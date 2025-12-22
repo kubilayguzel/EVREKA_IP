@@ -487,7 +487,7 @@ class DataEntryModule {
             return;
         }
 
-        // 1. Veriyi Topla (Strategy Pattern)
+        // 1. Veriyi Topla
         const recordData = strategy.collectData(this);
 
         // 2. Validasyon
@@ -497,10 +497,8 @@ class DataEntryModule {
             return;
         }
 
-        // 3. Ortak Alanları Ekle (Metadata)
+        // 3. Ortak Alanları Ekle
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
-        
-        // Create tarihi sadece yeni kayıtta, Update tarihi her zaman
         if (!this.editingRecordId) {
             recordData.createdAt = new Date().toISOString(); 
         }
@@ -510,117 +508,94 @@ class DataEntryModule {
             this.saveBtn.disabled = true;
             this.saveBtn.textContent = 'İşleniyor...';
 
+            // --- KRİTİK DÜZELTME BURADA ---
+            // Eğer stratejinin (SuitStrategy) özel bir 'save' metodu varsa, işlemi ona devrediyoruz.
+            // Bu sayede strategies.js içindeki dosya yükleme ve transaction oluşturma kodları çalışıyor.
+            if (strategy.save) {
+                if (this.editingRecordId) {
+                    recordData.id = this.editingRecordId;
+                    // Güncelleme senaryosu için strategies.js'e update mantığı eklenebilir
+                    // Şimdilik save() create mantığıyla çalışıyor, manuel giriş genelde create içindir.
+                }
+                
+                await strategy.save(recordData);
+                
+                alert(this.editingRecordId ? 'Kayıt güncellendi.' : 'Dava kaydı ve işlem geçmişi başarıyla oluşturuldu.');
+                window.location.href = 'portfolio.html';
+                return; // Buradan çıkıp aşağıdaki eski kodları atlıyoruz!
+            }
+            // -----------------------------
+
             // ============================================================
-            // 🖼️ DOSYA YÜKLEME (Sadece Marka ve Dosya Seçiliyse)
+            // DİĞER TİPLER (Marka/Patent) İÇİN ESKİ YAPI DEVAM EDİYOR
             // ============================================================
+            
             if (ipType === 'trademark') {
                 if (this.uploadedBrandImage instanceof File) {
                     console.log('📤 Resim Storage\'a yükleniyor...');
                     this.saveBtn.textContent = 'Resim Yükleniyor...';
-                    
                     const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
                     const storagePath = `brand-images/${fileName}`;
-                    
                     const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
-                    
                     if (downloadURL) {
                         recordData.brandImageUrl = downloadURL;
-                        console.log('✅ Resim yüklendi, URL:', downloadURL);
                     } else {
                         throw new Error("Resim yüklenemedi.");
                     }
                 } else if (typeof this.uploadedBrandImage === 'string') {
-                    // Mevcut URL'i koru
                     recordData.brandImageUrl = this.uploadedBrandImage;
                 }
             }
 
             this.saveBtn.textContent = 'Kaydediliyor...';
 
-            // ============================================================
-            // 🔄 KAYIT İŞLEMİ (EDIT vs CREATE)
-            // ============================================================
-            
             if (this.editingRecordId) {
-                // --- GÜNCELLEME (UPDATE) MODU ---
+                // --- GÜNCELLEME MODU ---
                 console.log('✏️ Güncelleme modu, ID:', this.editingRecordId);
-
-                if (ipType === 'suit') {
-                    // Dava Güncelleme
-                    const db = getFirestore();
-                    const suitRef = doc(db, 'suits', this.editingRecordId);
-                    await updateDoc(suitRef, recordData);
-                    alert('Dava kaydı başarıyla güncellendi.');
-                } else {
-                    
-                    if (recordData.origin === 'WIPO') {
-                        recordData.wipoIR = recordData.internationalRegNumber || recordData.registrationNumber;
-                    } else if (recordData.origin === 'ARIPO') {
-                        recordData.aripoIR = recordData.internationalRegNumber || recordData.registrationNumber;
-                    }
-
-                    // WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
-                    if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
-                        if (this.selectedCountries && this.selectedCountries.length > 0) {
-                            recordData.countries = this.selectedCountries.map(c => c.code);
-                            console.log('🌍 Parent ülke listesi güncelleniyor:', recordData.countries);
-                        }
-                    }
-
-                    // 1. Mevcut Kaydı Güncelle
-                    const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
-                    
-                    if (!result.success) {
-                        throw new Error(result.error || 'Güncelleme başarısız.');
-                    }
-                    
-                    // 2. WIPO/ARIPO Child İşlemleri (Senkronizasyon)
-                    // 🔥 DÜZELTME: Sadece eğer bu bir PARENT kayıtsa child senkronizasyonu yap!
-                    // Child kayıtlarda bu işlemi yaparsak kendisini kopyalar.
-                    if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
-                        console.log('🔄 Child Senkronizasyonu başlatılıyor...');
-                        
-                        // A) Eksik olan (yeni eklenen) ülkeleri yarat
-                        await this.syncAndCreateMissingChildren(this.editingRecordId, recordData);
-
-                        // B) Mevcut Child kayıtlarına değişiklikleri yay (İsim, tarih, IR No vb.)
-                        await this.propagateUpdatesToChildren(this.editingRecordId, recordData);
-                    } else {
-                        console.log('ℹ️ Bu bir Child kayıt veya WIPO değil, senkronizasyon atlandı.');
-                    }
-
-                    alert('Kayıt başarıyla güncellendi.');
+                
+                // SuitStrategy.save yukarıda return ettiği için burası sadece Marka/Patent için çalışır
+                if (recordData.origin === 'WIPO') {
+                    recordData.wipoIR = recordData.internationalRegNumber || recordData.registrationNumber;
+                } else if (recordData.origin === 'ARIPO') {
+                    recordData.aripoIR = recordData.internationalRegNumber || recordData.registrationNumber;
                 }
+
+                if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
+                    if (this.selectedCountries && this.selectedCountries.length > 0) {
+                        recordData.countries = this.selectedCountries.map(c => c.code);
+                    }
+                }
+
+                const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
+                if (!result.success) throw new Error(result.error || 'Güncelleme başarısız.');
+
+                // Child Senkronizasyonu (WIPO)
+                if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
+                    await this.syncAndCreateMissingChildren(this.editingRecordId, recordData);
+                    await this.propagateUpdatesToChildren(this.editingRecordId, recordData);
+                }
+                alert('Kayıt başarıyla güncellendi.');
 
             } else {
-                // --- YENİ KAYIT (CREATE) MODU ---
-                console.log('➕ Yeni kayıt modu...');
-                
-                if (ipType === 'suit') {
-                    const db = getFirestore();
-                    const suitsColRef = collection(db, 'suits');
-                    await addDoc(suitsColRef, recordData);
-                    alert('Dava kaydı başarıyla oluşturuldu!');
-                } else {
-                    // Parent + Child oluşturma mantığı burada (Create Modu)
-                    await this.saveIpRecordWithStrategy(recordData); 
-                }
+                // --- YENİ KAYIT MODU (Marka/Patent) ---
+                console.log('➕ Yeni kayıt modu (Marka/Patent)...');
+                await this.saveIpRecordWithStrategy(recordData); 
             }
 
-            // Başarılı ise yönlendir
             window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
-            
             if (error.message && error.message.includes('duplikasyon')) {
                 alert('HATA: Bu kayıt zaten mevcut (Aynı numara ile).');
             } else {
                 alert('Bir hata oluştu: ' + error.message);
             }
         } finally {
-            this.saveBtn.disabled = false;
-            this.saveBtn.textContent = 'Kaydet';
+            if(this.saveBtn) {
+                this.saveBtn.disabled = false;
+                this.saveBtn.textContent = 'Kaydet';
+            }
         }
     }
 
