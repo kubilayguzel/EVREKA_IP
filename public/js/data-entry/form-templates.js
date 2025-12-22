@@ -352,8 +352,10 @@ export const FormTemplates = {
                         <input type="date" class="form-control" id="suitOpeningDate" required>
                     </div>
 
-                    <div class="form-group full-width mt-3 border p-3 rounded bg-light">
-                        <label class="form-label text-dark"><i class="fas fa-paperclip mr-2"></i>Dava Evrakları</label>
+                    <div class="form-group full-width mt-3">
+                        <label class="form-label text-dark" style="font-weight:600;">
+                            <i class="fas fa-paperclip mr-2"></i>Dava Evrakları
+                        </label>
                         
                         <div class="custom-file">
                             <input type="file" class="custom-file-input" id="suitDocument" multiple>
