@@ -411,12 +411,13 @@ export class TaskSubmitHandler {
     }
 
 // D) DAVA KAYDI VE İLK TRANSACTION (GÜVENLİ VERSİYON)
+
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
             const client = selectedRelatedParties && selectedRelatedParties.length > 0 ? selectedRelatedParties[0] : null;
             
-            // 1. Mahkeme İsmini Belirle
+            // 1. Mahkeme İsmini Belirle (Mevcut kod)
             const courtSelect = document.getElementById('courtName');
             const customInput = document.getElementById('customCourtInput');
             let finalCourtName = '';
@@ -429,34 +430,23 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // 2. İlgili Varlık Bilgilerini Güvenli Hazırla
-            let assetId = null;
-            let assetTitle = '';
-            let assetNumber = '';
-
+            // --- DÜZELTME BURADA BAŞLIYOR ---
+            // Eski "Asset Başlık/Numara Hesaplama" kısmı tamamen kaldırıldı.
+            // Sadece ID ve Type (ipRecord/suit) belirleniyor.
+            
+            let subjectAssetData = null;
             if (selectedIpRecord) {
-                assetId = selectedIpRecord.id;
-                
-                if (selectedIpRecord._source === 'suit') {
-                    // --- DAVA SEÇİLDİYSE ---
-                    assetTitle = selectedIpRecord.displayCourt || selectedIpRecord.court || selectedIpRecord.title || '';
-                    assetNumber = selectedIpRecord.displayFileNumber || 
-                                  selectedIpRecord.fileNumber || 
-                                  (selectedIpRecord.suitDetails && selectedIpRecord.suitDetails.caseNo) || 
-                                  selectedIpRecord.caseNo || '';
-                } else {
-                    // --- MARKA/PATENT SEÇİLDİYSE ---
-                    assetTitle = selectedIpRecord.title || selectedIpRecord.markName || '';
-                    assetNumber = selectedIpRecord.applicationNumber || selectedIpRecord.applicationNo || '';
-                }
+                subjectAssetData = {
+                    id: selectedIpRecord.id,
+                    // _source: 'suit' ise 'suit', değilse 'ipRecord' olarak kaydet
+                    type: selectedIpRecord._source === 'suit' ? 'suit' : 'ipRecord'
+                };
             }
+            // --------------------------------
 
-            // --- YENİ EKLENEN KISIM: PARENT KONTROLÜ ---
-            // Sadece bu ID'lere sahip işlemler "Yeni Ana Dava" sayılır ve belgeleri Dava Kartına kopyalanır.
-            // Diğerleri (Cevap dilekçesi vb.) Child işlemdir, belgeler sadece Task içinde kalır.
+            // Parent Kontrolü (Aynı kalıyor)
             const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
             const isParentCreation = PARENT_SUIT_IDS.includes(String(selectedTaskType.id));
-            // -------------------------------------------
 
             // 3. Dava Objesini Hazırla
             const newSuitData = {
@@ -464,10 +454,8 @@ export class TaskSubmitHandler {
                 transactionTypeId: selectedTaskType.id,
                 suitType: selectedTaskType.alias || selectedTaskType.name,
                 
-                // --- YENİ EKLENEN KISIM: DOKÜMANLAR ---
-                // Eğer Parent ise (Dava Açılış), yüklenen belgeleri buraya da ekle.
+                // Dava açılış ise belgeleri kopyala
                 documents: isParentCreation ? (taskData.documents || []) : [],
-                // --------------------------------------
 
                 suitDetails: {
                     court: finalCourtName,
@@ -478,11 +466,10 @@ export class TaskSubmitHandler {
                 },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
-                subjectAsset: selectedIpRecord ? {
-                    id: assetId,
-                    title: assetTitle,
-                    number: assetNumber
-                } : null,
+                
+                // --- SADELEŞTİRİLMİŞ VARLIK OBJESİ ---
+                subjectAsset: subjectAssetData,
+                // -------------------------------------
                 
                 suitStatus: 'continue',
                 portfolioStatus: 'active',
@@ -491,14 +478,14 @@ export class TaskSubmitHandler {
                 relatedTaskId: taskId
             };
 
-            // 4. Davayı 'suits' Koleksiyonuna Ekle
+            // 4. Kayıt İşlemleri (Aynı kalıyor)
             const suitsRef = collection(db, 'suits');
             const suitDocRef = await addDoc(suitsRef, newSuitData);
             const newSuitId = suitDocRef.id;
 
             console.log('✅ Yeni Dava Kartı Oluşturuldu ID:', newSuitId);
 
-            // 5. İLK TRANSACTION'I EKLE
+            // 5. İlk Transaction (Aynı kalıyor)
             const initialTransaction = {
                 type: selectedTaskType.id,
                 description: `${selectedTaskType.alias || selectedTaskType.name} işlemi yapıldı.`,
@@ -518,6 +505,7 @@ export class TaskSubmitHandler {
             alert('Dava kartı oluşturulurken hata meydana geldi: ' + error.message);
         }
     }
+
 
 // E) PORTFOLYO GEÇMİŞİ (GÜNCELLENDİ: Hem Dava Hem Marka İçin)
     async _addTransactionToPortfolio(recordId, taskType, taskId, state) {
