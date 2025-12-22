@@ -477,7 +477,6 @@ class DataEntryModule {
     // ============================================================
     // 4. KAYDETME & WIPO/ARIPO MANTIĞI (CORE)
     // ============================================================
-
     async handleSavePortfolio() {
         const ipType = this.ipTypeSelect.value;
         const strategy = this.strategies[ipType];
@@ -499,100 +498,120 @@ class DataEntryModule {
 
         // 3. Ortak Alanları Ekle
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
+        
+        // Yeni kayıt ise createdAt ekle
         if (!this.editingRecordId) {
             recordData.createdAt = new Date().toISOString(); 
         }
+        // Her güncellemede updatedAt yenile
         recordData.updatedAt = new Date().toISOString(); 
 
         try {
             this.saveBtn.disabled = true;
             this.saveBtn.textContent = 'İşleniyor...';
 
-            // --- KRİTİK DÜZELTME BURADA ---
-            // Eğer stratejinin (SuitStrategy) özel bir 'save' metodu varsa, işlemi ona devrediyoruz.
-            // Bu sayede strategies.js içindeki dosya yükleme ve transaction oluşturma kodları çalışıyor.
+            // ============================================================
+            // 🚀 KRİTİK DÜZELTME: STRATEJİYE ÖZEL KAYIT KONTROLÜ
+            // ============================================================
+            // Eğer stratejinin (örn: SuitStrategy) kendine ait bir 'save' metodu varsa,
+            // tüm kayıt işlemini (dosya yükleme, transaction vb.) ona devret.
             if (strategy.save) {
+                // Güncelleme modundaysak ID bilgisini veriye ekle
                 if (this.editingRecordId) {
                     recordData.id = this.editingRecordId;
-                    // Güncelleme senaryosu için strategies.js'e update mantığı eklenebilir
-                    // Şimdilik save() create mantığıyla çalışıyor, manuel giriş genelde create içindir.
                 }
                 
+                // SuitStrategy.save() metodu çalıştırılır
                 await strategy.save(recordData);
                 
                 alert(this.editingRecordId ? 'Kayıt güncellendi.' : 'Dava kaydı ve işlem geçmişi başarıyla oluşturuldu.');
                 window.location.href = 'portfolio.html';
-                return; // Buradan çıkıp aşağıdaki eski kodları atlıyoruz!
+                return; // 🛑 BURADAN ÇIKIYORUZ (Aşağıdaki eski kodlar çalışmaz)
             }
-            // -----------------------------
+            // ============================================================
 
-            // ============================================================
-            // DİĞER TİPLER (Marka/Patent) İÇİN ESKİ YAPI DEVAM EDİYOR
-            // ============================================================
-            
+
+            // ... (Aşağıdaki kodlar SADECE Marka/Patent/Tasarım için çalışmaya devam eder) ...
+
+            // 🖼️ DOSYA YÜKLEME (Sadece Marka ve Dosya Seçiliyse)
             if (ipType === 'trademark') {
                 if (this.uploadedBrandImage instanceof File) {
                     console.log('📤 Resim Storage\'a yükleniyor...');
                     this.saveBtn.textContent = 'Resim Yükleniyor...';
+                    
                     const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
                     const storagePath = `brand-images/${fileName}`;
+                    
                     const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
+                    
                     if (downloadURL) {
                         recordData.brandImageUrl = downloadURL;
+                        console.log('✅ Resim yüklendi, URL:', downloadURL);
                     } else {
                         throw new Error("Resim yüklenemedi.");
                     }
                 } else if (typeof this.uploadedBrandImage === 'string') {
+                    // Mevcut URL'i koru
                     recordData.brandImageUrl = this.uploadedBrandImage;
                 }
             }
 
             this.saveBtn.textContent = 'Kaydediliyor...';
 
+            // 🔄 KAYIT İŞLEMİ (Marka/Patent/Tasarım)
             if (this.editingRecordId) {
-                // --- GÜNCELLEME MODU ---
+                // --- GÜNCELLEME (UPDATE) MODU ---
                 console.log('✏️ Güncelleme modu, ID:', this.editingRecordId);
-                
-                // SuitStrategy.save yukarıda return ettiği için burası sadece Marka/Patent için çalışır
+
                 if (recordData.origin === 'WIPO') {
                     recordData.wipoIR = recordData.internationalRegNumber || recordData.registrationNumber;
                 } else if (recordData.origin === 'ARIPO') {
                     recordData.aripoIR = recordData.internationalRegNumber || recordData.registrationNumber;
                 }
 
+                // WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
                 if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
                     if (this.selectedCountries && this.selectedCountries.length > 0) {
                         recordData.countries = this.selectedCountries.map(c => c.code);
                     }
                 }
 
+                // 1. Mevcut Kaydı Güncelle
                 const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
-                if (!result.success) throw new Error(result.error || 'Güncelleme başarısız.');
-
-                // Child Senkronizasyonu (WIPO)
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Güncelleme başarısız.');
+                }
+                
+                // 2. WIPO/ARIPO Child Senkronizasyonu
                 if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
                     await this.syncAndCreateMissingChildren(this.editingRecordId, recordData);
                     await this.propagateUpdatesToChildren(this.editingRecordId, recordData);
                 }
+
                 alert('Kayıt başarıyla güncellendi.');
 
             } else {
-                // --- YENİ KAYIT MODU (Marka/Patent) ---
+                // --- YENİ KAYIT (CREATE) MODU ---
                 console.log('➕ Yeni kayıt modu (Marka/Patent)...');
+                
+                // Parent + Child oluşturma mantığı (Create Modu)
                 await this.saveIpRecordWithStrategy(recordData); 
             }
 
+            // Başarılı ise yönlendir
             window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
+            
             if (error.message && error.message.includes('duplikasyon')) {
                 alert('HATA: Bu kayıt zaten mevcut (Aynı numara ile).');
             } else {
                 alert('Bir hata oluştu: ' + error.message);
             }
         } finally {
-            if(this.saveBtn) {
+            if (this.saveBtn) {
                 this.saveBtn.disabled = false;
                 this.saveBtn.textContent = 'Kaydet';
             }
