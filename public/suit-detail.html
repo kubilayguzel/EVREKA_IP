@@ -201,21 +201,25 @@
                 setText('viewOpenedDate', formatDate(details.openingDate));
                 setText('viewSubjectAsset', data.subjectAsset?.title || data.title); // Konu Varlık
 
-                // Durum Rengi ve Metni
-                const statusVal = data.suitStatus;
-                
-                // Listeden eşleşen objeyi bul
+                // 1. Önce ana kayda (data.suitStatus), yoksa detaylara (details.suitStatus) bak.
+                // Hiçbiri yoksa varsayılan olarak 'continue' kabul et.
+                let statusVal = data.suitStatus || details.suitStatus || 'continue';
+
+                // 2. Utils.js'deki listeden eşleşeni bul
                 let statusObj = null;
-                if (STATUSES.litigation) {
+                if (STATUSES && STATUSES.litigation) {
                     statusObj = STATUSES.litigation.find(s => s.value === statusVal);
                 }
 
-                // Bulunursa metni ve rengi al, bulunamazsa ham değeri göster
-                const statusText = statusObj ? statusObj.text : (statusVal || '-');
+                // 3. Metni ve Rengi Belirle
+                const statusText = statusObj ? statusObj.text : statusVal;
                 const statusColor = statusObj && statusObj.color ? statusObj.color : 'secondary';
                 
+                // 4. Ekrana Bas
                 const statusEl = document.getElementById('viewSuitStatus');
-                statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
+                if (statusEl) {
+                    statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
+                }
                 
                 // 2. Taraf Bilgileri
                 setText('viewClientName', data.client?.name);
