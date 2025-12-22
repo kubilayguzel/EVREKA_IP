@@ -12,20 +12,20 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
         .main-container {width: 100%; padding: 30px; padding-top: 120px; margin: 0; }
-        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .section-card { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 25px; }
-        .section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e1e8ed; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
-        .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
-        .form-group.full-width { grid-column: 1 / -1; }
-        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        .form-input, .form-select, .form-textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; background: white; }
-        .form-textarea { min-height: 120px; resize: vertical; }
-        .form-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px; }
-        .btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
-        .btn-primary { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; }
-        .btn-secondary { background: #6c757d; color: white; }
+        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); display: flex; justify-content: space-between; align-items: center; }
+        .page-title { font-size: 1.8em; color: #1e3c72; margin-bottom: 5px; font-weight: 700; }
+        .page-subtitle { color: #666; font-size: 1em; margin: 0; }
+        
+        .section-card { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05); margin-bottom: 25px; transition: transform 0.2s; }
+        .section-title { font-size: 1.2em; color: #1e3c72; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #f0f2f5; font-weight: 600; }
+        
+        /* Detay Görünüm Stilleri (Read-Only) */
+        .detail-row { display: flex; margin-bottom: 15px; border-bottom: 1px solid #f8f9fa; padding-bottom: 8px; }
+        .detail-row:last-child { border-bottom: none; margin-bottom: 0; }
+        .detail-label { width: 40%; font-weight: 600; color: #555; font-size: 0.95em; }
+        .detail-value { width: 60%; color: #222; font-weight: 500; font-size: 1em; word-break: break-word; }
+        .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
+        .description-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; color: #444; line-height: 1.6; }
 
         /* Timeline Stilleri */
         .timeline-container { position: relative; padding-left: 20px; border-left: 3px solid #e9ecef; margin-top: 10px; }
@@ -44,11 +44,10 @@
         .file-item:last-child { border-bottom: none; }
         .file-name a { color: #1e3c72; font-weight: 500; }
         .btn-remove-file { background: #ff6b6b; color: white; width: 25px; height: 25px; border-radius: 50%; border:none; cursor: pointer; }
-
-        /* Loading */
-        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1e3c72; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: all 0.3s; }
+        .btn-secondary { background-color: #6c757d; border: none; }
+        .btn-primary { background: linear-gradient(45deg, #1e3c72, #2a5298); border: none; }
     </style>
 </head>
 <body>
@@ -58,131 +57,95 @@
     <div class="page-wrapper">
         <main class="main-container">
             <section class="page-header">
-                <h1 class="page-title" id="suitTitle">Dava Detayı</h1>
-                <p class="page-subtitle">Dava sürecini ve geçmiş işlemleri yönetin</p>
+                <div>
+                    <h1 class="page-title" id="suitTitleHeader">Dava Detayı</h1>
+                    <p class="page-subtitle" id="suitSubtitleHeader">Dosya No: Yükleniyor...</p>
+                </div>
+                <div>
+                    <a href="portfolio.html" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-2"></i>Portföye Dön</a>
+                </div>
             </section>
 
-            <form id="suitForm">
-                <div class="row">
-                    <div class="col-lg-7">
-                        <div class="section-card">
-                            <h3 class="section-title">Temel Bilgiler</h3>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label">Dava No *</label>
-                                    <input type="text" id="caseNo" class="form-input" required>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Dava Türü *</label>
-                                    <input type="text" id="suitType" class="form-input" required>
-                                </div>
-                                <div class="form-group full-width">
-                                    <label class="form-label">Mahkeme *</label>
-                                    <select id="court" class="form-select">
-                                        <option value="">Seçiniz...</option>
-                                        <optgroup label="Ankara">
-                                            <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                                        </optgroup>
-                                        <optgroup label="İstanbul">
-                                            <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="İstanbul Anadolu 1. FSHHM">İstanbul Anadolu 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                        </optgroup>
-                                        <optgroup label="Diğer İller">
-                                            <option value="İzmir FSHHM">İzmir Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Bursa FSHHM">Bursa Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                            <option value="Antalya FSHHM">Antalya Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                        </optgroup>
-                                        <optgroup label="Yüksek Yargı / Diğer">
-                                            <option value="Yargıtay">Yargıtay</option>
-                                            <option value="other">Diğer (Elle Giriniz)</option>
-                                        </optgroup>
-                                    </select>
-                                    <input type="text" id="customCourtInput" class="form-input mt-2" style="display:none;" placeholder="Mahkeme adını yazınız...">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Açılış Tarihi</label>
-                                    <input type="date" id="openedDate" class="form-input">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Durum</label>
-                                    <select id="suitStatus" class="form-select">
-                                        <option value="">Seçiniz...</option>
-                                        </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="section-card">
-                            <h3 class="section-title">Taraf Bilgileri</h3>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label">Müvekkil</label>
-                                    <input type="text" id="clientName" class="form-input">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Rol</label>
-                                    <select id="clientRole" class="form-select">
-                                        <option value="Davacı">Davacı</option>
-                                        <option value="Davalı">Davalı</option>
-                                        <option value="Müdahil">Müdahil</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Karşı Taraf</label>
-                                    <input type="text" id="opposingParty" class="form-input">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Karşı Taraf Vekili</label>
-                                    <input type="text" id="opposingCounsel" class="form-input">
-                                </div>
-                            </div>
-                        </div>
+            <div class="row">
+                <div class="col-lg-7">
+                    
+                    <div class="section-card">
+                        <h3 class="section-title"><i class="fas fa-info-circle mr-2"></i>Temel Bilgiler</h3>
                         
-                        <div class="section-card">
-                            <h3 class="section-title">Konu Varlık & Açıklama</h3>
-                            <div class="form-group">
-                                <label class="form-label">İlgili Varlık (Marka/Patent)</label>
-                                <input type="text" id="subjectAssetTitle" class="form-input" placeholder="Bağlı bir varlık yok">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Açıklama</label>
-                                <textarea id="description" class="form-textarea"></textarea>
-                            </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Dava Durumu:</span>
+                            <span class="detail-value" id="viewSuitStatus">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Dava Türü:</span>
+                            <span class="detail-value" id="viewSuitType">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Mahkeme:</span>
+                            <span class="detail-value" id="viewCourt">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Esas No:</span>
+                            <span class="detail-value" id="viewCaseNo">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Dava Açılış Tarihi:</span>
+                            <span class="detail-value" id="viewOpenedDate">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Portföy Varlığı (Konu):</span>
+                            <span class="detail-value" id="viewSubjectAsset">-</span>
                         </div>
                     </div>
 
-                    <div class="col-lg-5">
-                        <div class="section-card" style="background-color: #fcfcfc;">
-                            <h3 class="section-title"><i class="fas fa-history mr-2"></i> İşlem Geçmişi (Timeline)</h3>
-                            <div id="timelineContainer" class="timeline-container">
-                                <p class="text-muted text-center py-3">Yükleniyor...</p>
-                            </div>
-                        </div>
-
-                        <div class="section-card">
-                            <h3 class="section-title">Belgeler</h3>
-                            <button type="button" class="btn btn-secondary btn-sm btn-block mb-3" id="uploadBtn">
-                                <i class="fas fa-plus"></i> Belge Ekle
-                            </button>
-                            <input type="file" id="fileInput" hidden multiple>
-                            <div id="fileListContainer" class="file-list-container"></div>
-                        </div>
+                    <div class="section-card">
+                        <h3 class="section-title"><i class="fas fa-users mr-2"></i>Taraf Bilgileri</h3>
                         
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary btn-block btn-lg">Değişiklikleri Kaydet</button>
-                            <button type="button" class="btn btn-secondary btn-block mt-2" id="cancelBtn">İptal</button>
+                        <div class="detail-row">
+                            <span class="detail-label">Müvekkil:</span>
+                            <span class="detail-value" id="viewClientName">-</span>
                         </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Müvekkil Rolü:</span>
+                            <span class="detail-value" id="viewClientRole">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Karşı Taraf:</span>
+                            <span class="detail-value" id="viewOpposingParty">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Karşı Taraf Vekili:</span>
+                            <span class="detail-value" id="viewOpposingCounsel">-</span>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3 class="section-title"><i class="fas fa-align-left mr-2"></i>Açıklama / Notlar</h3>
+                        <div class="description-box" id="viewDescription">
+                            <em>Açıklama bulunmuyor.</em>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="section-card" style="background-color: #fcfcfc;">
+                        <h3 class="section-title"><i class="fas fa-history mr-2"></i> İşlem Geçmişi (Timeline)</h3>
+                        <div id="timelineContainer" class="timeline-container">
+                            <p class="text-muted text-center py-3">Yükleniyor...</p>
+                        </div>
+                    </div>
+
+                    <div class="section-card">
+                        <h3 class="section-title"><i class="fas fa-paperclip mr-2"></i>Belgeler</h3>
+                        <button type="button" class="btn btn-secondary btn-sm btn-block mb-3" id="uploadBtn">
+                            <i class="fas fa-plus mr-1"></i> Belge Ekle
+                        </button>
+                        <input type="file" id="fileInput" hidden multiple>
+                        <div id="fileListContainer" class="file-list-container"></div>
                     </div>
                 </div>
-            </form>
+            </div>
         </main>
     </div>
 
@@ -210,78 +173,68 @@
             });
         })();
 
-        // Dava Verilerini Yükle
-    async function loadSuitData() {
-        try {
-            // --- YENİ EKLENECEK KISIM BAŞLANGIÇ ---
-            // Dropdown'ı utils.js'ten doldur
-            const statusSelect = document.getElementById('suitStatus');
-            if (statusSelect && STATUSES.litigation) {
-                // Mevcut seçenekleri temizle (Seçiniz hariç)
-                statusSelect.innerHTML = '<option value="">Seçiniz...</option>';
+        // Dava Verilerini Yükle ve Görüntüle (Read-Only)
+        async function loadSuitData() {
+            try {
+                const docRef = doc(db, 'suits', suitId);
+                const snap = await getDoc(docRef);
                 
-                STATUSES.litigation.forEach(st => {
-                    const opt = document.createElement('option');
-                    opt.value = st.value; // Örn: 'expert_examination'
-                    opt.textContent = st.text; // Örn: 'Bilirkişi İncelemesinde'
-                    statusSelect.appendChild(opt);
-                });
-            }
-                    const docRef = doc(db, 'suits', suitId);
-                    const snap = await getDoc(docRef);
-                    
-                    if (!snap.exists()) {
-                        alert('Dava bulunamadı.');
-                        return window.location.href = 'portfolio.html';
-                    }
-
-                    const data = snap.data();
-                    const details = data.suitDetails || {};
-                    
-                    document.getElementById('suitTitle').textContent = `Dava: ${details.caseNo || data.title}`;
-                    
-                    // Form Doldurma
-                    setValue('caseNo', details.caseNo);
-                    setValue('suitType', data.transactionType?.alias || data.transactionType?.name);
-                    
-                    // Mahkeme Seçimi Mantığı
-                    const courtSelect = document.getElementById('court');
-                    const courtVal = details.court || '';
-                    let found = false;
-                    for(let opt of courtSelect.options) {
-                        if(opt.value === courtVal) {
-                            courtSelect.value = courtVal;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found && courtVal) {
-                        courtSelect.value = 'other';
-                        document.getElementById('customCourtInput').style.display = 'block';
-                        setValue('customCourtInput', courtVal);
-                    } else {
-                        courtSelect.value = courtVal;
-                    }
-
-                    setValue('openedDate', formatDateForInput(details.openingDate));
-                    setValue('suitStatus', details.suitStatus);
-                    setValue('clientName', data.client?.name);
-                    setValue('clientRole', data.client?.clientRole);
-                    setValue('opposingParty', details.opposingParty);
-                    setValue('opposingCounsel', details.opposingCounsel);
-                    setValue('subjectAssetTitle', data.subjectAsset?.title);
-                    setValue('description', details.description);
-
-                    currentDocuments = data.documents || [];
-                    renderDocuments();
-
-                } catch (e) {
-                    console.error(e);
-                    showNotification('Veri yüklenemedi.', 'error');
+                if (!snap.exists()) {
+                    alert('Dava bulunamadı.');
+                    return window.location.href = 'portfolio.html';
                 }
-            }
 
-        // Timeline (İşlem Geçmişi) Yükle
+                const data = snap.data();
+                const details = data.suitDetails || {};
+                
+                // Başlıkları Güncelle
+                const displayTitle = details.caseNo || data.title || 'Dava Detayı';
+                document.getElementById('suitTitleHeader').textContent = displayTitle;
+                document.getElementById('suitSubtitleHeader').textContent = `Dosya No: ${details.caseNo || '-'}`;
+
+                // --- VERİLERİ YERLEŞTİR (TEXT CONTENT) ---
+                
+                // 1. Temel Bilgiler
+                setText('viewSuitType', data.suitType || data.transactionType?.alias || data.transactionType?.name);
+                setText('viewCourt', details.court);
+                setText('viewCaseNo', details.caseNo);
+                setText('viewOpenedDate', formatDate(details.openingDate));
+                setText('viewSubjectAsset', data.subjectAsset?.title || data.title); // Konu Varlık
+
+                // Durum Rengi ve Metni
+                const statusVal = details.suitStatus;
+                const statusObj = STATUSES.litigation ? STATUSES.litigation.find(s => s.value === statusVal) : null;
+                const statusText = statusObj ? statusObj.text : (statusVal || '-');
+                const statusColor = statusObj && statusObj.color ? statusObj.color : 'secondary';
+                
+                const statusEl = document.getElementById('viewSuitStatus');
+                statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
+
+                // 2. Taraf Bilgileri
+                setText('viewClientName', data.client?.name);
+                setText('viewClientRole', formatRole(data.clientRole || data.client?.role));
+                setText('viewOpposingParty', details.opposingParty);
+                setText('viewOpposingCounsel', details.opposingCounsel);
+
+                // 3. Açıklama
+                const descEl = document.getElementById('viewDescription');
+                if (details.description) {
+                    descEl.textContent = details.description;
+                } else {
+                    descEl.innerHTML = '<em class="text-muted">Açıklama bulunmuyor.</em>';
+                }
+
+                // Belgeler
+                currentDocuments = data.documents || [];
+                renderDocuments();
+
+            } catch (e) {
+                console.error(e);
+                showNotification('Veri yüklenemedi.', 'error');
+            }
+        }
+
+        // Timeline (İşlem Geçmişi) Yükle (Değişmedi)
         async function loadSuitTransactions() {
             const container = document.getElementById('timelineContainer');
             try {
@@ -298,7 +251,7 @@
                     const t = doc.data();
                     const date = t.creationDate ? new Date(t.creationDate).toLocaleDateString('tr-TR') : '-';
                     const desc = t.description || 'İşlem detay girilmemiş.';
-                    const typeName = t.transactionTypeName || 'İşlem'; // Task type ismi eklenebilir
+                    const typeName = t.transactionTypeName || 'İşlem'; 
 
                     html += `
                         <div class="timeline-item">
@@ -320,49 +273,9 @@
         }
 
         function setupEventListeners() {
-            document.getElementById('suitForm').addEventListener('submit', handleSave);
-            document.getElementById('cancelBtn').addEventListener('click', () => window.location.href = 'portfolio.html');
-            
             // Dosya Yükleme
             document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
             document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-
-            // Mahkeme "Diğer" seçimi
-            document.getElementById('court').addEventListener('change', (e) => {
-                const custom = document.getElementById('customCourtInput');
-                if (e.target.value === 'other') custom.style.display = 'block';
-                else { custom.style.display = 'none'; custom.value = ''; }
-            });
-        }
-
-        async function handleSave(e) {
-            e.preventDefault();
-            if (!confirm('Kaydetmek istiyor musunuz?')) return;
-
-            const courtSelect = document.getElementById('court');
-            const finalCourt = courtSelect.value === 'other' ? document.getElementById('customCourtInput').value : courtSelect.value;
-
-            const updateData = {
-                'suitDetails.caseNo': getValue('caseNo'),
-                'suitDetails.court': finalCourt,
-                'suitDetails.suitStatus': getValue('suitStatus'),
-                'suitDetails.openingDate': document.getElementById('openedDate').value ? new Date(document.getElementById('openedDate').value).toISOString() : null,
-                'suitDetails.opposingParty': getValue('opposingParty'),
-                'suitDetails.opposingCounsel': getValue('opposingCounsel'),
-                'suitDetails.description': getValue('description'),
-                'client.name': getValue('clientName'),
-                'client.clientRole': getValue('clientRole'),
-                'documents': currentDocuments
-            };
-
-            try {
-                await updateDoc(doc(db, 'suits', suitId), updateData);
-                showNotification('Güncellendi!', 'success');
-                setTimeout(() => window.location.reload(), 1000);
-            } catch (e) {
-                console.error(e);
-                showNotification('Hata oluştu.', 'error');
-            }
         }
 
         async function handleFileUpload(e) {
@@ -377,7 +290,7 @@
                     currentDocuments.push({ name: file.name, url: url, path: path, uploadedAt: new Date().toISOString() });
                 } catch (err) { console.error(err); }
             }
-            // Firestore'a kaydetmeden önce UI güncelle (veya direkt kaydet)
+            
             await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
             renderDocuments();
             showNotification('Dosyalar yüklendi.', 'success');
@@ -389,14 +302,13 @@
             
             list.innerHTML = currentDocuments.map((d, i) => `
                 <div class="file-item">
-                    <div class="file-name"><a href="${d.url}" target="_blank">${d.name}</a></div>
-                    <button type="button" class="btn-remove-file" onclick="window.removeDoc(${i})">&times;</button>
+                    <div class="file-name"><a href="${d.url}" target="_blank"><i class="fas fa-file-alt mr-2"></i>${d.name}</a></div>
+                    <button type="button" class="btn-remove-file" onclick="window.removeDoc(${i})" title="Sil">&times;</button>
                 </div>
             `).join('');
             
-            // Global fonksiyon atama (module scope dışına erişim için - basit çözüm)
             window.removeDoc = async (index) => {
-                if(!confirm('Silinsin mi?')) return;
+                if(!confirm('Bu belge silinsin mi?')) return;
                 currentDocuments.splice(index, 1);
                 await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
                 renderDocuments();
@@ -404,14 +316,23 @@
         }
 
         // Helpers
-        function setValue(id, val) { const el = document.getElementById(id); if(el) el.value = val || ''; }
-        function getValue(id) { return document.getElementById(id)?.value || ''; }
-        function formatDateForInput(dateVal) {
-            if(!dateVal) return '';
+        function setText(id, val) { 
+            const el = document.getElementById(id); 
+            if(el) el.textContent = val || '-'; 
+        }
+        
+        function formatDate(dateVal) {
+            if(!dateVal) return '-';
             try {
                 const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
-                return d.toISOString().split('T')[0];
-            } catch { return ''; }
+                return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+            } catch { return '-'; }
+        }
+
+        function formatRole(role) {
+            if (!role) return '-';
+            const roles = { 'davaci': 'Davacı', 'davali': 'Davalı', 'mudahil': 'Müdahil' };
+            return roles[role.toLowerCase()] || role;
         }
     </script>
     <script type="module" src="./js/layout-loader.js"></script>
