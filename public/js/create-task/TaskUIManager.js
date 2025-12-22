@@ -1,5 +1,6 @@
 import { TASK_IDS, RELATED_PARTY_REQUIRED, PARTY_LABEL_BY_ID, asId } from './TaskConstants.js';
 import { getSelectedNiceClasses } from '../nice-classification.js';
+import { LAWSUIT_SUBJECTS, COURTS_LIST } from '../../utils.js';
 
 export class TaskUIManager {
     constructor() {
@@ -290,78 +291,58 @@ export class TaskUIManager {
     }
 
 // Parametre olarak taskTypeId alacak şekilde güncellendi
+
     _getLawsuitDetailsHtml(taskTypeId) {
-        
-        // İşlem tipi 60 (Yargıtay) ise otomatik seçili gelsin
         const isYargitayTask = String(taskTypeId) === '60';
-        const yargitaySelectedAttr = isYargitayTask ? 'selected' : '';
+        
+        // Mahkeme Listesini Oluştur
+        const courtOptions = COURTS_LIST.map(group => `
+            <optgroup label="${group.label}">
+                ${group.options.map(opt => 
+                    `<option value="${opt.value}" ${opt.value === 'Yargıtay' && isYargitayTask ? 'selected' : ''}>${opt.text}</option>`
+                ).join('')}
+            </optgroup>
+        `).join('');
+
+        // Dava Konusu Listesini Oluştur
+        const subjectOptions = LAWSUIT_SUBJECTS.map(s => 
+            `<option value="${s.value}">${s.text}</option>`
+        ).join('');
 
         return `
         <div class="section-card">
             <h3 class="section-title">4. Dava Bilgileri</h3>
             <div class="form-grid">
+                
                 <div class="form-group full-width">
                     <label class="form-label">Mahkeme</label>
                     <select id="courtName" class="form-select">
                         <option value="">Seçiniz...</option>
-                        
-                        <optgroup label="Ankara">
-                            <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                        </optgroup>
-
-                        <optgroup label="İstanbul (Çağlayan)">
-                            <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                        </optgroup>
-
-                        <optgroup label="İstanbul (Anadolu)">
-                            <option value="İstanbul Anadolu 1. FSHHM">İstanbul Anadolu 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul Anadolu 2. FSHHM">İstanbul Anadolu 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İstanbul Anadolu FSHCM">İstanbul Anadolu Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                        </optgroup>
-
-                        <optgroup label="İzmir">
-                            <option value="İzmir FSHHM">İzmir Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="İzmir FSHCM">İzmir Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                        </optgroup>
-
-                        <optgroup label="Bursa">
-                            <option value="Bursa FSHHM">Bursa Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                        </optgroup>
-
-                        <optgroup label="Antalya">
-                            <option value="Antalya FSHHM">Antalya Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                        </optgroup>
-                        
-                        <optgroup label="Yüksek Yargı / Diğer">
-                            <option value="Yargıtay" ${yargitaySelectedAttr}>Yargıtay</option>
-                            
-                            <option value="other">Diğer (Elle Giriniz)</option>
-                        </optgroup>
+                        ${courtOptions}
                     </select>
-                    
                     <input type="text" id="customCourtInput" class="form-input mt-2" 
-                           placeholder="Mahkeme/Daire adını tam olarak yazınız..." 
+                           placeholder="Mahkeme adını tam olarak yazınız..." 
                            style="display:none; border-color: #3498db;">
                 </div>
 
                 <div class="form-group full-width">
                     <label class="form-label">Konu</label>
-                    <textarea id="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
-                </div>
+                    <select id="subjectOfLawsuit" class="form-select">
+                        <option value="">Seçiniz...</option>
+                        ${subjectOptions}
+                    </select>
+                    </div>
 
                 <div class="form-group">
                     <label class="form-label">Dava Tarihi (Açılış)</label>
                     <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
                 </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Esas No</label>
+                    <input type="text" id="suitCaseNo" class="form-input" placeholder="Henüz yoksa boş bırakın">
+                </div>
+
                 <div class="form-group full-width mt-3">
                     <label class="form-label"><i class="fas fa-paperclip mr-2"></i>Dava Dokümanı / Ekler</label>
                     <div class="custom-file">
