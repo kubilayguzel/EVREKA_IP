@@ -416,6 +416,41 @@ export class TaskUIManager {
         return `<div class="form-actions"><button type="button" id="cancelBtn" class="btn btn-secondary">İptal</button><button type="submit" id="saveTaskBtn" class="btn btn-primary" disabled>Kaydet</button></div>`;
     }
 
+    // Seçilen dosyaları listeleyen fonksiyon
+    renderUploadedFiles(files) {
+        const container = document.getElementById('suitDocumentList');
+        const label = document.querySelector('.custom-file-label[for="suitDocument"]');
+        
+        // Label'ı güncelle (Örn: 3 dosya seçildi)
+        if (label) {
+            const count = files.length;
+            label.textContent = count > 0 ? `${count} dosya seçildi` : 'Dosya Seçiniz...';
+        }
+
+        if (!container) return;
+
+        if (!files || files.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        // Listeyi oluştur
+        container.innerHTML = files.map((file, index) => `
+            <div class="d-flex justify-content-between align-items-center p-2 mb-2 border rounded bg-white shadow-sm">
+                <div class="d-flex align-items-center overflow-hidden">
+                    <i class="fas fa-file-pdf text-danger mr-3" style="font-size: 1.2rem;"></i>
+                    <div style="overflow: hidden;">
+                        <div class="text-truncate font-weight-bold text-dark" title="${file.name}">${file.name}</div>
+                        <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-file-btn" data-index="${index}" title="Listeden Kaldır">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+    
     // --- EKSİK OLAN FONKSİYONLAR EKLENDİ ---
 
     // 1. Seçilen Başvuru Sahiplerini Listeleme
