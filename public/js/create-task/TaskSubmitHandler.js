@@ -414,10 +414,22 @@ export class TaskSubmitHandler {
 
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
+        
+        // 1. PARENT (ANA DAVA) KONTROLÜ - KRİTİK DÜZELTME
+        // Bu liste dışındaki işlemler (Child) için yeni dava kartı AÇILMAMALI.
+        // Child işlemler için sadece transaction (tarihçe) eklenmeli (Bunu Step 7 yapıyor).
+        const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
+        const isParentCreation = PARENT_SUIT_IDS.includes(String(selectedTaskType.id));
+
+        if (!isParentCreation) {
+            console.log('ℹ️ Bu bir alt işlem (Child), yeni dava kartı oluşturulmuyor. Transaction mevcut davaya eklenecek.');
+            return; // Fonksiyondan çık, yeni kart oluşturma.
+        }
+
         try {
             const client = selectedRelatedParties && selectedRelatedParties.length > 0 ? selectedRelatedParties[0] : null;
             
-            // 1. Mahkeme İsmini Belirle (Mevcut kod)
+            // 2. Mahkeme İsmini Belirle
             const courtSelect = document.getElementById('courtName');
             const customInput = document.getElementById('customCourtInput');
             let finalCourtName = '';
@@ -430,32 +442,23 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // --- DÜZELTME BURADA BAŞLIYOR ---
-            // Eski "Asset Başlık/Numara Hesaplama" kısmı tamamen kaldırıldı.
-            // Sadece ID ve Type (ipRecord/suit) belirleniyor.
-            
+            // 3. İlgili Varlık Bilgilerini Hazırla (Sadeleştirilmiş)
             let subjectAssetData = null;
             if (selectedIpRecord) {
                 subjectAssetData = {
                     id: selectedIpRecord.id,
-                    // _source: 'suit' ise 'suit', değilse 'ipRecord' olarak kaydet
                     type: selectedIpRecord._source === 'suit' ? 'suit' : 'ipRecord'
                 };
             }
-            // --------------------------------
 
-            // Parent Kontrolü (Aynı kalıyor)
-            const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
-            const isParentCreation = PARENT_SUIT_IDS.includes(String(selectedTaskType.id));
-
-            // 3. Dava Objesini Hazırla
+            // 4. Dava Objesini Hazırla
             const newSuitData = {
                 title: taskData.title,
                 transactionTypeId: selectedTaskType.id,
                 suitType: selectedTaskType.alias || selectedTaskType.name,
                 
-                // Dava açılış ise belgeleri kopyala
-                documents: isParentCreation ? (taskData.documents || []) : [],
+                // Parent olduğu için belgeleri kopyala
+                documents: taskData.documents || [],
 
                 suitDetails: {
                     court: finalCourtName,
@@ -466,10 +469,7 @@ export class TaskSubmitHandler {
                 },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
-                
-                // --- SADELEŞTİRİLMİŞ VARLIK OBJESİ ---
                 subjectAsset: subjectAssetData,
-                // -------------------------------------
                 
                 suitStatus: 'continue',
                 portfolioStatus: 'active',
@@ -478,14 +478,14 @@ export class TaskSubmitHandler {
                 relatedTaskId: taskId
             };
 
-            // 4. Kayıt İşlemleri (Aynı kalıyor)
+            // 5. Davayı 'suits' Koleksiyonuna Ekle
             const suitsRef = collection(db, 'suits');
             const suitDocRef = await addDoc(suitsRef, newSuitData);
             const newSuitId = suitDocRef.id;
 
             console.log('✅ Yeni Dava Kartı Oluşturuldu ID:', newSuitId);
 
-            // 5. İlk Transaction (Aynı kalıyor)
+            // 6. İLK TRANSACTION'I EKLE
             const initialTransaction = {
                 type: selectedTaskType.id,
                 description: `${selectedTaskType.alias || selectedTaskType.name} işlemi yapıldı.`,
