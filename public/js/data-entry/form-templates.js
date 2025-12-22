@@ -286,91 +286,85 @@ export const FormTemplates = {
     `,
 
     getSuitFields: (taskName) => `
-        <div class="card mb-4">
-            <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0 text-dark">3. Dava Detayları</h5>
-            </div>
-            <div class="card-body">
-                <div class="form-grid">
-                    
-                    <div class="form-group full-width">
-                        <label for="suitCourt" class="form-label">Mahkeme</label>
-                        <select id="suitCourt" name="suitCourt" class="form-select" required>
-                            <option value="">Seçiniz...</option>
-                            <optgroup label="Ankara">
-                                <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                            </optgroup>
-                            <optgroup label="İstanbul">
-                                <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                            </optgroup>
-                            <optgroup label="Diğer">
-                                <option value="istinaf">Bölge Adliye Mahkemesi (İstinaf)</option>
-                                <option value="yargitay">Yargıtay</option>
-                                <option value="other">Diğer (Manuel Giriş)</option>
-                            </optgroup>
-                        </select>
-                        <input type="text" id="customCourtInput" class="form-control mt-2" placeholder="Mahkeme adını yazınız..." style="display:none;">
-                    </div>
+        <div class="card-header bg-white border-bottom">
+            <h5 class="mb-0 text-dark">3. Dava Detayları</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                
+                <div class="form-group full-width">
+                    <label for="suitCourt" class="form-label">Mahkeme</label>
+                    <select id="suitCourt" name="suitCourt" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                        <optgroup label="Ankara">
+                            <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+                        <optgroup label="İstanbul">
+                            <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+                        <optgroup label="Diğer">
+                            <option value="istinaf">Bölge Adliye Mahkemesi (İstinaf)</option>
+                            <option value="yargitay">Yargıtay</option>
+                            <option value="other">Diğer (Manuel Giriş)</option>
+                        </optgroup>
+                    </select>
+                    <input type="text" id="customCourtInput" class="form-control mt-2" placeholder="Mahkeme adını yazınız..." style="display:none;">
+                </div>
 
-                    <div class="form-group full-width">
-                        <label for="suitDescription" class="form-label">Dava Konusu ve Açıklama</label>
-                        <textarea class="form-control" id="suitDescription" rows="3" placeholder="Konu, talep sonucu..."></textarea>
-                    </div>
+                <div class="form-group full-width">
+                    <label for="suitDescription" class="form-label">Dava Konusu ve Açıklama</label>
+                    <textarea class="form-control" id="suitDescription" rows="3" placeholder="Konu, talep sonucu..."></textarea>
+                </div>
 
-                    <div class="form-group">
-                        <label for="opposingParty" class="form-label">Karşı Taraf</label>
-                        <input type="text" id="opposingParty" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
-                        <input type="text" id="opposingCounsel" class="form-input">
-                    </div>
+                <div class="form-group">
+                    <label for="opposingParty" class="form-label">Karşı Taraf</label>
+                    <input type="text" id="opposingParty" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
+                    <input type="text" id="opposingCounsel" class="form-input">
+                </div>
 
-                    <div class="form-group">
-                        <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
-                        <select id="suitStatusSelect" class="form-select" required>
-                            <option value="">Seçiniz...</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
+                    <select id="suitStatusSelect" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                    </select>
+                </div>
 
-                    <div class="form-group">
-                        <label for="suitCaseNo" class="form-label">Esas No</label>
-                        <input type="text" class="form-control" id="suitCaseNo">
-                    </div>
+                <div class="form-group">
+                    <label for="suitCaseNo" class="form-label">Esas No</label>
+                    <input type="text" class="form-control" id="suitCaseNo">
+                </div>
 
-                    <div class="form-group">
-                        <label for="suitOpeningDate" class="form-label">Dava Tarihi (Açılış)</label>
-                        <input type="date" class="form-control" id="suitOpeningDate" required>
-                    </div>
+                <div class="form-group">
+                    <label for="suitOpeningDate" class="form-label">Dava Tarihi (Açılış)</label>
+                    <input type="date" class="form-control" id="suitOpeningDate" required>
+                </div>
 
-                    <div class="form-group full-width mt-3">
-                        <label class="form-label text-dark" style="font-weight:600;">
-                            <i class="fas fa-paperclip mr-2"></i>Dava Evrakları
-                        </label>
-                        
-                        <div class="custom-file">
-                            <input type="file" class="custom-file-input" id="suitDocument" multiple>
-                            <label class="custom-file-label" for="suitDocument">Dosya Seçiniz...</label>
-                        </div>
-                        <small class="text-muted d-block mt-1">Dava dilekçesi, tensip zaptı vb. evrakları buraya yükleyebilirsiniz.</small>
+                <div class="form-group full-width mt-3">
+                    <label class="form-label text-dark" style="font-weight:600;"><i class="fas fa-paperclip mr-2"></i>Dava Evrakları</label>
+                    <div class="custom-file">
+                        <input type="file" class="custom-file-input" id="suitDocument" multiple>
+                        <label class="custom-file-label" for="suitDocument">Dosya Seçiniz...</label>
                     </div>
-
+                    <small class="text-muted d-block mt-1">Dava dilekçesi, tensip zaptı vb. evrakları buraya yükleyebilirsiniz.</small>
                 </div>
             </div>
         </div>
     `,
 
     getClientSection: () => `
-            <div class="card mb-4" id="clientSection">
+        <div class="card mb-4" id="clientSection">
             <div class="card-header bg-white border-bottom">
                 <h5 class="mb-0 text-dark">1. Müvekkil Bilgileri</h5>
             </div>
@@ -387,41 +381,50 @@ export const FormTemplates = {
                     <div class="form-group"></div>
                 </div>
                 <div class="form-group full-width mt-3">
-                    <label for="suitClientSearch" class="form-label">Müvekkil Ara (Sistemdeki Kişiler)</label>
+                    <label for="suitClientSearch" class="form-label">Müvekkil Ara</label>
                     <div class="d-flex" style="gap:10px; align-items:flex-start;">
                         <div class="search-input-wrapper" style="flex:1; position:relative;">
                             <input type="text" id="suitClientSearch" class="form-input" placeholder="Müvekkil adı, e-posta..." autocomplete="off">
                             <div id="suitClientSearchResults" class="search-results-list" style="display:none;"></div> 
                         </div>
-                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
-                            <span>&#x2795;</span> Yeni Kişi
-                        </button>
+                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person"><span>&#x2795;</span> Yeni Kişi</button>
                     </div>
                 </div>
-                <div id="selectedSuitClient" class="mt-2" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
-                    Seçilen: <span id="selectedSuitClientName"></span>
-                    <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSuitClient">Kaldır</button>
+                <div id="selectedSuitClient" class="mt-3 p-3 border rounded bg-light d-none align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted mr-2">Seçilen:</span>
+                        <span id="selectedSuitClientName" class="font-weight-bold text-primary"></span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearSuitClient">
+                        <i class="fas fa-times mr-1"></i>Kaldır
+                    </button>
                 </div>
             </div>
         </div>
     `,
-    getSubjectAssetSection: () => `
+
+getSubjectAssetSection: () => `
         <div class="card mb-4" id="subjectAssetSection">
             <div class="card-header bg-white border-bottom">
                 <h5 class="mb-0 text-dark">2. Dava Konusu (Portföy Varlığı)</h5>
             </div>
             <div class="card-body">
                 <div class="form-group full-width">
-                    <label for="subjectAssetSearch" class="form-label">Portföyden Varlık Ara (Marka, Patent, Tasarım)</label>
+                    <label for="subjectAssetSearch" class="form-label">Portföyden Varlık Ara</label>
                     <div class="search-input-wrapper" style="position:relative;">
                         <input type="text" id="subjectAssetSearch" class="form-input" placeholder="Başlık, numara, tip..." autocomplete="off">
                         <div id="subjectAssetSearchResults" class="search-results-list" style="display:none;"></div> 
                     </div>
                 </div>
-                <div id="selectedSubjectAsset" class="mt-3" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
-                    Seçilen: <span id="selectedSubjectAssetName" class="font-weight-bold"></span>
-                    (<span id="selectedSubjectAssetType"></span> - <span id="selectedSubjectAssetNumber"></span>)
-                    <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSubjectAsset">Kaldır</button>
+                <div id="selectedSubjectAsset" class="mt-3 p-3 border rounded bg-light d-none align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted mr-2">Seçilen:</span>
+                        <span id="selectedSubjectAssetName" class="font-weight-bold text-primary"></span>
+                        <small class="text-muted ml-2">(<span id="selectedSubjectAssetType"></span> - <span id="selectedSubjectAssetNumber"></span>)</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearSubjectAsset">
+                        <i class="fas fa-times mr-1"></i>Kaldır
+                    </button>
                 </div>
             </div>
         </div>
