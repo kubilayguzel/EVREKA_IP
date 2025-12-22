@@ -202,14 +202,21 @@
                 setText('viewSubjectAsset', data.subjectAsset?.title || data.title); // Konu Varlık
 
                 // Durum Rengi ve Metni
-                const statusVal = details.suitStatus;
-                const statusObj = STATUSES.litigation ? STATUSES.litigation.find(s => s.value === statusVal) : null;
+                const statusVal = details.suitStatus; // DB'den gelen örn: 'continue' veya 'expert_examination'
+                
+                // Listeden eşleşen objeyi bul
+                let statusObj = null;
+                if (STATUSES.litigation) {
+                    statusObj = STATUSES.litigation.find(s => s.value === statusVal);
+                }
+
+                // Bulunursa metni ve rengi al, bulunamazsa ham değeri göster
                 const statusText = statusObj ? statusObj.text : (statusVal || '-');
                 const statusColor = statusObj && statusObj.color ? statusObj.color : 'secondary';
                 
                 const statusEl = document.getElementById('viewSuitStatus');
                 statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
-
+                
                 // 2. Taraf Bilgileri
                 setText('viewClientName', data.client?.name);
                 setText('viewClientRole', formatRole(data.clientRole || data.client?.role));
