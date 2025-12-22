@@ -178,7 +178,35 @@ class DataEntryModule {
                     }
                 }
             }
+            
+            // 2. DOSYA YÜKLEME GÖRSEL GÜNCELLEMESİ (YENİ EKLENEN KISIM)
+            // Kullanıcı dosya seçtiğinde "Dosya Seçiniz..." yazısı dosya ismiyle değişir.
+            if (e.target && e.target.id === 'suitDocument') {
+                const label = e.target.nextElementSibling; // custom-file-label etiketi
+                const files = e.target.files;
+                
+                if (label) {
+                    if (files && files.length > 0) {
+                        // Tek dosya ise ismini, çoklu ise sayısını yaz
+                        if (files.length === 1) {
+                            label.textContent = files[0].name;
+                            label.classList.add('text-primary'); // Seçildiğini belli etmek için renk verelim
+                            label.style.fontWeight = 'bold';
+                        } else {
+                            label.textContent = `${files.length} dosya seçildi`;
+                            label.classList.add('text-primary');
+                            label.style.fontWeight = 'bold';
+                        }
+                    } else {
+                        // Seçim iptal edilirse eski haline dön
+                        label.textContent = 'Dosya Seçiniz...';
+                        label.classList.remove('text-primary');
+                        label.style.fontWeight = 'normal';
+                    }
+                }
+            }
         });
+
     }
 
     handleIPTypeChange(ipType) {
