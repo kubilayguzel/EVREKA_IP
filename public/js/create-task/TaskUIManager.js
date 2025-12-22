@@ -304,13 +304,8 @@ export class TaskUIManager {
                 </optgroup>
             `).join('');
 
-            // B) DAVA KONUSU LİSTESİ (Veritabanından)
-            // Sadece 'suit' tipinde olan ve 'parent' (Ana Dava) olanları filtreliyoruz.
-            const subjectOptions = allTransactionTypes
-                .filter(t => t.ipType === 'suit' && t.hierarchy === 'parent')
-                .map(t => `<option value="${t.alias || t.name}">${t.alias || t.name}</option>`)
-                .join('');
-
+            // B) DAVA KONUSU LİSTESİ (KALDIRILDI - Artık kullanılmıyor)
+            
             return `
             <div class="section-card">
                 <h3 class="section-title">4. Dava Bilgileri</h3>
@@ -325,16 +320,6 @@ export class TaskUIManager {
                         <input type="text" id="customCourtInput" class="form-input mt-2" 
                             placeholder="Mahkeme adını tam olarak yazınız..." 
                             style="display:none; border-color: #3498db;">
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label class="form-label">Konu</label>
-                        <select id="subjectOfLawsuit" class="form-select">
-                            <option value="">Seçiniz...</option>
-                            ${subjectOptions}
-                            <option value="other">Diğer (Manuel Giriş)</option>
-                        </select>
-                        <input type="text" id="customSubjectInput" class="form-input mt-2" placeholder="Dava konusunu yazınız..." style="display:none;">
                     </div>
 
                     <div class="form-group">
