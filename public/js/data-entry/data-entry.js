@@ -1086,8 +1086,116 @@ class DataEntryModule {
         }
     }
 
+
     setupSuitSubjectAssetSearchSelectors() {
-        // Search logic here
+        const input = document.getElementById('subjectAssetSearch');
+        const results = document.getElementById('subjectAssetSearchResults');
+        const clearBtn = document.getElementById('clearSubjectAsset');
+        let debounceTimer;
+
+        if (input) {
+            input.addEventListener('input', (e) => {
+                const term = e.target.value.trim().toLowerCase();
+                clearTimeout(debounceTimer);
+
+                if (term.length < 2) {
+                    if (results) results.style.display = 'none';
+                    return;
+                }
+
+                debounceTimer = setTimeout(async () => {
+                    try {
+                        // Firebase sorgusu (ipRecords içinde ara)
+                        const db = getFirestore();
+                        const ipRef = collection(db, 'ipRecords');
+                        
+                        // Basit arama: Başlık (title) veya Başvuru Numarası
+                        // Not: Firestore'da 'text contains' araması yoktur, o yüzden basit bir client-side filtreleme 
+                        // veya '>= term' yöntemi kullanıyoruz. Burada tüm kayıtları çekip yormamak için limitli çekip filtreliyoruz
+                        // veya varsa ipRecordsService.search metodunu kullanıyoruz.
+                        
+                        // YÖNTEM A: ipRecordsService varsa (Varsayıyoruz)
+                        // const searchRes = await ipRecordsService.search(term); 
+                        
+                        // YÖNTEM B: Manuel Sorgu (Daha garanti)
+                        const q = query(ipRef, where('portfoyStatus', '==', 'active')); // Sadece aktifler
+                        const snapshot = await getDocs(q);
+                        
+                        const matches = [];
+                        snapshot.forEach(doc => {
+                            const d = doc.data();
+                            const title = (d.title || d.markName || '').toLowerCase();
+                            const appNo = (d.applicationNumber || '').toLowerCase();
+                            
+                            // Arama terimi başlıkta veya numarada geçiyor mu?
+                            if (title.includes(term) || appNo.includes(term)) {
+                                matches.push({ id: doc.id, ...d });
+                            }
+                        });
+
+                        // Sonuçları Göster
+                        if (results) {
+                            if (matches.length === 0) {
+                                results.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
+                            } else {
+                                results.innerHTML = matches.slice(0, 10).map(rec => `
+                                    <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${rec.id}">
+                                        <div class="font-weight-bold">${rec.title || '-'}</div>
+                                        <div class="small text-muted">${rec.applicationNumber || 'No Yok'} (${rec.type || 'Bilinmiyor'})</div>
+                                    </div>
+                                `).join('');
+
+                                // Tıklama Olayı
+                                results.querySelectorAll('.search-result-item').forEach(item => {
+                                    item.addEventListener('click', () => {
+                                        const selectedId = item.dataset.id;
+                                        const selectedRecord = matches.find(m => m.id === selectedId);
+                                        this.selectSuitSubjectAsset(selectedRecord);
+                                        results.style.display = 'none';
+                                        input.value = '';
+                                    });
+                                });
+                            }
+                            results.style.display = 'block';
+                        }
+
+                    } catch (err) {
+                        console.error('Arama hatası:', err);
+                    }
+                }, 300); // 300ms gecikme
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.onclick = () => {
+                this.suitSubjectAsset = null;
+                document.getElementById('selectedSubjectAsset').style.display = 'none';
+                input.style.display = 'block'; 
+                input.value = '';
+                input.focus();
+                this.updateSaveButtonState();
+            };
+        }
+    }
+
+    // Seçilen Varlığı UI'a Yansıtma Yardımcısı
+    selectSuitSubjectAsset(asset) {
+        this.suitSubjectAsset = asset;
+        const display = document.getElementById('selectedSubjectAsset');
+        const inputWrapper = document.getElementById('subjectAssetSearch').parentNode; // Input wrapper
+
+        document.getElementById('selectedSubjectAssetName').textContent = asset.title || asset.markName;
+        document.getElementById('selectedSubjectAssetType').textContent = asset.type || 'Varlık';
+        document.getElementById('selectedSubjectAssetNumber').textContent = asset.applicationNumber || '-';
+
+        display.style.display = 'block';
+        
+        // Input'u gizle
+        // Not: search-input-wrapper içindeki input'u gizlemek yerine wrapper'ı gizlemek daha şık olabilir.
+        // Ama şimdilik sadece inputu gizleyip clear butonuna basınca açıyoruz.
+        document.getElementById('subjectAssetSearch').style.display = 'none'; 
+
+        this.updateSaveButtonState();
     }
 
     addPriority() {
