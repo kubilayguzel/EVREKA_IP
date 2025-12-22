@@ -294,11 +294,6 @@ export const FormTemplates = {
             </optgroup>
         `).join('');
 
-        // Konu Seçenekleri
-        const subjectOptions = LAWSUIT_SUBJECTS.map(s => 
-            `<option value="${s.value}">${s.text}</option>`
-        ).join('');
-
         return `
         <div class="card mb-4">
             <div class="card-header bg-white border-bottom">
@@ -314,14 +309,6 @@ export const FormTemplates = {
                             ${courtOptions}
                         </select>
                         <input type="text" id="customCourtInput" class="form-control mt-2" placeholder="Mahkeme adını yazınız..." style="display:none;">
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="suitDescription" class="form-label">Dava Konusu</label>
-                        <select id="suitDescription" class="form-select">
-                            <option value="">Seçiniz...</option>
-                            ${subjectOptions}
-                        </select>
                     </div>
 
                     <div class="form-group">
