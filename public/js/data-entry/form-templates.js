@@ -380,6 +380,7 @@ export const FormTemplates = {
                     </div>
                     <div class="form-group"></div>
                 </div>
+                
                 <div class="form-group full-width mt-3">
                     <label for="suitClientSearch" class="form-label">Müvekkil Ara</label>
                     <div class="d-flex" style="gap:10px; align-items:flex-start;">
@@ -390,6 +391,7 @@ export const FormTemplates = {
                         <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person"><span>&#x2795;</span> Yeni Kişi</button>
                     </div>
                 </div>
+
                 <div id="selectedSuitClient" class="mt-3 p-3 border rounded bg-light d-none align-items-center justify-content-between">
                     <div>
                         <span class="text-muted mr-2">Seçilen:</span>
@@ -403,7 +405,7 @@ export const FormTemplates = {
         </div>
     `,
 
-getSubjectAssetSection: () => `
+    getSubjectAssetSection: () => `
         <div class="card mb-4" id="subjectAssetSection">
             <div class="card-header bg-white border-bottom">
                 <h5 class="mb-0 text-dark">2. Dava Konusu (Portföy Varlığı)</h5>
