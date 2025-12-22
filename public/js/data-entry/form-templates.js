@@ -1,4 +1,5 @@
 // js/templates/form-templates.js
+import { LAWSUIT_SUBJECTS, COURTS_LIST } from '../../utils.js';
 
 export const FormTemplates = {
     getTrademarkForm: () => `
@@ -285,7 +286,20 @@ export const FormTemplates = {
         </div>
     `,
 
-    getSuitFields: (taskName) => `
+    getSuitFields: (taskName) => {
+        // Mahkeme Seçenekleri
+        const courtOptions = COURTS_LIST.map(group => `
+            <optgroup label="${group.label}">
+                ${group.options.map(opt => `<option value="${opt.value}">${opt.text}</option>`).join('')}
+            </optgroup>
+        `).join('');
+
+        // Konu Seçenekleri
+        const subjectOptions = LAWSUIT_SUBJECTS.map(s => 
+            `<option value="${s.value}">${s.text}</option>`
+        ).join('');
+
+        return `
         <div class="card mb-4">
             <div class="card-header bg-white border-bottom">
                 <h5 class="mb-0 text-dark">3. Dava Detayları</h5>
@@ -297,33 +311,17 @@ export const FormTemplates = {
                         <label for="suitCourt" class="form-label">Mahkeme</label>
                         <select id="suitCourt" name="suitCourt" class="form-select" required>
                             <option value="">Seçiniz...</option>
-                            <optgroup label="Ankara">
-                                <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                            </optgroup>
-                            <optgroup label="İstanbul">
-                                <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                                <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
-                            </optgroup>
-                            <optgroup label="Diğer">
-                                <option value="istinaf">Bölge Adliye Mahkemesi (İstinaf)</option>
-                                <option value="yargitay">Yargıtay</option>
-                                <option value="other">Diğer (Manuel Giriş)</option>
-                            </optgroup>
+                            ${courtOptions}
                         </select>
                         <input type="text" id="customCourtInput" class="form-control mt-2" placeholder="Mahkeme adını yazınız..." style="display:none;">
                     </div>
 
                     <div class="form-group full-width">
-                        <label for="suitDescription" class="form-label">Dava Konusu ve Açıklama</label>
-                        <textarea class="form-control" id="suitDescription" rows="3" placeholder="Konu, talep sonucu..."></textarea>
+                        <label for="suitDescription" class="form-label">Dava Konusu</label>
+                        <select id="suitDescription" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            ${subjectOptions}
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -353,9 +351,7 @@ export const FormTemplates = {
                     </div>
 
                     <div class="form-group full-width mt-3">
-                        <label class="form-label text-dark" style="font-weight:600;">
-                            <i class="fas fa-paperclip mr-2"></i>Dava Evrakları
-                        </label>
+                        <label class="form-label text-dark" style="font-weight:600;"><i class="fas fa-paperclip mr-2"></i>Dava Evrakları</label>
                         <div class="custom-file">
                             <input type="file" class="custom-file-input" id="suitDocument" multiple>
                             <label class="custom-file-label" for="suitDocument">Dosya Seçiniz...</label>
@@ -365,8 +361,8 @@ export const FormTemplates = {
 
                 </div>
             </div>
-        </div>
-    `,
+        </div>`;
+    },
 
     getClientSection: () => `
         <div class="card mb-4" id="clientSection">
