@@ -510,7 +510,7 @@ export class TaskSubmitHandler {
             // 6. İLK TRANSACTION'I EKLE
             const initialTransaction = {
                 type: selectedTaskType.id,
-                description: `${selectedTaskType.alias || selectedTaskType.name} işlemi yapıldı.`,
+                description: 'Dava Açıldı',
                 transactionHierarchy: 'parent',
                 triggeringTaskId: String(taskId),
                 createdAt: Timestamp.now(),
