@@ -1086,7 +1086,6 @@ class DataEntryModule {
         }
     }
 
-
     setupSuitSubjectAssetSearchSelectors() {
         const input = document.getElementById('subjectAssetSearch');
         const results = document.getElementById('subjectAssetSearchResults');
@@ -1105,31 +1104,59 @@ class DataEntryModule {
 
                 debounceTimer = setTimeout(async () => {
                     try {
-                        // Firebase sorgusu (ipRecords içinde ara)
                         const db = getFirestore();
+                        
+                        // 1. SORGU: Portföy (Marka/Patent)
                         const ipRef = collection(db, 'ipRecords');
-                        
-                        // Basit arama: Başlık (title) veya Başvuru Numarası
-                        // Not: Firestore'da 'text contains' araması yoktur, o yüzden basit bir client-side filtreleme 
-                        // veya '>= term' yöntemi kullanıyoruz. Burada tüm kayıtları çekip yormamak için limitli çekip filtreliyoruz
-                        // veya varsa ipRecordsService.search metodunu kullanıyoruz.
-                        
-                        // YÖNTEM A: ipRecordsService varsa (Varsayıyoruz)
-                        // const searchRes = await ipRecordsService.search(term); 
-                        
-                        // YÖNTEM B: Manuel Sorgu (Daha garanti)
-                        const q = query(ipRef, where('portfoyStatus', '==', 'active')); // Sadece aktifler
-                        const snapshot = await getDocs(q);
-                        
-                        const matches = [];
-                        snapshot.forEach(doc => {
+                        const qIp = query(ipRef, where('portfoyStatus', '==', 'active')); // Sadece aktifler
+
+                        // 2. SORGU: Davalar (Suits)
+                        const suitsRef = collection(db, 'suits');
+                        const qSuits = query(suitsRef, where('suitStatus', '!=', 'closed')); // Kapanmamış davalar
+
+                        // Paralel çekim (Performans için)
+                        const [ipSnapshot, suitSnapshot] = await Promise.all([
+                            getDocs(qIp),
+                            getDocs(qSuits)
+                        ]);
+
+                        let matches = [];
+
+                        // A) Marka/Patent Sonuçlarını İşle
+                        ipSnapshot.forEach(doc => {
                             const d = doc.data();
                             const title = (d.title || d.markName || '').toLowerCase();
                             const appNo = (d.applicationNumber || '').toLowerCase();
                             
-                            // Arama terimi başlıkta veya numarada geçiyor mu?
                             if (title.includes(term) || appNo.includes(term)) {
-                                matches.push({ id: doc.id, ...d });
+                                matches.push({ 
+                                    id: doc.id, 
+                                    ...d, 
+                                    _source: 'ipRecord', 
+                                    displayType: 'Marka/Patent' 
+                                });
+                            }
+                        });
+
+                        // B) Dava Sonuçlarını İşle
+                        suitSnapshot.forEach(doc => {
+                            const d = doc.data();
+                            
+                            // Dava başlığı, mahkeme adı veya esas no içinde ara
+                            const title = (d.title || '').toLowerCase();
+                            const court = (d.suitDetails?.court || '').toLowerCase();
+                            const caseNo = (d.suitDetails?.caseNo || '').toLowerCase();
+
+                            if (title.includes(term) || court.includes(term) || caseNo.includes(term)) {
+                                matches.push({ 
+                                    id: doc.id, 
+                                    ...d,
+                                    // Dava için başlık ve numara formatı uyduruyoruz
+                                    title: d.suitDetails?.court || d.title, 
+                                    applicationNumber: d.suitDetails?.caseNo || '-', 
+                                    _source: 'suit',
+                                    displayType: 'Dava Dosyası'
+                                });
                             }
                         });
 
@@ -1138,12 +1165,25 @@ class DataEntryModule {
                             if (matches.length === 0) {
                                 results.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
                             } else {
-                                results.innerHTML = matches.slice(0, 10).map(rec => `
-                                    <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${rec.id}">
-                                        <div class="font-weight-bold">${rec.title || '-'}</div>
-                                        <div class="small text-muted">${rec.applicationNumber || 'No Yok'} (${rec.type || 'Bilinmiyor'})</div>
+                                // İlk 10 sonucu göster
+                                results.innerHTML = matches.slice(0, 10).map(rec => {
+                                    // Rozet rengi: Dava ise Mavi, Diğeri Yeşil
+                                    const badgeClass = rec._source === 'suit' ? 'badge-primary' : 'badge-success';
+                                    const icon = rec._source === 'suit' ? '<i class="fas fa-gavel mr-1"></i>' : '<i class="fas fa-certificate mr-1"></i>';
+                                    
+                                    return `
+                                    <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${rec.id}" data-source="${rec._source}">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="font-weight-bold">${rec.title || '-'}</span>
+                                            <span class="badge ${badgeClass}" style="font-size:10px;">${icon}${rec.displayType}</span>
+                                        </div>
+                                        <div class="small text-muted mt-1">
+                                            ${rec.applicationNumber || 'No Yok'} 
+                                            ${rec._source === 'suit' ? '' : `(${rec.type || 'Bilinmiyor'})`}
+                                        </div>
                                     </div>
-                                `).join('');
+                                    `;
+                                }).join('');
 
                                 // Tıklama Olayı
                                 results.querySelectorAll('.search-result-item').forEach(item => {
@@ -1162,7 +1202,7 @@ class DataEntryModule {
                     } catch (err) {
                         console.error('Arama hatası:', err);
                     }
-                }, 300); // 300ms gecikme
+                }, 300);
             });
         }
 
