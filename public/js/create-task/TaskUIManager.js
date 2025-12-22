@@ -292,10 +292,9 @@ export class TaskUIManager {
 
     // Parametre olarak taskTypeId alacak şekilde güncellendi
 
-    _getLawsuitDetailsHtml(taskTypeId, allTransactionTypes) {
+        _getLawsuitDetailsHtml(taskTypeId, allTransactionTypes) {
             const isYargitayTask = String(taskTypeId) === '60';
             
-            // A) MAHKEME LİSTESİ (utils.js'ten)
             const courtOptions = COURTS_LIST.map(group => `
                 <optgroup label="${group.label}">
                     ${group.options.map(opt => 
@@ -304,8 +303,6 @@ export class TaskUIManager {
                 </optgroup>
             `).join('');
 
-            // B) DAVA KONUSU LİSTESİ (KALDIRILDI - Artık kullanılmıyor)
-            
             return `
             <div class="section-card">
                 <h3 class="section-title">4. Dava Bilgileri</h3>
@@ -329,6 +326,17 @@ export class TaskUIManager {
                     <div class="form-group">
                         <label class="form-label">Esas No</label>
                         <input type="text" id="suitCaseNo" class="form-input" placeholder="Henüz yoksa boş bırakın">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label class="form-label" style="font-weight:600;">
+                            <i class="fas fa-paperclip mr-2"></i>Dava Evrakları (PDF)
+                        </label>
+                        <div class="custom-file">
+                            <input type="file" class="custom-file-input" id="suitDocument" multiple accept=".pdf">
+                            <label class="custom-file-label" for="suitDocument" style="justify-content: flex-start;">Dosya Seçiniz...</label>
+                        </div>
+                        <small class="text-muted mt-1">Dava dilekçesi vb. evrakları buradan yükleyebilirsiniz.</small>
                     </div>
                     </div>
             </div>`;
