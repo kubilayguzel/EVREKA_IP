@@ -347,7 +347,6 @@ export class TaskUIManager {
                     </div>
                     </div>
             </div>`;
-        }
     }
 
     _getLawsuitOpponentHtml() {
