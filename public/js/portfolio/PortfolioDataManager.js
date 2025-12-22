@@ -162,6 +162,7 @@ export class PortfolioDataManager {
     }
 
     // --- LITIGATION ---
+
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -173,7 +174,7 @@ export class PortfolioDataManager {
                     ...data,
                     type: 'litigation',
                     status: data.suitDetails?.suitStatus || 'continue', 
-                    suitType: data.transactionType?.alias || data.transactionType?.name || '-',
+                    suitType: data.suitType || data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
                     client: data.client?.name || '-',
