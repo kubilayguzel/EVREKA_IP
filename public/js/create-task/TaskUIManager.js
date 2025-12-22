@@ -292,9 +292,10 @@ export class TaskUIManager {
 
     // Parametre olarak taskTypeId alacak şekilde güncellendi
 
-        _getLawsuitDetailsHtml(taskTypeId, allTransactionTypes) {
+    _getLawsuitDetailsHtml(taskTypeId, allTransactionTypes) {
             const isYargitayTask = String(taskTypeId) === '60';
             
+            // Mahkeme listesini oluştur
             const courtOptions = COURTS_LIST.map(group => `
                 <optgroup label="${group.label}">
                     ${group.options.map(opt => 
@@ -323,6 +324,7 @@ export class TaskUIManager {
                         <label class="form-label">Dava Tarihi (Açılış)</label>
                         <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">Esas No</label>
                         <input type="text" id="suitCaseNo" class="form-input" placeholder="Henüz yoksa boş bırakın">
@@ -337,8 +339,11 @@ export class TaskUIManager {
                             <label class="custom-file-label" for="suitDocument" style="justify-content: flex-start;">Dosya Seçiniz...</label>
                         </div>
                         <small class="text-muted mt-1">Dava dilekçesi vb. evrakları buradan yükleyebilirsiniz.</small>
+                        
+                        <div id="suitDocumentList" class="mt-3"></div>
                     </div>
-                    </div>
+
+                </div>
             </div>`;
     }
 
@@ -450,7 +455,7 @@ export class TaskUIManager {
             </div>
         `).join('');
     }
-    
+
     // --- EKSİK OLAN FONKSİYONLAR EKLENDİ ---
 
     // 1. Seçilen Başvuru Sahiplerini Listeleme
