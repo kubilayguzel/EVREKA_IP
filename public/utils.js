@@ -183,17 +183,6 @@ export const STATUSES = {
     
 };
 
-// public/utils.js dosyasının en altına ekleyin:
-
-export const LAWSUIT_SUBJECTS = [
-    { value: 'yidk_iptal', text: 'YİDK Kararının İptali' },
-    { value: 'hukumsuzluk', text: 'Marka Hükümsüzlüğü' },
-    { value: 'tecavuz_tazminat', text: 'Marka İhlali (Tecavüz) ve Tazminat' },
-    { value: 'delil_tespiti', text: 'Tecavüzün Tespiti / Delil Tespiti' },
-    { value: 'haksiz_rekabet', text: 'Haksız Rekabetin Önlenmesi' },
-    { value: 'other', text: 'Diğer (Manuel Giriş)' }
-];
-
 export const COURTS_LIST = [
     {
         label: 'Ankara',
@@ -207,7 +196,7 @@ export const COURTS_LIST = [
         ]
     },
     {
-        label: 'İstanbul',
+        label: 'İstanbul (Çağlayan)',
         options: [
             { value: 'İstanbul 1. FSHHM', text: 'İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi' },
             { value: 'İstanbul 2. FSHHM', text: 'İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi' },
@@ -217,10 +206,37 @@ export const COURTS_LIST = [
         ]
     },
     {
-        label: 'Diğer',
+        label: 'İstanbul (Anadolu)',
         options: [
+            { value: 'İstanbul Anadolu 1. FSHHM', text: 'İstanbul Anadolu 1. Fikri ve Sınai Haklar Hukuk Mahkemesi' },
+            { value: 'İstanbul Anadolu 2. FSHHM', text: 'İstanbul Anadolu 2. Fikri ve Sınai Haklar Hukuk Mahkemesi' },
+            { value: 'İstanbul Anadolu FSHCM', text: 'İstanbul Anadolu Fikri ve Sınai Haklar Ceza Mahkemesi' }
+        ]
+    },
+    {
+        label: 'İzmir',
+        options: [
+            { value: 'İzmir FSHHM', text: 'İzmir Fikri ve Sınai Haklar Hukuk Mahkemesi' },
+            { value: 'İzmir FSHCM', text: 'İzmir Fikri ve Sınai Haklar Ceza Mahkemesi' }
+        ]
+    },
+    {
+        label: 'Bursa',
+        options: [
+            { value: 'Bursa FSHHM', text: 'Bursa Fikri ve Sınai Haklar Hukuk Mahkemesi' }
+        ]
+    },
+    {
+        label: 'Antalya',
+        options: [
+            { value: 'Antalya FSHHM', text: 'Antalya Fikri ve Sınai Haklar Hukuk Mahkemesi' }
+        ]
+    },
+    {
+        label: 'Yüksek Yargı / Diğer',
+        options: [
+            { value: 'Yargıtay', text: 'Yargıtay' },
             { value: 'istinaf', text: 'Bölge Adliye Mahkemesi (İstinaf)' },
-            { value: 'yargitay', text: 'Yargıtay' },
             { value: 'other', text: 'Diğer (Manuel Giriş)' }
         ]
     }
