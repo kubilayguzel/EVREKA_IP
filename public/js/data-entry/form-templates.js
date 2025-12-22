@@ -1,5 +1,5 @@
 // js/templates/form-templates.js
-import { LAWSUIT_SUBJECTS, COURTS_LIST } from '../../utils.js';
+import {COURTS_LIST } from '../../utils.js';
 
 export const FormTemplates = {
     getTrademarkForm: () => `
