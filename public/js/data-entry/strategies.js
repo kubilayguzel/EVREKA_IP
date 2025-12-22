@@ -60,10 +60,8 @@ export class TrademarkStrategy extends BaseStrategy {
                             acc.push(classObj);
                         }
                         if (rawText) {
-                            // Nokta veya yeni satıra göre böl ama parantez artıklarını temizle
                             const lines = rawText.split(/[\n]/).map(l => l.trim()).filter(Boolean);
                             lines.forEach(line => {
-                                // ".)" veya ")" gibi hatalı bitişleri temizle
                                 const cleanLine = line.replace(/^\)+|\)+$/g, '').trim(); 
                                 if (cleanLine && !classObj.items.includes(cleanLine)) {
                                     classObj.items.push(cleanLine);
@@ -76,10 +74,8 @@ export class TrademarkStrategy extends BaseStrategy {
             }
         } catch (e) { console.warn('Nice classes hatası:', e); }
 
-        // WIPO/ARIPO kontrolü
         const isInternational = (origin === 'WIPO' || origin === 'ARIPO');
 
-        // Bülten verisi
         const bulletinNo = getVal('bulletinNo');
         const bulletinDate = getVal('bulletinDate');
         const bulletins = (bulletinNo || bulletinDate) 
@@ -87,24 +83,18 @@ export class TrademarkStrategy extends BaseStrategy {
             : [];
 
         return {
-            // --- EKSİK OLAN ALANLAR EKLENDİ ---
             ipType: 'trademark',
-            type: 'trademark',           // <-- EKLENDİ (Detay sayfası için şart)
-            portfoyStatus: 'active',     // <-- EKLENDİ (Varsayılan aktif)
-            // ----------------------------------
+            type: 'trademark',
+            portfoyStatus: 'active',
 
             title: brandText,
             brandText: brandText,
             
-            // Tarih formatlarını düzelt
             applicationDate: formatDate(getVal('applicationDate')),
             registrationDate: formatDate(getVal('registrationDate')),
             renewalDate: formatDate(getVal('renewalDate')),
             
-            // Numara Mantığı Düzeltildi
             applicationNumber: getVal('applicationNumber'),
-            // Eğer WIPO değilse, 'registrationNumber' alanını 'registrationNumber' olarak kaydet.
-            // Eskiden yanlışlıkla internationalRegNumber'a atıyorduk.
             registrationNumber: !isInternational ? getVal('registrationNumber') : null,
             internationalRegNumber: isInternational ? getVal('registrationNumber') : null, 
 
@@ -137,14 +127,13 @@ export class TrademarkStrategy extends BaseStrategy {
     }
 }
 
-// Diğer sınıflar (PatentStrategy, DesignStrategy, SuitStrategy) aynı kalabilir...
 export class PatentStrategy extends BaseStrategy {
     render(container) { container.innerHTML = FormTemplates.getPatentForm(); }
     collectData(context) {
         const title = getVal('patentTitle');
         return {
             ipType: 'patent',
-            type: 'patent', // <-- Patent için de ekle
+            type: 'patent',
             portfoyStatus: 'active',
             title: title,
             applicationNumber: getVal('patentApplicationNumber'),
@@ -158,14 +147,14 @@ export class PatentStrategy extends BaseStrategy {
     }
     validate(data) { if (!data.title) return 'Patent başlığı zorunludur.'; return null; }
 }
-// Design ve Suit sınıflarını da benzer mantıkla 'type' ekleyerek güncellemelisin.
+
 export class DesignStrategy extends BaseStrategy {
     render(container) { container.innerHTML = FormTemplates.getDesignForm(); }
     collectData(context) {
         const title = getVal('designTitle');
         return {
             ipType: 'design',
-            type: 'design', // <-- Tasarım için de ekle
+            type: 'design',
             portfoyStatus: 'active',
             title: title,
             applicationNumber: getVal('designApplicationNumber'),
@@ -182,19 +171,19 @@ export class DesignStrategy extends BaseStrategy {
 
 export class SuitStrategy extends BaseStrategy {
     render(container) { 
+        // Ana container data-entry.js tarafından temizlenip hazırlandığı için
+        // burada ekstra bir div oluşturmaya gerek yok, direkt container'ı kullanabiliriz
+        // veya yapıyı korumak adına container içine basabiliriz.
         container.innerHTML = '<div id="suitSpecificFieldsContainer"></div>'; 
     }
     
     renderSpecificFields(taskName) { 
-        // Form şablonlarını birleştiriyoruz
         return FormTemplates.getClientSection() + 
                FormTemplates.getSubjectAssetSection() + 
                FormTemplates.getSuitFields(taskName); 
     }
 
-    // validate fonksiyonu: Parent ID kontrolü burada yapılır
     validate(data) {
-        // A) Zorunlu Alan Kontrolleri
         if (!data.client) return 'Müvekkil seçimi zorunludur.';
         if (!data.clientRole) return 'Müvekkil rolü seçimi zorunludur.';
         if (!data.transactionTypeId) return 'İş Tipi (Dava Türü) seçilmelidir.';
@@ -202,9 +191,6 @@ export class SuitStrategy extends BaseStrategy {
         if (!data.suitDetails.caseNo) return 'Esas No zorunludur.';
         if (!data.suitDetails.openingDate) return 'Dava Tarihi zorunludur.';
 
-        // B) PARENT (ANA DAVA) ID KONTROLÜ
-        // Sadece bu ID'ler ile yeni bir dava dosyası açılabilir.
-        // Dilekçe (61), Bilirkişi (65) vb. gibi child işlemler buradan girilmemeli.
         const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
         
         if (!PARENT_SUIT_IDS.includes(String(data.transactionTypeId))) {
@@ -214,13 +200,11 @@ export class SuitStrategy extends BaseStrategy {
         return null;
     }
 
-    // SuitStrategy sınıfının collectData metodu:
     collectData(context) {
         const specificTaskType = context.suitSpecificTaskType;
         const clientPerson = context.suitClientPerson;
         const clientRole = getVal('clientRole');
         
-        // Mahkeme mantığı
         const courtSelect = document.getElementById('suitCourt');
         const customCourt = document.getElementById('customCourtInput');
         let finalCourt = getVal('suitCourt');
@@ -228,14 +212,12 @@ export class SuitStrategy extends BaseStrategy {
             finalCourt = customCourt?.value?.trim();
         }
 
-        // --- DÜZELTME BURADA ---
-        // subjectAsset: Sadece ID ve Type tutulacak
+        // --- SUBJECT ASSET SADELEŞTİRME ---
         let simplifiedAsset = null;
         if (context.suitSubjectAsset) {
             simplifiedAsset = {
                 id: context.suitSubjectAsset.id,
-                // _source verisi data-entry.js'teki aramadan gelir ('suit' veya 'ipRecord')
-                type: context.suitSubjectAsset._source || 'ipRecord' 
+                type: context.suitSubjectAsset._source === 'suit' ? 'suit' : 'ipRecord' 
             };
         }
 
@@ -250,7 +232,8 @@ export class SuitStrategy extends BaseStrategy {
             client: clientPerson ? { id: clientPerson.id, name: clientPerson.name, role: clientRole } : null,
             clientRole: clientRole,
             
-            transactionType: specificTaskType ? { id: specificTaskType.id, name: specificTaskType.name, alias: specificTaskType.alias } : null,
+            // --- TRANSACTION TYPE MAP KALDIRILDI ---
+            // Sadece ID tutuluyor
             transactionTypeId: specificTaskType?.id || null,
             
             suitDetails: {
@@ -263,13 +246,11 @@ export class SuitStrategy extends BaseStrategy {
                 suitStatus: getVal('suitStatusSelect') || 'filed'
             },
             
-            subjectAsset: simplifiedAsset, // Güncellenmiş sade obje
+            subjectAsset: simplifiedAsset,
             createdAt: new Date().toISOString()
         };
     }
 
-    // YENİ: save Metodu
-    // Standart data-entry kaydını ezer. Dosya yükleme ve Transaction oluşturma işlemlerini yönetir.
     async save(data) {
         try {
             console.log('💾 Dava kaydı başlatılıyor...', data);
@@ -286,20 +267,23 @@ export class SuitStrategy extends BaseStrategy {
                     const storagePath = `suit-documents/${Date.now()}_${file.name}`;
                     const storageRef = ref(storage, storagePath);
                     
-                    await uploadBytes(storageRef, file);
-                    const downloadURL = await getDownloadURL(storageRef);
-                    
-                    uploadedDocs.push({
-                        name: file.name,
-                        url: downloadURL,
-                        type: file.type,
-                        uploadedAt: new Date().toISOString(),
-                        uploadedBy: 'manual_entry'
-                    });
+                    try {
+                        const snapshot = await uploadBytes(storageRef, file);
+                        const downloadURL = await getDownloadURL(snapshot.ref);
+                        
+                        uploadedDocs.push({
+                            name: file.name,
+                            url: downloadURL,
+                            type: file.type,
+                            uploadedAt: new Date().toISOString(),
+                            uploadedBy: 'manual_entry'
+                        });
+                    } catch (uplErr) {
+                        console.error(`❌ Dosya yükleme hatası (${file.name}):`, uplErr);
+                    }
                 }
             }
             
-            // Yüklenen belgeleri ana veriye ekle
             data.documents = uploadedDocs;
 
             // 2. SUITS KOLEKSİYONUNA KAYIT
@@ -308,12 +292,12 @@ export class SuitStrategy extends BaseStrategy {
             console.log('✅ Dava kartı oluşturuldu ID:', newSuitId);
 
             // 3. İLK TRANSACTION (Zaman Çizelgesi Başlangıcı)
-            // Bu adım kritik. Dava detayına girdiğinizde tarihçenin boş gelmemesi için.
             const initialTransaction = {
                 type: data.transactionTypeId,
-                transactionTypeName: data.transactionType?.name || 'Dava Açılış',
+                // transactionTypeName olmadığı için genel açıklama
                 description: "Portföye manuel olarak eklendi.",
                 transactionHierarchy: 'parent',
+                triggeringTaskId: 'manual_entry', 
                 createdAt: Timestamp.now(),
                 creationDate: data.suitDetails.openingDate || new Date().toISOString()
             };
@@ -325,7 +309,7 @@ export class SuitStrategy extends BaseStrategy {
 
         } catch (error) {
             console.error('Dava Kayıt Hatası:', error);
-            throw error; // Hatayı yukarı fırlat ki UI tarafı yakalasın
+            throw error;
         }
     }
 }
