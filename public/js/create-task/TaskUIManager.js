@@ -1,6 +1,6 @@
 import { TASK_IDS, RELATED_PARTY_REQUIRED, PARTY_LABEL_BY_ID, asId } from './TaskConstants.js';
 import { getSelectedNiceClasses } from '../nice-classification.js';
-import { LAWSUIT_SUBJECTS, COURTS_LIST } from '../../utils.js';
+import { COURTS_LIST } from '../../utils.js';
 
 export class TaskUIManager {
     constructor() {
@@ -52,8 +52,8 @@ export class TaskUIManager {
 
         if (isLawsuitTask) {
             contentHtml += this._getLawsuitClientHtml();
-            // DEĞİŞİKLİK BURADA: taskTypeId parametresini içeri gönderiyoruz
-            contentHtml += this._getLawsuitDetailsHtml(taskTypeId); 
+            // Listeyi alt fonksiyona gönderiyoruz
+            contentHtml += this._getLawsuitDetailsHtml(taskTypeId, allTransactionTypes);
             contentHtml += this._getLawsuitOpponentHtml();
         } else if (needsRelatedParty) {
             contentHtml += this._getGenericRelatedPartyHtml(partyLabel);
@@ -290,69 +290,64 @@ export class TaskUIManager {
         </div>`;
     }
 
-// Parametre olarak taskTypeId alacak şekilde güncellendi
+    // Parametre olarak taskTypeId alacak şekilde güncellendi
 
-    _getLawsuitDetailsHtml(taskTypeId) {
-        const isYargitayTask = String(taskTypeId) === '60';
-        
-        // Mahkeme Listesini Oluştur
-        const courtOptions = COURTS_LIST.map(group => `
-            <optgroup label="${group.label}">
-                ${group.options.map(opt => 
-                    `<option value="${opt.value}" ${opt.value === 'Yargıtay' && isYargitayTask ? 'selected' : ''}>${opt.text}</option>`
-                ).join('')}
-            </optgroup>
-        `).join('');
+    _getLawsuitDetailsHtml(taskTypeId, allTransactionTypes) {
+            const isYargitayTask = String(taskTypeId) === '60';
+            
+            // A) MAHKEME LİSTESİ (utils.js'ten)
+            const courtOptions = COURTS_LIST.map(group => `
+                <optgroup label="${group.label}">
+                    ${group.options.map(opt => 
+                        `<option value="${opt.value}" ${opt.value === 'Yargıtay' && isYargitayTask ? 'selected' : ''}>${opt.text}</option>`
+                    ).join('')}
+                </optgroup>
+            `).join('');
 
-        // Dava Konusu Listesini Oluştur
-        const subjectOptions = LAWSUIT_SUBJECTS.map(s => 
-            `<option value="${s.value}">${s.text}</option>`
-        ).join('');
+            // B) DAVA KONUSU LİSTESİ (Veritabanından)
+            // Sadece 'suit' tipinde olan ve 'parent' (Ana Dava) olanları filtreliyoruz.
+            const subjectOptions = allTransactionTypes
+                .filter(t => t.ipType === 'suit' && t.hierarchy === 'parent')
+                .map(t => `<option value="${t.alias || t.name}">${t.alias || t.name}</option>`)
+                .join('');
 
-        return `
-        <div class="section-card">
-            <h3 class="section-title">4. Dava Bilgileri</h3>
-            <div class="form-grid">
-                
-                <div class="form-group full-width">
-                    <label class="form-label">Mahkeme</label>
-                    <select id="courtName" class="form-select">
-                        <option value="">Seçiniz...</option>
-                        ${courtOptions}
-                    </select>
-                    <input type="text" id="customCourtInput" class="form-input mt-2" 
-                           placeholder="Mahkeme adını tam olarak yazınız..." 
-                           style="display:none; border-color: #3498db;">
-                </div>
-
-                <div class="form-group full-width">
-                    <label class="form-label">Konu</label>
-                    <select id="subjectOfLawsuit" class="form-select">
-                        <option value="">Seçiniz...</option>
-                        ${subjectOptions}
-                    </select>
+            return `
+            <div class="section-card">
+                <h3 class="section-title">4. Dava Bilgileri</h3>
+                <div class="form-grid">
+                    
+                    <div class="form-group full-width">
+                        <label class="form-label">Mahkeme</label>
+                        <select id="courtName" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            ${courtOptions}
+                        </select>
+                        <input type="text" id="customCourtInput" class="form-input mt-2" 
+                            placeholder="Mahkeme adını tam olarak yazınız..." 
+                            style="display:none; border-color: #3498db;">
                     </div>
 
-                <div class="form-group">
-                    <label class="form-label">Dava Tarihi (Açılış)</label>
-                    <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Esas No</label>
-                    <input type="text" id="suitCaseNo" class="form-input" placeholder="Henüz yoksa boş bırakın">
-                </div>
-
-                <div class="form-group full-width mt-3">
-                    <label class="form-label"><i class="fas fa-paperclip mr-2"></i>Dava Dokümanı / Ekler</label>
-                    <div class="custom-file">
-                        <input type="file" class="custom-file-input" id="suitDocument" multiple>
-                        <label class="custom-file-label" for="suitDocument" data-browse="Gözat">Dosya Seçiniz...</label>
+                    <div class="form-group full-width">
+                        <label class="form-label">Konu</label>
+                        <select id="subjectOfLawsuit" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            ${subjectOptions}
+                            <option value="other">Diğer (Manuel Giriş)</option>
+                        </select>
+                        <input type="text" id="customSubjectInput" class="form-input mt-2" placeholder="Dava konusunu yazınız..." style="display:none;">
                     </div>
-                    <small class="form-text text-muted">Dava dilekçesi, tensip zaptı veya ilgili evrakları buraya yükleyebilirsiniz.</small>
-                </div>
-            </div>
-        </div>`;
+
+                    <div class="form-group">
+                        <label class="form-label">Dava Tarihi (Açılış)</label>
+                        <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Esas No</label>
+                        <input type="text" id="suitCaseNo" class="form-input" placeholder="Henüz yoksa boş bırakın">
+                    </div>
+                    </div>
+            </div>`;
+        }
     }
 
     _getLawsuitOpponentHtml() {
