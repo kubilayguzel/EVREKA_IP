@@ -368,7 +368,12 @@ setupEventListeners() {
         
         // 1. UI'ı Çizdir (Bu işlem DOM'a HTML stringini basar)
         if (isMarkaBasvuru) this.uiManager.renderTrademarkApplicationForm();
-        else this.uiManager.renderBaseForm(selectedType.alias || selectedType.name, selectedType.id, selectedType.ipType === 'suit');
+        this.uiManager.renderBaseForm(
+        selectedTaskType.alias || selectedTaskType.name,
+        selectedTaskType.id,
+        selectedTaskType.ipType === 'suit', // isLawsuitTask
+        this.state.allTransactionTypes // <--- YENİ: Veritabanındaki tüm iş tiplerini gönderiyoruz
+        );
         
         // 3. İlgili Varlık Kaynağını Belirle (Yeni Kod)
         const assetSource = selectedType.relatedAssetSource || 'ipRecords';
