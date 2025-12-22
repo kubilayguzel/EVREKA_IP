@@ -217,7 +217,7 @@ class DataEntryModule {
         const ownerCard = document.getElementById('ownerCard');
         const specificTaskTypeWrapper = document.getElementById('specificTaskTypeWrapper');
         const originSelectWrapper = document.getElementById('originSelectWrapper');
-        const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
+        const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard'); // Bu bizim ana kutumuz
         const dynamicFormContainer = document.getElementById('dynamicFormContainer');
         const clientSection = document.querySelector('.card[id="clientSection"]'); 
         
@@ -232,26 +232,22 @@ class DataEntryModule {
             specificTaskTypeWrapper.style.display = 'block';
             originSelectWrapper.style.display = 'block';
             
-            // --- DÜZELTME BAŞLANGICI: Konteyner Garantisi ---
             if (suitSpecificFieldsCard) {
+                // --- KRİTİK DÜZELTME BAŞLANGICI ---
+                // HTML'den gelen 'card', 'card-body', 'p-3' gibi sınıfları siliyoruz.
+                // Böylece "çift çerçeve" ve "girinti" sorunu ortadan kalkıyor.
+                suitSpecificFieldsCard.className = ''; 
                 suitSpecificFieldsCard.style.display = 'block';
-                // Eğer içinde container yoksa oluştur
-                let container = document.getElementById('suitSpecificFieldsContainer');
-                if (!container) {
-                    container = document.createElement('div');
-                    container.id = 'suitSpecificFieldsContainer';
-                    suitSpecificFieldsCard.appendChild(container);
-                }
-                container.innerHTML = ''; // İçini temizle
+                suitSpecificFieldsCard.innerHTML = ''; // İçini tamamen temizle
+                // --- KRİTİK DÜZELTME BİTİŞİ ---
             }
-            // --- DÜZELTME BİTİŞİ ---
 
             this.renderSuitClientSection(); 
             this.populateOriginDropdown('originSelect', 'TURKEY_NATIONAL', ipType); 
             this.populateSpecificTaskTypeDropdown(ipType);
             
         } else {
-            // Diğer tipler (Marka/Patent)
+            // Marka/Patent Seçimi
             specificTaskTypeWrapper.style.display = 'none';
             originSelectWrapper.style.display = 'block'; 
             if(suitSpecificFieldsCard) suitSpecificFieldsCard.style.display = 'none';
@@ -328,14 +324,18 @@ class DataEntryModule {
     handleSpecificTaskTypeChange(e) {
         const taskTypeId = e.target.value;
         this.suitSpecificTaskType = this.allTransactionTypes.find(t => t.id === taskTypeId);
-        const container = document.getElementById('suitSpecificFieldsContainer');
+        
+        // Artık alt container aramıyoruz, direkt ana kutuya basacağız
+        const container = document.getElementById('suitSpecificFieldsCard');
 
-        if (this.suitSpecificTaskType) {
+        if (this.suitSpecificTaskType && container) {
+            // Formu direkt ana kutunun içine basıyoruz
             container.innerHTML = this.renderSuitFields(this.suitSpecificTaskType.alias || this.suitSpecificTaskType.name);
+            
             this.setupSuitPersonSearchSelectors(); 
-            this.setupDynamicFormListeners(); // Datepicker ve eventleri tekrar bağla
-            this._populateSuitStatusDropdown();
-        } else {
+            this.setupDynamicFormListeners(); 
+            this._populateSuitStatusDropdown(); 
+        } else if (container) {
             container.innerHTML = '';
         }
         this.updateSaveButtonState();
