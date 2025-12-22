@@ -202,7 +202,7 @@
                 setText('viewSubjectAsset', data.subjectAsset?.title || data.title); // Konu Varlık
 
                 // Durum Rengi ve Metni
-                const statusVal = details.suitStatus; // DB'den gelen örn: 'continue' veya 'expert_examination'
+                const statusVal = data.suitStatus;
                 
                 // Listeden eşleşen objeyi bul
                 let statusObj = null;
