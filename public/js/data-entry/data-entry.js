@@ -191,9 +191,9 @@ class DataEntryModule {
         const originSelectWrapper = document.getElementById('originSelectWrapper');
         const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
         const dynamicFormContainer = document.getElementById('dynamicFormContainer');
-        const clientSection = document.querySelector('.card.mb-4[id="clientSection"]'); 
+        const clientSection = document.querySelector('.card[id="clientSection"]'); 
         
-        // Temizle
+        // Temizlik
         dynamicFormContainer.innerHTML = '';
         if (clientSection) clientSection.remove();
         document.getElementById('countrySelectionContainer').style.display = 'none';
@@ -203,16 +203,30 @@ class DataEntryModule {
         if (isSuit) {
             specificTaskTypeWrapper.style.display = 'block';
             originSelectWrapper.style.display = 'block';
-            suitSpecificFieldsCard.style.display = 'block';
             
+            // --- DÜZELTME BAŞLANGICI: Konteyner Garantisi ---
+            if (suitSpecificFieldsCard) {
+                suitSpecificFieldsCard.style.display = 'block';
+                // Eğer içinde container yoksa oluştur
+                let container = document.getElementById('suitSpecificFieldsContainer');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = 'suitSpecificFieldsContainer';
+                    suitSpecificFieldsCard.appendChild(container);
+                }
+                container.innerHTML = ''; // İçini temizle
+            }
+            // --- DÜZELTME BİTİŞİ ---
+
             this.renderSuitClientSection(); 
             this.populateOriginDropdown('originSelect', 'TURKEY_NATIONAL', ipType); 
             this.populateSpecificTaskTypeDropdown(ipType);
-            suitSpecificFieldsCard.querySelector('#suitSpecificFieldsContainer').innerHTML = '';
+            
         } else {
+            // Diğer tipler (Marka/Patent)
             specificTaskTypeWrapper.style.display = 'none';
             originSelectWrapper.style.display = 'block'; 
-            suitSpecificFieldsCard.style.display = 'none';
+            if(suitSpecificFieldsCard) suitSpecificFieldsCard.style.display = 'none';
 
             dynamicFormContainer.style.display = 'block';
             switch(ipType) {
@@ -892,9 +906,26 @@ class DataEntryModule {
 
     selectSuitClient(person) {
         this.suitClientPerson = person;
-        document.getElementById('selectedSuitClientName').textContent = person.name;
-        document.getElementById('selectedSuitClient').style.display = 'block';
-        document.getElementById('suitClientSearch').style.display = 'none';
+        const displayDiv = document.getElementById('selectedSuitClient');
+        const searchInput = document.getElementById('suitClientSearch'); // Wrapper yerine input
+
+        if (person) {
+            document.getElementById('selectedSuitClientName').textContent = person.name;
+            
+            // Görünür yap (d-none sınıfını kaldır, d-flex ekle)
+            if (displayDiv) {
+                displayDiv.classList.remove('d-none');
+                displayDiv.classList.add('d-flex');
+                displayDiv.style.display = 'flex'; // Garanti olsun
+            }
+            
+            // Arama kutusunu gizle
+            if (searchInput) {
+                // Inputun bulunduğu wrapper'ı gizle ki "+" butonu kalsın veya komple satırı gizle
+                // Biz sadece inputu gizliyoruz
+                searchInput.style.display = 'none';
+            }
+        }
         this.updateSaveButtonState();
     }
 
@@ -1244,16 +1275,21 @@ class DataEntryModule {
         const displayDiv = document.getElementById('selectedSubjectAsset');
         const input = document.getElementById('subjectAssetSearch');
 
-        document.getElementById('selectedSubjectAssetName').textContent = asset.displayTitle || asset.title || asset.markName;
-        document.getElementById('selectedSubjectAssetType').textContent = asset.displayType || asset.type;
-        document.getElementById('selectedSubjectAssetNumber').textContent = asset.displayNumber || asset.applicationNumber || '-';
+        if (asset) {
+            document.getElementById('selectedSubjectAssetName').textContent = asset.displayTitle || asset.title || asset.markName;
+            document.getElementById('selectedSubjectAssetType').textContent = asset.displayType || asset.type;
+            document.getElementById('selectedSubjectAssetNumber').textContent = asset.displayNumber || asset.applicationNumber || '-';
 
-        // Görüntüleme ayarları (Flex aç, input kapat)
-        if(displayDiv) {
-            displayDiv.classList.remove('d-none');
-            displayDiv.classList.add('d-flex');
+            // Görünür yap
+            if (displayDiv) {
+                displayDiv.classList.remove('d-none');
+                displayDiv.classList.add('d-flex');
+                displayDiv.style.display = 'flex'; // Garanti olsun
+            }
+            
+            // Inputu gizle
+            if (input) input.style.display = 'none';
         }
-        if(input) input.style.display = 'none';
 
         this.updateSaveButtonState();
     }
