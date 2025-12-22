@@ -169,11 +169,10 @@ export class DesignStrategy extends BaseStrategy {
     validate(data) { if (!data.title) return 'Tasarım başlığı zorunludur.'; return null; }
 }
 
+// public/js/data-entry/strategies.js içindeki SuitStrategy sınıfı
+
 export class SuitStrategy extends BaseStrategy {
     render(container) { 
-        // Ana container data-entry.js tarafından temizlenip hazırlandığı için
-        // burada ekstra bir div oluşturmaya gerek yok, direkt container'ı kullanabiliriz
-        // veya yapıyı korumak adına container içine basabiliriz.
         container.innerHTML = '<div id="suitSpecificFieldsContainer"></div>'; 
     }
     
@@ -192,11 +191,9 @@ export class SuitStrategy extends BaseStrategy {
         if (!data.suitDetails.openingDate) return 'Dava Tarihi zorunludur.';
 
         const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
-        
         if (!PARENT_SUIT_IDS.includes(String(data.transactionTypeId))) {
-            return `HATA: "Manuel Portföy Girişi" ekranından sadece yeni bir ana dava dosyası (Dava Açılış, Hükümsüzlük vb.) oluşturulabilir. Seçtiğiniz işlem tipi bir ara işlemdir. Lütfen İş Yönetimi modülünü kullanın.`;
+            return `HATA: Manuel girişten sadece ana dava dosyası oluşturulabilir. Ara işlemler için İş Yönetimi'ni kullanın.`;
         }
-
         return null;
     }
 
@@ -212,7 +209,6 @@ export class SuitStrategy extends BaseStrategy {
             finalCourt = customCourt?.value?.trim();
         }
 
-        // --- SUBJECT ASSET SADELEŞTİRME ---
         let simplifiedAsset = null;
         if (context.suitSubjectAsset) {
             simplifiedAsset = {
@@ -232,9 +228,9 @@ export class SuitStrategy extends BaseStrategy {
             client: clientPerson ? { id: clientPerson.id, name: clientPerson.name, role: clientRole } : null,
             clientRole: clientRole,
             
-            // --- TRANSACTION TYPE MAP KALDIRILDI ---
-            // Sadece ID tutuluyor
             transactionTypeId: specificTaskType?.id || null,
+            // EKLENDİ: Transaction adı için bunu taşıyoruz
+            transactionTypeName: specificTaskType?.alias || specificTaskType?.name || 'Dava İşlemi',
             
             suitDetails: {
                 court: finalCourt,
@@ -251,26 +247,26 @@ export class SuitStrategy extends BaseStrategy {
         };
     }
 
+    // --- SAVE FONKSİYONU ---
+    // Bu fonksiyon data-entry.js tarafından ÇAĞRILMALIDIR
     async save(data) {
         try {
-            console.log('💾 Dava kaydı başlatılıyor...', data);
+            console.log('💾 Dava manuel kaydı başlatılıyor...', data);
 
-            // 1. DOSYA YÜKLEME (Storage)
+            // 1. DOKÜMAN YÜKLEME
             const fileInput = document.getElementById('suitDocument');
             let uploadedDocs = [];
 
             if (fileInput && fileInput.files.length > 0) {
-                console.log(`📤 ${fileInput.files.length} adet belge yükleniyor...`);
+                console.log(`📤 ${fileInput.files.length} belge yükleniyor...`);
                 const storage = getStorage();
                 
                 for (const file of fileInput.files) {
                     const storagePath = `suit-documents/${Date.now()}_${file.name}`;
                     const storageRef = ref(storage, storagePath);
-                    
                     try {
                         const snapshot = await uploadBytes(storageRef, file);
                         const downloadURL = await getDownloadURL(snapshot.ref);
-                        
                         uploadedDocs.push({
                             name: file.name,
                             url: downloadURL,
@@ -286,15 +282,19 @@ export class SuitStrategy extends BaseStrategy {
             
             data.documents = uploadedDocs;
 
+            // Transaction adını ayır (Suits tablosuna kaydetmemek için)
+            const txName = data.transactionTypeName;
+            delete data.transactionTypeName; 
+
             // 2. SUITS KOLEKSİYONUNA KAYIT
             const docRef = await addDoc(collection(db, 'suits'), data);
             const newSuitId = docRef.id;
             console.log('✅ Dava kartı oluşturuldu ID:', newSuitId);
 
-            // 3. İLK TRANSACTION (Zaman Çizelgesi Başlangıcı)
+            // 3. İLK TRANSACTION (Tarihçe)
             const initialTransaction = {
                 type: data.transactionTypeId,
-                // transactionTypeName olmadığı için genel açıklama
+                transactionTypeName: txName, // Doğru isimle kaydet
                 description: "Portföye manuel olarak eklendi.",
                 transactionHierarchy: 'parent',
                 triggeringTaskId: 'manual_entry', 
@@ -303,7 +303,7 @@ export class SuitStrategy extends BaseStrategy {
             };
 
             await addDoc(collection(db, 'suits', newSuitId, 'transactions'), initialTransaction);
-            console.log('✅ İlk transaction eklendi.');
+            console.log('✅ Transaction oluşturuldu.');
 
             return newSuitId;
 
