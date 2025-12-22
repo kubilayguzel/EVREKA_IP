@@ -415,15 +415,13 @@ export class TaskSubmitHandler {
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         
-        // 1. PARENT (ANA DAVA) KONTROLÜ - KRİTİK DÜZELTME
-        // Bu liste dışındaki işlemler (Child) için yeni dava kartı AÇILMAMALI.
-        // Child işlemler için sadece transaction (tarihçe) eklenmeli (Bunu Step 7 yapıyor).
+        // 1. PARENT (ANA DAVA) KONTROLÜ
         const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
         const isParentCreation = PARENT_SUIT_IDS.includes(String(selectedTaskType.id));
 
         if (!isParentCreation) {
-            console.log('ℹ️ Bu bir alt işlem (Child), yeni dava kartı oluşturulmuyor. Transaction mevcut davaya eklenecek.');
-            return; // Fonksiyondan çık, yeni kart oluşturma.
+            console.log('ℹ️ Bu bir alt işlem (Child), yeni dava kartı oluşturulmuyor.');
+            return; 
         }
 
         try {
@@ -442,7 +440,7 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // 3. İlgili Varlık Bilgilerini Hazırla (Sadeleştirilmiş)
+            // 3. İlgili Varlık Bilgilerini Hazırla
             let subjectAssetData = null;
             if (selectedIpRecord) {
                 subjectAssetData = {
@@ -451,21 +449,43 @@ export class TaskSubmitHandler {
                 };
             }
 
+            // --- YENİ BAŞLIK (TITLE) MANTIĞI ---
+            // Title artık "İşin Adı" değil, "Konu Varlığın Kendisi" olacak.
+            let suitTitle = taskData.title; // Varsayılan olarak task başlığı kalsın (ne olur ne olmaz)
+
+            if (selectedIpRecord) {
+                if (selectedIpRecord._source === 'suit') {
+                    // Eğer seçilen varlık bir Dava ise -> Dosya No'yu (Esas No) başlık yap
+                    // Veri yapısına göre caseNo, fileNumber veya displayFileNumber alanlarını kontrol et
+                    suitTitle = selectedIpRecord.suitDetails?.caseNo || 
+                                selectedIpRecord.fileNumber || 
+                                selectedIpRecord.displayFileNumber || 
+                                selectedIpRecord.caseNo ||
+                                selectedIpRecord.title; // En kötü ihtimalle eski başlığı kullan
+                } else {
+                    // Eğer seçilen varlık Marka/Patent ise -> Marka Adını başlık yap
+                    suitTitle = selectedIpRecord.title || selectedIpRecord.markName;
+                }
+            }
+            // ------------------------------------
+
             // 4. Dava Objesini Hazırla
             const newSuitData = {
-                title: taskData.title,
+                title: suitTitle, // <--- GÜNCELLENDİ (Artık varlık adı)
                 transactionTypeId: selectedTaskType.id,
-                suitType: selectedTaskType.alias || selectedTaskType.name,
+                suitType: selectedTaskType.alias || selectedTaskType.name, // Bu alan "Dava Türü" kolonunda görünecek
                 
-                // Parent olduğu için belgeleri kopyala
                 documents: taskData.documents || [],
 
                 suitDetails: {
                     court: finalCourtName,
-                    description: document.getElementById('suitDescription')?.value || document.getElementById('subjectOfLawsuit')?.value || '',
+                    description: document.getElementById('suitDescription')?.value || '',
                     opposingParty: document.getElementById('opposingParty')?.value || '',
                     opposingCounsel: document.getElementById('opposingCounsel')?.value || '',
-                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString()
+                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString(),
+                    // Eğer esas no formdan girildiyse onu da alalım, yoksa varlıktan geleni kullanalım mı? 
+                    // Genelde yeni dava açarken formdan girilen esas no en doğrusudur.
+                    caseNo: document.getElementById('suitCaseNo')?.value || '' 
                 },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
@@ -485,6 +505,8 @@ export class TaskSubmitHandler {
 
             console.log('✅ Yeni Dava Kartı Oluşturuldu ID:', newSuitId);
 
+            // ... (Transaction ekleme kodları aynı kalacak) ...
+            
             // 6. İLK TRANSACTION'I EKLE
             const initialTransaction = {
                 type: selectedTaskType.id,
@@ -497,8 +519,6 @@ export class TaskSubmitHandler {
 
             const transactionsRef = collection(db, 'suits', newSuitId, 'transactions');
             await addDoc(transactionsRef, initialTransaction);
-
-            console.log('✅ Dava içine ilk transaction eklendi.');
 
         } catch (error) { 
             console.error('Suit oluşturma hatası:', error); 
