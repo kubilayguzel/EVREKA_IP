@@ -214,18 +214,29 @@ export class SuitStrategy extends BaseStrategy {
         return null;
     }
 
-    // collectData: Formdaki verileri toplar (Dosya yükleme hariç, onu save'de yapacağız)
+    // SuitStrategy sınıfının collectData metodu:
     collectData(context) {
         const specificTaskType = context.suitSpecificTaskType;
         const clientPerson = context.suitClientPerson;
         const clientRole = getVal('clientRole');
         
-        // Mahkeme mantığı: 'other' seçildiyse custom input'u al
+        // Mahkeme mantığı
         const courtSelect = document.getElementById('suitCourt');
         const customCourt = document.getElementById('customCourtInput');
         let finalCourt = getVal('suitCourt');
         if (finalCourt === 'other' || finalCourt === 'Diğer (Manuel Giriş)') {
             finalCourt = customCourt?.value?.trim();
+        }
+
+        // --- DÜZELTME BURADA ---
+        // subjectAsset: Sadece ID ve Type tutulacak
+        let simplifiedAsset = null;
+        if (context.suitSubjectAsset) {
+            simplifiedAsset = {
+                id: context.suitSubjectAsset.id,
+                // _source verisi data-entry.js'teki aramadan gelir ('suit' veya 'ipRecord')
+                type: context.suitSubjectAsset._source || 'ipRecord' 
+            };
         }
 
         return {
@@ -252,7 +263,7 @@ export class SuitStrategy extends BaseStrategy {
                 suitStatus: getVal('suitStatusSelect') || 'filed'
             },
             
-            subjectAsset: context.suitSubjectAsset || null,
+            subjectAsset: simplifiedAsset, // Güncellenmiş sade obje
             createdAt: new Date().toISOString()
         };
     }
