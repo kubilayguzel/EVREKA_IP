@@ -40,7 +40,8 @@ export class TaskUIManager {
     }
 
 // --- 2. DİĞER İŞLEMLER (BASE FORM) ---
-    renderBaseForm(taskTypeName, taskTypeId, isLawsuitTask) {
+
+    renderBaseForm(taskTypeName, taskTypeId, isLawsuitTask, allTransactionTypes) { 
         if (!this.container) return;
 
         const taskIdStr = asId(taskTypeId);
@@ -52,7 +53,6 @@ export class TaskUIManager {
 
         if (isLawsuitTask) {
             contentHtml += this._getLawsuitClientHtml();
-            // Listeyi alt fonksiyona gönderiyoruz
             contentHtml += this._getLawsuitDetailsHtml(taskTypeId, allTransactionTypes);
             contentHtml += this._getLawsuitOpponentHtml();
         } else if (needsRelatedParty) {
