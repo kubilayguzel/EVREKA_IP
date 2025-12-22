@@ -197,7 +197,7 @@ export class SuitStrategy extends BaseStrategy {
         return null;
     }
 
-    collectData(context) {
+ collectData(context) {
         const specificTaskType = context.suitSpecificTaskType;
         const clientPerson = context.suitClientPerson;
         const clientRole = getVal('clientRole');
@@ -209,19 +209,40 @@ export class SuitStrategy extends BaseStrategy {
             finalCourt = customCourt?.value?.trim();
         }
 
+        // Seçilen varlığı sadeleştir
         let simplifiedAsset = null;
         if (context.suitSubjectAsset) {
             simplifiedAsset = {
                 id: context.suitSubjectAsset.id,
-                type: context.suitSubjectAsset._source === 'suit' ? 'suit' : 'ipRecord' 
+                type: context.suitSubjectAsset._source === 'suit' ? 'suit' : 'ipRecord',
+                title: context.suitSubjectAsset.title || context.suitSubjectAsset.markName || context.suitSubjectAsset.displayTitle
             };
         }
+
+        // --- TITLE (BAŞLIK) BELİRLEME MANTIĞI ---
+        const caseNo = getVal('suitCaseNo');
+        let suitTitle = '';
+
+        if (simplifiedAsset && simplifiedAsset.title) {
+            // 1. Öncelik: Seçilen Varlığın Adı (Örn: "Garenta")
+            suitTitle = simplifiedAsset.title;
+        } else if (caseNo) {
+            // 2. Öncelik: Varlık yoksa Esas No (Örn: "2024/123 E.")
+            suitTitle = caseNo;
+        } else {
+            // 3. Öncelik: Hiçbiri yoksa İşlem Tipi (Örn: "Hükümsüzlük")
+            suitTitle = specificTaskType?.alias || specificTaskType?.name || 'Yeni Dava';
+        }
+        // ----------------------------------------
 
         return {
             ipType: 'suit',
             type: 'suit',
             portfoyStatus: 'active',
-            title: specificTaskType ? `${specificTaskType.alias || specificTaskType.name} - ${clientPerson?.name}` : 'Yeni Dava',
+            
+            // DÜZELTME 1: Title artık varlık adı veya dosya no
+            title: suitTitle,
+            
             origin: getVal('originSelect') || 'TURKEY_NATIONAL',
             country: getVal('countrySelect'),
             
@@ -229,15 +250,18 @@ export class SuitStrategy extends BaseStrategy {
             clientRole: clientRole,
             
             transactionTypeId: specificTaskType?.id || null,
-            // EKLENDİ: Transaction adı için bunu taşıyoruz
+            // DÜZELTME 2: suitType alanı veritabanına eklendi (Portföy listesinde görünmesi için)
+            suitType: specificTaskType?.alias || specificTaskType?.name || 'Dava İşlemi',
+            
+            // Bu alan sadece transaction oluştururken kullanılıyor, sonra silinecek
             transactionTypeName: specificTaskType?.alias || specificTaskType?.name || 'Dava İşlemi',
             
             suitDetails: {
                 court: finalCourt,
-                description: getVal('suitDescription'),
+                description: getVal('suitDescription'), // Not: Şablondan kaldırıldıysa boş gelir, sorun değil
                 opposingParty: getVal('opposingParty'),
                 opposingCounsel: getVal('opposingCounsel'),
-                caseNo: getVal('suitCaseNo'),
+                caseNo: caseNo,
                 openingDate: formatDate(getVal('suitOpeningDate')),
                 suitStatus: getVal('suitStatusSelect') || 'filed'
             },
