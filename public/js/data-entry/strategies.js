@@ -319,7 +319,7 @@ export class SuitStrategy extends BaseStrategy {
             const initialTransaction = {
                 type: data.transactionTypeId,
                 transactionTypeName: txName, // Doğru isimle kaydet
-                description: "Portföye manuel olarak eklendi.",
+                description: "Dava Açıldı",
                 transactionHierarchy: 'parent',
                 triggeringTaskId: 'manual_entry', 
                 createdAt: Timestamp.now(),
