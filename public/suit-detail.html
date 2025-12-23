@@ -37,13 +37,6 @@
         .timeline-desc { color: #555; font-size: 0.95em; }
         .timeline-badges { margin-top: 8px; }
         .badge-type { background-color: #e3f2fd; color: #1e3c72; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
-
-        /* Dosya Yükleme */
-        .file-list-container { margin-top: 15px; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; }
-        .file-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #eee; background: white; }
-        .file-item:last-child { border-bottom: none; }
-        .file-name a { color: #1e3c72; font-weight: 500; }
-        .btn-remove-file { background: #ff6b6b; color: white; width: 25px; height: 25px; border-radius: 50%; border:none; cursor: pointer; }
         
         .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: all 0.3s; }
         .btn-secondary { background-color: #6c757d; border: none; }
@@ -62,9 +55,7 @@
                     <p class="page-subtitle" id="suitSubtitleHeader">Dosya No: Yükleniyor...</p>
                 </div>
                 <div>
-                    <a href="portfolio.html?activeTab=litigation" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-arrow-left mr-2"></i>Portföye Dön
-                    </a>
+                    <a href="portfolio.html?activeTab=litigation" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-2"></i>Portföye Dön</a>
                 </div>
             </section>
 
@@ -132,19 +123,10 @@
 
                 <div class="col-lg-5">
                     <div class="section-card" style="background-color: #fcfcfc;">
-                        <h3 class="section-title"><i class="fas fa-history mr-2"></i> İşlem Geçmişi (Timeline)</h3>
+                        <h3 class="section-title"><i class="fas fa-history mr-2"></i> İşlem Geçmişi & Belgeler</h3>
                         <div id="timelineContainer" class="timeline-container">
                             <p class="text-muted text-center py-3">Yükleniyor...</p>
                         </div>
-                    </div>
-
-                    <div class="section-card">
-                        <h3 class="section-title"><i class="fas fa-paperclip mr-2"></i>Belgeler</h3>
-                        <button type="button" class="btn btn-secondary btn-sm btn-block mb-3" id="uploadBtn">
-                            <i class="fas fa-plus mr-1"></i> Belge Ekle
-                        </button>
-                        <input type="file" id="fileInput" hidden multiple>
-                        <div id="fileListContainer" class="file-list-container"></div>
                     </div>
                 </div>
             </div>
@@ -153,15 +135,13 @@
 
     <script type="module">
         import { loadSharedLayout } from './js/layout-loader.js';
-        import { db, auth, storage } from './firebase-config.js';
-        import { doc, getDoc, updateDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { db, auth } from './firebase-config.js';
+        import { doc, getDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         import { showNotification, STATUSES } from './utils.js';
 
         const params = new URLSearchParams(window.location.search);
         const suitId = params.get('id');
-        let currentDocuments = [];
 
         // Başlangıç
         (async function() {
@@ -170,8 +150,7 @@
                 if (!user) return window.location.href = 'index.html';
                 if (!suitId) return window.location.href = 'portfolio.html';
                 await loadSuitData();
-                await loadSuitTransactions(); // Timeline Yükle
-                setupEventListeners();
+                await loadSuitTransactions(); // Timeline ve Belgeler Yükle
             });
         })();
 
@@ -203,26 +182,15 @@
                 setText('viewOpenedDate', formatDate(details.openingDate));
                 setText('viewSubjectAsset', data.subjectAsset?.title || data.title); // Konu Varlık
 
-                // 1. Önce ana kayda (data.suitStatus), yoksa detaylara (details.suitStatus) bak.
-                // Hiçbiri yoksa varsayılan olarak 'continue' kabul et.
+                // Durum Gösterimi (Hem Root Hem Detail Kontrolü)
                 let statusVal = data.suitStatus || details.suitStatus || 'continue';
-
-                // 2. Utils.js'deki listeden eşleşeni bul
-                let statusObj = null;
-                if (STATUSES && STATUSES.litigation) {
-                    statusObj = STATUSES.litigation.find(s => s.value === statusVal);
-                }
-
-                // 3. Metni ve Rengi Belirle
+                let statusObj = STATUSES.litigation ? STATUSES.litigation.find(s => s.value === statusVal) : null;
                 const statusText = statusObj ? statusObj.text : statusVal;
                 const statusColor = statusObj && statusObj.color ? statusObj.color : 'secondary';
                 
-                // 4. Ekrana Bas
                 const statusEl = document.getElementById('viewSuitStatus');
-                if (statusEl) {
-                    statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
-                }
-                
+                statusEl.innerHTML = `<span class="badge badge-${statusColor}" style="font-size: 1rem; padding: 8px 12px;">${statusText}</span>`;
+
                 // 2. Taraf Bilgileri
                 setText('viewClientName', data.client?.name);
                 setText('viewClientRole', formatRole(data.clientRole || data.client?.role));
@@ -237,20 +205,17 @@
                     descEl.innerHTML = '<em class="text-muted">Açıklama bulunmuyor.</em>';
                 }
 
-                // Belgeler
-                currentDocuments = data.documents || [];
-                renderDocuments();
-
             } catch (e) {
                 console.error(e);
                 showNotification('Veri yüklenemedi.', 'error');
             }
         }
 
-        // Timeline (İşlem Geçmişi) Yükle (Değişmedi)
+        // Timeline (İşlem Geçmişi) ve Belgeler Yükle
         async function loadSuitTransactions() {
             const container = document.getElementById('timelineContainer');
             try {
+                // Tarihçeyi tarihe göre tersten sırala (En yeni en üstte)
                 const q = query(collection(db, 'suits', suitId, 'transactions'), orderBy('createdAt', 'desc'));
                 const snap = await getDocs(q);
                 
@@ -259,73 +224,78 @@
                     return;
                 }
 
-                let html = '';
-                snap.forEach(doc => {
-                    const t = doc.data();
+                // Her bir transaction satırını işle
+                const timelineItems = await Promise.all(snap.docs.map(async (docSnapshot) => {
+                    const t = docSnapshot.data();
+                    
+                    // Görüntülenecek veriler
                     const date = t.creationDate ? new Date(t.creationDate).toLocaleDateString('tr-TR') : '-';
                     const desc = t.description || 'İşlem detay girilmemiş.';
                     const typeName = t.transactionTypeName || 'İşlem'; 
+                    
+                    let docs = [];
 
-                    html += `
+                    // --- MANTIK DEĞİŞİKLİĞİ ---
+                    
+                    // DURUM 1: Bu işlem bir Task (İş) tarafından tetiklendiyse -> Task'a git
+                    if (t.triggeringTaskId && t.triggeringTaskId !== 'manual_entry') {
+                        try {
+                            const taskRef = doc(db, 'tasks', t.triggeringTaskId);
+                            const taskSnap = await getDoc(taskRef);
+                            if (taskSnap.exists()) {
+                                const taskData = taskSnap.data();
+                                if (taskData.documents && Array.isArray(taskData.documents)) {
+                                    docs = taskData.documents;
+                                }
+                            }
+                        } catch (err) {
+                            console.warn('Task belgesi çekilemedi:', t.triggeringTaskId, err);
+                        }
+                    } 
+                    // DURUM 2: Task yoksa (Manuel Giriş) VE bu Ana Dava Açılış (Parent) işlemiyse -> Suit'e git
+                    else if (t.transactionHierarchy === 'parent') {
+                        // Global değişkendeki (currentDocuments) suit belgelerini kullan
+                        if (currentDocuments && Array.isArray(currentDocuments)) {
+                            docs = currentDocuments;
+                        }
+                    }
+                    // Not: Diğer ara manuel işlemlerin şu an belge tutma özelliği yok, ilerde eklenirse buraya bakılır.
+
+                    
+                    // --- HTML OLUŞTURMA (Belgeler Varsa) ---
+                    let docsHtml = '';
+                    if (docs.length > 0) {
+                        docsHtml = `<div class="mt-2 pt-2 border-top">`;
+                        docsHtml += docs.map(d => `
+                            <a href="${d.url || d.fileUrl || d.downloadURL}" target="_blank" class="d-inline-flex align-items-center mr-2 mb-1 p-2 border rounded bg-white text-decoration-none text-dark shadow-sm" style="font-size: 0.85em;">
+                                <i class="fas fa-file-pdf text-danger mr-2"></i> 
+                                <span class="text-truncate" style="max-width: 180px;">${d.name || d.fileName || 'Belge'}</span>
+                            </a>
+                        `).join('');
+                        docsHtml += `</div>`;
+                    }
+
+                    return `
                         <div class="timeline-item">
                             <div class="timeline-date">${date}</div>
                             <div class="timeline-content">
-                                <div class="timeline-title">${typeName}</div>
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="timeline-title">${typeName}</div>
+                                    ${(t.triggeringTaskId && t.triggeringTaskId !== 'manual_entry') ? `<span class="badge badge-light border" style="font-size:0.7em;">Ref: ${t.triggeringTaskId}</span>` : ''}
+                                </div>
                                 <div class="timeline-desc">${desc}</div>
-                                ${t.triggeringTaskId ? `<div class="timeline-badges"><span class="badge-type">Ref: ${t.triggeringTaskId}</span></div>` : ''}
+                                ${docsHtml}
                             </div>
                         </div>
                     `;
-                });
-                container.innerHTML = html;
+                }));
+
+                container.innerHTML = timelineItems.join('');
 
             } catch (e) {
                 console.error("Timeline hatası:", e);
                 container.innerHTML = '<p class="text-danger">Geçmiş yüklenemedi.</p>';
             }
-        }
-
-        function setupEventListeners() {
-            // Dosya Yükleme
-            document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
-            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-        }
-
-        async function handleFileUpload(e) {
-            const files = e.target.files;
-            if (!files.length) return;
-
-            for (const file of files) {
-                const path = `suit_docs/${suitId}/${Date.now()}_${file.name}`;
-                try {
-                    const res = await uploadBytes(storageRef(storage, path), file);
-                    const url = await getDownloadURL(res.ref);
-                    currentDocuments.push({ name: file.name, url: url, path: path, uploadedAt: new Date().toISOString() });
-                } catch (err) { console.error(err); }
-            }
-            
-            await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
-            renderDocuments();
-            showNotification('Dosyalar yüklendi.', 'success');
-        }
-
-        function renderDocuments() {
-            const list = document.getElementById('fileListContainer');
-            if (!currentDocuments.length) { list.innerHTML = '<p class="text-center p-3 text-muted">Dosya yok.</p>'; return; }
-            
-            list.innerHTML = currentDocuments.map((d, i) => `
-                <div class="file-item">
-                    <div class="file-name"><a href="${d.url}" target="_blank"><i class="fas fa-file-alt mr-2"></i>${d.name}</a></div>
-                    <button type="button" class="btn-remove-file" onclick="window.removeDoc(${i})" title="Sil">&times;</button>
-                </div>
-            `).join('');
-            
-            window.removeDoc = async (index) => {
-                if(!confirm('Bu belge silinsin mi?')) return;
-                currentDocuments.splice(index, 1);
-                await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
-                renderDocuments();
-            };
         }
 
         // Helpers
