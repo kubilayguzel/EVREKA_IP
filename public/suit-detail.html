@@ -143,6 +143,8 @@
         const params = new URLSearchParams(window.location.search);
         const suitId = params.get('id');
 
+        let currentDocuments = [];
+
         // Başlangıç
         (async function() {
             await loadSharedLayout();
@@ -167,6 +169,7 @@
 
                 const data = snap.data();
                 const details = data.suitDetails || {};
+                currentDocuments = data.documents || [];
                 
                 // Başlıkları Güncelle
                 const displayTitle = details.caseNo || data.title || 'Dava Detayı';
