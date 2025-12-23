@@ -25,17 +25,45 @@ class PortfolioController {
         this.init();
     }
 
+
     async init() {
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
                 this.renderer.showLoading(true);
                 
+                // --- YENİ: URL'den Tab Bilgisini Okuma ve Ayarlama ---
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get('activeTab');
+                
+                // Eğer geçerli bir tab parametresi varsa state'i güncelle
+                if (tabParam && ['all', 'trademark', 'patent', 'design', 'litigation', 'objections'].includes(tabParam)) {
+                    this.state.activeTab = tabParam;
+                    
+                    // HTML'deki butonların 'active' sınıfını güncelle
+                    const tabButtons = document.querySelectorAll('.tab-button');
+                    if (tabButtons.length > 0) {
+                        tabButtons.forEach(btn => btn.classList.remove('active'));
+                        const activeBtn = document.querySelector(`.tab-button[data-type="${tabParam}"]`);
+                        if (activeBtn) activeBtn.classList.add('active');
+                    }
+                }
+                // -----------------------------------------------------
+
                 try {
                     await this.dataManager.loadInitialData();
+                    
+                    // --- YENİ: Seçili Tab'a Göre Özel Veri Yükleme ---
+                    // Normalde bu işlem "click" olayında yapılıyordu, açılışta da yapılması lazım.
+                    if (this.state.activeTab === 'litigation') {
+                        await this.dataManager.loadLitigationData();
+                    } else if (this.state.activeTab === 'objections') {
+                        await this.dataManager.loadObjectionRows();
+                    }
+                    // -------------------------------------------------
+
                     this.setupPagination();
                     this.setupEventListeners();
-                    // YENİ: Görsel Hover Efektini Başlat
                     this.setupImageHover();
                     this.render();
                 } catch (e) {
