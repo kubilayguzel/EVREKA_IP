@@ -240,73 +240,48 @@
       return { toList: to || [], ccList: cc || [] };
     }
 
-    // ---------- Resolve ipRecord, supporting associatedTransactionId ----------
+// ---------- Resolve ipRecord, supporting associatedTransactionId ----------
+
 async function resolveIpRecordId(notification) {
-  
-  // Önce notification'da ipRecordId var mı kontrol et
+  // 1. Önce Backend'in kaydettiği 'relatedIpRecordId' alanına bak (EN ÖNEMLİ DÜZELTME)
+  if (notification.relatedIpRecordId) {
+    return notification.relatedIpRecordId;
+  }
+
+  // 2. Eski yöntem: notification'da ipRecordId var mı kontrol et
   if (notification.ipRecordId) {
     return notification.ipRecordId;
   }
 
-  // clientId varsa onu kullanarak ipRecord bul
+  // 3. clientId varsa onu kullanarak ipRecord bul (Fallback)
   if (notification.clientId) {
     try {
-      // *** DOĞRU SORGU - applicants.id field'ını kontrol et ***
       const ipRecordsQuery = query(
         collection(db, "ipRecords"),
         where("applicants", "array-contains-any", [
           { id: notification.clientId },
-          { id: notification.clientId, name: "ANADOLU EFES" },
-          { id: notification.clientId, email: "axxc@afes.com" }
+          { id: notification.clientId, name: "ANADOLU EFES" } // Örnek veri, genel yapıda kalabilir
         ])
       );
       
       const ipRecordsSnap = await getDocs(ipRecordsQuery);
-           
       if (!ipRecordsSnap.empty) {
-        const firstIpRecord = ipRecordsSnap.docs[0];
-        return firstIpRecord.id;
-      } else {
-        
-        // ALTERNATİF: Tüm ipRecords'ları çek ve manuel filtrele
-        const allIpRecordsSnap = await getDocs(collection(db, "ipRecords"));
-        
-        for (const ipDoc of allIpRecordsSnap.docs) {
-          const ipData = ipDoc.data();
-          if (ipData.applicants && Array.isArray(ipData.applicants)) {
-            for (const applicant of ipData.applicants) {
-              if (applicant.id === notification.clientId) {
-                return ipDoc.id;
-              }
-            }
-          }
-        }
+        return ipRecordsSnap.docs[0].id;
       }
     } catch (error) {
+      console.warn("Client ID ile IP Record bulunamadı:", error);
     }
   }
 
-  // sourceDocumentId varsa
+  // 4. sourceDocumentId varsa (unindexed_pdfs üzerinden)
   if (notification.sourceDocumentId) {
     try {
       const docRef = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
       if (docRef.exists()) {
         const docData = docRef.data();
-      
-        if (docData.ipRecordId) {
-          return docData.ipRecordId;
-        }
-        if (docData.relatedIpRecordId) {
-          return docData.relatedIpRecordId;
-        }
-        if (docData.ipRecordRefId) {
-          return docData.ipRecordRefId;
-        }
-        
-      } else {
+        return docData.ipRecordId || docData.relatedIpRecordId || docData.ipRecordRefId || null;
       }
-    } catch (error) {
-    }
+    } catch (error) { }
   }
 
   return null;
@@ -407,28 +382,41 @@ async function resolveDeliveryDate(notification) {
   }
 }
 
+// notifications.html içinde mevcut fonksiyonu bununla değiştirin:
 async function resolveApplicationNo(notification) {
   try {
-    // Önce notification'da applicationNo var mı kontrol et
+    // 1. Bildirimin kendisinde varsa direkt dön
     if (notification.applicationNo) return notification.applicationNo;
 
-    // ipRecordId'yi güvenli şekilde al
-    let ipRecordId = await resolveIpRecordId(notification);
-    if (!ipRecordId) return '-';
+    // 2. ID'yi çözümle
+    let recordId = await resolveIpRecordId(notification);
+    if (!recordId) return '-';
 
-    // ipRecord'dan application number'ı al
-    const recSnap = await getDoc(doc(db, "ipRecords", ipRecordId));
-    if (!recSnap.exists()) return '-';
-    
-    const recData = recSnap.data();
-    return recData.applicationNumber || 
-           recData.applicationNo || 
-           recData.appNo || 
-           recData.details?.brandInfo?.applicationNo || '-';
+    // 3. Önce IP RECORDS (Marka/Patent) tablosuna bak
+    const ipSnap = await getDoc(doc(db, "ipRecords", recordId));
+    if (ipSnap.exists()) {
+      const recData = ipSnap.data();
+      return recData.applicationNumber || 
+             recData.applicationNo || 
+             recData.appNo || 
+             recData.details?.brandInfo?.applicationNo || '-';
+    }
+
+    // 4. Eğer orada yoksa SUITS (Dava) tablosuna bak (YENİ EKLENDİ)
+    const suitSnap = await getDoc(doc(db, "suits", recordId));
+    if (suitSnap.exists()) {
+      const suitData = suitSnap.data();
+      // Dava dosyalarında genelde 'esasNo', 'dosyaNo' veya 'caseNo' kullanılır
+      return suitData.esasNo || suitData.caseNo || suitData.fileNo || '-';
+    }
+
+    return '-';
   } catch (error) {
+    console.error("Başvuru no çözülürken hata:", error);
     return '-';
   }
 }
+
 async function resolveApplicantName(notification) {
   
   try {
