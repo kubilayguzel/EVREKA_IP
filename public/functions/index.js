@@ -1632,15 +1632,13 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     // Sadece "Completed" statüsüne geçişte çalış
     const becameCompleted = before.status !== "completed" && after.status === "completed";
     
-    // EPATS belgesi var mı kontrolü. 
-    // Belge olmadan da "İş Bitti" maili atmak istiyorsanız aşağıdaki satırı olduğu gibi bırakın.
-    // Eğer belge zorunluysa if koşuluna '&& epatsDoc' ekleyin.
+    // EPATS Belge Kontrolü
     const epatsDoc = after?.details?.epatsDocument || null;
     
     if (!becameCompleted) return null;
 
     const dedupe = (arr) => Array.from(new Set((arr || []).filter(Boolean).map((x) => String(x).trim())));
-    const categoryKey = "marka";
+    const categoryKey = "marka"; // Varsayılan
 
     // --- ALICI BELİRLEME YARDIMCISI ---
     const findRecipientsFromPersonsRelated = async (personIds) => {
@@ -1671,17 +1669,15 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       return await findRecipientsFromPersonsRelated(ids);
     };
 
-    // --- KRİTİK GÜNCELLEME: ŞABLON SEÇİMİ (TaskType Filtreli) ---
+    // --- ŞABLON SEÇİMİ (TaskType Filtreli) ---
     let template = null, templateId = null, hasTemplate = false;
     try {
-      // İşin tipini string olarak al (Örn: "2", "22", "trademark_application")
       const currentTaskType = String(after.taskType || "");
 
       if (currentTaskType) {
-        // Sadece bu iş tipine ve "complete" olayına ait kuralı getir
         const rulesSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task_completion_epats")
-          .where("taskType", "==", currentTaskType) // <--- FİLTRE EKLENDİ
+          .where("taskType", "==", currentTaskType)
           .limit(1)
           .get();
 
@@ -1696,14 +1692,11 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
               hasTemplate = true;
             }
           }
-        } else {
-           console.log(`ℹ️ TaskType '${currentTaskType}' için tamamlanma şablonu bulunamadı.`);
         }
       }
     } catch (e) {
       console.warn("Template kuralı aranırken hata:", e?.message || e);
     }
-    // --- GÜNCELLEME SONU ---
 
     // IP Kaydını Çek
     let ipRecord = null;
@@ -1716,7 +1709,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
-    // Alıcıları Belirle (TaskOwner -> Applicant)
+    // Alıcıları Belirle
     const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
     let toRecipients = [], ccRecipients = [], usedSource = null;
 
@@ -1732,7 +1725,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       ccRecipients = r.cc;
     }
 
-    // CC Listesini Genişlet (İş tipine göre sabit CC'ler)
+    // CC Listesini Genişlet
     let txTypeForCc = null;
     try {
       const relatedIpId = after.relatedIpRecordId || null;
@@ -1753,28 +1746,32 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       console.warn("CC listesi genişletilirken hata:", e?.message || e);
     }
 
-    // İçerik Oluşturma
+    // --- İÇERİK OLUŞTURMA VE DEĞİŞKEN EŞLEŞTİRME (DÜZELTİLEN KISIM) ---
     let subject = "", body = "";
     if (hasTemplate) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
+      
+      const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
+
       const parameters = {
-        muvekkil_adi: "Değerli Müvekkilimiz", // İsim çözülebilirse buraya eklenebilir
-        proje_adi: ipRecord?.title || after.relatedIpRecordTitle || "Dosya",
+        muvekkil_adi: "Değerli Müvekkilimiz",
+        // Hem 'proje_adi' hem de 'relatedIpRecordTitle' aynı veriyi taşır
+        proje_adi: ipTitle,
+        relatedIpRecordTitle: ipTitle, // <--- EKLENDİ
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
         basvuru_no: ipRecord?.applicationNumber || after?.relatedIpRecordTitle || "",
       };
+      
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
     }
 
-    // === DURUM VE ATAMA MANTIĞI ===
+    // Statü Belirleme
     const coreMissing = [];
     if ((toRecipients.length + ccRecipients.length) === 0) coreMissing.push("recipients");
     if (!hasTemplate) coreMissing.push("mailTemplate");
-    
-    // Şablon veya alıcı yoksa "missing_info", varsa "awaiting_client_approval"
     const finalStatus = coreMissing.length ? "missing_info" : "awaiting_client_approval";
 
     const epatsAttachment = {
@@ -1792,17 +1789,13 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       missingFields: coreMissing,
       mode: "draft",
       isDraft: true,
-
-      // --- OTOMATİK ATAMA ---
-      assignedTo_uid: selcanUserId,
+      assignedTo_uid: selcanUserId, 
       assignedTo_email: selcanUserEmail,
-      // ---------------------
-
       relatedIpRecordId: after.relatedIpRecordId || null,
       associatedTaskId:  taskId,
       associatedTransactionId: after.relatedTransactionId || after.transactionId || null,
       templateId: templateId || null,
-      notificationType: "marka", // İhtiyaca göre dinamik yapılabilir
+      notificationType: "marka",
       source: usedSource,
       epatsAttachment,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1810,7 +1803,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     };
 
     await adminDb.collection("mail_notifications").add(notificationDoc);
-    console.log(`Bildirim '${finalStatus}' olarak oluşturuldu ve ${selcanUserEmail} kullanıcısına atandı. TaskType: ${after.taskType}`);
+    console.log(`Bildirim '${finalStatus}' olarak oluşturuldu. TaskType: ${after.taskType}`);
 
     return null;
   }
