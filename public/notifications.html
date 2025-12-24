@@ -933,8 +933,8 @@ function startNotificationListener() {
     return '-';
   }
 }
-    // ---------- Render ----------
-// notifications.html dosyanızda mevcut renderCurrentPage fonksiyonunu tamamen şununla değiştirin:
+
+// notifications.html dosyanızdaki mevcut renderCurrentPage fonksiyonunu bununla değiştirin:
 async function renderCurrentPage() {
   if (!pagination) return;
 
@@ -956,121 +956,139 @@ async function renderCurrentPage() {
   const rows = await Promise.all(slice.map(async (notification) => {
     const tr = document.createElement('tr');
 
-    const statusClass = notification.status === 'sent' ? 'status-sent'
-      : notification.status === 'failed' ? 'status-failed'
-      : notification.status === 'missing_info' ? 'missing-info'
-      : 'status-pending';
+    // --- DURUM YÖNETİMİ (GÜNCELLENDİ) ---
+    // Backend statü kodlarını kullanıcı dostu metinlere çeviriyoruz
+    const statusMap = {
+      'sent': 'Gönderildi',
+      'failed': 'Hata Oluştu',
+      'pending': 'Gönderim Sırasında',
+      'missing_info': 'Eksik Bilgi',
+      'awaiting_client_approval': 'Taslak (Onay Bekliyor)',
+      'draft': 'Taslak',
+      'client_approval_closed': 'Onaylandı (Kapatıldı)'
+    };
+
+    // CSS Sınıfını belirle
+    let statusClass = 'status-pending';
+    if (notification.status === 'sent') statusClass = 'status-sent';
+    else if (notification.status === 'failed') statusClass = 'status-failed';
+    else if (notification.status === 'missing_info') statusClass = 'missing-info';
+    else if (notification.status === 'awaiting_client_approval') statusClass = 'status-pending'; // Gri/Sarı tonlu varsayılan
+    else if (notification.status === 'draft') statusClass = 'status-pending';
+
+    // Görünen metni belirle (Map'te yoksa ham kodu göster)
+    const statusText = statusMap[notification.status] || notification.status || '-';
+    // -------------------------------------
 
     const subjectCell = notification.subject
       ? notification.subject
       : '<span class="missing-field">Konu Eksik</span>';
 
-const [
-  recipientDisplay,
-  applicationNoText,
-  typeText,
-  docInfo,
-  deliveryDateText
-] = await Promise.all([
-(async () => {
-    // ✅ ÖNCE recipientTo'dan alıcıları göster (taskOwner veya applicant olabilir)
-    const { toList } = getToCcFromNotification(notification);
-    if (toList && toList.length > 0) {
-      // Email adreslerinden isimleri çöz
-      const names = [];
-      for (const email of toList.slice(0, 2)) { // İlk 2 alıcı
-        try {
-          // 1. personsRelated'da email ile ara
-          const personsRelatedSnap = await getDocs(query(
-            collection(db, 'personsRelated'),
-            where('email', '==', email),
-            limit(1)
-          ));
-          
-          if (!personsRelatedSnap.empty) {
-            // personsRelated kaydından personId al
-            const personsRelatedData = personsRelatedSnap.docs[0].data();
-            const personId = personsRelatedData.personId;
-            
-            if (personId) {
-              // 2. persons koleksiyonundan personId ile kişiyi bul
-              const personSnap = await getDoc(doc(db, 'persons', personId));
-              if (personSnap.exists()) {
-                const personData = personSnap.data();
-                names.push(personData.name || personData.companyName || email);
+    const [
+      recipientDisplay,
+      applicationNoText,
+      typeText,
+      docInfo,
+      deliveryDateText
+    ] = await Promise.all([
+      (async () => {
+        // ✅ ÖNCE recipientTo'dan alıcıları göster (taskOwner veya applicant olabilir)
+        const { toList } = getToCcFromNotification(notification);
+        if (toList && toList.length > 0) {
+          // Email adreslerinden isimleri çöz
+          const names = [];
+          for (const email of toList.slice(0, 2)) { // İlk 2 alıcı
+            try {
+              // 1. personsRelated'da email ile ara
+              const personsRelatedSnap = await getDocs(query(
+                collection(db, 'personsRelated'),
+                where('email', '==', email),
+                limit(1)
+              ));
+              
+              if (!personsRelatedSnap.empty) {
+                // personsRelated kaydından personId al
+                const personsRelatedData = personsRelatedSnap.docs[0].data();
+                const personId = personsRelatedData.personId;
+                
+                if (personId) {
+                  // 2. persons koleksiyonundan personId ile kişiyi bul
+                  const personSnap = await getDoc(doc(db, 'persons', personId));
+                  if (personSnap.exists()) {
+                    const personData = personSnap.data();
+                    names.push(personData.name || personData.companyName || email);
+                  } else {
+                    names.push(email);
+                  }
+                } else {
+                  names.push(email);
+                }
               } else {
-                names.push(email);
+                // personsRelated'da bulunamadıysa direkt persons'da ara (fallback)
+                const personsSnap = await getDocs(query(
+                  collection(db, 'persons'),
+                  where('email', '==', email),
+                  limit(1)
+                ));
+                if (!personsSnap.empty) {
+                  const personData = personsSnap.docs[0].data();
+                  names.push(personData.name || personData.companyName || email);
+                } else {
+                  names.push(email);
+                }
               }
-            } else {
-              names.push(email);
-            }
-          } else {
-            // personsRelated'da bulunamadıysa direkt persons'da ara (fallback)
-            const personsSnap = await getDocs(query(
-              collection(db, 'persons'),
-              where('email', '==', email),
-              limit(1)
-            ));
-            if (!personsSnap.empty) {
-              const personData = personsSnap.docs[0].data();
-              names.push(personData.name || personData.companyName || email);
-            } else {
+            } catch (err) {
+              console.warn('Email çözme hatası:', email, err);
               names.push(email);
             }
           }
-        } catch (err) {
-          console.warn('Email çözme hatası:', email, err);
-          names.push(email);
+          const displayText = names.join(', ');
+          return toList.length > 2 ? `${displayText} (+${toList.length - 2})` : displayText;
         }
-      }
-      const displayText = names.join(', ');
-      return toList.length > 2 ? `${displayText} (+${toList.length - 2})` : displayText;
-    }
-    
-    // Fallback: applicantName (eski davranış)
-    if (notification.applicantName) return notification.applicantName;
-    try { return await resolveApplicantName(notification); } catch { return '-'; }
-  })(),
+        
+        // Fallback: applicantName (eski davranış)
+        if (notification.applicantName) return notification.applicantName;
+        try { return await resolveApplicantName(notification); } catch { return '-'; }
+      })(),
 
-  (async () => {
-    if (notification.applicationNo) return notification.applicationNo;
-    try { return await resolveApplicationNo(notification); } catch { return '-'; }
-  })(),
-  (async () => {
-    try {
-      let rawType = '';
-      if (notification.type) rawType = String(notification.type);
-      else if (notification.notificationType) rawType = String(notification.notificationType);
-      else rawType = await resolveType(notification);
+      (async () => {
+        if (notification.applicationNo) return notification.applicationNo;
+        try { return await resolveApplicationNo(notification); } catch { return '-'; }
+      })(),
+      (async () => {
+        try {
+          let rawType = '';
+          if (notification.type) rawType = String(notification.type);
+          else if (notification.notificationType) rawType = String(notification.notificationType);
+          else rawType = await resolveType(notification);
 
-      const map = {
-        trademark: 'Marka', marka: 'Marka',
-        patent: 'Patent',
-        design: 'Tasarım', tasarim: 'Tasarım',
-        litigation: 'Dava', dava: 'Dava',
-        objection: 'İtiraz', itiraz: 'İtiraz'
-      };
-      return map[rawType.toLowerCase?.() || ''] || rawType || '-';
-    } catch {
-      const fallback = String(notification.type || notification.notificationType || '');
-      const map = {
-        trademark: 'Marka', marka: 'Marka',
-        patent: 'Patent',
-        design: 'Tasarım', tasarim: 'Tasarım',
-        litigation: 'Dava', dava: 'Dava',
-        objection: 'İtiraz', itiraz: 'İtiraz'
-      };
-      return map[fallback.toLowerCase?.()] || fallback || '-';
-    }
-  })(),
-  // Senkron ise direkt değer döner; async ise promise — ikisini de Promise.all çözer.
-  getAttachmentPreviews(notification),
-  (async () => {
-    try { return await resolveDeliveryDate(notification); } catch { return '-'; }
-  })()
-]);
+          const map = {
+            trademark: 'Marka', marka: 'Marka',
+            patent: 'Patent',
+            design: 'Tasarım', tasarim: 'Tasarım',
+            litigation: 'Dava', dava: 'Dava',
+            objection: 'İtiraz', itiraz: 'İtiraz'
+          };
+          return map[rawType.toLowerCase?.() || ''] || rawType || '-';
+        } catch {
+          const fallback = String(notification.type || notification.notificationType || '');
+          const map = {
+            trademark: 'Marka', marka: 'Marka',
+            patent: 'Patent',
+            design: 'Tasarım', tasarim: 'Tasarım',
+            litigation: 'Dava', dava: 'Dava',
+            objection: 'İtiraz', itiraz: 'İtiraz'
+          };
+          return map[fallback.toLowerCase?.()] || fallback || '-';
+        }
+      })(),
+      // Senkron ise direkt değer döner; async ise promise — ikisini de Promise.all çözer.
+      getAttachmentPreviews(notification),
+      (async () => {
+        try { return await resolveDeliveryDate(notification); } catch { return '-'; }
+      })()
+    ]);
 
-    
     const previews = docInfo; // array from getAttachmentPreviews
     const fileCellHtml = (Array.isArray(previews) && previews.length)
       ? previews.map(p => p.fileUrl
@@ -1078,7 +1096,6 @@ const [
           : `${p.fileName || '-'}`
         ).join("<br>")
       : '-';
-
 
     const sentAtText = (notification.sentAt && typeof notification.sentAt.toDate === 'function')
       ? notification.sentAt.toDate().toLocaleString('tr-TR') : '-';
@@ -1089,8 +1106,9 @@ const [
     const createdAtText = (notification.createdAt && typeof notification.createdAt.toDate === 'function')
       ? notification.createdAt.toDate().toLocaleString('tr-TR') : (notification.createdAt ? new Date(notification.createdAt).toLocaleString('tr-TR') : '-');
 
+    // HTML İçeriğini Oluştur (statusText değişkenini kullandığımıza dikkat edin)
     tr.innerHTML = `
-      <td><span class="status-badge ${statusClass}">${notification.status || '-'}</span></td>
+      <td><span class="status-badge ${statusClass}">${statusText}</span></td>
       <td>${recipientDisplay || '-'}</td>
       <td>${subjectCell}</td>
       <td>${applicationNoText || '-'}</td>
