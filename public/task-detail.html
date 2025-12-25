@@ -846,10 +846,23 @@ if (typeof this.renderDocuments === 'function') {
                 // Eğer bu iş bir "başvuru işlemi" ise kullanıcıdan başvuru bilgilerini al
                 try {
                     if (this.isApplicationTask()) {
-                        this.openApplicationDataModal();
+                        const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
+                        let dataMissing = true;
+
+                        if (ipId) {
+                            const rec = this.allIpRecords.find(r => String(r.id) == String(ipId));
+                            // Eğer kayıt bulunduysa ve hem numara hem tarih varsa modalı açma
+                            if (rec && rec.applicationNumber && rec.applicationDate) {
+                                dataMissing = false;
+                            }
+                        }
+
+                        if (dataMissing) {
+                            this.openApplicationDataModal();
+                        }
                     }
                 } catch (e) {
-                    console.warn('Application data modal could not be opened:', e);
+                    console.warn('Application data modal logic error:', e);
                 }
 
                         if (task.details.epatsDocument.documentDate) {
