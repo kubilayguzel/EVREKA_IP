@@ -77,6 +77,13 @@ setupEventListeners() {
 
         // 1.5. VALIDATOR TETİKLEYİCİLERİ (Input ve Change Eventleri)
         document.addEventListener('input', (e) => {
+            // e.target kontrolü ekle
+            if (!e.target) {
+                console.log('🔄 Nice sınıf değişikliği algılandı (target yok)');
+                this.validator.checkCompleteness(this.state);
+                return;
+            }
+            
             const inputTriggerIds = ['brandExampleText', 'taskTitle'];
             if (inputTriggerIds.includes(e.target.id)) {
                 console.log('🔄 Validator tetiklendi (input):', e.target.id, e.target.value);
@@ -84,7 +91,7 @@ setupEventListeners() {
             }
             
             // Nice Classification değişikliklerini yakala
-            if (e.target.closest('#selectedNiceClasses') || e.target.closest('#niceClassificationList')) {
+            if (e.target.closest && (e.target.closest('#selectedNiceClasses') || e.target.closest('#niceClassificationList'))) {
                 console.log('🔄 Nice sınıf değişikliği algılandı');
                 setTimeout(() => this.validator.checkCompleteness(this.state), 100);
             }
