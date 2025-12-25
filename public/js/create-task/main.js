@@ -316,8 +316,15 @@ setupEventListeners() {
         });
 
     // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
-        $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
-            this.uiManager.updateButtonsAndTabs();
+    $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
+            // YENİ: Son sekme mi kontrolü
+            const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
+            const activeTab = e.target;
+            const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
+
+            // uiManager'a durumu bildir
+            this.uiManager.updateButtonsAndTabs(isLastTab);
+
             const targetTabId = e.target.getAttribute('href').substring(1);
             
             if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
@@ -341,6 +348,25 @@ setupEventListeners() {
         });
 
         this.setupBrandExample();
+    }
+
+    handleNextTab() {
+        // Aktif sekmeyi bul
+        const activeTab = document.querySelector('#myTaskTabs .nav-link.active');
+        if (!activeTab) return;
+        
+        // Bir sonraki sekmeyi (li elemanını) bul
+        const parentLi = activeTab.parentElement;
+        const nextLi = parentLi.nextElementSibling;
+        
+        // Eğer sonraki sekme varsa geçiş yap
+        if (nextLi) {
+            const nextLink = nextLi.querySelector('.nav-link');
+            if (nextLink) {
+                // Bootstrap tab fonksiyonu ile geçiş yap
+                $(nextLink).tab('show');
+            }
+        }
     }
 
     handleMainTypeChange(e) {
