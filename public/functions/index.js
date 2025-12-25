@@ -5642,8 +5642,6 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
 
 // functions/index.js dosyasındaki ilgili fonksiyonu bununla değiştirin:
 
-// functions/index.js - createClientNotificationOnRenewalTaskCreated Fonksiyonu
-
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
   async (event) => {
@@ -5671,13 +5669,32 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // 3. Varsayılan (Fallback) İçerik
-      let templateId = null;
-      let subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
-      let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
+      // --- YENİ VERİLERİN HAZIRLANMASI ---
       
-      // Varsayılan metin düz yazı olduğu için burada <br> dönüşümü YAPILMALI
-      body = body.replace(/\n/g, '<br>');
+      // A) Başvuru Numarası ve Marka Adı
+      const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
+      const markName = ipData.title || ipData.markName || "-";
+
+      // B) Başvuru Sahipleri (Array -> String)
+      // Örn: "Evreka Patent A.Ş., Ahmet Yılmaz"
+      const applicantNames = applicants
+        .map(a => a.name || a.companyName || "")
+        .filter(Boolean)
+        .join(", ") || "-";
+
+      // C) Sınıflar (niceClasses veya classNo)
+      // Veritabanında array de olabilir string de olabilir, ikisini de kapsayalım.
+      let classesRaw = ipData.niceClasses || ipData.classNo || ipData.classes || [];
+      const classNumbers = Array.isArray(classesRaw) 
+        ? classesRaw.join(", ") 
+        : (String(classesRaw) || "-");
+
+      // D) Varsayılan Konu ve İçerik
+      // İSTEK: Konu kısmında marka adını "" içine alıp sonra - koyarak devam edelim.
+      let subject = `"${markName}" - Yenileme Onayı Bekleniyor`; 
+      
+      let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
+      body = body.replace(/\n/g, '<br>'); 
 
       try {
         const ruleSnap = await adminDb.collection("template_rules")
@@ -5697,19 +5714,13 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
-              // --- KRİTİK DÜZELTME BURADA ---
-              // Eğer gelen veri zaten HTML ise (<html> içeriyorsa), \n replace işlemini yapma!
-              // Aksi takdirde <html><br><body> gibi bozuk yapı oluşur.
+              // HTML değilse satır sonlarını düzelt
               const isHtml = rawBody && (rawBody.includes("<html") || rawBody.includes("<body"));
-              
               if (rawBody && !isHtml) {
                   rawBody = rawBody.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
               }
 
-              // Değişken Hazırlığı
-              const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
-              const markName = ipData.title || ipData.markName || "-";
-              
+              // Görsel URL Temizliği
               const clean = (val) => (val ? String(val).trim() : "");
               const markImageUrl = 
                 clean(ipData.brandImageUrl) || 
@@ -5721,11 +5732,14 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 
               console.log(`🖼️ [GÖRSEL] Task: ${taskId} -> URL: ${markImageUrl}`);
 
+              // --- DEĞİŞKENLERİ YERİNE KOYMA (Variable Replacement) ---
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
                 "{{markImageUrl}}": markImageUrl,
-                "{{relatedIpRecordTitle}}": markName
+                "{{relatedIpRecordTitle}}": markName,
+                "{{applicantNames}}": applicantNames, // YENİ
+                "{{classNumbers}}": classNumbers      // YENİ
               };
 
               Object.keys(replacements).forEach(key => {
