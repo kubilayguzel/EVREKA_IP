@@ -17,6 +17,7 @@ function renderSelectedClasses() {
 
     countBadge.textContent = Object.keys(selectedClasses).length;
     
+    // --- DURUM 1: HİÇ SINIF SEÇİLMEDİYSE ---
     if (Object.keys(selectedClasses).length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -27,11 +28,13 @@ function renderSelectedClasses() {
                 </p>
             </div>`;
         
-        // Sinyal gönder (Silindiğinde de kontrol etsin)
-        document.dispatchEvent(new Event('input')); 
+        // ÖNEMLİ GÜNCELLEME: Olayı container üzerinden ve 'bubbles: true' ile tetikliyoruz.
+        // Böylece main.js'deki (e.target.closest) kontrolü bu değişikliği yakalayabilir.
+        container.dispatchEvent(new Event('input', { bubbles: true })); 
         return;
     }
 
+    // --- DURUM 2: SINIFLAR SEÇİLDİYSE ---
     const grouped = {};
     Object.entries(selectedClasses).forEach(([code, item]) => {
         if (!grouped[item.classNum]) grouped[item.classNum] = [];
@@ -51,8 +54,11 @@ function renderSelectedClasses() {
             </div>`;
         });
     });
+    
     container.innerHTML = html;
-    document.dispatchEvent(new Event('input')); 
+
+    // ÖNEMLİ GÜNCELLEME: Burada da aynı şekilde bubbles: true ile tetikliyoruz.
+    container.dispatchEvent(new Event('input', { bubbles: true })); 
 }
 
 export function setSelectedNiceClasses(classes) {
