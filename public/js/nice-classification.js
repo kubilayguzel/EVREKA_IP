@@ -48,6 +48,7 @@ function renderSelectedClasses() {
         });
     });
     container.innerHTML = html;
+document.dispatchEvent(new Event('input'));
 }
 
 export function setSelectedNiceClasses(classes) {
