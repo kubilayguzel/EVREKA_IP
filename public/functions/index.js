@@ -5640,7 +5640,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
   }
 });
 
-// functions/index.js dosyasındaki ilgili fonksiyonu bununla değiştirin:
+// functions/index.js - createClientNotificationOnRenewalTaskCreated (TARİH EKLENDİ)
 
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
@@ -5669,32 +5669,42 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // --- YENİ VERİLERİN HAZIRLANMASI ---
+      // --- VERİ HAZIRLIĞI ---
       
-      // A) Başvuru Numarası ve Marka Adı
+      // A) Tarih Formatlama Fonksiyonu (YENİ)
+      const formatDate = (val) => {
+        if (!val) return "-";
+        // Eğer Firestore Timestamp ise (.toDate), değilse string/date olarak işle
+        const date = (val.toDate) ? val.toDate() : new Date(val);
+        // Geçersiz tarih kontrolü
+        if (isNaN(date.getTime())) return "-";
+        // TR Formatı: 25.12.2025
+        return date.toLocaleDateString("tr-TR");
+      };
+
+      // B) Temel Alanlar
       const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
       const markName = ipData.title || ipData.markName || "-";
 
-      // B) Başvuru Sahipleri (Array -> String)
-      // Örn: "Evreka Patent A.Ş., Ahmet Yılmaz"
+      // C) Tarih Alanı (protectionEndDate yoksa renewalDate, o da yoksa -)
+      const renewalDateText = formatDate(ipData.protectionEndDate || ipData.renewalDate);
+
+      // D) Başvuru Sahipleri
       const applicantNames = applicants
         .map(a => a.name || a.companyName || "")
         .filter(Boolean)
         .join(", ") || "-";
 
-      // C) Sınıflar (niceClasses veya classNo)
-      // Veritabanında array de olabilir string de olabilir, ikisini de kapsayalım.
+      // E) Sınıflar
       let classesRaw = ipData.niceClasses || ipData.classNo || ipData.classes || [];
       const classNumbers = Array.isArray(classesRaw) 
         ? classesRaw.join(", ") 
         : (String(classesRaw) || "-");
 
-      // D) Varsayılan Konu ve İçerik
-      // İSTEK: Konu kısmında marka adını "" içine alıp sonra - koyarak devam edelim.
-      let subject = `"${markName}" - Yenileme Onayı Bekleniyor`; 
-      
+      // F) Konu ve İçerik
+      let subject = `"${markName}" - Yenileme Onayı Bekleniyor`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
-      body = body.replace(/\n/g, '<br>'); 
+      body = body.replace(/\n/g, '<br>');
 
       try {
         const ruleSnap = await adminDb.collection("template_rules")
@@ -5714,13 +5724,12 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
-              // HTML değilse satır sonlarını düzelt
               const isHtml = rawBody && (rawBody.includes("<html") || rawBody.includes("<body"));
               if (rawBody && !isHtml) {
                   rawBody = rawBody.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
               }
 
-              // Görsel URL Temizliği
+              // Görsel URL
               const clean = (val) => (val ? String(val).trim() : "");
               const markImageUrl = 
                 clean(ipData.brandImageUrl) || 
@@ -5730,16 +5739,15 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
                 clean(ipData.imageSignedUrl) || 
                 "";
 
-              console.log(`🖼️ [GÖRSEL] Task: ${taskId} -> URL: ${markImageUrl}`);
-
-              // --- DEĞİŞKENLERİ YERİNE KOYMA (Variable Replacement) ---
+              // --- DEĞİŞKENLER (YENİ EKLENDİ) ---
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
                 "{{markImageUrl}}": markImageUrl,
                 "{{relatedIpRecordTitle}}": markName,
-                "{{applicantNames}}": applicantNames, // YENİ
-                "{{classNumbers}}": classNumbers      // YENİ
+                "{{applicantNames}}": applicantNames,
+                "{{classNumbers}}": classNumbers,
+                "{{renewalDate}}": renewalDateText // <--- YENİ
               };
 
               Object.keys(replacements).forEach(key => {
