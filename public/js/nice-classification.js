@@ -11,44 +11,48 @@ let class35_5_modalSelectedItems = {};
 let class35_5_modalAllData = [];
 
 function renderSelectedClasses() {
-    const container = document.getElementById('selectedNiceClasses');
-    const countBadge = document.getElementById('selectedClassCount');
-    if (!container || !countBadge) return;
+    const container = document.getElementById('selectedNiceClasses');
+    const countBadge = document.getElementById('selectedClassCount');
+    if (!container || !countBadge) return;
 
-    countBadge.textContent = Object.keys(selectedClasses).length;
-    if (Object.keys(selectedClasses).length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-list-alt fa-3x text-muted mb-3"></i>
-                <p class="text-muted">
-                    Henüz hiçbir sınıf seçilmedi.<br>
-                    Sol panelden sınıf başlığına veya alt sınıfları seçin.
-                </p>
-            </div>`;
-        return;
-    }
+    countBadge.textContent = Object.keys(selectedClasses).length;
+    
+    if (Object.keys(selectedClasses).length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-list-alt fa-3x text-muted mb-3"></i>
+                <p class="text-muted">
+                    Henüz hiçbir sınıf seçilmedi.<br>
+                    Sol panelden sınıf başlığına veya alt sınıfları seçin.
+                </p>
+            </div>`;
+        
+        // Sinyal gönder (Silindiğinde de kontrol etsin)
+        document.dispatchEvent(new Event('input')); 
+        return;
+    }
 
-    const grouped = {};
-    Object.entries(selectedClasses).forEach(([code, item]) => {
-        if (!grouped[item.classNum]) grouped[item.classNum] = [];
-        grouped[item.classNum].push({ code, text: item.text });
-    });
+    const grouped = {};
+    Object.entries(selectedClasses).forEach(([code, item]) => {
+        if (!grouped[item.classNum]) grouped[item.classNum] = [];
+        grouped[item.classNum].push({ code, text: item.text });
+    });
 
-    let html = '';
-    Object.keys(grouped).sort((a, b) => parseInt(a) - parseInt(b)).forEach(classNum => {
-        grouped[classNum].forEach(item => {
-            const isCustom = classNum === '99';
-            const displayCode = isCustom ? classNum : item.code;
-            html += `
-            <div class="selected-class-item ${isCustom ? 'custom' : ''}">
-                <div class="selected-class-number">Sınıf ${displayCode}</div>
-                <p class="selected-class-description">${item.text}</p>
-                <button class="remove-selected-btn" data-key="${item.code}" title="Kaldır">&times;</button>
-            </div>`;
-        });
-    });
-    container.innerHTML = html;
-document.dispatchEvent(new Event('input'));
+    let html = '';
+    Object.keys(grouped).sort((a, b) => parseInt(a) - parseInt(b)).forEach(classNum => {
+        grouped[classNum].forEach(item => {
+            const isCustom = classNum === '99';
+            const displayCode = isCustom ? classNum : item.code;
+            html += `
+            <div class="selected-class-item ${isCustom ? 'custom' : ''}">
+                <div class="selected-class-number">Sınıf ${displayCode}</div>
+                <p class="selected-class-description">${item.text}</p>
+                <button class="remove-selected-btn" data-key="${item.code}" title="Kaldır">&times;</button>
+            </div>`;
+        });
+    });
+    container.innerHTML = html;
+    document.dispatchEvent(new Event('input')); 
 }
 
 export function setSelectedNiceClasses(classes) {
