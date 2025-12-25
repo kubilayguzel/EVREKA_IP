@@ -75,38 +75,31 @@ setupEventListeners() {
             originSelect.addEventListener('change', (e) => this.handleOriginChange(e.target.value));
         }
 
-        // 2. GLOBAL TIKLAMA YÖNETİCİSİ (Dinamik Butonlar İçin)
+        // 2. GLOBAL TIKLAMA YÖNETİCİSİ
         document.addEventListener('click', (e) => {
             
-            // --- A) FORM AKSİYONLARI (KAYDET / İPTAL / İLERLE) ---
+            // --- A) FORM AKSİYONLARI ---
             
             // 💾 KAYDET BUTONU
             if (e.target.id === 'saveTaskBtn' || e.target.closest('#saveTaskBtn')) {
                 const btn = e.target.closest('#saveTaskBtn') || e.target;
                 if (btn.disabled) return;
                 
-                // 1. Tahakkuk Verisini Al
+                // Tahakkuk Verisini Al
                 let accrualData = null;
                 const isFree = document.getElementById('isFreeTransaction')?.checked;
                 
-                // Eğer ücretsiz değilse ve manager varsa veriyi çek
                 if (!isFree && this.accrualFormManager) {
                     const result = this.accrualFormManager.getData();
-                    
-                    // Eğer form görünürse (Wrapper açıksa) validasyon yap
                     const isFormVisible = document.getElementById('accrualToggleWrapper')?.style.display !== 'none';
                     
                     if (isFormVisible && !result.success) {
                         alert(result.error);
                         return;
                     }
-                    
-                    if (result.success) {
-                        accrualData = result.data;
-                    }
+                    if (result.success) accrualData = result.data;
                 }
 
-                // 2. Bu veriyi State'e ekle
                 this.state.accrualData = accrualData; 
                 this.state.isFreeTransaction = isFree;
 
@@ -126,32 +119,27 @@ setupEventListeners() {
                 this.handleNextTab();
             }
 
-            // --- B) SİLME VE TEMİZLEME İŞLEMLERİ ---
+            // --- B) SİLME VE TEMİZLEME ---
 
-            // Varlık (Asset) Kaldır -- [GÜNCELLENDİ]
+            // Varlık (Asset) Kaldır
             if (e.target.closest('#clearSelectedIpRecord')) {
                 this.state.selectedIpRecord = null;
                 document.getElementById('selectedIpRecordContainer').style.display = 'none';
                 document.getElementById('ipRecordSearch').value = '';
                 
-                // Görseli temizle
                 const imgEl = document.getElementById('selectedIpRecordImage');
                 if(imgEl) imgEl.src = '';
 
-                // ---> YENİ: Kilitleri Aç ve Temizle <---
-                // Eğer bir dava seçiliydiyse ve kaldırıldıysa alanları serbest bırak
                 this.uiManager.unlockAndClearLawsuitFields();
-                this.state.selectedRelatedParties = []; // Otomatik seçilen müvekkili de temizle
-
-                // WIPO/ARIPO alt kayıtları temizle
+                this.state.selectedRelatedParties = [];
                 this.state.selectedWipoAripoChildren = [];
                 this.uiManager.renderWipoAripoChildRecords([]);
 
                 const originSelect = document.getElementById('originSelect');
                 const mainIpTypeSelect = document.getElementById('mainIpType');
-                
                 if (originSelect) originSelect.disabled = false;
                 if (mainIpTypeSelect) mainIpTypeSelect.disabled = false;
+                
                 this.validator.checkCompleteness(this.state);
             }
 
@@ -182,15 +170,14 @@ setupEventListeners() {
                 this.validator.checkCompleteness(this.state);
             }
 
-            // --- C) MODAL VE EKLEME İŞLEMLERİ ---
+            // --- C) MODAL VE EKLEME ---
 
-            // Yeni Kişi / Başvuru Sahibi Ekleme
+            // Yeni Kişi Ekleme
             if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn')) {
                 const isApplicant = e.target.closest('#addNewApplicantBtn'); 
 
                 openPersonModal((newPerson) => { 
                     this.state.allPersons.push(newPerson); 
-                    
                     if (isApplicant) {
                         if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
                             this.state.selectedApplicants.push(newPerson);
@@ -202,23 +189,20 @@ setupEventListeners() {
                     this.validator.checkCompleteness(this.state);
                 });
 
-                // Modal açılınca şehir listesini tetikle
                 setTimeout(() => {
                     const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
-                    if (countrySelect && (countrySelect.value === 'Turkey' || countrySelect.value === 'TR' || countrySelect.value === 'Türkiye')) {
-                        console.log('🌍 Şehir listesi tetikleniyor...');
+                    if (countrySelect && ['Turkey','TR','Türkiye'].includes(countrySelect.value)) {
                         countrySelect.dispatchEvent(new Event('change'));
                     }
                 }, 300);
             }
             
-            // Parent Transaction Seçim Listener (Modal İçin)
+            // Parent Transaction Seçim (Modal)
             if (e.target.closest('.list-group-item') && document.getElementById('parentListContainer')?.contains(e.target)) {
                  // Yedek listener
             }
 
-            // --- D) TAHAKKUK UI YÖNETİMİ ---           
-            // "Tahakkuk Formu Aç/Kapat" Butonu
+            // --- D) TAHAKKUK UI ---
             if (e.target.id === 'toggleAccrualFormBtn' || e.target.closest('#toggleAccrualFormBtn')) {
                 const wrapper = document.getElementById('accrualToggleWrapper'); 
                 const btn = document.getElementById('toggleAccrualFormBtn');
@@ -234,7 +218,7 @@ setupEventListeners() {
                 }
             }
 
-            // --- ÜCRETSİZ İŞLEM CHECKBOX ---
+            // Ücretsiz İşlem Checkbox
             if (e.target.id === 'isFreeTransaction') {
                 const isChecked = e.target.checked;
                 const btn = document.getElementById('toggleAccrualFormBtn');
@@ -253,21 +237,19 @@ setupEventListeners() {
             }
         });
         
-        // 3. PARENT TRANSACTION MODAL SEÇİMİ
+        // 3. Parent Transaction Event
         document.addEventListener('parentTransactionSelected', (e) => {
-            const selectedId = e.detail.id;
-            console.log('🎯 Modalden seçim geldi:', selectedId);
-            this.submitHandler.selectedParentTransactionId = selectedId;
+            this.submitHandler.selectedParentTransactionId = e.detail.id;
             this.uiManager.hideParentSelectionModal();
             alert('Geri çekilecek işlem seçildi.');
         });
         
-        // Modal Kapatma Butonları
         const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
         closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
 
-        // --- MAHKEME SEÇİMİ DİNLEYİCİSİ (Diğer seçeneği için) ---
+        // 4. Change Listeners (Mahkeme, Dosya vb.)
         document.addEventListener('change', (e) => {
+            // Mahkeme "Diğer" seçimi
             if (e.target && e.target.id === 'courtName') {
                 const customInput = document.getElementById('customCourtInput');
                 if (customInput) {
@@ -283,46 +265,37 @@ setupEventListeners() {
                 }
             }
 
-            // --- YENİ: DAVA DOKÜMANI SEÇİMİ ---
+            // Dava Dokümanı
             if (e.target.id === 'suitDocument') {
-                // Yeni seçilenleri diziye çevir
                 const newFiles = Array.from(e.target.files);
-                
-                // State'teki mevcut dosyaların üzerine ekle (Birikimli gitmesi için)
                 this.state.uploadedFiles = [...(this.state.uploadedFiles || []), ...newFiles];
-                
-                // Listeyi ekrana çiz
                 this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
-                
-                // Input'u temizle (Böylece aynı dosyayı tekrar seçebilirsiniz)
                 e.target.value = ''; 
-                
-                console.log('📎 Güncel dosya listesi:', this.state.uploadedFiles);
             }
 
-            // --- YENİ: DOSYA SİLME BUTONU ---
+            // Dosya Silme
             if (e.target.closest('.remove-file-btn')) {
                 const btn = e.target.closest('.remove-file-btn');
                 const index = parseInt(btn.dataset.index);
-                
                 if (this.state.uploadedFiles) {
-                    // Diziden ilgili dosyayı çıkar
                     this.state.uploadedFiles.splice(index, 1);
-                    
-                    // Listeyi yeniden çiz
                     this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
                 }
             }
+            
+            // Validator Tetikleyiciler (Change)
+            if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
+            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) {
+                this.validator.checkCompleteness(this.state);
+            }
         });
 
-    // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
-    $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
-            // YENİ: Son sekme mi kontrolü
+        // 5. TAB DEĞİŞİMİ
+        $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
             const activeTab = e.target;
             const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
 
-            // uiManager'a durumu bildir
             this.uiManager.updateButtonsAndTabs(isLastTab);
 
             const targetTabId = e.target.getAttribute('href').substring(1);
@@ -336,24 +309,25 @@ setupEventListeners() {
             if (targetTabId === 'summary') this.uiManager.renderSummaryTab(this.state);
         });
         
-        // Form Elemanlarını Dinle
+        // --- KRİTİK GÜNCELLEME: GARANTİLİ INPUT DİNLEYİCİSİ ---
+        
+        // 1. Genel Input Takipçisi (Her tuşa basıldığında çalışır)
         document.addEventListener('input', (e) => {
-            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) this.calculateTotalAmount();
-            
-            // 🆕 MARKA ADI İÇİN VALIDATOR EKLEME
-            if (e.target.id === 'brandExampleText') {
-                this.validator.checkCompleteness(this.state);
+            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) {
+                this.calculateTotalAmount();
             }
-            
+            // Her türlü veri girişinde validator çalışsın
             this.validator.checkCompleteness(this.state);
         });
-
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
-            
-            // 🆕 MENŞE/ÜLKE SEÇİMİ İÇİN VALIDATOR EKLEME
-            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate', 'originSelect', 'countrySelect'].includes(e.target.id)) {
-                this.validator.checkCompleteness(this.state);
+        
+        // 2. ÖZEL TAKİPÇİ (Marka Adı İçin)
+        // Kutuya tıklandığı an ona özel bir takipçi yapıştırır, böylece kaçırma şansı olmaz.
+        document.addEventListener('focusin', (e) => {
+            if (e.target.id === 'brandExampleText') {
+                e.target.oninput = () => {
+                    console.log('📝 Marka adı yazılıyor...');
+                    this.validator.checkCompleteness(this.state);
+                };
             }
         });
 
