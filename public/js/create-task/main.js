@@ -339,12 +339,22 @@ setupEventListeners() {
         // Form Elemanlarını Dinle
         document.addEventListener('input', (e) => {
             if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) this.calculateTotalAmount();
+            
+            // 🆕 MARKA ADI İÇİN VALIDATOR EKLEME
+            if (e.target.id === 'brandExampleText') {
+                this.validator.checkCompleteness(this.state);
+            }
+            
             this.validator.checkCompleteness(this.state);
         });
-        
+
         document.addEventListener('change', (e) => {
             if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
-            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) this.validator.checkCompleteness(this.state);
+            
+            // 🆕 MENŞE/ÜLKE SEÇİMİ İÇİN VALIDATOR EKLEME
+            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate', 'originSelect', 'countrySelect'].includes(e.target.id)) {
+                this.validator.checkCompleteness(this.state);
+            }
         });
 
         this.setupBrandExample();
