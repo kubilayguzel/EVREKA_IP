@@ -5649,7 +5649,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
     const task = snap?.data() || {};
     const taskId = event.params.taskId;
 
-    // Yalnızca yenileme + müvekkil onayı bekliyor
+    // Yalnızca yenileme (22) + müvekkil onayı bekliyor statüsü
     if (String(task.taskType) !== "22") return null;
     if (task.status !== "awaiting_client_approval") return null;
 
@@ -5665,54 +5665,94 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const ipData = ipDoc.data() || {};
       const applicants = ipData.applicants || [];
 
-      // 2) Alıcılar (mevcut yardımcıyı kullan)
-      // notificationType sisteminizde 'marka' / 'trademark' gibi; sizde kullanılan key'i geçin
+      // 2) Alıcılar
       const notificationType = (task.mainProcessType || "marka");
-      const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType); // :contentReference[oaicite:4]{index=4}
+      const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // 3) Şablon kuralı (taskType’a göre) - veritabanınızda zaten tanımlı
-      // Örn: template_rules[sourceType='task', taskType='22'] → templateId
+      // 3) Şablon Kuralı ve Şablon İçeriğini Getirme (DÜZELTİLEN KISIM)
       let templateId = null;
+      let subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
+      let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
+
       try {
+        // A) Kuraldan templateId'yi bul
         const ruleSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task")
           .where("taskType", "==", "22")
           .limit(1)
           .get();
+
         if (!ruleSnap.empty) {
           templateId = ruleSnap.docs[0].data()?.templateId || null;
+
+          // B) Şablon içeriğini 'mail_templates'ten çek
+          if (templateId) {
+            const templateSnap = await adminDb.collection("mail_templates").doc(templateId).get();
+            if (templateSnap.exists) {
+              const tmplData = templateSnap.data();
+              
+              // Şablondaki ham metinleri al
+              let rawSubject = tmplData.subject || subject;
+              let rawBody = tmplData.body || body;
+
+              // C) Değişkenleri Değiştir (Variable Replacement)
+              const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
+              const markName = ipData.title || ipData.markName || "-";
+              
+              // Görsel URL'si (Varsa public URL, yoksa boş)
+              // Not: ipRecord içinde imagePath, imageUrl veya publicImageUrl olabilir.
+              const markImageUrl = ipData.publicImageUrl || ipData.imageUrl || ipData.imageSignedUrl || "";
+
+              const replacements = {
+                "{{applicationNo}}": appNo,
+                "{{markName}}": markName,
+                "{{markImageUrl}}": markImageUrl,
+                "{{relatedIpRecordTitle}}": markName // Eski değişken desteği
+              };
+
+              // Regex ile tüm eşleşmeleri değiştir
+              Object.keys(replacements).forEach(key => {
+                 const val = replacements[key];
+                 // Global replace (tüm geçişleri değiştir)
+                 rawSubject = rawSubject.split(key).join(val);
+                 rawBody = rawBody.split(key).join(val);
+              });
+
+              subject = rawSubject;
+              body = rawBody;
+            }
+          }
         }
       } catch (e) {
-        console.warn("template_rules lookup failed:", e?.message || e);
+        console.warn("Template lookup/fetch failed:", e?.message || e);
       }
 
-      // 4) Konu/Gövde (İsterseniz burada template body/subject’i resolve edebilirsiniz;
-      // yoksa boş geçin, UI zaten taslak üzerinde düzenliyor)
-      const subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
-      const body    = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
-
-      // 5) Eksik alan kontrolü → ortak statü mantığına uygun missing_info/awaiting… (örneğe paralel)
+      // 4) Eksik alan kontrolü
       const hasRecipients = (toList.length + ccList.length) > 0;
       const missingFields = [];
       if (!hasRecipients) missingFields.push("recipients");
-      if (!templateId)    missingFields.push("template");
+      // TemplateId bulunamasa bile varsayılan metinle taslak oluşsun diye bunu zorunlu tutmayabiliriz,
+      // ama sisteminizde 'template' missing field ise ekleyelim:
+      if (!templateId) missingFields.push("template");
+      
       const finalStatus = missingFields.length ? "missing_info" : "awaiting_client_approval";
 
-      // 6) mail_notifications kaydını oluştur (ortak şemayla bire bir)
+      // 5) mail_notifications kaydını oluştur
       const notificationDoc = {
-        toList, ccList,                                 // ✔ alıcılar
+        toList, ccList,
         clientId: task.clientId || (applicants?.[0]?.id || null),
-        subject, body,
+        subject, 
+        body, // Artık veritabanından gelen ve işlenen body kullanılıyor
         status: finalStatus,
         mode: "draft",
         isDraft: true,
 
-        assignedTo_uid: task.assignedTo_uid || null,    // ✔ mevcut atamayı taşı
+        assignedTo_uid: task.assignedTo_uid || null,
         assignedTo_email: task.assignedTo_email || null,
 
         sourceDocumentId: null,
-        relatedIpRecordId,                               // ✔ işinizin ilişkilendiği IP kaydı
-        associatedTaskId: taskId,                        // ✔ bu task’a bağlı
+        relatedIpRecordId,
+        associatedTaskId: taskId,
         associatedTransactionId: null,
 
         templateId,
@@ -5724,8 +5764,8 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      await adminDb.collection("mail_notifications").add(notificationDoc); // :contentReference[oaicite:5]{index=5}
-      console.log("✅ Renewal task notification draft created", { taskId });
+      await adminDb.collection("mail_notifications").add(notificationDoc);
+      console.log("✅ Renewal task notification draft created with TEMPLATE", { taskId, templateId });
 
       return null;
     } catch (err) {
