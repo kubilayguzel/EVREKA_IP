@@ -5640,8 +5640,8 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
   }
 });
 
+// functions/index.js dosyasındaki ilgili fonksiyonu bununla değiştirin:
 
-// Yeni: Yenileme (taskType=22) işi oluşturulduğunda müşteri mail taslağı aç
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
   async (event) => {
@@ -5669,10 +5669,13 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // 3) Şablon Kuralı ve Şablon İçeriğini Getirme (DÜZELTİLEN KISIM)
+      // 3) Şablon Kuralı ve Varsayılan İçerik
       let templateId = null;
       let subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
+
+      // Varsayılan içerikteki \n karakterlerini <br>'ye çevir (Fallback için)
+      body = body.replace(/\n/g, '<br>');
 
       try {
         // A) Kuraldan templateId'yi bul
@@ -5695,25 +5698,36 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
-              // C) Değişkenleri Değiştir (Variable Replacement)
+              // --- DÜZELTME 1: \n Karakter Temizliği ---
+              // Şablon içinde yanlışlıkla \\n (yazı olarak) veya \n kaldıysa <br> yap
+              if (rawBody) {
+                  rawBody = rawBody.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+              }
+
+              // C) Değişkenleri Değiştir
               const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
               const markName = ipData.title || ipData.markName || "-";
               
-              // Görsel URL'si (Varsa public URL, yoksa boş)
-              // Not: ipRecord içinde imagePath, imageUrl veya publicImageUrl olabilir.
-              const markImageUrl = ipData.publicImageUrl || ipData.imageUrl || ipData.imageSignedUrl || "";
+              // --- DÜZELTME 2: Görsel URL Kontrolü (GÜNCELLENDİ) ---
+              // brandImageUrl alanına öncelik verildi
+              const markImageUrl = 
+                ipData.brandImageUrl ||  // <--- İLK BURAYA BAKILACAK
+                ipData.publicImageUrl || 
+                ipData.imageUrl || 
+                ipData.imageSignedUrl || 
+                ipData.trademarkImage || 
+                "";
 
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
                 "{{markImageUrl}}": markImageUrl,
-                "{{relatedIpRecordTitle}}": markName // Eski değişken desteği
+                "{{relatedIpRecordTitle}}": markName
               };
 
-              // Regex ile tüm eşleşmeleri değiştir
               Object.keys(replacements).forEach(key => {
                  const val = replacements[key];
-                 // Global replace (tüm geçişleri değiştir)
+                 // Global replace
                  rawSubject = rawSubject.split(key).join(val);
                  rawBody = rawBody.split(key).join(val);
               });
@@ -5731,8 +5745,6 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const hasRecipients = (toList.length + ccList.length) > 0;
       const missingFields = [];
       if (!hasRecipients) missingFields.push("recipients");
-      // TemplateId bulunamasa bile varsayılan metinle taslak oluşsun diye bunu zorunlu tutmayabiliriz,
-      // ama sisteminizde 'template' missing field ise ekleyelim:
       if (!templateId) missingFields.push("template");
       
       const finalStatus = missingFields.length ? "missing_info" : "awaiting_client_approval";
@@ -5742,7 +5754,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
         toList, ccList,
         clientId: task.clientId || (applicants?.[0]?.id || null),
         subject, 
-        body, // Artık veritabanından gelen ve işlenen body kullanılıyor
+        body, 
         status: finalStatus,
         mode: "draft",
         isDraft: true,
@@ -5765,7 +5777,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       };
 
       await adminDb.collection("mail_notifications").add(notificationDoc);
-      console.log("✅ Renewal task notification draft created with TEMPLATE", { taskId, templateId });
+      console.log("✅ Renewal task notification draft created with BRANDIMAGEURL fix", { taskId });
 
       return null;
     } catch (err) {
