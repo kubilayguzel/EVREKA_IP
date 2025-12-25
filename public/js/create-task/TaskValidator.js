@@ -1,98 +1,92 @@
 import { RELATED_PARTY_REQUIRED, TASK_IDS, asId } from './TaskConstants.js';
-import { getSelectedNiceClasses } from '../nice-classification.js';
 
 export class TaskValidator {
     constructor() {
         this.saveBtn = document.getElementById('saveTaskBtn');
     }
 
-    /**
-     * Formun doluluk durumunu kontrol eder ve Kaydet butonunu açar/kapatır.
-     * @param {Object} state - Uygulamanın anlık durum nesnesi (seçili kayıtlar vb.)
-     */
     checkCompleteness(state) {
-        // State'den gerekli verileri al
-        const { 
-            selectedTaskType, 
-            selectedIpRecord, 
-            selectedApplicants, 
-            selectedRelatedParties, 
-            selectedCountries 
-        } = state;
-
-        // Butonu her seferinde yeniden seç (DOM değişmiş olabilir)
+        // Butonu seç
         this.saveBtn = document.getElementById('saveTaskBtn');
+        if (!this.saveBtn) return;
 
-        if (!selectedTaskType || !this.saveBtn) {
-            if (this.saveBtn) this.saveBtn.disabled = true;
-            return;
-        }
+        // Form tipini anlamaya çalış
+        const { selectedTaskType } = state || {};
+        
+        // Ekranda "Marka Adı" kutusu var mı? Varsa bu bir Marka Başvurusudur.
+        // (State'e güvenmek yerine ekrana bakıyoruz)
+        const brandInputExists = !!document.getElementById('brandExampleText');
 
         let isComplete = false;
-        
+
         // --- SENARYO 1: MARKA BAŞVURUSU ---
-        if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
+        // (State 'Başvuru' diyorsa VEYA ekranda marka adı kutusu varsa)
+        if ((selectedTaskType?.alias === 'Başvuru' && selectedTaskType?.ipType === 'trademark') || brandInputExists) {
+            
+            // 1. Marka Adı (DOM)
             const brandText = document.getElementById('brandExampleText')?.value?.trim();
             
-            // 1. YÖNTEM: Global fonksiyondan kontrol (Hafıza)
-            const memoryClasses = typeof getSelectedNiceClasses === 'function' ? getSelectedNiceClasses() : [];
-            
-            // 2. YÖNTEM: DOM'dan Doğrudan Kontrol (Görsel - GARANTİ YÖNTEM)
-            // Listede fiziksel olarak bulunan sınıf kutucuklarını sayar
+            // 2. Sınıf Seçimi (DOM - Garanti Yöntem)
+            // Listede kaç tane sınıf kutucuğu var?
             const domClassCount = document.querySelectorAll('#selectedNiceClasses .selected-class-item').length;
+            const hasNiceClasses = domClassCount > 0;
             
-            // İkisinden birinde veri varsa kabul et
-            const hasNiceClasses = memoryClasses.length > 0 || domClassCount > 0;
+            // 3. Başvuru Sahibi (DOM - Garanti Yöntem)
+            // Listede kaç tane kişi kutucuğu var?
+            const domApplicantCount = document.querySelectorAll('#selectedApplicantsList .selected-item').length;
+            const hasApplicants = domApplicantCount > 0;
             
-            // Başvuru sahipleri
-            const hasApplicants = selectedApplicants && selectedApplicants.length > 0;
-            
-            // Menşe/Ülke seçimi kontrolü
+            // 4. Menşe/Ülke (DOM)
             const originType = document.getElementById('originSelect')?.value;
-            let hasCountrySelection = false;
-            
+            let hasCountrySelection = true;
             if (originType === 'Yurtdışı Ulusal') {
                 hasCountrySelection = !!document.getElementById('countrySelect')?.value;
-            } else if (originType === 'WIPO' || originType === 'ARIPO') {
-                hasCountrySelection = selectedCountries && selectedCountries.length > 0;
-            } else {
-                hasCountrySelection = true; // TÜRKPATENT için ülke seçimi gerekmez
+            } else if (['WIPO', 'ARIPO'].includes(originType)) {
+                // Çoklu ülke seçimi listesindeki elemanları say
+                hasCountrySelection = document.querySelectorAll('#selectedCountriesList .selected-item').length > 0;
             }
 
+            // 5. Atanan Kişi (DOM)
             const assignedTo = document.getElementById('assignedTo')?.value;
             
-            // Hata Ayıklama (Konsolda eksik olanı görmek için)
-            if (!assignedTo) console.warn('❌ EKSİK: Atanacak Kişi (assignedTo) seçilmedi.');
-            if (!brandText) console.warn('❌ EKSİK: Marka Adı (brandExampleText) girilmedi.');
-            if (!hasNiceClasses) console.warn('❌ EKSİK: Mal/Hizmet Sınıfı seçilmedi (Ekranda görünmüyor).');
-            if (!hasApplicants) console.warn('❌ EKSİK: Başvuru Sahibi seçilmedi.');
+            // Konsola Durum Raporu Yaz (F12'de görebilmeniz için)
+            console.log('--- VALIDATOR KONTROLÜ (DOM) ---');
+            if (!assignedTo) console.warn('❌ Atanacak Kişi eksik');
+            if (!brandText) console.warn('❌ Marka Adı eksik');
+            if (!hasNiceClasses) console.warn(`❌ Sınıf Seçimi eksik (Ekranda: ${domClassCount})`);
+            if (!hasApplicants) console.warn(`❌ Başvuru Sahibi eksik (Ekranda: ${domApplicantCount})`);
+            if (!hasCountrySelection) console.warn('❌ Ülke Seçimi eksik');
 
             // Hepsini kontrol et
             isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);
             
         } 
-        // --- SENARYO 2: DİĞER İŞLEMLER (Standart) ---
+        // --- SENARYO 2: DİĞER İŞLEMLER ---
         else {
-            const taskTitle = document.getElementById('taskTitle')?.value?.trim() || selectedTaskType?.alias || selectedTaskType?.name;
-            const hasIpRecord = !!selectedIpRecord;
+            const taskTitle = document.getElementById('taskTitle')?.value?.trim() || selectedTaskType?.alias;
+            const hasIpRecord = !!state.selectedIpRecord; // Burası state'den kalabilir veya DOM'a çevrilebilir
             const assignedTo = document.getElementById('assignedTo')?.value;
-
-            const tIdStr = asId(selectedTaskType.id);
-            const needsRelatedParty = RELATED_PARTY_REQUIRED.has(tIdStr);
-            const needsObjectionOwner = (tIdStr === TASK_IDS.ITIRAZ_YAYIN) || (tIdStr === '19') || (tIdStr === '7');
-            const hasRelated = Array.isArray(selectedRelatedParties) && selectedRelatedParties.length > 0;
             
-            if (!assignedTo) console.warn('❌ EKSİK: Atanacak Kişi seçilmedi.');
-            if (!hasIpRecord) console.warn('❌ EKSİK: Varlık seçilmedi.');
+            // DOM Kontrolü: İlgili Taraf Listesi
+            const domRelatedCount = document.querySelectorAll('#relatedPartyList .selected-item').length;
 
-            isComplete = !!assignedTo && !!taskTitle && !!hasIpRecord && (!needsRelatedParty || hasRelated) && (!needsObjectionOwner || hasRelated);
+            const tIdStr = asId(selectedTaskType?.id);
+            const needsRelated = RELATED_PARTY_REQUIRED.has(tIdStr);
+            
+            // Dava işlemlerinde bazen ilgili taraf otomatik kilitli gelir, liste boş olabilir ama input doludur.
+            // Bu yüzden detaylı kontrol gerekebilir ama şimdilik standart mantık:
+            const hasRelated = domRelatedCount > 0;
+
+            isComplete = !!assignedTo && !!taskTitle && !!hasIpRecord && (!needsRelated || hasRelated);
         }
 
         // Sonucu uygula
         this.saveBtn.disabled = !isComplete;
         
         if (isComplete) {
-            console.log('✅ VALIDASYON BAŞARILI: Buton aktifleşti.');
+            console.log('✅ VALIDASYON BAŞARILI: Kaydet butonu açıldı.');
+        } else {
+            console.log('🔒 Buton kilitli kaldı.');
         }
     }
 }
