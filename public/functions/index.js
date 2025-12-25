@@ -5642,6 +5642,8 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
 
 // functions/index.js - createClientNotificationOnRenewalTaskCreated (TARİH EKLENDİ)
 
+// functions/index.js - createClientNotificationOnRenewalTaskCreated (FIXED)
+
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
   async (event) => {
@@ -5671,14 +5673,11 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 
       // --- VERİ HAZIRLIĞI ---
       
-      // A) Tarih Formatlama Fonksiyonu (YENİ)
+      // A) Tarih Formatlama
       const formatDate = (val) => {
         if (!val) return "-";
-        // Eğer Firestore Timestamp ise (.toDate), değilse string/date olarak işle
         const date = (val.toDate) ? val.toDate() : new Date(val);
-        // Geçersiz tarih kontrolü
         if (isNaN(date.getTime())) return "-";
-        // TR Formatı: 25.12.2025
         return date.toLocaleDateString("tr-TR");
       };
 
@@ -5686,7 +5685,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
       const markName = ipData.title || ipData.markName || "-";
 
-      // C) Tarih Alanı (protectionEndDate yoksa renewalDate, o da yoksa -)
+      // C) Tarih Alanı
       const renewalDateText = formatDate(ipData.protectionEndDate || ipData.renewalDate);
 
       // D) Başvuru Sahipleri
@@ -5705,6 +5704,9 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       let subject = `"${markName}" - Yenileme Onayı Bekleniyor`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
       body = body.replace(/\n/g, '<br>');
+
+      // --- DÜZELTME: templateId BURADA TANIMLANIYOR ---
+      let templateId = null; 
 
       try {
         const ruleSnap = await adminDb.collection("template_rules")
@@ -5739,7 +5741,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
                 clean(ipData.imageSignedUrl) || 
                 "";
 
-              // --- DEĞİŞKENLER (YENİ EKLENDİ) ---
+              // --- DEĞİŞKENLER ---
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
@@ -5747,7 +5749,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
                 "{{relatedIpRecordTitle}}": markName,
                 "{{applicantNames}}": applicantNames,
                 "{{classNumbers}}": classNumbers,
-                "{{renewalDate}}": renewalDateText // <--- YENİ
+                "{{renewalDate}}": renewalDateText
               };
 
               Object.keys(replacements).forEach(key => {
