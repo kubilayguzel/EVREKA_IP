@@ -386,30 +386,108 @@ export class TaskSubmitHandler {
         }
     }
 
-    // C) MARKA BAŞVURUSU
+// C) MARKA BAŞVURUSU (GÜNCELLENDİ: Eksik Veriler Eklendi)
     async _handleTrademarkApplication(state, taskData) {
-        const { selectedApplicants, priorities, uploadedFiles } = state;
+        const { selectedApplicants, priorities, uploadedFiles, selectedTaskType } = state;
+        
+        // 1. Görsel Yükleme
         let brandImageUrl = null;
         if (uploadedFiles.length > 0) {
             const file = uploadedFiles[0];
             const path = `brand-images/${Date.now()}_${file.name}`;
-            brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
+            try {
+                brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
+            } catch (e) { console.error('Görsel yükleme hatası:', e); }
         }
+
+        // 2. DOM'dan Eksik Verileri Çek
+        // UI Manager'da bu ID'leri kullanmıştık, şimdi değerlerini alıyoruz.
+        const brandType = document.getElementById('brandType')?.value || '';
+        const brandCategory = document.getElementById('brandCategory')?.value || '';
+        const visualDescription = document.getElementById('brandExampleText')?.value || ''; // Marka Örneği Yazılı İfadesi
+        const nonLatin = document.getElementById('nonLatinAlphabet')?.value || '';
+        
+        // Menşe Bilgisi
+        let origin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
+        let originCountry = 'TR'; // Varsayılan
+        
+        if (origin === 'Yurtdışı Ulusal' || origin === 'FOREIGN_NATIONAL') {
+            origin = 'FOREIGN_NATIONAL';
+            originCountry = document.getElementById('countrySelect')?.value || '';
+        } else if (['WIPO', 'ARIPO', 'EUIPO'].includes(origin)) {
+            // WIPO ise originCountry 'WO' vb. olabilir veya merkez ofis
+        }
+
+        // 3. Nice Sınıflarını Scraper Formatına Uygun Hale Getir
+        // Scraper genelde { code: "35", description: "..." } formatı veya sadece array kullanır.
+        // getSelectedNiceClasses() bize string dizisi dönüyor: ["(35) Reklamcılık...", "(9) Yazılım..."]
+        // Veritabanı tutarlılığı için bu formatı koruyoruz.
+        const niceClasses = getSelectedNiceClasses();
+
+        // 4. Record Owner Type Belirleme
+        // Eğer başvuru sahibi bizsek 'self', değilse 'third_party' (Genelde başvuru yapıyorsak self'tir ama kontrol edilebilir)
+        const recordOwnerType = 'self'; 
+
+        // 5. Başvuru Sahiplerini Detaylandır
+        // State'deki selectedApplicants sadece ID ve Name tutuyor olabilir. 
+        // Eğer detay gerekiyorsa (adres vb.), applicants array'ini olduğu gibi alıyoruz.
+        // Veritabanında 'holder' veya 'applicants' olarak geçebilir. Tutarlılık için 'applicants' kullanıyoruz.
+        const applicantsData = selectedApplicants.map(p => ({
+            id: p.id,
+            name: p.name,
+            address: p.address || '', // Varsa
+            country: p.country || '', // Varsa
+            role: 'applicant'
+        }));
+
+        // 6. YENİ PORTFÖY KAYDI (Genişletilmiş Şema)
         const newRecordData = {
-            title: taskData.title,
-            type: 'trademark',
-            status: 'filed',
-            applicationDate: new Date().toISOString().split('T')[0],
+            // -- Kimlik Bilgileri --
+            title: visualDescription || taskData.title, // Marka adı öncelikli
+            markName: visualDescription || taskData.title, // Scraper uyumluluğu için (bazı yerlerde markName kullanılır)
+            type: 'trademark', // Sabit
+            recordOwnerType: recordOwnerType,
+            
+            // -- Statü ve Tarihler --
+            status: 'filed', // İlk kayıt statüsü (Başvuru Yapıldı)
+            currentStatus: 'Başvuru Yapıldı', // UI gösterimi için
+            applicationDate: new Date().toISOString().split('T')[0], // Bugün
+            applicationNumber: null, // Henüz yok (Daha sonra task güncellemeleriyle girilecek)
+            
+            // -- Marka Detayları (EKLENEN ALANLAR) --
+            brandType: brandType,         // Örn: Şekil + Kelime
+            brandCategory: brandCategory, // Örn: Ticaret Markası
+            visualDescription: visualDescription, // Marka Yazılı İfadesi
+            nonLatinAlphabet: nonLatin,
+            
+            // -- Görsel --
             brandImageUrl: brandImageUrl,
-            applicants: selectedApplicants.map(p => ({ id: p.id, name: p.name })),
-            priorities: priorities,
-            goodsAndServices: getSelectedNiceClasses(),
-            createdAt: new Date().toISOString()
+            imagePath: brandImageUrl, // Scraper uyumluluğu için çift kayıt (bazı modüller imagePath arar)
+            
+            // -- Sınıflar ve Kişiler --
+            goodsAndServices: niceClasses, // create-task UI formatı
+            niceClasses: niceClasses,      // Scraper uyumluluğu için (Gerekirse parse edilebilir)
+            applicants: applicantsData,
+            holder: applicantsData,        // Scraper 'holder' alanını kullanıyor olabilir, yedekliyoruz.
+            
+            // -- Rüçhan --
+            priorities: priorities || [],
+            
+            // -- Menşe --
+            origin: origin,
+            countryCode: originCountry,
+
+            // -- Sistem --
+            source: 'task_creation', // Kaydın nereden geldiğini anlamak için
+            createdViaTaskId: taskData.id || null, // Hangi iş ile oluştuğu
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
+
         const result = await ipRecordsService.createRecord(newRecordData);
         return result.success ? result.id : null;
     }
-
+    
 // D) DAVA KAYDI VE İLK TRANSACTION (GÜVENLİ VERSİYON)
 
     async _handleSuitCreation(state, taskData, taskId) {
