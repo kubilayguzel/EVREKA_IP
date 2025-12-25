@@ -5642,6 +5642,8 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
 
 // functions/index.js dosyasındaki ilgili fonksiyonu bununla değiştirin:
 
+// functions/index.js - createClientNotificationOnRenewalTaskCreated Fonksiyonu
+
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
   async (event) => {
@@ -5649,12 +5651,12 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
     const task = snap?.data() || {};
     const taskId = event.params.taskId;
 
-    // Sadece 'Yenileme' (22) ve 'Müvekkil Onayı Bekliyor' statüsündekiler
+    // Sadece 'Yenileme' (22) ve 'Müvekkil Onayı Bekliyor'
     if (String(task.taskType) !== "22") return null;
     if (task.status !== "awaiting_client_approval") return null;
 
     try {
-      // 1) İlgili IP Kaydını Çek
+      // 1. IP Kaydı
       const relatedIpRecordId = task.relatedIpRecordId;
       if (!relatedIpRecordId) return null;
 
@@ -5665,20 +5667,19 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const ipData = ipDoc.data() || {};
       const applicants = ipData.applicants || [];
 
-      // 2) Alıcıları Belirle
+      // 2. Alıcılar
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // 3) Şablon Seçimi ve İçerik Hazırlığı
+      // 3. Varsayılan (Fallback) İçerik
       let templateId = null;
       let subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
-
-      // Varsayılan metindeki \n karakterlerini <br>'ye çevir (HTML formatı için)
+      
+      // Varsayılan metin düz yazı olduğu için burada <br> dönüşümü YAPILMALI
       body = body.replace(/\n/g, '<br>');
 
       try {
-        // A) Kuraldan şablon ID'sini bul
         const ruleSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task")
           .where("taskType", "==", "22")
@@ -5688,7 +5689,6 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
         if (!ruleSnap.empty) {
           templateId = ruleSnap.docs[0].data()?.templateId || null;
 
-          // B) Şablon içeriğini 'mail_templates'ten çek
           if (templateId) {
             const templateSnap = await adminDb.collection("mail_templates").doc(templateId).get();
             if (templateSnap.exists) {
@@ -5697,22 +5697,29 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
-              // Şablondan gelen metindeki \n veya \\n karakterlerini temizle
-              if (rawBody) {
+              // --- KRİTİK DÜZELTME BURADA ---
+              // Eğer gelen veri zaten HTML ise (<html> içeriyorsa), \n replace işlemini yapma!
+              // Aksi takdirde <html><br><body> gibi bozuk yapı oluşur.
+              const isHtml = rawBody && (rawBody.includes("<html") || rawBody.includes("<body"));
+              
+              if (rawBody && !isHtml) {
                   rawBody = rawBody.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
               }
 
-              // C) Değişkenleri Değiştir (Variable Replacement)
+              // Değişken Hazırlığı
               const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
               const markName = ipData.title || ipData.markName || "-";
               
-              // --- DÜZELTME: Görsel URL Alanı (brandImageUrl Eklendi) ---
-              // Buradaki sıralama önemlidir, ilk dolu olanı alır.
+              const clean = (val) => (val ? String(val).trim() : "");
               const markImageUrl = 
-                ipData.brandImageUrl ||  // <--- SİZİN BELİRTTİĞİNİZ ALAN
-                ""; // Hiçbiri yoksa boş bırak
+                clean(ipData.brandImageUrl) || 
+                clean(ipData.trademarkImage) || 
+                clean(ipData.publicImageUrl) || 
+                clean(ipData.imageUrl) || 
+                clean(ipData.imageSignedUrl) || 
+                "";
 
-              console.log(`🖼️ [DEBUG] Görsel URL: ${markImageUrl} (Task: ${taskId})`);
+              console.log(`🖼️ [GÖRSEL] Task: ${taskId} -> URL: ${markImageUrl}`);
 
               const replacements = {
                 "{{applicationNo}}": appNo,
@@ -5723,7 +5730,6 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 
               Object.keys(replacements).forEach(key => {
                  const val = replacements[key];
-                 // Tüm eşleşmeleri değiştir (Global replace)
                  rawSubject = rawSubject.split(key).join(val);
                  rawBody = rawBody.split(key).join(val);
               });
@@ -5734,10 +5740,10 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
           }
         }
       } catch (e) {
-        console.warn("Şablon yükleme hatası:", e?.message || e);
+        console.warn("Template hatası:", e);
       }
 
-      // 4) Bildirimi Kaydet
+      // 4. Kayıt
       const hasRecipients = (toList.length + ccList.length) > 0;
       const missingFields = [];
       if (!hasRecipients) missingFields.push("recipients");
@@ -5748,29 +5754,21 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const notificationDoc = {
         toList, ccList,
         clientId: task.clientId || (applicants?.[0]?.id || null),
-        subject, 
-        body, 
-        status: finalStatus,
-        mode: "draft",
-        isDraft: true,
+        subject, body, status: finalStatus,
+        mode: "draft", isDraft: true,
         assignedTo_uid: task.assignedTo_uid || null,
         assignedTo_email: task.assignedTo_email || null,
-        relatedIpRecordId,
-        associatedTaskId: taskId,
-        templateId,
-        notificationType,
-        source: "task_renewal_auto",
+        relatedIpRecordId, associatedTaskId: taskId,
+        templateId, notificationType, source: "task_renewal_auto",
         missingFields,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
       await adminDb.collection("mail_notifications").add(notificationDoc);
-      console.log("✅ Yenileme bildirimi taslağı oluşturuldu.", { taskId, hasImage: !!notificationDoc.body.includes('http') });
-
       return null;
     } catch (err) {
-      console.error("❌ Bildirim oluşturma hatası:", err);
+      console.error("Hata:", err);
       return null;
     }
   }
