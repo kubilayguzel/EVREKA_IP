@@ -65,6 +65,19 @@ class CreateTaskController {
 setupEventListeners() {
         if (this._eventsBound) return;
         this._eventsBound = true;
+
+        // --- MUTATION OBSERVER EKLEMESİ (NICE SINIFLARI İÇİN) ---
+        // Nice sınıf listesine bir eleman eklendiğinde veya çıkarıldığında validator'ı otomatik çalıştırır.
+        const niceListObserver = new MutationObserver(() => {
+            console.log('🔄 Nice sınıf listesi değişti (Observer)');
+            this.validator.checkCompleteness(this.state);
+        });
+
+        const niceListContainer = document.getElementById('selectedNiceClasses');
+        if (niceListContainer) {
+            niceListObserver.observe(niceListContainer, { childList: true, subtree: true });
+        }
+        // ---------------------------------------------------------
         
         // 1. Statik Alanlar (Değişmeyenler)
         document.getElementById('mainIpType')?.addEventListener('change', (e) => this.handleMainTypeChange(e));
@@ -90,11 +103,6 @@ setupEventListeners() {
                 this.validator.checkCompleteness(this.state);
             }
             
-            // Nice Classification değişikliklerini yakala
-            if (e.target.closest && (e.target.closest('#selectedNiceClasses') || e.target.closest('#niceClassificationList'))) {
-                console.log('🔄 Nice sınıf değişikliği algılandı');
-                setTimeout(() => this.validator.checkCompleteness(this.state), 100);
-            }
         });
 
                 
