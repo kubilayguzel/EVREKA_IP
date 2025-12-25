@@ -75,6 +75,23 @@ setupEventListeners() {
             originSelect.addEventListener('change', (e) => this.handleOriginChange(e.target.value));
         }
 
+        // 1.5. VALIDATOR TETİKLEYİCİLERİ (Input ve Change Eventleri)
+        document.addEventListener('input', (e) => {
+            const inputTriggerIds = ['brandExampleText', 'taskTitle'];
+            if (inputTriggerIds.includes(e.target.id)) {
+                console.log('🔄 Validator tetiklendi (input):', e.target.id, e.target.value);
+                this.validator.checkCompleteness(this.state);
+            }
+        });
+        
+        document.addEventListener('change', (e) => {
+            const changeTriggerIds = ['assignedTo', 'originSelect', 'countrySelect', 'taskDueDate'];
+            if (changeTriggerIds.includes(e.target.id)) {
+                console.log('🔄 Validator tetiklendi (change):', e.target.id, e.target.value);
+                this.validator.checkCompleteness(this.state);
+            }
+        });
+        
         // 2. GLOBAL TIKLAMA YÖNETİCİSİ
         document.addEventListener('click', (e) => {
             
