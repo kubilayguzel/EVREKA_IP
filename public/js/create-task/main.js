@@ -329,13 +329,14 @@ setupEventListeners() {
             }
         });
 
-// 5. TAB DEĞİŞİMİ VE VERİ YÜKLEME (GÜNCELLENDİ)
+// 5. TAB DEĞİŞİMİ VE VERİ YÜKLEME
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
             const activeTab = e.target;
             const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
 
             // Butonları güncelle (İlerle / Kaydet)
+            // DİKKAT: Buton burada yeniden oluşturuluyor (default disabled)
             this.uiManager.updateButtonsAndTabs(isLastTab);
 
             const targetTabId = e.target.getAttribute('href').substring(1);
@@ -351,15 +352,12 @@ setupEventListeners() {
                 this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
             }
             
-            // --- RÜÇHAN SEKMESİ (BURASI DÜZELTİLDİ) ---
+            // Rüçhan Sekmesi
             if (targetTabId === 'priority') {
-                // 1. Ülke listesi boşsa doldur
                 const prioSelect = document.getElementById('priorityCountry');
                 if (prioSelect && prioSelect.options.length <= 1) {
-                    console.log('🌍 Rüçhan ülkeleri yükleniyor...');
                     this.uiManager.populateDropdown('priorityCountry', this.state.allCountries, 'code', 'name');
                 }
-                // 2. Eklenen rüçhanları listele
                 this.uiManager.renderPriorities(this.state.priorities);
             }
             
@@ -367,6 +365,11 @@ setupEventListeners() {
             if (targetTabId === 'summary') {
                 this.uiManager.renderSummaryTab(this.state);
             }
+
+            // --- EKLEMENİZ GEREKEN KRİTİK SATIR ---
+            // Son sekmeye gelindiğinde buton yeni oluşturulduğu için 
+            // validator'ı elle tetikleyip durumunu güncellememiz lazım.
+            this.validator.checkCompleteness(this.state);
         });
         
         // --- KRİTİK GÜNCELLEME: GARANTİLİ INPUT DİNLEYİCİSİ ---
