@@ -1616,6 +1616,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   }
 );
 
+// functions/index.js içindeki 'createUniversalNotificationOnTaskCompleteV2' fonksiyonunu bununla değiştirin:
+
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
@@ -1669,7 +1671,68 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       return await findRecipientsFromPersonsRelated(ids);
     };
 
-    // --- ŞABLON SEÇİMİ (TaskType Filtreli) ---
+    // IP Kaydını Çek
+    let ipRecord = null;
+    if (after.relatedIpRecordId) {
+      try {
+        const ipSnap = await adminDb.collection("ipRecords").doc(after.relatedIpRecordId).get();
+        if (ipSnap.exists) ipRecord = ipSnap.data();
+      } catch (e) {
+        console.warn("IP kaydı okunurken hata:", e?.message || e);
+      }
+    }
+
+    // --- DATA HAZIRLIĞI (YENİ EKLENEN KISIM) ---
+    // Task Type 2 (Başvuru) vb. için özel veri hazırlığı
+    let enrichedData = {
+        applicantNames: "-",
+        classNumbers: "-",
+        applicationDate: "-",
+        markImageUrl: ""
+    };
+
+    if (ipRecord) {
+        // 1. Görsel URL
+        const clean = (val) => (val ? String(val).trim() : "");
+        enrichedData.markImageUrl = clean(ipRecord.brandImageUrl) || clean(ipRecord.trademarkImage) || clean(ipRecord.publicImageUrl) || "";
+
+        // 2. Başvuru Sahipleri (İsimleri Çözümleme)
+        try {
+            const rawApplicants = ipRecord.applicants || [];
+            const namesList = [];
+            for (const app of rawApplicants) {
+                if (app.id) {
+                    // Cache kullanılabilir ama şimdilik direkt çekiyoruz
+                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
+                    if (pDoc.exists) {
+                        const pData = pDoc.data();
+                        namesList.push(pData.name || pData.companyName || "-");
+                    }
+                }
+            }
+            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
+        } catch (e) { console.error("Applicant name fetch error:", e); }
+
+        // 3. Sınıflar (goodsAndServicesByClass'tan)
+        if (ipRecord.goodsAndServicesByClass && Array.isArray(ipRecord.goodsAndServicesByClass)) {
+            enrichedData.classNumbers = ipRecord.goodsAndServicesByClass
+                .map(item => item.classNo)
+                .filter(Boolean)
+                .join(", ");
+        }
+
+        // 4. Başvuru Tarihi Formatlama
+        const formatDate = (val) => {
+            if (!val) return "-";
+            const date = (val.toDate) ? val.toDate() : new Date(val);
+            if (isNaN(date.getTime())) return "-";
+            return date.toLocaleDateString("tr-TR");
+        };
+        enrichedData.applicationDate = formatDate(ipRecord.applicationDate);
+    }
+    // -------------------------------------------
+
+    // --- ŞABLON SEÇİMİ ---
     let template = null, templateId = null, hasTemplate = false;
     try {
       const currentTaskType = String(after.taskType || "");
@@ -1696,17 +1759,6 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     } catch (e) {
       console.warn("Template kuralı aranırken hata:", e?.message || e);
-    }
-
-    // IP Kaydını Çek
-    let ipRecord = null;
-    if (after.relatedIpRecordId) {
-      try {
-        const ipSnap = await adminDb.collection("ipRecords").doc(after.relatedIpRecordId).get();
-        if (ipSnap.exists) ipRecord = ipSnap.data();
-      } catch (e) {
-        console.warn("IP kaydı okunurken hata:", e?.message || e);
-      }
     }
 
     // Alıcıları Belirle
@@ -1746,7 +1798,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       console.warn("CC listesi genişletilirken hata:", e?.message || e);
     }
 
-    // --- İÇERİK OLUŞTURMA VE DEĞİŞKEN EŞLEŞTİRME (DÜZELTİLEN KISIM) ---
+    // --- İÇERİK OLUŞTURMA VE DEĞİŞKEN EŞLEŞTİRME ---
     let subject = "", body = "";
     if (hasTemplate) {
       subject = String(template.subject || "");
@@ -1754,14 +1806,24 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       
       const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
 
+      // ✅ GÜNCELLENMİŞ PARAMETRELER
       const parameters = {
         muvekkil_adi: "Değerli Müvekkilimiz",
-        // Hem 'proje_adi' hem de 'relatedIpRecordTitle' aynı veriyi taşır
         proje_adi: ipTitle,
-        relatedIpRecordTitle: ipTitle, // <--- EKLENDİ
+        relatedIpRecordTitle: ipTitle,
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
-        basvuru_no: ipRecord?.applicationNumber || after?.relatedIpRecordTitle || "",
+        
+        // Yeni Eklenenler:
+        applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
+        markName: ipRecord?.title || ipRecord?.markName || "-",
+        markImageUrl: enrichedData.markImageUrl,
+        applicantNames: enrichedData.applicantNames,
+        classNumbers: enrichedData.classNumbers,
+        applicationDate: enrichedData.applicationDate,
+        
+        // Geri uyumluluk için eski parametreler
+        basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
       };
       
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
