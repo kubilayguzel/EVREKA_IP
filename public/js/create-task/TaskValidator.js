@@ -58,8 +58,7 @@ export class TaskValidator {
             if (!hasCountrySelection) console.warn('❌ Ülke Seçimi eksik');
 
             // Hepsini kontrol et
-            isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);
-            
+            isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);            
         } 
         // --- SENARYO 2: DİĞER İŞLEMLER ---
         else {
