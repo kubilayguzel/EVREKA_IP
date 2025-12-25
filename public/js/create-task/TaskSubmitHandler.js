@@ -386,7 +386,7 @@ export class TaskSubmitHandler {
         }
     }
 
-// C) MARKA BAŞVURUSU (GÜNCELLENDİ: Eksik Veriler Eklendi)
+// C) MARKA BAŞVURUSU (DÜZELTİLDİ: Yalın Marka Adı Kullanımı)
     async _handleTrademarkApplication(state, taskData) {
         const { selectedApplicants, priorities, uploadedFiles, selectedTaskType } = state;
         
@@ -400,75 +400,73 @@ export class TaskSubmitHandler {
             } catch (e) { console.error('Görsel yükleme hatası:', e); }
         }
 
-        // 2. DOM'dan Eksik Verileri Çek
-        // UI Manager'da bu ID'leri kullanmıştık, şimdi değerlerini alıyoruz.
+        // 2. DOM'dan Verileri Çek
         const brandType = document.getElementById('brandType')?.value || '';
         const brandCategory = document.getElementById('brandCategory')?.value || '';
-        const visualDescription = document.getElementById('brandExampleText')?.value || ''; // Marka Örneği Yazılı İfadesi
+        // "Marka Örneği Yazılı İfadesi" bizim asıl yalın marka adımızdır.
+        const visualDescription = document.getElementById('brandExampleText')?.value?.trim() || ''; 
         const nonLatin = document.getElementById('nonLatinAlphabet')?.value || '';
         
+        // --- İSİM DÜZELTME MANTIĞI ---
+        // Task başlığında "Marka Başvurusu" yazar ama portföy kaydında sadece marka adı yazmalı.
+        // Eğer visualDescription varsa onu kullan (En doğrusu budur).
+        // Eğer yoksa (örn: Sadece Şekil), taskData.title içinden "Marka Başvurusu" ibaresini temizle.
+        let cleanBrandName = visualDescription;
+        if (!cleanBrandName && taskData.title) {
+             cleanBrandName = taskData.title.replace(/ Marka Başvurusu$/i, '').trim();
+        }
+        // -----------------------------
+
         // Menşe Bilgisi
         let origin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
-        let originCountry = 'TR'; // Varsayılan
+        let originCountry = 'TR'; 
         
         if (origin === 'Yurtdışı Ulusal' || origin === 'FOREIGN_NATIONAL') {
             origin = 'FOREIGN_NATIONAL';
             originCountry = document.getElementById('countrySelect')?.value || '';
-        } else if (['WIPO', 'ARIPO', 'EUIPO'].includes(origin)) {
-            // WIPO ise originCountry 'WO' vb. olabilir veya merkez ofis
         }
 
-        // 3. Nice Sınıflarını Scraper Formatına Uygun Hale Getir
-        // Scraper genelde { code: "35", description: "..." } formatı veya sadece array kullanır.
-        // getSelectedNiceClasses() bize string dizisi dönüyor: ["(35) Reklamcılık...", "(9) Yazılım..."]
-        // Veritabanı tutarlılığı için bu formatı koruyoruz.
         const niceClasses = getSelectedNiceClasses();
-
-        // 4. Record Owner Type Belirleme
-        // Eğer başvuru sahibi bizsek 'self', değilse 'third_party' (Genelde başvuru yapıyorsak self'tir ama kontrol edilebilir)
         const recordOwnerType = 'self'; 
 
-        // 5. Başvuru Sahiplerini Detaylandır
-        // State'deki selectedApplicants sadece ID ve Name tutuyor olabilir. 
-        // Eğer detay gerekiyorsa (adres vb.), applicants array'ini olduğu gibi alıyoruz.
-        // Veritabanında 'holder' veya 'applicants' olarak geçebilir. Tutarlılık için 'applicants' kullanıyoruz.
+        // Başvuru Sahipleri
         const applicantsData = selectedApplicants.map(p => ({
             id: p.id,
             name: p.name,
-            address: p.address || '', // Varsa
-            country: p.country || '', // Varsa
+            address: p.address || '',
+            country: p.country || '',
             role: 'applicant'
         }));
 
-        // 6. YENİ PORTFÖY KAYDI (Genişletilmiş Şema)
+        // YENİ PORTFÖY KAYDI
         const newRecordData = {
             // -- Kimlik Bilgileri --
-            title: visualDescription || taskData.title, // Marka adı öncelikli
-            markName: visualDescription || taskData.title, // Scraper uyumluluğu için (bazı yerlerde markName kullanılır)
-            type: 'trademark', // Sabit
+            title: cleanBrandName,      // DÜZELTİLDİ: Artık "Adidas" yazar ("Adidas Marka Başvurusu" yazmaz)
+            markName: cleanBrandName,   // DÜZELTİLDİ
+            type: 'trademark',
             recordOwnerType: recordOwnerType,
             
             // -- Statü ve Tarihler --
-            status: 'filed', // İlk kayıt statüsü (Başvuru Yapıldı)
-            currentStatus: 'Başvuru Yapıldı', // UI gösterimi için
-            applicationDate: new Date().toISOString().split('T')[0], // Bugün
-            applicationNumber: null, // Henüz yok (Daha sonra task güncellemeleriyle girilecek)
+            status: 'filed',
+            currentStatus: 'Başvuru Yapıldı',
+            applicationDate: new Date().toISOString().split('T')[0],
+            applicationNumber: null,
             
-            // -- Marka Detayları (EKLENEN ALANLAR) --
-            brandType: brandType,         // Örn: Şekil + Kelime
-            brandCategory: brandCategory, // Örn: Ticaret Markası
-            visualDescription: visualDescription, // Marka Yazılı İfadesi
+            // -- Marka Detayları --
+            brandType: brandType,
+            brandCategory: brandCategory,
+            visualDescription: visualDescription, // Orijinal tanım
             nonLatinAlphabet: nonLatin,
             
             // -- Görsel --
             brandImageUrl: brandImageUrl,
-            imagePath: brandImageUrl, // Scraper uyumluluğu için çift kayıt (bazı modüller imagePath arar)
+            imagePath: brandImageUrl,
             
             // -- Sınıflar ve Kişiler --
-            goodsAndServices: niceClasses, // create-task UI formatı
-            niceClasses: niceClasses,      // Scraper uyumluluğu için (Gerekirse parse edilebilir)
+            goodsAndServices: niceClasses,
+            niceClasses: niceClasses,
             applicants: applicantsData,
-            holder: applicantsData,        // Scraper 'holder' alanını kullanıyor olabilir, yedekliyoruz.
+            holder: applicantsData,
             
             // -- Rüçhan --
             priorities: priorities || [],
@@ -478,8 +476,8 @@ export class TaskSubmitHandler {
             countryCode: originCountry,
 
             // -- Sistem --
-            source: 'task_creation', // Kaydın nereden geldiğini anlamak için
-            createdViaTaskId: taskData.id || null, // Hangi iş ile oluştuğu
+            source: 'task_creation',
+            createdViaTaskId: taskData.id || null, // Task ID henüz belli olmayabilir, null gitmesi normal
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
