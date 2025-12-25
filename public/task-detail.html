@@ -2166,7 +2166,7 @@ async removeEpatsDocument() {
                 }
             }
 
-async saveApplicationDataToIpRecord() {
+            async saveApplicationDataToIpRecord() {
                 try {
                     const numEl = document.getElementById('appNumberInput');
                     const dateEl = document.getElementById('appDateInput');
@@ -2178,24 +2178,29 @@ async saveApplicationDataToIpRecord() {
                         return;
                     }
 
-                    // Form alanlarına kopyala (henüz kaydetme)
+                    // Form alanlarına kopyala
                     const formAppNumber = document.getElementById('modalApplicationNumber');
                     const formAppDate = document.getElementById('modalApplicationDate');
+                    
                     if (formAppNumber) formAppNumber.value = applicationNumber;
-                    if (formAppDate) formAppDate.value = applicationDate;
+                    if (formAppDate) {
+                        // Tarih formatını garantiye al (YYYY-MM-DD)
+                        formAppDate.value = applicationDate; 
+                    }
 
-                    // Başvuru alanlarını göster
+                    // Alanları görünür yap
                     this.showApplicationFields();
 
-                    // Modal'ı kapat - kaydetme işlemi "Değişiklikleri Kaydet" butonuna bırak
+                    // Modalı kapat
                     this.closeApplicationDataModal();
                     
-                    showNotification('Başvuru bilgileri forma eklendi. Kaydetmek için "Değişiklikleri Kaydet" butonuna basın.', 'info');
+                    showNotification('Başvuru bilgileri forma eklendi. Kalıcı olması için lütfen "Değişiklikleri Kaydet" butonuna basınız.', 'info');
                 } catch (e) {
                     console.error('saveApplicationDataToIpRecord error:', e);
                     showNotification('Bir hata oluştu: ' + e.message, 'error');
                 }
             }
+            
             showApplicationFields() {
                 const appNumberField = document.getElementById('applicationNumberField');
                 const appDateField = document.getElementById('applicationDateField');
