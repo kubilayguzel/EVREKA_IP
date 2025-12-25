@@ -27,8 +27,12 @@ export class TaskValidator {
             const brandText = document.getElementById('brandExampleText')?.value?.trim();
             
             // 2. Sınıf Seçimi (DOM - Garanti Yöntem)
-            // Listede kaç tane sınıf kutucuğu var?
-            const domClassCount = document.querySelectorAll('#selectedNiceClasses .selected-class-item').length;
+            // Hata düzeltmesi: .selected-class-item yerine container'ın çocuklarını sayıyoruz veya genel .selected-item arıyoruz.
+            const selectedClassesContainer = document.getElementById('selectedNiceClasses');
+            // Boş durum (empty-state) div'ini hariç tutmak için children kontrolü veya class kontrolü
+            const domClassCount = selectedClassesContainer 
+                ? selectedClassesContainer.querySelectorAll('.selected-item, .selected-class-item, .list-group-item').length 
+                : 0;
             const hasNiceClasses = domClassCount > 0;
             
             // 3. Başvuru Sahibi (DOM - Garanti Yöntem)
