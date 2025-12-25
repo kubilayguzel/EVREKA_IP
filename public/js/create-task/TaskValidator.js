@@ -29,13 +29,17 @@ export class TaskValidator {
         }
 
         let isComplete = false;
+        
+        // Konsolu temizle ki sadece güncel hataları görelim (İsteğe bağlı, kafa karıştırırsa silebilirsiniz)
+        // console.clear(); 
 
         // --- SENARYO 1: MARKA BAŞVURUSU ---
         if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
             const brandText = document.getElementById('brandExampleText')?.value?.trim();
             
             // Nice sınıfları (Global fonksiyondan kontrol)
-            const hasNiceClasses = typeof getSelectedNiceClasses === 'function' && getSelectedNiceClasses().length > 0;
+            const niceClasses = typeof getSelectedNiceClasses === 'function' ? getSelectedNiceClasses() : [];
+            const hasNiceClasses = niceClasses.length > 0;
             
             // Başvuru sahipleri
             const hasApplicants = selectedApplicants && selectedApplicants.length > 0;
@@ -54,15 +58,16 @@ export class TaskValidator {
 
             const assignedTo = document.getElementById('assignedTo')?.value;
             
+            // --- DETAYLI KONTROL VE LOGLAMA ---
+            if (!assignedTo) console.warn('❌ EKSİK: Atanacak Kişi (assignedTo) seçilmedi.');
+            if (!brandText) console.warn('❌ EKSİK: Marka Adı/Yazılı İfadesi (brandExampleText) girilmedi.');
+            if (!hasNiceClasses) console.warn('❌ EKSİK: En az 1 tane Mal/Hizmet Sınıfı seçilmedi.');
+            if (!hasApplicants) console.warn('❌ EKSİK: Başvuru Sahibi seçilmedi.');
+            if (!hasCountrySelection) console.warn(`❌ EKSİK: Ülke seçimi yapılmadı (${originType}).`);
+
             // Hepsini kontrol et
             isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);
             
-            // Debug
-            /*
-            console.log('🔍 Validator (Başvuru):', {
-                assignedTo, brandText, hasNiceClasses, hasApplicants, hasCountrySelection, isComplete
-            });
-            */
         } 
         // --- SENARYO 2: DİĞER İŞLEMLER (Standart) ---
         else {
@@ -80,16 +85,20 @@ export class TaskValidator {
             
             const hasRelated = Array.isArray(selectedRelatedParties) && selectedRelatedParties.length > 0;
             
+            // --- DETAYLI KONTROL VE LOGLAMA ---
+            if (!assignedTo) console.warn('❌ EKSİK: Atanacak Kişi seçilmedi.');
+            if (!hasIpRecord) console.warn('❌ EKSİK: Varlık (Dava veya Marka/Patent) seçilmedi.');
+            if (needsRelatedParty && !hasRelated) console.warn('❌ EKSİK: İlgili Taraf/Müvekkil seçilmedi.');
+            
             isComplete = !!assignedTo && !!taskTitle && !!hasIpRecord && (!needsRelatedParty || hasRelated) && (!needsObjectionOwner || hasRelated);
-
-            // Debug
-            /*
-            console.log('🔍 Validator (Standart):', {
-                taskTitle, hasIpRecord, assignedTo, needsRelatedParty, hasRelated, isComplete
-            });
-            */
         }
 
+        // Sonucu uygula
         this.saveBtn.disabled = !isComplete;
+        
+        // Eğer her şey tamsa yeşil mesaj ver
+        if (isComplete) {
+            console.log('✅ VALIDASYON BAŞARILI: Kaydet butonu aktif.');
+        }
     }
 }
