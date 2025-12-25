@@ -528,21 +528,123 @@ export class TaskUIManager {
             </div>`).join('');
     }
 
-    // 5. Özet Sekmesi
+// 5. Özet Sekmesi (GÜNCELLENMİŞ VERSİYON)
     renderSummaryTab(state) {
         const container = document.getElementById('summaryContent');
         if (!container) return;
         
-        const { selectedApplicants, allUsers } = state;
-        const assigned = allUsers.find(u => u.id === document.getElementById('assignedTo')?.value);
-        const goods = typeof getSelectedNiceClasses === 'function' ? getSelectedNiceClasses() : [];
+        // --- 1. DOM ve State'den Güncel Verileri Çek ---
         
-        let html = `<h4>Özet</h4><ul>`;
-        html += `<li><b>İşlem:</b> ${state.selectedTaskType?.alias}</li>`;
-        html += `<li><b>Atanan:</b> ${assigned?.displayName || '-'}</li>`;
-        if(selectedApplicants && selectedApplicants.length) html += `<li><b>Başvuru Sahipleri:</b> ${selectedApplicants.map(a=>a.name).join(', ')}</li>`;
-        if(goods.length) html += `<li><b>Sınıflar:</b> ${goods.length} adet seçildi</li>`;
-        html += `</ul>`;
+        // Marka Bilgileri
+        const brandName = document.getElementById('brandExampleText')?.value || '-';
+        const brandType = document.getElementById('brandType')?.value || '-';
+        const brandCategory = document.getElementById('brandCategory')?.value || '-';
+        const nonLatin = document.getElementById('nonLatinAlphabet')?.value || '-';
+        
+        // Atama ve İşlem Bilgileri
+        const assignedToId = document.getElementById('assignedTo')?.value;
+        const assignedUser = state.allUsers.find(u => u.id === assignedToId);
+        const taskType = state.selectedTaskType?.alias || state.selectedTaskType?.name || '-';
+        
+        // Menşe (Detaylı)
+        let origin = document.getElementById('originSelect')?.value || '-';
+        if (origin === 'Yurtdışı Ulusal') {
+            const countrySelect = document.getElementById('countrySelect');
+            const countryName = countrySelect.options[countrySelect.selectedIndex]?.text;
+            origin += ` (${countryName})`;
+        }
+
+        // Listeler (Sınıflar, Kişiler, Rüçhanlar)
+        const classes = typeof getSelectedNiceClasses === 'function' ? getSelectedNiceClasses() : [];
+        const classHtml = classes.length > 0 
+            ? `<div style="max-height: 150px; overflow-y: auto;">${classes.map(c => `<div class="border-bottom py-1">${c}</div>`).join('')}</div>`
+            : '<span class="text-danger">Seçim Yok</span>';
+
+        const applicants = state.selectedApplicants && state.selectedApplicants.length > 0
+            ? state.selectedApplicants.map(a => a.name).join(', ')
+            : '<span class="text-danger">Seçilmedi</span>';
+
+        let priorityHtml = 'Yok';
+        if (state.priorities && state.priorities.length > 0) {
+            priorityHtml = '<ul class="pl-3 mb-0">' + 
+                state.priorities.map(p => `<li><strong>${p.type}:</strong> ${p.country} - ${p.number} (${p.date})</li>`).join('') + 
+                '</ul>';
+        }
+
+        // --- 2. GÖRSEL VE İNDİRME ALANI ---
+        let imageSection = '';
+        
+        if (state.uploadedFiles && state.uploadedFiles.length > 0) {
+            const file = state.uploadedFiles[0];
+            // Tarayıcı hafızasında geçici bir URL oluşturuyoruz (Blob URL)
+            const imgUrl = URL.createObjectURL(file);
+            
+            imageSection = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light text-center">
+                        <h6 class="mb-0 text-dark">Marka Örneği</h6>
+                    </div>
+                    <div class="card-body text-center p-3">
+                        <div style="background-color: #f8f9fa; border: 1px dashed #ccc; display: inline-block; padding: 5px; border-radius: 4px;">
+                            <img src="${imgUrl}" alt="Marka" class="img-fluid" style="max-height: 250px; object-fit: contain;">
+                        </div>
+                        <div class="mt-3">
+                            <p class="text-muted small mb-2">${file.name} (${(file.size/1024).toFixed(1)} KB)</p>
+                            <a href="${imgUrl}" download="${file.name}" class="btn btn-sm btn-primary btn-block">
+                                <i class="fas fa-download mr-2"></i>Görseli İndir
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            imageSection = `
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-image fa-2x mb-2"></i><br>
+                    Marka görseli yüklenmedi.
+                </div>
+            `;
+        }
+
+        // --- 3. HTML ŞABLONU (GRID YAPISI) ---
+        const html = `
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header bg-white border-bottom">
+                            <h5 class="mb-0 text-primary"><i class="fas fa-info-circle mr-2"></i>Başvuru Özeti</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped table-hover mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 30%;" class="pl-4">Marka Adı</th>
+                                        <td class="text-primary font-weight-bold" style="font-size: 1.1em;">${brandName}</td>
+                                    </tr>
+                                    <tr><th class="pl-4">İşlem Tipi</th><td>${taskType}</td></tr>
+                                    <tr><th class="pl-4">Marka Tipi / Türü</th><td>${brandType} / ${brandCategory}</td></tr>
+                                    ${nonLatin !== '-' ? `<tr><th class="pl-4">Latin Dışı Karakter</th><td>${nonLatin}</td></tr>` : ''}
+                                    <tr><th class="pl-4">Menşe</th><td>${origin}</td></tr>
+                                    <tr><th class="pl-4">Atanan Uzman</th><td>${assignedUser?.displayName || assignedUser?.email || '<span class="text-danger">Seçilmedi</span>'}</td></tr>
+                                    <tr><th class="pl-4">Başvuru Sahipleri</th><td>${applicants}</td></tr>
+                                    <tr><th class="pl-4">Nice Sınıfları (${classes.length})</th><td>${classHtml}</td></tr>
+                                    <tr><th class="pl-4">Rüçhan Bilgileri</th><td>${priorityHtml}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    ${imageSection}
+                    
+                    <div class="mt-3 p-3 bg-light rounded border text-muted small">
+                        <i class="fas fa-check-double mr-1"></i>
+                        Lütfen yukarıdaki bilgileri kontrol ediniz. "İş Oluştur ve Kaydet" butonuna bastığınızda işlem başlatılacaktır.
+                    </div>
+                </div>
+            </div>
+        `;
         
         container.innerHTML = html;
     }
