@@ -5649,12 +5649,12 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
     const task = snap?.data() || {};
     const taskId = event.params.taskId;
 
-    // Yalnızca yenileme (22) + müvekkil onayı bekliyor statüsü
+    // Sadece 'Yenileme' (22) ve 'Müvekkil Onayı Bekliyor' statüsündekiler
     if (String(task.taskType) !== "22") return null;
     if (task.status !== "awaiting_client_approval") return null;
 
     try {
-      // 1) İlgili IP kaydı ve applicants
+      // 1) İlgili IP Kaydını Çek
       const relatedIpRecordId = task.relatedIpRecordId;
       if (!relatedIpRecordId) return null;
 
@@ -5665,20 +5665,20 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const ipData = ipDoc.data() || {};
       const applicants = ipData.applicants || [];
 
-      // 2) Alıcılar
+      // 2) Alıcıları Belirle
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
 
-      // 3) Şablon Kuralı ve Varsayılan İçerik
+      // 3) Şablon Seçimi ve İçerik Hazırlığı
       let templateId = null;
       let subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
 
-      // Varsayılan içerikteki \n karakterlerini <br>'ye çevir (Fallback için)
+      // Varsayılan metindeki \n karakterlerini <br>'ye çevir (HTML formatı için)
       body = body.replace(/\n/g, '<br>');
 
       try {
-        // A) Kuraldan templateId'yi bul
+        // A) Kuraldan şablon ID'sini bul
         const ruleSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task")
           .where("taskType", "==", "22")
@@ -5694,29 +5694,25 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
             if (templateSnap.exists) {
               const tmplData = templateSnap.data();
               
-              // Şablondaki ham metinleri al
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
-              // --- DÜZELTME 1: \n Karakter Temizliği ---
-              // Şablon içinde yanlışlıkla \\n (yazı olarak) veya \n kaldıysa <br> yap
+              // Şablondan gelen metindeki \n veya \\n karakterlerini temizle
               if (rawBody) {
                   rawBody = rawBody.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
               }
 
-              // C) Değişkenleri Değiştir
+              // C) Değişkenleri Değiştir (Variable Replacement)
               const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
               const markName = ipData.title || ipData.markName || "-";
               
-              // --- DÜZELTME 2: Görsel URL Kontrolü (GÜNCELLENDİ) ---
-              // brandImageUrl alanına öncelik verildi
+              // --- DÜZELTME: Görsel URL Alanı (brandImageUrl Eklendi) ---
+              // Buradaki sıralama önemlidir, ilk dolu olanı alır.
               const markImageUrl = 
-                ipData.brandImageUrl ||  // <--- İLK BURAYA BAKILACAK
-                ipData.publicImageUrl || 
-                ipData.imageUrl || 
-                ipData.imageSignedUrl || 
-                ipData.trademarkImage || 
-                "";
+                ipData.brandImageUrl ||  // <--- SİZİN BELİRTTİĞİNİZ ALAN
+                ""; // Hiçbiri yoksa boş bırak
+
+              console.log(`🖼️ [DEBUG] Görsel URL: ${markImageUrl} (Task: ${taskId})`);
 
               const replacements = {
                 "{{applicationNo}}": appNo,
@@ -5727,7 +5723,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 
               Object.keys(replacements).forEach(key => {
                  const val = replacements[key];
-                 // Global replace
+                 // Tüm eşleşmeleri değiştir (Global replace)
                  rawSubject = rawSubject.split(key).join(val);
                  rawBody = rawBody.split(key).join(val);
               });
@@ -5738,10 +5734,10 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
           }
         }
       } catch (e) {
-        console.warn("Template lookup/fetch failed:", e?.message || e);
+        console.warn("Şablon yükleme hatası:", e?.message || e);
       }
 
-      // 4) Eksik alan kontrolü
+      // 4) Bildirimi Kaydet
       const hasRecipients = (toList.length + ccList.length) > 0;
       const missingFields = [];
       if (!hasRecipients) missingFields.push("recipients");
@@ -5749,7 +5745,6 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       
       const finalStatus = missingFields.length ? "missing_info" : "awaiting_client_approval";
 
-      // 5) mail_notifications kaydını oluştur
       const notificationDoc = {
         toList, ccList,
         clientId: task.clientId || (applicants?.[0]?.id || null),
@@ -5758,30 +5753,24 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
         status: finalStatus,
         mode: "draft",
         isDraft: true,
-
         assignedTo_uid: task.assignedTo_uid || null,
         assignedTo_email: task.assignedTo_email || null,
-
-        sourceDocumentId: null,
         relatedIpRecordId,
         associatedTaskId: taskId,
-        associatedTransactionId: null,
-
         templateId,
         notificationType,
         source: "task_renewal_auto",
         missingFields,
-
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
       await adminDb.collection("mail_notifications").add(notificationDoc);
-      console.log("✅ Renewal task notification draft created with BRANDIMAGEURL fix", { taskId });
+      console.log("✅ Yenileme bildirimi taslağı oluşturuldu.", { taskId, hasImage: !!notificationDoc.body.includes('http') });
 
       return null;
     } catch (err) {
-      console.error("❌ renewal notification create failed:", err);
+      console.error("❌ Bildirim oluşturma hatası:", err);
       return null;
     }
   }
