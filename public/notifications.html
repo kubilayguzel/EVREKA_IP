@@ -247,24 +247,24 @@ async function resolveIpRecordId(notification) {
   }
 
   // 3. clientId varsa onu kullanarak ipRecord bul (Fallback)
-  if (notification.clientId) {
-    try {
-      const ipRecordsQuery = query(
-        collection(db, "ipRecords"),
-        where("applicants", "array-contains-any", [
-          { id: notification.clientId },
-          { id: notification.clientId, name: "ANADOLU EFES" } // Örnek veri, genel yapıda kalabilir
-        ])
-      );
-      
-      const ipRecordsSnap = await getDocs(ipRecordsQuery);
-      if (!ipRecordsSnap.empty) {
-        return ipRecordsSnap.docs[0].id;
+    if (notification.clientId) {
+      try {
+        const ipRecordsQuery = query(
+          collection(db, "ipRecords"),
+          where("applicants", "array-contains", { id: notification.clientId }) 
+        );
+        // Not: Eğer veritabanında 'applicants' dizisindeki objelerde 'name' alanı da varsa,
+        // Firestore tam eşleşme aradığı için sadece {id: ...} sorgusu o kaydı bulamayabilir.
+        // Kesin çözüm için ipRecords koleksiyonunda sadece ID'leri tutan 'applicantIds' alanı olması önerilir.
+        
+        const ipRecordsSnap = await getDocs(ipRecordsQuery);
+        if (!ipRecordsSnap.empty) {
+          return ipRecordsSnap.docs[0].id;
+        }
+      } catch (error) {
+        console.warn("Client ID ile IP Record bulunamadı:", error);
       }
-    } catch (error) {
-      console.warn("Client ID ile IP Record bulunamadı:", error);
     }
-  }
 
   // 4. sourceDocumentId varsa (unindexed_pdfs üzerinden)
   if (notification.sourceDocumentId) {
