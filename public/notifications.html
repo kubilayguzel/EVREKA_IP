@@ -205,19 +205,6 @@
     import { loadSharedLayout } from "./js/layout-loader.js";
     import Pagination from "./js/pagination.js";
 
-    // Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
-      authDomain: "ip-manager-production-aab4b.firebaseapp.com",
-      projectId: "ip-manager-production-aab4b",
-      storageBucket: "ip-manager-production-aab4b.appspot.com",
-      messagingSenderId: "594650169512",
-      appId: "1:594650169512:web:43496005e063a40511829d"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const functions = getFunctions(app, "europe-west1");
-    const auth = getAuth(app);
     const sendEmail = httpsCallable(functions, "sendEmailNotificationV2");
 
     // DOM
