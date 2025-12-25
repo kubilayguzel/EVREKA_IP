@@ -384,13 +384,18 @@ setupEventListeners() {
         const isMarkaBasvuru = selectedType.alias === 'Başvuru' && selectedType.ipType === 'trademark';
         
         // 1. UI'ı Çizdir (Bu işlem DOM'a HTML stringini basar)
-        if (isMarkaBasvuru) this.uiManager.renderTrademarkApplicationForm();
-        this.uiManager.renderBaseForm(
-            selectedType.alias || selectedType.name, // DÜZELTME: selectedType kullanıldı
-            selectedType.id,
-            selectedType.ipType === 'suit', 
-            this.state.allTransactionTypes 
-        );
+        if (isMarkaBasvuru) {
+            // Eğer Marka Başvurusu ise özel sekmeli formu bas
+            this.uiManager.renderTrademarkApplicationForm();
+        } else {
+            // Değilse standart formu (Varlık Arama + Detaylar) bas
+            this.uiManager.renderBaseForm(
+                selectedType.alias || selectedType.name,
+                selectedType.id,
+                selectedType.ipType === 'suit', 
+                this.state.allTransactionTypes 
+            );
+        }
         
         // 3. İlgili Varlık Kaynağını Belirle (Yeni Kod)
         const assetSource = selectedType.relatedAssetSource || 'ipRecords';
