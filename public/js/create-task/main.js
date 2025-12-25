@@ -290,23 +290,44 @@ setupEventListeners() {
             }
         });
 
-        // 5. TAB DEĞİŞİMİ
+// 5. TAB DEĞİŞİMİ VE VERİ YÜKLEME (GÜNCELLENDİ)
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
             const activeTab = e.target;
             const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
 
+            // Butonları güncelle (İlerle / Kaydet)
             this.uiManager.updateButtonsAndTabs(isLastTab);
 
             const targetTabId = e.target.getAttribute('href').substring(1);
             
+            // Mal/Hizmet Sekmesi
             if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
                 await initializeNiceClassification();
                 this.state.isNiceClassificationInitialized = true;
             }
-            if (targetTabId === 'applicants') this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
-            if (targetTabId === 'priority') this.uiManager.renderPriorities(this.state.priorities);
-            if (targetTabId === 'summary') this.uiManager.renderSummaryTab(this.state);
+            
+            // Başvuru Sahibi Sekmesi
+            if (targetTabId === 'applicants') {
+                this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+            }
+            
+            // --- RÜÇHAN SEKMESİ (BURASI DÜZELTİLDİ) ---
+            if (targetTabId === 'priority') {
+                // 1. Ülke listesi boşsa doldur
+                const prioSelect = document.getElementById('priorityCountry');
+                if (prioSelect && prioSelect.options.length <= 1) {
+                    console.log('🌍 Rüçhan ülkeleri yükleniyor...');
+                    this.uiManager.populateDropdown('priorityCountry', this.state.allCountries, 'code', 'name');
+                }
+                // 2. Eklenen rüçhanları listele
+                this.uiManager.renderPriorities(this.state.priorities);
+            }
+            
+            // Özet Sekmesi
+            if (targetTabId === 'summary') {
+                this.uiManager.renderSummaryTab(this.state);
+            }
         });
         
         // --- KRİTİK GÜNCELLEME: GARANTİLİ INPUT DİNLEYİCİSİ ---
