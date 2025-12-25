@@ -5642,7 +5642,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
 
 // functions/index.js - createClientNotificationOnRenewalTaskCreated (TARİH EKLENDİ)
 
-// functions/index.js - createClientNotificationOnRenewalTaskCreated (FIXED)
+// functions/index.js - createClientNotificationOnRenewalTaskCreated (FINAL)
 
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
@@ -5665,47 +5665,64 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       if (!ipDoc.exists) return null;
 
       const ipData = ipDoc.data() || {};
-      const applicants = ipData.applicants || [];
+      
+      // Veritabanındaki 'applicants' array'i (Sadece ID ve email içeriyor)
+      const rawApplicants = ipData.applicants || [];
 
-      // 2. Alıcılar
+      // 2. Alıcılar (E-posta gönderilecek kişiler)
       const notificationType = (task.mainProcessType || "marka");
-      const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType);
+      const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(rawApplicants, notificationType);
 
       // --- VERİ HAZIRLIĞI ---
       
-      // A) Tarih Formatlama
+      // A) Başvuru Sahiplerini 'persons' Koleksiyonundan Çekme (YENİ)
+      let applicantNames = "-";
+      try {
+          const namesList = [];
+          // rawApplicants içindeki her bir objenin 'id'sine bakıyoruz
+          for (const rawApp of rawApplicants) {
+              if (rawApp.id) {
+                  const personDoc = await adminDb.collection("persons").doc(rawApp.id).get();
+                  if (personDoc.exists) {
+                      const pData = personDoc.data();
+                      // name (şahıs) veya companyName (şirket) alanını al
+                      namesList.push(pData.name || pData.companyName || "-");
+                  }
+              }
+          }
+          if (namesList.length > 0) applicantNames = namesList.join(", ");
+      } catch (err) {
+          console.error("Applicant fetch error:", err);
+      }
+
+      // B) Sınıfları 'goodsAndServicesByClass' içinden Çekme (YENİ)
+      let classNumbers = "-";
+      if (ipData.goodsAndServicesByClass && Array.isArray(ipData.goodsAndServicesByClass)) {
+          classNumbers = ipData.goodsAndServicesByClass
+            .map(item => item.classNo) // Her objeden classNo'yu al
+            .filter(Boolean)           // Boş olanları ele
+            .join(", ");               // Virgülle birleştir
+      }
+
+      // C) Tarih Formatlama
       const formatDate = (val) => {
         if (!val) return "-";
         const date = (val.toDate) ? val.toDate() : new Date(val);
         if (isNaN(date.getTime())) return "-";
         return date.toLocaleDateString("tr-TR");
       };
+      const renewalDateText = formatDate(ipData.protectionEndDate || ipData.renewalDate);
 
-      // B) Temel Alanlar
+      // D) Temel Alanlar
       const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
       const markName = ipData.title || ipData.markName || "-";
 
-      // C) Tarih Alanı
-      const renewalDateText = formatDate(ipData.protectionEndDate || ipData.renewalDate);
-
-      // D) Başvuru Sahipleri
-      const applicantNames = applicants
-        .map(a => a.name || a.companyName || "")
-        .filter(Boolean)
-        .join(", ") || "-";
-
-      // E) Sınıflar
-      let classesRaw = ipData.niceClasses || ipData.classNo || ipData.classes || [];
-      const classNumbers = Array.isArray(classesRaw) 
-        ? classesRaw.join(", ") 
-        : (String(classesRaw) || "-");
-
-      // F) Konu ve İçerik
+      // E) Konu ve İçerik
       let subject = `"${markName}" - Yenileme Onayı Bekleniyor`;
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
       body = body.replace(/\n/g, '<br>');
 
-      // --- DÜZELTME: templateId BURADA TANIMLANIYOR ---
+      // F) Şablon Yönetimi
       let templateId = null; 
 
       try {
@@ -5741,14 +5758,14 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
                 clean(ipData.imageSignedUrl) || 
                 "";
 
-              // --- DEĞİŞKENLER ---
+              // --- DEĞİŞKENLERİ YERİNE KOYMA ---
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
                 "{{markImageUrl}}": markImageUrl,
                 "{{relatedIpRecordTitle}}": markName,
-                "{{applicantNames}}": applicantNames,
-                "{{classNumbers}}": classNumbers,
+                "{{applicantNames}}": applicantNames, // Artık gerçek isimler
+                "{{classNumbers}}": classNumbers,     // Artık goodsAndServicesByClass'tan geliyor
                 "{{renewalDate}}": renewalDateText
               };
 
@@ -5777,7 +5794,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 
       const notificationDoc = {
         toList, ccList,
-        clientId: task.clientId || (applicants?.[0]?.id || null),
+        clientId: task.clientId || (rawApplicants?.[0]?.id || null),
         subject, body, status: finalStatus,
         mode: "draft", isDraft: true,
         assignedTo_uid: task.assignedTo_uid || null,
