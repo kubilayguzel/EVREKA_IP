@@ -1618,6 +1618,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
 // functions/index.js içindeki 'createUniversalNotificationOnTaskCompleteV2' fonksiyonunu bununla değiştirin:
 
+// functions/index.js
+
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
@@ -1682,7 +1684,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
-    // --- DATA HAZIRLIĞI (YENİ EKLENEN KISIM) ---
+    // --- DATA HAZIRLIĞI (GÜNCELLENDİ) ---
     // Task Type 2 (Başvuru) vb. için özel veri hazırlığı
     let enrichedData = {
         applicantNames: "-",
@@ -1713,12 +1715,23 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
             if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
         } catch (e) { console.error("Applicant name fetch error:", e); }
 
-        // 3. Sınıflar (goodsAndServicesByClass'tan)
-        if (ipRecord.goodsAndServicesByClass && Array.isArray(ipRecord.goodsAndServicesByClass)) {
+        // 3. Sınıflar (GÜNCELLENDİ: Hem detaylı hem basit dizi desteği)
+        if (ipRecord.goodsAndServicesByClass && Array.isArray(ipRecord.goodsAndServicesByClass) && ipRecord.goodsAndServicesByClass.length > 0) {
+            // Yöntem A: Detaylı yapı (goodsAndServicesByClass)
             enrichedData.classNumbers = ipRecord.goodsAndServicesByClass
                 .map(item => item.classNo)
                 .filter(Boolean)
                 .join(", ");
+        } 
+        else if (ipRecord.niceClasses && Array.isArray(ipRecord.niceClasses) && ipRecord.niceClasses.length > 0) {
+            // Yöntem B: Basit Dizi (niceClasses: ["05", "35"])
+            enrichedData.classNumbers = ipRecord.niceClasses.join(", ");
+        }
+        else if (ipRecord.niceClass) {
+            // Yöntem C: Tekil/String (niceClass)
+            enrichedData.classNumbers = Array.isArray(ipRecord.niceClass) 
+                ? ipRecord.niceClass.join(", ") 
+                : String(ipRecord.niceClass);
         }
 
         // 4. Başvuru Tarihi Formatlama
@@ -1814,7 +1827,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
         
-        // Yeni Eklenenler:
+        // Yeni Eklenenler (Marka Başvuru Bildirimi İçin):
         applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         markName: ipRecord?.title || ipRecord?.markName || "-",
         markImageUrl: enrichedData.markImageUrl,
