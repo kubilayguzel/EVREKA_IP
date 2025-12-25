@@ -728,38 +728,66 @@ async function getAttachmentPreviews(notification) {
 
       renderChips();
 
-      // Taslak kaydederken bu dizileri de kullanacağız:
+// Taslak kaydederken bu dizileri de kullanacağız:
       
   document.getElementById("save-draft").onclick = (() => {
-  let inflight = false;
-  return async () => {
-    if (inflight) return;
-    inflight = true;
-    const id = document.getElementById("save-draft").dataset.id;
-    const subject = document.getElementById("modal-subject").value.trim();
-    const body = tinymce.get("modal-body").getContent();
-    try {
-      __overlay.show('Taslak kaydediliyor…');
-      const { toList, ccList } = collectModalRecipients();
-      await updateDoc(doc(db, "mail_notifications", id), {
-        subject,
-        body,
-        isDraft: true,
-        updatedAt: serverTimestamp(),
-        toList,
-        ccList
-      });
-      alert("Taslak kaydedildi!");
-      document.getElementById("notification-modal").style.display = "none";
-    } catch (err) {
-      console.error(err);
-      alert("Taslak kaydedilemedi.");
-    } finally {
-      __overlay.hide();
-      inflight = false;
-    }
-  };
-})();
+    let inflight = false;
+    return async () => {
+      if (inflight) return;
+      inflight = true;
+      
+      // HTML Elementlerinden verileri al
+      const id = document.getElementById("save-draft").dataset.id;
+      const subject = document.getElementById("modal-subject").value.trim();
+      const body = tinymce.get("modal-body").getContent();
+      
+      try {
+        __overlay.show('Taslak güncelleniyor…');
+        
+        // 1. Modal üzerindeki alıcıları topla
+        const { toList, ccList } = collectModalRecipients();
+        
+        // 2. Eksik alanları YENİDEN HESAPLA
+        const missingFields = [];
+        const hasRecipients = (toList && toList.length > 0) || (ccList && ccList.length > 0);
+        
+        if (!hasRecipients) {
+          missingFields.push("recipients");
+        }
+        // İsteğe bağlı: Konu başlığı zorunluysa kontrol et
+        // if (!subject) missingFields.push("subject"); 
+
+        // 3. Yeni statüyü belirle
+        // Eğer hala eksik alan varsa 'missing_info', yoksa 'awaiting_client_approval' (veya 'draft')
+        let newStatus = missingFields.length > 0 ? 'missing_info' : 'awaiting_client_approval';
+
+        // 4. Veritabanını güncelle (Status ve missingFields DAHİL)
+        await updateDoc(doc(db, "mail_notifications", id), {
+          subject,
+          body,
+          isDraft: true,
+          updatedAt: serverTimestamp(),
+          toList,
+          ccList,
+          // -- Eklenen Kritik Kısım --
+          status: newStatus,
+          missingFields: missingFields
+        });
+
+        alert("Taslak başarıyla güncellendi ve durumu düzeltildi!");
+        document.getElementById("notification-modal").style.display = "none";
+        
+      } catch (err) {
+        console.error("Kaydetme hatası:", err);
+        alert("Taslak kaydedilemedi: " + err.message);
+      } finally {
+        __overlay.hide();
+        inflight = false;
+      }
+    };
+  })();
+
+
       // ==== /Chip editor ====
       (async () => {
       const modalBodyEl = document.querySelector('#notification-modal .modal-body');
