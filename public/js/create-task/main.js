@@ -82,8 +82,15 @@ setupEventListeners() {
                 console.log('🔄 Validator tetiklendi (input):', e.target.id, e.target.value);
                 this.validator.checkCompleteness(this.state);
             }
+            
+            // Nice Classification değişikliklerini yakala
+            if (e.target.closest('#selectedNiceClasses') || e.target.closest('#niceClassificationList')) {
+                console.log('🔄 Nice sınıf değişikliği algılandı');
+                setTimeout(() => this.validator.checkCompleteness(this.state), 100);
+            }
         });
-        
+
+                
         document.addEventListener('change', (e) => {
             const changeTriggerIds = ['assignedTo', 'originSelect', 'countrySelect', 'taskDueDate'];
             if (changeTriggerIds.includes(e.target.id)) {
@@ -91,7 +98,7 @@ setupEventListeners() {
                 this.validator.checkCompleteness(this.state);
             }
         });
-        
+
         // 2. GLOBAL TIKLAMA YÖNETİCİSİ
         document.addEventListener('click', (e) => {
             
