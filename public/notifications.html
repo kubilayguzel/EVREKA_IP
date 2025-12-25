@@ -188,14 +188,20 @@
 
   <!-- Main module -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import {
-      getFirestore, collection, query, orderBy, onSnapshot,
+// 1. Modülleri v10.7.1 olarak (Config dosyanızla AYNI sürümde) çağırıyoruz
+    import { 
+      collection, query, orderBy, onSnapshot,
       doc, getDoc, updateDoc, serverTimestamp,
       collectionGroup, where, getDocs, documentId, limit 
-    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
-    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-functions.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    
+    import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    // 2. ORTAK AYAR DOSYASINI ÇAĞIRIYORUZ (Oturum bilgisini paylaşmak için ŞART!)
+    import { db, auth, functions } from "./firebase-config.js"; 
+    
+    // Diğer yerel importlarınız
     import { loadSharedLayout } from "./js/layout-loader.js";
     import Pagination from "./js/pagination.js";
 
