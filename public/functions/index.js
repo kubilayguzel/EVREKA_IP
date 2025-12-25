@@ -5640,9 +5640,8 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
   }
 });
 
-// functions/index.js - createClientNotificationOnRenewalTaskCreated (TARİH EKLENDİ)
 
-// functions/index.js - createClientNotificationOnRenewalTaskCreated (FINAL)
+// functions/index.js - createClientNotificationOnRenewalTaskCreated (KONU FORMATI DÜZELTİLDİ)
 
 export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   { document: "tasks/{taskId}", region: "europe-west1" },
@@ -5665,27 +5664,23 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       if (!ipDoc.exists) return null;
 
       const ipData = ipDoc.data() || {};
-      
-      // Veritabanındaki 'applicants' array'i (Sadece ID ve email içeriyor)
       const rawApplicants = ipData.applicants || [];
 
-      // 2. Alıcılar (E-posta gönderilecek kişiler)
+      // 2. Alıcılar
       const notificationType = (task.mainProcessType || "marka");
       const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(rawApplicants, notificationType);
 
       // --- VERİ HAZIRLIĞI ---
       
-      // A) Başvuru Sahiplerini 'persons' Koleksiyonundan Çekme (YENİ)
+      // A) Başvuru Sahipleri (Person ID -> Name)
       let applicantNames = "-";
       try {
           const namesList = [];
-          // rawApplicants içindeki her bir objenin 'id'sine bakıyoruz
           for (const rawApp of rawApplicants) {
               if (rawApp.id) {
                   const personDoc = await adminDb.collection("persons").doc(rawApp.id).get();
                   if (personDoc.exists) {
                       const pData = personDoc.data();
-                      // name (şahıs) veya companyName (şirket) alanını al
                       namesList.push(pData.name || pData.companyName || "-");
                   }
               }
@@ -5695,13 +5690,13 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
           console.error("Applicant fetch error:", err);
       }
 
-      // B) Sınıfları 'goodsAndServicesByClass' içinden Çekme (YENİ)
+      // B) Sınıflar
       let classNumbers = "-";
       if (ipData.goodsAndServicesByClass && Array.isArray(ipData.goodsAndServicesByClass)) {
           classNumbers = ipData.goodsAndServicesByClass
-            .map(item => item.classNo) // Her objeden classNo'yu al
-            .filter(Boolean)           // Boş olanları ele
-            .join(", ");               // Virgülle birleştir
+            .map(item => item.classNo)
+            .filter(Boolean)
+            .join(", ");
       }
 
       // C) Tarih Formatlama
@@ -5717,8 +5712,10 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       const appNo = ipData.applicationNumber || ipData.applicationNo || ipData.appNo || "-";
       const markName = ipData.title || ipData.markName || "-";
 
-      // E) Konu ve İçerik
-      let subject = `"${markName}" - Yenileme Onayı Bekleniyor`;
+      // --- E) KONU (İSTEĞE GÖRE GÜNCELLENDİ) ---
+      // Format: 2006/04203 - "emaar şekil" - Marka Yenileme İşlemi / Talimat Bekleniyor
+      let subject = `${appNo} - "${markName}" - Marka Yenileme İşlemi / Talimat Bekleniyor`;
+      
       let body = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
       body = body.replace(/\n/g, '<br>');
 
@@ -5740,6 +5737,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
             if (templateSnap.exists) {
               const tmplData = templateSnap.data();
               
+              // Eğer şablonda bir konu (subject) tanımlıysa onu al, yoksa yukarıdaki varsayılanı kullan
               let rawSubject = tmplData.subject || subject;
               let rawBody = tmplData.body || body;
 
@@ -5758,14 +5756,14 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
                 clean(ipData.imageSignedUrl) || 
                 "";
 
-              // --- DEĞİŞKENLERİ YERİNE KOYMA ---
+              // --- DEĞİŞKENLER ---
               const replacements = {
                 "{{applicationNo}}": appNo,
                 "{{markName}}": markName,
                 "{{markImageUrl}}": markImageUrl,
                 "{{relatedIpRecordTitle}}": markName,
-                "{{applicantNames}}": applicantNames, // Artık gerçek isimler
-                "{{classNumbers}}": classNumbers,     // Artık goodsAndServicesByClass'tan geliyor
+                "{{applicantNames}}": applicantNames,
+                "{{classNumbers}}": classNumbers,
                 "{{renewalDate}}": renewalDateText
               };
 
