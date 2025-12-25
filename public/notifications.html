@@ -959,7 +959,7 @@ function startNotificationListener() {
 async function renderCurrentPage() {
   if (!pagination) return;
 
-  // Re-entrant guard
+  // Çakışma önleyici (Hızlı sayfa geçişleri için)
   if (__isRendering) { __rerenderPending = true; return; }
   __isRendering = true;
   const myTicket = ++__renderTicket;
@@ -973,93 +973,80 @@ async function renderCurrentPage() {
     return;
   }
 
-  // Tüm satırları hafızada, paralel asenkron hesaplayın
+  // Tüm satırları paralel olarak işle
   const rows = await Promise.all(slice.map(async (notification) => {
     const tr = document.createElement('tr');
 
-    // --- DURUM YÖNETİMİ (GÜNCELLENDİ) ---
-    // Backend statü kodlarını kullanıcı dostu metinlere çeviriyoruz
+    // --- 1. STATÜ YÖNETİMİ ---
     const statusMap = {
       'sent': 'Gönderildi',
       'failed': 'Hata Oluştu',
       'pending': 'Gönderim Sırasında',
       'missing_info': 'Eksik Bilgi',
-      'awaiting_client_approval': 'Taslak (Onay Bekliyor)',
+      'awaiting_client_approval': 'Onay Bekliyor', // Taslak yerine daha açıklayıcı
       'draft': 'Taslak',
-      'client_approval_closed': 'Onaylandı (Kapatıldı)'
+      'client_approval_closed': 'Onaylandı (Kapatıldı)',
+      'client_no_response_closed': 'Cevap Alınamadı'
     };
 
-    // CSS Sınıfını belirle
-    let statusClass = 'status-pending';
+    let statusClass = 'status-pending'; // Varsayılan gri
     if (notification.status === 'sent') statusClass = 'status-sent';
     else if (notification.status === 'failed') statusClass = 'status-failed';
     else if (notification.status === 'missing_info') statusClass = 'missing-info';
-    else if (notification.status === 'awaiting_client_approval') statusClass = 'status-pending'; // Gri/Sarı tonlu varsayılan
-    else if (notification.status === 'draft') statusClass = 'status-pending';
-
-    // Görünen metni belirle (Map'te yoksa ham kodu göster)
+    else if (notification.status === 'awaiting_client_approval') statusClass = 'status-pending';
+    
     const statusText = statusMap[notification.status] || notification.status || '-';
-    // -------------------------------------
 
+    // --- 2. KONU ---
     const subjectCell = notification.subject
       ? notification.subject
       : '<span class="missing-field">Konu Eksik</span>';
 
+    // --- 3. ASENKRON VERİ ÇÖZÜMLEME ---
     const [
-      recipientDisplay,
-      applicationNoText,
-      typeText,
-      docInfo,
-      deliveryDateText
+      clientDisplay,      // Müvekkil Sütunu (Düzeltilen Kısım)
+      applicationNoText,  // Başvuru No
+      typeText,           // Tür
+      docInfo,            // Ekler
+      deliveryDateText    // Son Tarih
     ] = await Promise.all([
+      
+      // A) MÜVEKKİL SÜTUNU MANTIĞI
       (async () => {
-        // ✅ ÖNCE recipientTo'dan alıcıları göster (taskOwner veya applicant olabilir)
+        let clientName = '-';
+        
+        // 1. Bildirim üzerinde kayıtlı isim var mı?
+        if (notification.applicantName) {
+            clientName = notification.applicantName;
+        } 
+        // 2. Yoksa veritabanından (resolveApplicantName) bulmaya çalış
+        else {
+            try { 
+                const resolved = await resolveApplicantName(notification); 
+                if (resolved && resolved !== '-') clientName = resolved;
+            } catch (e) { 
+                console.warn('Müvekkil adı çözülemedi:', e); 
+            }
+        }
+
+        // Eğer geçerli bir isim bulunduysa döndür
+        if (clientName !== '-') return clientName;
+
+        // 3. FALLBACK: Hiçbiri yoksa, 'To' kısmındaki mailleri/isimleri göster
         const { toList } = getToCcFromNotification(notification);
         if (toList && toList.length > 0) {
-          // Email adreslerinden isimleri çöz
           const names = [];
-          for (const email of toList.slice(0, 2)) { // İlk 2 alıcı
+          for (const email of toList.slice(0, 2)) {
             try {
-              // 1. personsRelated'da email ile ara
-              const personsRelatedSnap = await getDocs(query(
-                collection(db, 'personsRelated'),
-                where('email', '==', email),
-                limit(1)
-              ));
-              
-              if (!personsRelatedSnap.empty) {
-                // personsRelated kaydından personId al
-                const personsRelatedData = personsRelatedSnap.docs[0].data();
-                const personId = personsRelatedData.personId;
-                
-                if (personId) {
-                  // 2. persons koleksiyonundan personId ile kişiyi bul
-                  const personSnap = await getDoc(doc(db, 'persons', personId));
-                  if (personSnap.exists()) {
-                    const personData = personSnap.data();
-                    names.push(personData.name || personData.companyName || email);
-                  } else {
-                    names.push(email);
-                  }
-                } else {
-                  names.push(email);
-                }
+              // Basit bir önbellek veya sorgu ile ismi bulmaya çalış
+              const personsSnap = await getDocs(query(collection(db, 'persons'), where('email', '==', email), limit(1)));
+              if (!personsSnap.empty) {
+                  const p = personsSnap.docs[0].data();
+                  names.push(p.name || p.companyName || email);
               } else {
-                // personsRelated'da bulunamadıysa direkt persons'da ara (fallback)
-                const personsSnap = await getDocs(query(
-                  collection(db, 'persons'),
-                  where('email', '==', email),
-                  limit(1)
-                ));
-                if (!personsSnap.empty) {
-                  const personData = personsSnap.docs[0].data();
-                  names.push(personData.name || personData.companyName || email);
-                } else {
                   names.push(email);
-                }
               }
             } catch (err) {
-              console.warn('Email çözme hatası:', email, err);
               names.push(email);
             }
           }
@@ -1067,15 +1054,16 @@ async function renderCurrentPage() {
           return toList.length > 2 ? `${displayText} (+${toList.length - 2})` : displayText;
         }
         
-        // Fallback: applicantName (eski davranış)
-        if (notification.applicantName) return notification.applicantName;
-        try { return await resolveApplicantName(notification); } catch { return '-'; }
+        return '-';
       })(),
 
+      // B) BAŞVURU NO
       (async () => {
         if (notification.applicationNo) return notification.applicationNo;
         try { return await resolveApplicationNo(notification); } catch { return '-'; }
       })(),
+
+      // C) TÜR (Marka, Patent vb.)
       (async () => {
         try {
           let rawType = '';
@@ -1091,28 +1079,21 @@ async function renderCurrentPage() {
             objection: 'İtiraz', itiraz: 'İtiraz'
           };
           return map[rawType.toLowerCase?.() || ''] || rawType || '-';
-        } catch {
-          const fallback = String(notification.type || notification.notificationType || '');
-          const map = {
-            trademark: 'Marka', marka: 'Marka',
-            patent: 'Patent',
-            design: 'Tasarım', tasarim: 'Tasarım',
-            litigation: 'Dava', dava: 'Dava',
-            objection: 'İtiraz', itiraz: 'İtiraz'
-          };
-          return map[fallback.toLowerCase?.()] || fallback || '-';
-        }
+        } catch { return '-'; }
       })(),
-      // Senkron ise direkt değer döner; async ise promise — ikisini de Promise.all çözer.
+
+      // D) EKLER (Dosya Linkleri)
       getAttachmentPreviews(notification),
+
+      // E) SON TARİH
       (async () => {
         try { return await resolveDeliveryDate(notification); } catch { return '-'; }
       })()
     ]);
 
-    const previews = docInfo; // array from getAttachmentPreviews
-    const fileCellHtml = (Array.isArray(previews) && previews.length)
-      ? previews.map(p => p.fileUrl
+    // --- 4. FORMATLAMA ---
+    const fileCellHtml = (Array.isArray(docInfo) && docInfo.length)
+      ? docInfo.map(p => p.fileUrl
           ? `<a class="link" href="${p.fileUrl}" target="_blank" rel="noopener">${p.fileName}</a>`
           : `${p.fileName || '-'}`
         ).join("<br>")
@@ -1125,12 +1106,13 @@ async function renderCurrentPage() {
       ? notification.lastReminderAt.toDate().toLocaleString('tr-TR') : '-';
 
     const createdAtText = (notification.createdAt && typeof notification.createdAt.toDate === 'function')
-      ? notification.createdAt.toDate().toLocaleString('tr-TR') : (notification.createdAt ? new Date(notification.createdAt).toLocaleString('tr-TR') : '-');
+      ? notification.createdAt.toDate().toLocaleString('tr-TR') 
+      : (notification.createdAt ? new Date(notification.createdAt).toLocaleString('tr-TR') : '-');
 
-    // HTML İçeriğini Oluştur (statusText değişkenini kullandığımıza dikkat edin)
+    // --- 5. HTML OLUŞTURMA ---
     tr.innerHTML = `
       <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-      <td>${recipientDisplay || '-'}</td>
+      <td>${clientDisplay || '-'}</td>
       <td>${subjectCell}</td>
       <td>${applicationNoText || '-'}</td>
       <td>${typeText || '-'}</td>
@@ -1142,9 +1124,10 @@ async function renderCurrentPage() {
       <td class="actions-cell"></td>
     `;
 
+    // --- 6. BUTONLAR ---
     const actionCell = tr.querySelector('.actions-cell');
-    actionCell.innerHTML = '';
-
+    
+    // Düzenle Butonu (Her zaman görünür)
     const editButton = document.createElement('button');
     editButton.className = 'action-btn';
     editButton.textContent = 'Düzenle';
@@ -1152,6 +1135,7 @@ async function renderCurrentPage() {
     editButton.addEventListener('click', () => openModal(notification));
     actionCell.appendChild(editButton);
 
+    // Duruma Göre Diğer Butonlar
     if (notification.status === 'missing_info') {
       const missingBtn = document.createElement('button');
       missingBtn.className = 'action-btn';
@@ -1169,6 +1153,7 @@ async function renderCurrentPage() {
     } else {
       const sendBtn = document.createElement('button');
       sendBtn.className = 'action-btn';
+      // Hata varsa "Tekrar Gönder", yoksa "Gönder"
       sendBtn.textContent = (notification.status === 'failed') ? 'Tekrar Gönder' : 'Gönder';
       sendBtn.dataset.id = notification.id;
       sendBtn.addEventListener('click', (e) => sendNotificationWithUI(e, notification));
@@ -1178,14 +1163,14 @@ async function renderCurrentPage() {
     return tr;
   }));
 
-  // Daha yeni bir render başladıysa DOM'a dokunma
+  // Render sırasında yeni bir istek geldiyse işlemi iptal et
   if (myTicket !== __renderTicket) {
     __isRendering = false;
     if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
     return;
   }
 
-  // Atomik DOM güncelleme
+  // DOM'u güncelle
   const frag = document.createDocumentFragment();
   rows.forEach(tr => frag.appendChild(tr));
   tableBody.replaceChildren(frag);
@@ -1193,7 +1178,6 @@ async function renderCurrentPage() {
   __isRendering = false;
   if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
 }
-
     // ---------- Global exposures ----------
     try { globalThis.openModal = openModal; } catch (e) {}
     try { globalThis.showMissingInfo = showMissingInfo; } catch (e) {}
