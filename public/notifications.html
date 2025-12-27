@@ -1033,54 +1033,67 @@ async function renderCurrentPage() {
     ] = await Promise.all([
       
 
-// A) MÜVEKKİL SÜTUNU MANTIĞI (SADECE TASKOWNER)
+    // A) MÜVEKKİL SÜTUNU MANTIĞI (DÜZELTİLMİŞ)
       (async () => {
-        // 1. taskOwner String (ID) ise
-        if (typeof notification.taskOwner === 'string') {
-            try {
-                const personData = await getDocFromDb("persons", notification.taskOwner);
-                if (personData) {
-                    return personData.name || personData.companyName || '-';
-                }
-            } catch (e) {
-                console.warn("Müvekkil ID'si çözülürken hata:", e);
-            }
-            return '-'; // ID çözülemediyse eksik göster
-        }
-
-        // 2. taskOwner Dizi ise
-        if (Array.isArray(notification.taskOwner) && notification.taskOwner.length > 0) {
-            const firstVal = notification.taskOwner[0];
-            if (typeof firstVal === 'string') {
+        // 1. ÖNCELİK: Task Owner (Görev Sahibi)
+        if (notification.taskOwner) {
+            
+            // SENARYO 1: taskOwner bir String (ID) ise - Örn: "64ed6f..."
+            if (typeof notification.taskOwner === 'string') {
+                // Eğer ID değil de direkt isim yazılmışsa ve '@' yoksa (eski veri) yine de sorgulamayı deneriz
                 try {
-                    const personData = await getDocFromDb("persons", firstVal);
+                    const personData = await getDocFromDb("persons", notification.taskOwner);
                     if (personData) {
-                        return personData.name || personData.companyName || '-';
+                        return personData.name || personData.companyName || notification.taskOwner;
                     }
-                } catch (e) {}
-                return '-';
+                } catch (e) {
+                    console.warn("Müvekkil ID'si çözülürken hata:", e);
+                }
+                // Veritabanında yoksa veya hata varsa eldeki ID/String'i göster
+                return notification.taskOwner;
             }
-            if (typeof firstVal === 'object' && firstVal.name) {
-                return firstVal.name;
+
+            // SENARYO 2: taskOwner bir Dizi (Array) ise - Örn: ["64ed6f..."]
+            // (Backend güncellemesinden sonra veriler dizi olarak gelebilir)
+            if (Array.isArray(notification.taskOwner) && notification.taskOwner.length > 0) {
+                const firstVal = notification.taskOwner[0];
+                
+                // Dizi içindeki ilk eleman ID ise
+                if (typeof firstVal === 'string') {
+                     try {
+                        const personData = await getDocFromDb("persons", firstVal);
+                        if (personData) {
+                            return personData.name || personData.companyName || firstVal;
+                        }
+                    } catch (e) {}
+                    return firstVal;
+                }
+                
+                // Dizi içindeki ilk eleman Obje ise
+                if (typeof firstVal === 'object' && firstVal.name) return firstVal.name;
+            }
+
+            // SENARYO 3: taskOwner eski tip bir Obje ise
+            if (typeof notification.taskOwner === 'object' && notification.taskOwner.name) {
+                return notification.taskOwner.name;
             }
         }
+        
+        // --- Eğer yukarıda taskOwner'dan sonuç çıkmazsa aşağıdakilere geç ---
 
-        // 3. taskOwner Obje ise
-        if (typeof notification.taskOwner === 'object' && notification.taskOwner !== null && notification.taskOwner.name) {
-            return notification.taskOwner.name;
-        }
-
-        // 4. taskOwner yoksa applicantName'i göster
-        if (notification.applicantName) {
-            return notification.applicantName;
-        }
-
-        // 5. Son çare: ipRecords'tan
+        // 2. Yedek: applicantName
+        if (notification.applicantName) return notification.applicantName;
+        
+        // 3. Veritabanından (ipRecords üzerinden) bulmaya çalış
         try { 
             const resolved = await resolveApplicantName(notification); 
             if (resolved && resolved !== '-') return resolved;
         } catch (e) {}
 
+        // 4. Son Çare: To listesindeki ilk alıcı
+        const { toList } = getToCcFromNotification(notification);
+        if (toList && toList.length > 0) return toList[0];
+        
         return '-';
       })(),
       
