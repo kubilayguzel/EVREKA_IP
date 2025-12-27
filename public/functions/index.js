@@ -1950,6 +1950,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       notificationType: "marka",
       source: usedSource,
       epatsAttachment,
+      taskOwner: ownerIds,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
