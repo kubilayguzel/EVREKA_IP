@@ -1682,8 +1682,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
-    // --- DATA HAZIRLIĞI (YENİ EKLENEN KISIM) ---
-    // Task Type 2 (Başvuru) vb. için özel veri hazırlığı
+    // --- DATA HAZIRLIĞI ---
     let enrichedData = {
         applicantNames: "-",
         classNumbers: "-",
@@ -1702,7 +1701,6 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
             const namesList = [];
             for (const app of rawApplicants) {
                 if (app.id) {
-                    // Cache kullanılabilir ama şimdilik direkt çekiyoruz
                     const pDoc = await adminDb.collection("persons").doc(app.id).get();
                     if (pDoc.exists) {
                         const pData = pDoc.data();
@@ -1806,6 +1804,16 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       
       const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
 
+      // YENİ EKLENEN TARİH FORMATLAYICI
+      const formatTrDate = (val) => {
+        if (!val) return new Date().toLocaleDateString("tr-TR");
+        const d = (val && val.toDate) ? val.toDate() : new Date(val);
+        return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
+      };
+      
+      // EPATS tarihini al, yoksa bugünü kullan
+      const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
+
       // ✅ GÜNCELLENMİŞ PARAMETRELER
       const parameters = {
         muvekkil_adi: "Değerli Müvekkilimiz",
@@ -1821,6 +1829,9 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         applicantNames: enrichedData.applicantNames,
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
+        
+        // Mail şablonundaki {{transactionDate}} için:
+        transactionDate: transactionDateStr,
         
         // Geri uyumluluk için eski parametreler
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
