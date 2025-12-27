@@ -1032,18 +1032,16 @@ async function renderCurrentPage() {
       deliveryDateText    // Son Tarih
     ] = await Promise.all([
       
-// A) MÜVEKKİL SÜTUNU MANTIĞI (GÜNCELLENMİŞ - DİREKT ID SORGUSU)
+
+// A) MÜVEKKİL SÜTUNU MANTIĞI (GÜNCELLENMİŞ - KESİN TASK OWNER ÇÖZÜMLEME)
       (async () => {
-        // 1. ÖNCELİK: Task Owner (Görev Sahibi)
+        // 1. ÖNCELİK: Task Owner (Görev Sahibi) VARSA KESİNLİKLE BU KULLANILMALI
         if (notification.taskOwner) {
-            // Durum 1: taskOwner bir obje ise (eski kayıtlar vs.) ve içinde isim varsa
-            if (typeof notification.taskOwner === 'object' && notification.taskOwner.name) {
-                return notification.taskOwner.name;
-            }
-            // Durum 2: taskOwner bir STRING ise (ID Kabul Ediyoruz)
-            else if (typeof notification.taskOwner === 'string') {
+            
+            // Senaryo 1: taskOwner bir String (ID) ise - Örn: "64ed6f..."
+            if (typeof notification.taskOwner === 'string') {
                 try {
-                    // Bu ID ile 'persons' tablosuna gidip Ad/Şirket Adı çekiyoruz
+                    // ID olduğunu varsayıp 'persons' tablosundan sorguluyoruz
                     const personData = await getDocFromDb("persons", notification.taskOwner);
                     if (personData) {
                         return personData.name || personData.companyName || notification.taskOwner;
@@ -1051,27 +1049,50 @@ async function renderCurrentPage() {
                 } catch (e) {
                     console.warn("Müvekkil ID'si çözülürken hata:", e);
                 }
-                // Eğer veritabanında bulamazsak ID'yi olduğu gibi gösterelim
+                // Veritabanından isim dönemezsek bile ID'yi gösterelim ki yanlışlıkla eski sahibini göstermesin
                 return notification.taskOwner;
             }
+
+            // Senaryo 2: taskOwner bir Dizi (Array) ise - Örn: ["64ed6f..."]
+            // (Backend güncellemesinden sonra dizi olarak gelebilir)
+            if (Array.isArray(notification.taskOwner) && notification.taskOwner.length > 0) {
+                const firstVal = notification.taskOwner[0];
+                if (typeof firstVal === 'string') {
+                     try {
+                        const personData = await getDocFromDb("persons", firstVal);
+                        if (personData) {
+                            return personData.name || personData.companyName || firstVal;
+                        }
+                    } catch (e) {}
+                    return firstVal;
+                }
+                // Dizi içinde obje varsa
+                if (typeof firstVal === 'object' && firstVal.name) return firstVal.name;
+            }
+
+            // Senaryo 3: taskOwner eski usul bir obje ise
+            if (typeof notification.taskOwner === 'object' && notification.taskOwner.name) {
+                return notification.taskOwner.name;
+            }
         }
+        
+        // --- Eğer yukarıda taskOwner YOKSA aşağıdakilere geç ---
 
         // 2. Yedek: applicantName
         if (notification.applicantName) return notification.applicantName;
-
-        // 3. Veritabanından (ipRecords üzerinden) bulmaya çalış
-        try {
-            const resolved = await resolveApplicantName(notification);
+        
+        // 3. Veritabanından (ipRecords üzerinden) bulmaya çalış (Eski yöntem)
+        try { 
+            const resolved = await resolveApplicantName(notification); 
             if (resolved && resolved !== '-') return resolved;
         } catch (e) {}
 
         // 4. Son Çare: To listesindeki ilk alıcı
         const { toList } = getToCcFromNotification(notification);
         if (toList && toList.length > 0) return toList[0];
-
+        
         return '-';
       })(),
-
 
       // B) BAŞVURU NO
       (async () => {
