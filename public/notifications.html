@@ -1218,6 +1218,7 @@ async function renderCurrentPage() {
     // ---------- Global exposures ----------
     try { globalThis.openModal = openModal; } catch (e) {}
     try { globalThis.showMissingInfo = showMissingInfo; } catch (e) {}
+    try { globalThis.getToCcFromNotification = getToCcFromNotification; } catch (e) {}
     if (typeof globalThis.sendNotification !== "function") {
       globalThis.sendNotification = async function(notification) {
         try {
