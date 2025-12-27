@@ -1690,28 +1690,74 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         markImageUrl: ""
     };
 
+    // 1. ÖNCELİK: Task Details'den "İlgili Taraf" (Güncel Sahip) bilgisini çek
+    // Birleşme, Devir gibi işlemlerde yeni sahip 'details' altında gelir.
+    let relatedPartyFound = false;
+    const tDetails = after.details || {};
+    let targetParties = [];
+
+    if (tDetails.relatedParty) {
+        // Tekil ise diziye at
+        targetParties.push(tDetails.relatedParty);
+    } else if (Array.isArray(tDetails.relatedParties) && tDetails.relatedParties.length > 0) {
+        // Çoğul ise diziyi al
+        targetParties = tDetails.relatedParties;
+    }
+
+    if (targetParties.length > 0) {
+        try {
+            const names = [];
+            for (const p of targetParties) {
+                // ID varsa DB'den taze isim çek (en güvenlisi)
+                if (p.id) {
+                    const pDoc = await adminDb.collection("persons").doc(p.id).get();
+                    if (pDoc.exists) {
+                        const pd = pDoc.data();
+                        names.push(pd.name || pd.companyName || "-");
+                    } else if (p.name) {
+                        // DB'de yoksa objede gelen ismi kullan
+                        names.push(p.name);
+                    }
+                } else if (p.name) {
+                    // ID yoksa direkt ismi kullan
+                    names.push(p.name);
+                }
+            }
+            
+            if (names.length > 0) {
+                enrichedData.applicantNames = names.join(", ");
+                relatedPartyFound = true;
+                console.log("✅ Güncel Sahip (applicantNames) task details üzerinden alındı:", enrichedData.applicantNames);
+            }
+        } catch (e) {
+            console.error("Related party fetch error:", e);
+        }
+    }
+
     if (ipRecord) {
-        // 1. Görsel URL
+        // 2. Görsel URL
         const clean = (val) => (val ? String(val).trim() : "");
         enrichedData.markImageUrl = clean(ipRecord.brandImageUrl) || clean(ipRecord.trademarkImage) || clean(ipRecord.publicImageUrl) || "";
 
-        // 2. Başvuru Sahipleri (İsimleri Çözümleme)
-        try {
-            const rawApplicants = ipRecord.applicants || [];
-            const namesList = [];
-            for (const app of rawApplicants) {
-                if (app.id) {
-                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
-                    if (pDoc.exists) {
-                        const pData = pDoc.data();
-                        namesList.push(pData.name || pData.companyName || "-");
+        // 3. FALLBACK: Eğer relatedParty bulunamadıysa IP kaydındaki sahipleri kullan
+        if (!relatedPartyFound) {
+            try {
+                const rawApplicants = ipRecord.applicants || [];
+                const namesList = [];
+                for (const app of rawApplicants) {
+                    if (app.id) {
+                        const pDoc = await adminDb.collection("persons").doc(app.id).get();
+                        if (pDoc.exists) {
+                            const pData = pDoc.data();
+                            namesList.push(pData.name || pData.companyName || "-");
+                        }
                     }
                 }
-            }
-            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
-        } catch (e) { console.error("Applicant name fetch error:", e); }
+                if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
+            } catch (e) { console.error("Applicant name fetch error:", e); }
+        }
 
-        // 3. Sınıflar (goodsAndServicesByClass'tan)
+        // 4. Sınıflar (goodsAndServicesByClass'tan)
         if (ipRecord.goodsAndServicesByClass && Array.isArray(ipRecord.goodsAndServicesByClass)) {
             enrichedData.classNumbers = ipRecord.goodsAndServicesByClass
                 .map(item => item.classNo)
@@ -1719,7 +1765,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
                 .join(", ");
         }
 
-        // 4. Başvuru Tarihi Formatlama
+        // 5. Başvuru Tarihi Formatlama
         const formatDate = (val) => {
             if (!val) return "-";
             const date = (val.toDate) ? val.toDate() : new Date(val);
@@ -1811,7 +1857,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
       };
       
-      // EPATS tarihini al, yoksa bugünü kullan
+      // EPATS tarihini al, yoksa bugünü kullan (transactionDate için)
       const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
 
       // ✅ GÜNCELLENMİŞ PARAMETRELER
@@ -1826,7 +1872,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         markName: ipRecord?.title || ipRecord?.markName || "-",
         markImageUrl: enrichedData.markImageUrl,
-        applicantNames: enrichedData.applicantNames,
+        applicantNames: enrichedData.applicantNames, // Artık relatedParty'den gelebilir
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         
