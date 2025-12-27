@@ -1616,8 +1616,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   }
 );
 
-// functions/index.js içindeki 'createUniversalNotificationOnTaskCompleteV2' fonksiyonunu bununla değiştirin:
-
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
@@ -1694,7 +1692,11 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
     // 1. ÖNCELİK (EN YÜKSEK): Task Owner (task.taskOwner)
     // İtiraz ve diğer işlemlerde seçilen kişi buraya yazılıyor.
-    const taskOwnerIdsForName = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
+    
+    // --- GÜNCELLEME: taskOwner string ise diziye çevir (İsim Çözümleme İçin) ---
+    let rawOwnerForName = after.taskOwner;
+    if (typeof rawOwnerForName === 'string') rawOwnerForName = [rawOwnerForName];
+    const taskOwnerIdsForName = Array.isArray(rawOwnerForName) ? rawOwnerForName.filter(Boolean) : [];
     
     if (taskOwnerIdsForName.length > 0) {
         try {
@@ -1829,12 +1831,21 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       console.warn("Template kuralı aranırken hata:", e?.message || e);
     }
 
-    // Alıcıları Belirle
-    const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
+    // --- ALICILARI BELİRLE ---
+    
+    // --- GÜNCELLEME: taskOwner string ise diziye çevir (Alıcı Belirleme İçin) ---
+    // Bu kısım, veritabanında "ID" string olarak kayıtlıysa onu ["ID"] dizisine çevirir.
+    let rawOwner = after.taskOwner;
+    if (typeof rawOwner === 'string') {
+        rawOwner = [rawOwner];
+    }
+    const ownerIds = Array.isArray(rawOwner) ? rawOwner.filter(Boolean) : [];
+
     let toRecipients = [], ccRecipients = [], usedSource = null;
 
     if (ownerIds.length > 0) {
       usedSource = "taskOwner";
+      // Artık ownerIds bir dizi olduğu için bu fonksiyon sorunsuz çalışır
       const r = await findRecipientsFromPersonsRelated(ownerIds);
       toRecipients = r.to;
       ccRecipients = r.cc;
