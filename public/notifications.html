@@ -668,7 +668,28 @@ async function getAttachmentPreviews(notification) {
         }
       });
 
-      const { toList, ccList } = getToCcFromNotification(notification);
+      // --- DEĞİŞİKLİK BAŞLANGICI ---
+      // const yerine let yapıyoruz ki değiştirebilelim
+      let { toList, ccList } = getToCcFromNotification(notification);
+
+      // Eğer To listesi boşsa ve taskOwner bilgisi varsa listeye ekle
+      if ((!toList || toList.length === 0) && notification.taskOwner) {
+          let ownerEmail = null;
+          
+          if (typeof notification.taskOwner === 'object') {
+              // taskOwner objesinden email alanlarını kontrol et
+              ownerEmail = notification.taskOwner.authorizedPersonEmail || notification.taskOwner.email;
+          } else if (typeof notification.taskOwner === 'string' && notification.taskOwner.includes('@')) {
+              // taskOwner direkt bir email stringi ise
+              ownerEmail = notification.taskOwner;
+          }
+          
+          if (ownerEmail) {
+              toList = [ownerEmail];
+          }
+      }
+      // --- DEĞİŞİKLİK BİTİŞİ ---
+
       const toEl = document.getElementById("modal-to");
       const ccEl = document.getElementById("modal-cc");
       const renderBadges = (arr, kind) => {
@@ -1011,51 +1032,33 @@ async function renderCurrentPage() {
       deliveryDateText    // Son Tarih
     ] = await Promise.all([
       
-      // A) MÜVEKKİL SÜTUNU MANTIĞI
-      (async () => {
-        let clientName = '-';
-        
-        // 1. Bildirim üzerinde kayıtlı isim var mı?
-        if (notification.applicantName) {
-            clientName = notification.applicantName;
-        } 
-        // 2. Yoksa veritabanından (resolveApplicantName) bulmaya çalış
-        else {
+// A) MÜVEKKİL SÜTUNU MANTIĞI (GÜNCELLENMİŞ)
+          (async () => {
+            // 1. ÖNCELİK: Task Owner (Görev Sahibi)
+            if (notification.taskOwner) {
+                if (typeof notification.taskOwner === 'object' && notification.taskOwner.name) {
+                    return notification.taskOwner.name;
+                } else if (typeof notification.taskOwner === 'string' && !notification.taskOwner.includes('@')) {
+                    return notification.taskOwner;
+                }
+            }
+            
+            // 2. Yedek: applicantName
+            if (notification.applicantName) return notification.applicantName;
+            
+            // 3. Veritabanından bulmaya çalış
             try { 
                 const resolved = await resolveApplicantName(notification); 
-                if (resolved && resolved !== '-') clientName = resolved;
-            } catch (e) { 
-                console.warn('Müvekkil adı çözülemedi:', e); 
-            }
-        }
+                if (resolved && resolved !== '-') return resolved;
+            } catch (e) {}
 
-        // Eğer geçerli bir isim bulunduysa döndür
-        if (clientName !== '-') return clientName;
+            // 4. Son Çare: To listesindeki ilk alıcı
+            const { toList } = getToCcFromNotification(notification);
+            if (toList && toList.length > 0) return toList[0];
+            
+            return '-';
+          })(),
 
-        // 3. FALLBACK: Hiçbiri yoksa, 'To' kısmındaki mailleri/isimleri göster
-        const { toList } = getToCcFromNotification(notification);
-        if (toList && toList.length > 0) {
-          const names = [];
-          for (const email of toList.slice(0, 2)) {
-            try {
-              // Basit bir önbellek veya sorgu ile ismi bulmaya çalış
-              const personsSnap = await getDocs(query(collection(db, 'persons'), where('email', '==', email), limit(1)));
-              if (!personsSnap.empty) {
-                  const p = personsSnap.docs[0].data();
-                  names.push(p.name || p.companyName || email);
-              } else {
-                  names.push(email);
-              }
-            } catch (err) {
-              names.push(email);
-            }
-          }
-          const displayText = names.join(', ');
-          return toList.length > 2 ? `${displayText} (+${toList.length - 2})` : displayText;
-        }
-        
-        return '-';
-      })(),
 
       // B) BAŞVURU NO
       (async () => {
@@ -1338,17 +1341,6 @@ try {
     }
   };
 
-  async function sendNotificationWithUI(e, notification) {
-    const btn = e && e.currentTarget ? e.currentTarget : null;
-    try {
-      if (btn) btn.disabled = true;
-      __overlay.show('E-posta gönderiliyor…');
-      await sendNotification(notification);
-    } finally {
-      __overlay.hide();
-      if (btn) btn.disabled = false;
-    }
-  }
   async function sendReminderWithUI(e, notification) {
     const btn = e && e.currentTarget ? e.currentTarget : null;
     try {
@@ -1360,6 +1352,40 @@ try {
       if (btn) btn.disabled = false;
     }
   }
+
+  // --- YENİ GÖNDERİM FONKSİYONU (Validasyonlu) ---
+    async function sendNotificationWithUI(e, notification) {
+        const btn = e && e.currentTarget ? e.currentTarget : null;
+
+        // Validasyon: To listesini kontrol et
+        const { toList } = getToCcFromNotification(notification);
+        
+        if (!toList || toList.length === 0) {
+            alert("HATA: 'Kime' (To) alanı boş. Sadece CC ile veya alıcısız gönderim yapılamaz.\n\nLütfen 'Düzenle' butonuna basarak en az bir alıcı ekleyin.");
+            return; 
+        }
+
+        try {
+          if (btn) btn.disabled = true;
+          // Overlay'i güvenli şekilde bul ve göster
+          const overlay = document.getElementById('progressOverlay');
+          if (overlay) overlay.style.display = 'flex';
+          
+          await sendEmail({ notificationId: notification.id });
+          alert("İşlem başarılı.");
+          
+        } catch (err) {
+            console.error(err);
+            alert("Gönderim sırasında hata oluştu.");
+        } finally {
+          const overlay = document.getElementById('progressOverlay');
+          if (overlay) overlay.style.display = 'none';
+          if (btn) btn.disabled = false;
+        }
+    }
+    
+    // Fonksiyonu HTML butonlarının erişebilmesi için dışarı açıyoruz
+    window.sendNotificationWithUI = sendNotificationWithUI;
 </script>
 
 </body>
