@@ -1303,6 +1303,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 );
 
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1324,9 +1326,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     console.log(`📄 Belge indexlendi: ${docId}`, after);
 
+    // --- DEĞİŞKENLERİ EN BAŞTA TANIMLIYORUZ (HATA ÇÖZÜMÜ) ---
     let rule = null;
     let template = null;
     let client = null;
+    let subject = ""; // <--- ARTIK EN TEPEDE
+    let body = "";    // <--- ARTIK EN TEPEDE
     
     let ipRecordData = null;
     let applicants = [];
@@ -1528,7 +1533,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- KRİTİK BÖLÜM: EŞLEŞTİRME MANTIĞI GÜNCELLEMESİ ---
+    // --- KESİN EŞLEŞTİRME MANTIĞI (GÜNCELLENMİŞ) ---
     const querySubType = after.subProcessType || foundTransactionType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1546,18 +1551,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           .get();
 
         if (!rulesSnapshot.empty) {
-          // GÜNCELLEME: Çapraz Eşleştirme Listesi
-          // safeMainProcessType 'marka' ise -> ['marka', 'trademark'] ararız
-          // safeMainProcessType 'trademark' ise -> ['marka', 'trademark'] ararız
+          // Çapraz Eşleştirme Listesi
           let possibleMainTypes = [safeMainProcessType.toLowerCase()];
           
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
           if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
-          if (possibleMainTypes.includes('patent')) possibleMainTypes.push('patent'); // Genişletilebilir
+          if (possibleMainTypes.includes('patent')) possibleMainTypes.push('patent'); 
           if (possibleMainTypes.includes('tasarim')) possibleMainTypes.push('design');
           if (possibleMainTypes.includes('design')) possibleMainTypes.push('tasarim');
           
-          // Benzersiz yap
           possibleMainTypes = [...new Set(possibleMainTypes)];
 
           console.log(`🔍 [DEBUG] Veritabanı ile karşılaştırılan tipler: ${JSON.stringify(possibleMainTypes)}`);
@@ -1574,9 +1576,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
           } else {
-             // Detaylı Log: Neden eşleşmedi?
              const foundRulesTypes = rulesSnapshot.docs.map(d => d.data().mainProcessType);
-             console.warn(`⚠️ SubType tuttu (${querySubType}) ama MainType tutmadı. DB'deki Tipler: ${JSON.stringify(foundRulesTypes)} vs Aranan: ${JSON.stringify(possibleMainTypes)}`);
+             console.warn(`⚠️ SubType tuttu ama MainType tutmadı. DB: ${JSON.stringify(foundRulesTypes)} vs Aranan: ${JSON.stringify(possibleMainTypes)}`);
           }
         } else {
             console.warn(`⚠️ Şablon kuralı hiç bulunamadı (SubType yok).`);
