@@ -1319,11 +1319,18 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     // Sadece indexed geçişinde çalış
     if (!(before.status !== "indexed" && after.status === "indexed")) {
-      console.log("Status değişimi indekslenme değil, işlem atlandı.");
       return null;
     }
 
-    console.log(`📄 Belge indexlendi: ${docId}`, after);
+    console.log(`🚀 [DEBUG] Belge indexlendi: ${docId}`);
+    console.log(`🔍 [DEBUG] Gelen 'after' verisi (Özet):`, {
+       evrakNo: after.evrakNo,
+       tebligTarihi: after.tebligTarihi,
+       teblig_tarihi: after.teblig_tarihi,
+       resmiSonTarih: after.resmiSonTarih,
+       deadline: after.deadline,
+       transactionId: after.associatedTransactionId || after.finalTransactionId
+    });
 
     // --- DEĞİŞKENLER ---
     let rule = null;
@@ -1335,9 +1342,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let ipRecordData = null;
     let applicants = [];
     
-    // İKİ AYRI DEĞİŞKEN TANIMLIYORUZ:
-    let foundTransactionType = null; // Şablon bulmak için kullanılacak (Örn: '24')
-    let parentTransactionType = null; // İsimlendirme için kullanılacak (Örn: Parent Tipi)
+    // İşlem tipleri
+    let foundTransactionType = null; // Şablon bulmak için (Örn: '24')
+    let parentTransactionType = null; // İsimlendirme için (Örn: 'marka')
     
     let taskOwnerIds = [];
 
@@ -1352,24 +1359,31 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  ipRecordData = ipDoc.data();
                  applicants = ipRecordData.applicants || [];
                  
-                 // SEÇİLEN TRANSACTION'I ÇEKİYORUZ
+                 // TRANSACTION SORGUSU
                  if (associatedTransactionId) {
+                     console.log(`🔍 [DEBUG] Transaction aranıyor ID: ${associatedTransactionId}`);
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
+                     
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
-                         
-                         // 1. ŞABLON İÇİN: Seçilen işlemin kendi tipini sakla (Örn: '24')
-                         // Bunu SİLMİYORUZ, çünkü veritabanındaki kural 'subProcessType: 24' buna bakıyor.
+                         console.log(`✅ [DEBUG] Transaction bulundu:`, txnData);
+
+                         // 1. ŞABLON İÇİN: Kendi tipini sakla (Örn: '24')
                          foundTransactionType = txnData.type ? String(txnData.type) : null;
                          
                          // 2. İSİMLENDİRME İÇİN: Parent Kontrolü
                          if (txnData.parentId) {
+                             console.log(`🔍 [DEBUG] Parent Transaction aranıyor ID: ${txnData.parentId}`);
                              const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(txnData.parentId).get();
                              if (parentSnap.exists) {
                                  const parentTxnData = parentSnap.data();
                                  parentTransactionType = parentTxnData.type ? String(parentTxnData.type) : null;
-                                 console.log(`🔗 Parent Transaction Bulundu: ${txnData.parentId}, Type=${parentTransactionType}`);
+                                 console.log(`✅ [DEBUG] Parent Transaction bulundu. Tipi: ${parentTransactionType}`);
+                             } else {
+                                 console.warn(`⚠️ [DEBUG] Parent ID (${txnData.parentId}) var ama kayıt bulunamadı.`);
                              }
+                         } else {
+                             console.log(`ℹ️ [DEBUG] Bu işlemin bir Parent ID'si yok.`);
                          }
                          
                          // Task Owner bilgisi
@@ -1382,24 +1396,42 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                 if (Array.isArray(rawOwner)) taskOwnerIds.push(...rawOwner);
                             }
                          }
+                     } else {
+                         console.warn(`⚠️ [DEBUG] Transaction ID (${associatedTransactionId}) veritabanında bulunamadı.`);
                      }
+                 } else {
+                     console.log(`ℹ️ [DEBUG] associatedTransactionId boş.`);
                  }
              }
         } 
     } catch (error) {
-        console.error("IP/Transaction çözümleme hatası:", error);
+        console.error("❌ [DEBUG] IP/Transaction çözümleme hatası:", error);
     }
 
-    // --- TARİH FORMATLAYICI ---
+    // --- TARİH FORMATLAYICI (GÜÇLENDİRİLMİŞ) ---
     const formatDate = (val) => {
         if (!val) return "-";
-        let date;
-        if (typeof val.toDate === 'function') date = val.toDate();
-        else if (val._seconds) date = new Date(val._seconds * 1000);
-        else date = new Date(val);
+        try {
+            let date;
+            if (typeof val.toDate === 'function') date = val.toDate(); // Firestore Timestamp
+            else if (val._seconds) date = new Date(val._seconds * 1000); // Raw Seconds
+            else if (typeof val === 'string') {
+                // "2024-01-01" veya "01.01.2024" formatlarını destekle
+                if (val.includes('.')) {
+                    const parts = val.split('.');
+                    if (parts.length === 3) date = new Date(parts[2], parts[1]-1, parts[0]);
+                } else {
+                    date = new Date(val);
+                }
+            }
+            else date = new Date(val);
 
-        if (isNaN(date.getTime())) return "-";
-        return date.toLocaleDateString("tr-TR");
+            if (isNaN(date.getTime())) return "-";
+            return date.toLocaleDateString("tr-TR");
+        } catch (e) {
+            console.error("Tarih formatlama hatası:", val, e);
+            return "-";
+        }
     };
 
     // --- ENRICHED DATA ---
@@ -1442,11 +1474,14 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
+    // Tarihleri Al (Tüm olası alan adlarını dene)
     const rawTeblig = after.tebligTarihi || after.teblig_tarihi || after.notificationDate || after.date;
-    const rawDeadline = after.deadline || after.responseDeadline || after.officialResponseDeadline || after.resmiSonTarih;
+    const rawDeadline = after.deadline || after.resmiSonTarih || after.responseDeadline || after.officialResponseDeadline;
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
+
+    console.log(`📅 [DEBUG] Tarihler: HamTeblig=${rawTeblig}, HamDeadline=${rawDeadline} -> Formatlı: ${enrichedData.tebligTarihiFormatted} / ${enrichedData.deadlineFormatted}`);
 
     // --- İŞLEM ADI BELİRLEME ---
     let rawMainProcessType = after.mainProcessType;
@@ -1483,6 +1518,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     // DÜZELTME: Eğer hedef tip '24' (Eksiklik Bildirimi) ise ve Parent'ı yoksa,
     // Ekranda "Eksiklik Bildirimi" yazması yerine "Marka Başvurusu" (Ana Dosya Tipi) yazsın istiyoruz.
     if (String(targetType) === '24') {
+        console.log(`ℹ️ [DEBUG] Hedef tip '24' (Eksiklik) ama parent yok, Ana Dosya Tipi'ne (${safeMainProcessType}) dönülüyor.`);
         targetType = safeMainProcessType;
     }
 
@@ -1495,7 +1531,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         finalIslemTanimlamasi = `başvuruya ilişkin ${targetNameRaw}`;
     }
 
-    console.log(`🏷️ İşlem Adı Oluşturuldu: HedefTip=${targetType} -> Sonuç="${finalIslemTanimlamasi}"`);
+    console.log(`🏷️ [DEBUG] İşlem Adı Sonuç: HedefTip=${targetType} -> "${finalIslemTanimlamasi}"`);
 
     // B) Notification Type
     const typeMapping = { 'trademark': 'marka', 'marka': 'marka', 'patent': 'patent', 'design': 'tasarim', 'tasarim': 'tasarim' };
@@ -1572,6 +1608,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
     }
 
+    console.log(`📄 [DEBUG] Şablon aranıyor. SubTypeOptions:`, subTypeOptions);
+
     if (subTypeOptions.length > 0) {
         const rulesSnapshot = await adminDb
           .collection("template_rules")
@@ -1594,7 +1632,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              rule = matchedDoc.data();
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
+             console.log(`✅ [DEBUG] Şablon bulundu: ${rule.templateId}`);
+          } else {
+             console.warn(`⚠️ [DEBUG] Kural bulundu ama MainType eşleşmedi.`);
           }
+        } else {
+             console.warn(`⚠️ [DEBUG] Template rule bulunamadı.`);
         }
     }
 
@@ -1604,6 +1647,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       body    = String(template.body || "");
       
       const parameters = {
+        // Önce ham veriler (ezilmemesi gerekenler aşağıda)
         ...client, 
         ...after, 
         ...ipRecordData, 
@@ -1614,7 +1658,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
         
-        // DİNAMİK ALANLAR
+        // DİNAMİK ALANLAR (Kesinlikle dolu olmalı)
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
@@ -1627,6 +1671,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         applicationDate: enrichedData.applicationDate,
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
+
+      console.log(`📝 [DEBUG] Mail Parametreleri (Özet):`, {
+          islem: parameters.islem_turu_adi,
+          teblig: parameters.teblig_tarihi,
+          sonTarih: parameters.resmi_son_cevap_tarihi
+      });
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
