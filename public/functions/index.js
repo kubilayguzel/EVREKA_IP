@@ -1417,10 +1417,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     // 2. Tarih Hesaplama (Eğer Task yoksa ve Tebliğ Tarihi varsa)
                     // Sadece bu işlemin kendi tipi için hesaplama yapılır (Parent için değil)
                     if (templateSearchType && fetchedTxnData?.date) {
-                        // Kendi tipinin (templateSearchType) süresine bakmamız lazım, namingTargetType (parent) süresine değil.
-                        // Eğer namingTargetType === templateSearchType ise zaten elimizde var.
-                        // Değilse tekrar sorgulamamız gerekebilir ama genellikle alt işlemin süresi vardır.
-                        
                         let duePeriod = typeData.duePeriod; // Ay cinsinden süre (örn: 2)
                         
                         // Eğer yukarıda Parent'ı sorguladıysak ama bize Child'ın süresi lazımsa:
@@ -1469,9 +1465,47 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
-    // --- ENRICHED DATA (IP BİLGİLERİ) ---
-    // ... (IP record enriched data kısmı aynı kalacak) ...
-    // Kısaltmak için bu bloğu tekrar yazmıyorum, yukarıdaki kodunuzdakiyle aynı.
+    // --- ENRICHED DATA (IP BİLGİLERİ) - EKSİK KISIM EKLENDİ ---
+    let enrichedData = {
+        applicantNames: "-",
+        classNumbers: "-",
+        applicationDate: "-",
+        markImageUrl: "",
+        markName: "-",
+        tebligTarihiFormatted: "-",
+        deadlineFormatted: "-"
+    };
+
+    if (ipRecordData) {
+        const clean = (val) => (val ? String(val).trim() : "");
+        enrichedData.markName = clean(ipRecordData.title) || clean(ipRecordData.markName) || "-";
+        enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
+        enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
+
+        // Başvuru Sahipleri
+        try {
+            const namesList = [];
+            const apps = ipRecordData.applicants || applicants || [];
+            for (const app of apps) {
+                if (app.id) {
+                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
+                    if (pDoc.exists) namesList.push(pDoc.data().name || pDoc.data().companyName || "-");
+                } else if (app.name) {
+                    namesList.push(app.name);
+                }
+            }
+            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
+        } catch (e) { console.error("Applicant fetch error:", e); }
+
+        // Sınıf Numaraları
+        const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
+        if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
+            enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass.map(item => extractClassNo(item.classNo)).filter(Boolean).join(", ");
+        } else if (ipRecordData.niceClasses) {
+            const arr = Array.isArray(ipRecordData.niceClasses) ? ipRecordData.niceClasses : [String(ipRecordData.niceClasses)];
+            enrichedData.classNumbers = arr.map(c => extractClassNo(c)).filter(Boolean).join(", ");
+        }
+    }
     
     // --- TARİHLERİ BELİRLE (TASK > TRANSACTION > HESAPLANAN) ---
     
@@ -1492,8 +1526,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         fetchedTxnData?.deadline,               
         calculatedDeadline // ✅ YENİ: Sunucuda hesaplanan tarih
     );
-    
-    // ... (EnrichedData doldurma ve geri kalan kod aynı) ...
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
