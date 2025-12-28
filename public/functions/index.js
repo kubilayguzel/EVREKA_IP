@@ -1334,11 +1334,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     
     let ipRecordData = null;
     let applicants = [];
-    let foundTransactionType = null;
+    
+    // İKİ AYRI DEĞİŞKEN TANIMLIYORUZ:
+    let foundTransactionType = null; // Şablon bulmak için kullanılacak (Örn: '24')
+    let parentTransactionType = null; // İsimlendirme için kullanılacak (Örn: Parent Tipi)
+    
     let taskOwnerIds = [];
 
-    // Transaction ve Kayıt ID'lerini Al
-    // associatedTransactionId: Kullanıcının arayüzde seçtiği "Bağlı Olduğu İşlem" ID'sidir.
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
 
@@ -1350,38 +1352,27 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  ipRecordData = ipDoc.data();
                  applicants = ipRecordData.applicants || [];
                  
-                 // SADECE SEÇİLEN PARENT TRANSACTION'I ÇEKİYORUZ
+                 // SEÇİLEN TRANSACTION'I ÇEKİYORUZ
                  if (associatedTransactionId) {
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
                          
-                         // --- GÜNCELLEME: Parent Kontrolü ---
-                         // Eğer bu işlemin bir parentId'si varsa, parent transaction'ı bul ve onun tipini kullan.
+                         // 1. ŞABLON İÇİN: Seçilen işlemin kendi tipini sakla (Örn: '24')
+                         // Bunu SİLMİYORUZ, çünkü veritabanındaki kural 'subProcessType: 24' buna bakıyor.
+                         foundTransactionType = txnData.type ? String(txnData.type) : null;
+                         
+                         // 2. İSİMLENDİRME İÇİN: Parent Kontrolü
                          if (txnData.parentId) {
                              const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(txnData.parentId).get();
                              if (parentSnap.exists) {
                                  const parentTxnData = parentSnap.data();
-                                 foundTransactionType = parentTxnData.type ? String(parentTxnData.type) : null;
-                                 console.log(`🔗 Parent Transaction Bulundu: ${txnData.parentId}, Type=${foundTransactionType}`);
-                             } else {
-                                 // Parent bulunamazsa kendi tipini kullan
-                                 foundTransactionType = txnData.type ? String(txnData.type) : null;
+                                 parentTransactionType = parentTxnData.type ? String(parentTxnData.type) : null;
+                                 console.log(`🔗 Parent Transaction Bulundu: ${txnData.parentId}, Type=${parentTransactionType}`);
                              }
-                         } 
-                         // Eğer parentId yoksa ve işlem tipi '24' (Eksiklik Bildirimi) ise,
-                         // bu bir alt işlemdir ama parentId'si (muhtemelen ana dosya olduğu için) yoktur.
-                         // Bu durumda foundTransactionType'ı null yapalım ki kod aşağıda "Marka Başvurusu"na (Ana Tipe) fallback yapsın.
-                         else if (String(txnData.type) === '24') {
-                             foundTransactionType = null; 
-                             console.log(`🔗 Alt İşlem (Tip 24) tespit edildi, Ana Dosya Tipi kullanılacak.`);
-                         }
-                         else {
-                             // Diğer durumlarda kendi tipini kullan
-                             foundTransactionType = txnData.type ? String(txnData.type) : null;
                          }
                          
-                         // Task Owner bilgisi varsa alalım (Mail gönderimi için)
+                         // Task Owner bilgisi
                          if (txnData.triggeringTaskId) {
                             const t = await adminDb.collection("tasks").doc(String(txnData.triggeringTaskId)).get();
                             if (t.exists) {
@@ -1391,7 +1382,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                 if (Array.isArray(rawOwner)) taskOwnerIds.push(...rawOwner);
                             }
                          }
-                         console.log(`🔗 Seçilen Parent Transaction (Final): Type=${foundTransactionType}`);
                      }
                  }
              }
@@ -1404,9 +1394,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const formatDate = (val) => {
         if (!val) return "-";
         let date;
-        if (typeof val.toDate === 'function') date = val.toDate(); // Firestore Timestamp
-        else if (val._seconds) date = new Date(val._seconds * 1000); // Raw Seconds
-        else date = new Date(val); // String/Number
+        if (typeof val.toDate === 'function') date = val.toDate();
+        else if (val._seconds) date = new Date(val._seconds * 1000);
+        else date = new Date(val);
 
         if (isNaN(date.getTime())) return "-";
         return date.toLocaleDateString("tr-TR");
@@ -1429,7 +1419,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
         enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
 
-        // Başvuru Sahipleri
         try {
             const namesList = [];
             const apps = ipRecordData.applicants || applicants || [];
@@ -1444,7 +1433,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
         } catch (e) { console.error("Applicant fetch error:", e); }
 
-        // Sınıf Numaraları
         const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
         if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
             enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass.map(item => extractClassNo(item.classNo)).filter(Boolean).join(", ");
@@ -1454,20 +1442,17 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
-    // Tarihleri Al
     const rawTeblig = after.tebligTarihi || after.teblig_tarihi || after.notificationDate || after.date;
     const rawDeadline = after.deadline || after.responseDeadline || after.officialResponseDeadline || after.resmiSonTarih;
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
-    // --- İŞLEM ADI BELİRLEME (Parent Tipine Göre) ---
-    // Ana dosya tipini belirle
+    // --- İŞLEM ADI BELİRLEME ---
     let rawMainProcessType = after.mainProcessType;
     if (!rawMainProcessType && ipRecordData) rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
     const safeMainProcessType = String(rawMainProcessType || "marka");
 
-    // İsimlendirme Haritası
     const getParentTransactionName = (type) => {
         const t = String(type || "").toLowerCase().trim();
         const map = {
@@ -1481,31 +1466,36 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             'appeal': 'Karara İtiraz',
             'defense': 'Savunma',
             'objection': 'İtiraz',
-            '24': 'Eksiklik Bildirimi', // --- GÜNCELLEME: Listeye eklendi ---
-            // Ana Dosya Tipleri
+            '24': 'Eksiklik Bildirimi',
             'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
             'patent': 'Patent Başvurusu',
             'design': 'Tasarım Başvurusu', 'tasarim': 'Tasarım Başvurusu'
         };
-        // Bulamazsa baş harfini büyüt yaz
         return map[t] || (t.length > 2 ? t.charAt(0).toUpperCase() + t.slice(1) : "İşlem");
     };
 
-    // Hangi Tipi Baz Alacağız? 
-    // Öncelik: Seçilen Parent Transaction. Yoksa: Ana Dosya Tipi.
-    const targetType = foundTransactionType ? foundTransactionType : safeMainProcessType;
+    // HANGİ TİPİ BAZ ALACAĞIZ? (GÖRÜNEN İSİM İÇİN)
+    // 1. Varsa Parent Type (Üst işlem)
+    // 2. Yoksa Found Type (Kendi tipi)
+    // 3. O da yoksa Ana Dosya Tipi (Marka Başvurusu vb.)
+    let targetType = parentTransactionType ? parentTransactionType : (foundTransactionType ? foundTransactionType : safeMainProcessType);
+
+    // DÜZELTME: Eğer hedef tip '24' (Eksiklik Bildirimi) ise ve Parent'ı yoksa,
+    // Ekranda "Eksiklik Bildirimi" yazması yerine "Marka Başvurusu" (Ana Dosya Tipi) yazsın istiyoruz.
+    if (String(targetType) === '24') {
+        targetType = safeMainProcessType;
+    }
+
     const targetNameRaw = getParentTransactionName(targetType);
 
-    // Cümle Kurma Mantığı:
     let finalIslemTanimlamasi = targetNameRaw;
     const mainFileTypes = ['marka', 'trademark', 'patent', 'design', 'tasarim', 'marka başvurusu', 'patent başvurusu', 'tasarım başvurusu'];
 
-    // Eğer bu bir ANA DOSYA DEĞİLSE (yani devir, yenileme vb. ise)
     if (!mainFileTypes.includes(String(targetType).toLowerCase()) && !targetNameRaw.includes("Başvurusu")) {
         finalIslemTanimlamasi = `başvuruya ilişkin ${targetNameRaw}`;
     }
 
-    console.log(`🏷️ İşlem Adı Oluşturuldu: Tip=${targetType} -> Sonuç="${finalIslemTanimlamasi}"`);
+    console.log(`🏷️ İşlem Adı Oluşturuldu: HedefTip=${targetType} -> Sonuç="${finalIslemTanimlamasi}"`);
 
     // B) Notification Type
     const typeMapping = { 'trademark': 'marka', 'marka': 'marka', 'patent': 'patent', 'design': 'tasarim', 'tasarim': 'tasarim' };
@@ -1536,16 +1526,14 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       return { to, cc };
     }
 
-    // Task Owner Ekle (IP'deki ve Parent Transaction'daki Task Owner'lar)
     const owners = ipRecordData?.taskOwner || [];
     taskOwnerIds.push(...owners);
-    taskOwnerIds = [...new Set(taskOwnerIds)]; // Tekrar edenleri sil
+    taskOwnerIds = [...new Set(taskOwnerIds)]; 
 
     if (taskOwnerIds.length > 0) {
       const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
       toRecipients.push(...fromOwners.to);
       fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
-      // Eğer hiç sorumlu bulamazsa, kişilerin ana maillerini ekle
       if (toRecipients.length === 0 && ccRecipientsSet.size === 0) {
           for (const uid of taskOwnerIds) {
               const p = await adminDb.collection("persons").doc(String(uid)).get();
@@ -1554,14 +1542,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       }
     }
 
-    // Başvuru Sahipleri
     if ((toRecipients.length + ccRecipientsSet.size) === 0) {
       const rec = await getRecipientsByApplicantIds(applicants, notificationType);
       (rec.to || []).forEach((e) => toRecipients.push(e));
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
-    // Transaction'a özel CC Listesi (Evreka List)
     if (foundTransactionType) {
       const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
@@ -1570,7 +1556,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
     const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
-    // D) Müşteri Bilgisi
     if (!client && after.clientId) {
       const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
       if (clientSnapshot.exists) client = clientSnapshot.data();
@@ -1579,6 +1564,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
     // --- ŞABLON EŞLEŞTİRME ---
+    // Burada foundTransactionType (yani '24') kullanıyoruz ki kuralı bulabilsin.
     const querySubType = after.subProcessType || foundTransactionType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1618,8 +1604,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       body    = String(template.body || "");
       
       const parameters = {
-        // --- GÜNCELLEME: Spread Sıralaması Düzeltildi ---
-        // Önce ham verileri yay, böylece aşağıdakiler ezilmez
         ...client, 
         ...after, 
         ...ipRecordData, 
@@ -1630,10 +1614,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
         
-        // DİNAMİK ALANLAR (Artık ezilmeyecekler)
+        // DİNAMİK ALANLAR
         islem_turu_adi: finalIslemTanimlamasi, 
-        teblig_tarihi: enrichedData.tebligTarihiFormatted, // Formatlanmış tarih
-        resmi_son_cevap_tarihi: enrichedData.deadlineFormatted, // Formatlanmış tarih
+        teblig_tarihi: enrichedData.tebligTarihiFormatted,
+        resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
         
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
