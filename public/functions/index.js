@@ -1304,6 +1304,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
 // functions/index.js
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1396,7 +1398,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
     const safeMainProcessType = String(rawMainProcessType || "marka");
 
-    // Ön Yüz (Frontend) İçin Türkçe Mapping
     const typeMapping = {
         'trademark': 'marka', 'patent': 'patent', 'design': 'tasarim', 'litigation': 'dava',
         'marka': 'marka', 'tasarim': 'tasarim', 'dava': 'dava', 'muhasebe': 'muhasebe'
@@ -1484,8 +1485,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const querySubType = after.subProcessType || foundTransactionType || null; 
     
-    // --- DÜZELTME BURADA: Veritabanı Sorgusu İçin İngilizce Çeviri ---
-    // Template Rules tablosunda mainProcessType 'trademark', 'suit' gibi İngilizce tutuluyor.
+    // Veritabanı Sorgusu İçin İngilizce Çeviri (Template Rules'a Uygun)
     const dbTypeMapping = {
         'marka': 'trademark',
         'trademark': 'trademark',
@@ -1497,7 +1497,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         'genel': 'general',
         'general': 'general'
     };
-    // Eğer mappingde yoksa eldeki değeri kullan (fallback)
     const queryMainType = dbTypeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType;
 
     console.log(`🔎 Şablon aranıyor (DB): MainType=${queryMainType}, SubType=${querySubType}`);
@@ -1505,7 +1504,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const rulesSnapshot = await adminDb
       .collection("template_rules")
       .where("sourceType", "==", "document")
-      .where("mainProcessType", "==", queryMainType) // Artık 'marka' yerine 'trademark' ile arayacak
+      .where("mainProcessType", "==", queryMainType) 
       .where("subProcessType", "==", querySubType)
       .limit(1)
       .get();
@@ -1527,14 +1526,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     } else {
       subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
       body    = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
-      status  = "missing_info";
+      // HATA BURADAYDI: status değişkenini kaldırdık, aşağıda otomatik belirlenecek.
     }
 
     const missingFields = [];
     if (!client) missingFields.push("client");
-    if (!template) missingFields.push("template");
+    if (!template) missingFields.push("template"); // Template bulunamazsa eksik olarak işaretle
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
+    // Template veya alıcı yoksa statü "missing_info" olur
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
     const notificationData = {
@@ -1546,12 +1546,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       clientId: after.clientId || (applicants[0]?.id || null),
       subject: subject || "",
       body: body || "",
-      status: finalStatus || "missing_info",
+      status: finalStatus, // Hata önlendi
       missingFields: missingFields || [],
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
       
-      // Güvenli veriler
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
       
