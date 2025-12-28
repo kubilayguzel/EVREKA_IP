@@ -1302,6 +1302,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
   }
 );
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1326,7 +1328,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let rule = null;
     let template = null;
     let client = null;
-    let status = "pending";
     let subject = "";
     let body = "";
     let ipRecordData = null;
@@ -1350,15 +1351,14 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
-                         // --- KRİTİK VERİ: İşlem Tipi Buradan Alınıyor ---
-                         foundTransactionType = txnData.type ? String(txnData.type) : null; 
+                         foundTransactionType = txnData.type ? String(txnData.type) : null;
                          triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
                      }
                  }
              }
         } 
         else if (associatedTransactionId) {
-            // Eski yöntem: Tüm DB tarama (Record ID yoksa)
+            // Eski yöntem: Tüm DB tarama
             const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
             for (const ipDoc of ipRecordsSnapshot.docs) {
                 const txnRef = adminDb.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(associatedTransactionId);
@@ -1396,6 +1396,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
     const safeMainProcessType = String(rawMainProcessType || "marka");
 
+    // Ön Yüz (Frontend) İçin Türkçe Mapping
     const typeMapping = {
         'trademark': 'marka', 'patent': 'patent', 'design': 'tasarim', 'litigation': 'dava',
         'marka': 'marka', 'tasarim': 'tasarim', 'dava': 'dava', 'muhasebe': 'muhasebe'
@@ -1481,16 +1482,30 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- DÜZELTME BURADA: subProcessType (24) Belirleme ---
-    // Belgede yoksa, transaction'dan gelen tipi kullan
     const querySubType = after.subProcessType || foundTransactionType || null; 
     
-    console.log(`🔎 Şablon aranıyor: MainType=${safeMainProcessType}, SubType=${querySubType}`);
+    // --- DÜZELTME BURADA: Veritabanı Sorgusu İçin İngilizce Çeviri ---
+    // Template Rules tablosunda mainProcessType 'trademark', 'suit' gibi İngilizce tutuluyor.
+    const dbTypeMapping = {
+        'marka': 'trademark',
+        'trademark': 'trademark',
+        'patent': 'patent',
+        'tasarim': 'design',
+        'design': 'design',
+        'dava': 'suit',
+        'suit': 'suit',
+        'genel': 'general',
+        'general': 'general'
+    };
+    // Eğer mappingde yoksa eldeki değeri kullan (fallback)
+    const queryMainType = dbTypeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType;
+
+    console.log(`🔎 Şablon aranıyor (DB): MainType=${queryMainType}, SubType=${querySubType}`);
 
     const rulesSnapshot = await adminDb
       .collection("template_rules")
       .where("sourceType", "==", "document")
-      .where("mainProcessType", "==", safeMainProcessType)
+      .where("mainProcessType", "==", queryMainType) // Artık 'marka' yerine 'trademark' ile arayacak
       .where("subProcessType", "==", querySubType)
       .limit(1)
       .get();
@@ -1500,7 +1515,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
       if (templateSnapshot.exists) template = templateSnapshot.data();
     } else {
-        console.warn("⚠️ Şablon kuralı bulunamadı.");
+        console.warn(`⚠️ Şablon kuralı bulunamadı. Aranan: ${queryMainType} / ${querySubType}`);
     }
 
     if (template && client) {
