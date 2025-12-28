@@ -623,6 +623,7 @@ export class TaskSubmitHandler {
             transactionHierarchy: hierarchy,
             triggeringTaskId: String(taskId),
             createdAt: Timestamp.now(), // Firestore Timestamp kullanıyoruz
+            timestamp: new Date().toISOString(),
             ...extraData
         };
 
