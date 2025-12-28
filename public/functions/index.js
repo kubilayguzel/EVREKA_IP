@@ -1355,8 +1355,31 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
-                         // Sadece tipi alıyoruz, gerisine ihtiyacımız yok.
-                         foundTransactionType = txnData.type ? String(txnData.type) : null;
+                         
+                         // --- GÜNCELLEME: Parent Kontrolü ---
+                         // Eğer bu işlemin bir parentId'si varsa, parent transaction'ı bul ve onun tipini kullan.
+                         if (txnData.parentId) {
+                             const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(txnData.parentId).get();
+                             if (parentSnap.exists) {
+                                 const parentTxnData = parentSnap.data();
+                                 foundTransactionType = parentTxnData.type ? String(parentTxnData.type) : null;
+                                 console.log(`🔗 Parent Transaction Bulundu: ${txnData.parentId}, Type=${foundTransactionType}`);
+                             } else {
+                                 // Parent bulunamazsa kendi tipini kullan
+                                 foundTransactionType = txnData.type ? String(txnData.type) : null;
+                             }
+                         } 
+                         // Eğer parentId yoksa ve işlem tipi '24' (Eksiklik Bildirimi) ise,
+                         // bu bir alt işlemdir ama parentId'si (muhtemelen ana dosya olduğu için) yoktur.
+                         // Bu durumda foundTransactionType'ı null yapalım ki kod aşağıda "Marka Başvurusu"na (Ana Tipe) fallback yapsın.
+                         else if (String(txnData.type) === '24') {
+                             foundTransactionType = null; 
+                             console.log(`🔗 Alt İşlem (Tip 24) tespit edildi, Ana Dosya Tipi kullanılacak.`);
+                         }
+                         else {
+                             // Diğer durumlarda kendi tipini kullan
+                             foundTransactionType = txnData.type ? String(txnData.type) : null;
+                         }
                          
                          // Task Owner bilgisi varsa alalım (Mail gönderimi için)
                          if (txnData.triggeringTaskId) {
@@ -1368,7 +1391,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                 if (Array.isArray(rawOwner)) taskOwnerIds.push(...rawOwner);
                             }
                          }
-                         console.log(`🔗 Seçilen Parent Transaction: Type=${foundTransactionType}`);
+                         console.log(`🔗 Seçilen Parent Transaction (Final): Type=${foundTransactionType}`);
                      }
                  }
              }
@@ -1458,7 +1481,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             'appeal': 'Karara İtiraz',
             'defense': 'Savunma',
             'objection': 'İtiraz',
-            '24': 'Eksiklik Bildirimi',
+            '24': 'Eksiklik Bildirimi', // --- GÜNCELLEME: Listeye eklendi ---
             // Ana Dosya Tipleri
             'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
             'patent': 'Patent Başvurusu',
@@ -1594,8 +1617,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       subject = String(template.subject || "");
       body    = String(template.body || "");
       
-    const parameters = {
-        // Önce ham verileri yay (spread), böylece alttaki özel tanımlar bunları ezer
+      const parameters = {
+        // --- GÜNCELLEME: Spread Sıralaması Düzeltildi ---
+        // Önce ham verileri yay, böylece aşağıdakiler ezilmez
         ...client, 
         ...after, 
         ...ipRecordData, 
@@ -1618,7 +1642,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
-    };
+      };
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
