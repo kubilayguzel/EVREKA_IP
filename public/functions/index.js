@@ -1302,8 +1302,6 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
   }
 );
 
-// functions/index.js
-
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1352,7 +1350,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
-                         foundTransactionType = txnData.type ?? null;
+                         // --- KRİTİK VERİ: İşlem Tipi Buradan Alınıyor ---
+                         foundTransactionType = txnData.type ? String(txnData.type) : null; 
                          triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
                      }
                  }
@@ -1368,7 +1367,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     const txnData = txnSnap.data() || {};
                     ipRecordData = ipDoc.data();
                     applicants = ipRecordData.applicants || [];
-                    foundTransactionType = txnData.type ?? null;
+                    foundTransactionType = txnData.type ? String(txnData.type) : null;
                     triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
                     
                     if (!triggeringTaskIdFromTxn && (txnData.transactionHierarchy === "child" || txnData.parentId)) {
@@ -1390,7 +1389,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         console.error("IP/Transaction çözümleme hatası:", error);
     }
 
-    // B) İşlem Tipini Belirle
+    // B) İşlem Tipini (Main Process Type) Belirle
     let rawMainProcessType = after.mainProcessType;
     if (!rawMainProcessType && ipRecordData) {
         rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
@@ -1450,7 +1449,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       toRecipients.push(...fromOwners.to);
       fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
       
-      // PersonsRelated boşsa, TaskOwner'ın ana mailini al
       if (toRecipients.length === 0 && ccRecipientsSet.size === 0) {
           for (const uid of taskOwnerIds) {
               const p = await adminDb.collection("persons").doc(String(uid)).get();
@@ -1483,7 +1481,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    const querySubType = after.subProcessType || null; 
+    // --- DÜZELTME BURADA: subProcessType (24) Belirleme ---
+    // Belgede yoksa, transaction'dan gelen tipi kullan
+    const querySubType = after.subProcessType || foundTransactionType || null; 
+    
+    console.log(`🔎 Şablon aranıyor: MainType=${safeMainProcessType}, SubType=${querySubType}`);
+
     const rulesSnapshot = await adminDb
       .collection("template_rules")
       .where("sourceType", "==", "document")
@@ -1496,6 +1499,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       rule = rulesSnapshot.docs[0].data();
       const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
       if (templateSnapshot.exists) template = templateSnapshot.data();
+    } else {
+        console.warn("⚠️ Şablon kuralı bulunamadı.");
     }
 
     if (template && client) {
@@ -1517,7 +1522,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
-    // --- HATAYI ÇÖZEN GÜVENLİ VERİ OLUŞTURMA KISMI ---
     const notificationData = {
       recipientTo: toRecipients || [],
       recipientCc: ccRecipients || [],
@@ -1532,7 +1536,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
       
-      // HATA BURADAYDI: undefined gitmesini engellemek için '|| null' ekledik
+      // Güvenli veriler
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
       
