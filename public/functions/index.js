@@ -1305,6 +1305,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
 // functions/index.js
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1326,12 +1328,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     console.log(`📄 Belge indexlendi: ${docId}`, after);
 
-    // --- DEĞİŞKENLERİ EN BAŞTA TANIMLIYORUZ (HATA ÇÖZÜMÜ) ---
+    // --- DEĞİŞKENLER ---
     let rule = null;
     let template = null;
     let client = null;
-    let subject = ""; // <--- ARTIK EN TEPEDE
-    let body = "";    // <--- ARTIK EN TEPEDE
+    let subject = ""; 
+    let body = "";    
     
     let ipRecordData = null;
     let applicants = [];
@@ -1373,6 +1375,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     foundTransactionType = txnData.type ? String(txnData.type) : null;
                     triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
                     
+                    // Parent Trigger bulma mantığı
                     if (!triggeringTaskIdFromTxn && (txnData.transactionHierarchy === "child" || txnData.parentId)) {
                         try {
                             const parentId = txnData.parentId;
@@ -1398,7 +1401,17 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         classNumbers: "-",
         applicationDate: "-",
         markImageUrl: "",
-        markName: "-"
+        markName: "-",
+        tebligTarihiFormatted: "-",
+        deadlineFormatted: "-"
+    };
+
+    // Tarih Formatlayıcı
+    const formatDate = (val) => {
+        if (!val) return "-";
+        const date = (val.toDate) ? val.toDate() : new Date(val);
+        if (isNaN(date.getTime())) return "-";
+        return date.toLocaleDateString("tr-TR");
     };
 
     if (ipRecordData) {
@@ -1439,14 +1452,47 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             enrichedData.classNumbers = arr.map(c => extractClassNo(c)).filter(Boolean).join(", ");
         }
 
-        // 4. Tarih
-        const formatDate = (val) => {
-            if (!val) return "-";
-            const date = (val.toDate) ? val.toDate() : new Date(val);
-            if (isNaN(date.getTime())) return "-";
-            return date.toLocaleDateString("tr-TR");
-        };
         enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
+    }
+
+    // --- TARİHLERİ DOĞRUDAN İNDEKSLENEN DOKÜMANDAN ALIYORUZ ---
+    // 'tebligTarihi' ve 'deadline' (resmi son tarih) alanları pdf indekslenirken after'a yazılıyor.
+    enrichedData.tebligTarihiFormatted = formatDate(after.tebligTarihi || after.notificationDate);
+    enrichedData.deadlineFormatted = formatDate(after.deadline || after.officialResponseDeadline || after.responseDeadline);
+
+    // --- DİNAMİK İŞLEM ADI OLUŞTURMA ---
+    // İngilizce transaction type'ı Türkçeye ve bağlama uygun hale getiriyoruz.
+    const getParentTransactionName = (type) => {
+        const t = String(type || "").toLowerCase();
+        const map = {
+            'transfer': 'Devir Talebi',
+            'renewal': 'Yenileme Talebi',
+            'merger': 'Birleşme İşlemi',
+            'title_change': 'Unvan Değişikliği',
+            'address_change': 'Adres Değişikliği',
+            'assignment': 'Devir',
+            'withdrawal': 'Geri Çekme Talebi',
+            'opposition': 'İtiraz',
+            'appeal': 'Karara İtiraz',
+            'defense': 'Savunma',
+            'marka': 'Marka Başvurusu',
+            'trademark': 'Marka Başvurusu',
+            'patent': 'Patent Başvurusu',
+            'design': 'Tasarım Başvurusu'
+        };
+        return map[t] || "Başvuru/İşlem";
+    };
+
+    // Eğer foundTransactionType boşsa, mainProcessType (marka vb.) kullanılır.
+    const parentTxNameRaw = getParentTransactionName(foundTransactionType || rawMainProcessType);
+    
+    // Cümle yapısını kuruyoruz: "Marka Başvurusu" ise direk onu kullan, "Devir" ise "başvuruya ilişkin Devir Talebi" de.
+    let finalIslemTanimlamasi = parentTxNameRaw;
+    const basicTypes = ['marka','trademark','patent','design','tasarim'];
+    
+    // Eğer temel bir tip değilse (yani alt işlemse: devir, yenileme vb.) başına ekleme yap
+    if (foundTransactionType && !basicTypes.includes(foundTransactionType.toLowerCase())) {
+        finalIslemTanimlamasi = `başvuruya ilişkin ${parentTxNameRaw}`;
     }
 
     // B) İşlem Tipini Belirle
@@ -1533,7 +1579,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- KESİN EŞLEŞTİRME MANTIĞI (GÜNCELLENMİŞ) ---
+    // --- ŞABLON EŞLEŞTİRME ---
     const querySubType = after.subProcessType || foundTransactionType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1551,9 +1597,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           .get();
 
         if (!rulesSnapshot.empty) {
-          // Çapraz Eşleştirme Listesi
           let possibleMainTypes = [safeMainProcessType.toLowerCase()];
-          
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
           if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
           if (possibleMainTypes.includes('patent')) possibleMainTypes.push('patent'); 
@@ -1561,8 +1605,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           if (possibleMainTypes.includes('design')) possibleMainTypes.push('tasarim');
           
           possibleMainTypes = [...new Set(possibleMainTypes)];
-
-          console.log(`🔍 [DEBUG] Veritabanı ile karşılaştırılan tipler: ${JSON.stringify(possibleMainTypes)}`);
 
           const matchedDoc = rulesSnapshot.docs.find(doc => {
               const d = doc.data();
@@ -1575,12 +1617,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              console.log(`✅ Kural EŞLEŞTİ: ${matchedDoc.id}, MainType: ${rule.mainProcessType}`);
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
-          } else {
-             const foundRulesTypes = rulesSnapshot.docs.map(d => d.data().mainProcessType);
-             console.warn(`⚠️ SubType tuttu ama MainType tutmadı. DB: ${JSON.stringify(foundRulesTypes)} vs Aranan: ${JSON.stringify(possibleMainTypes)}`);
           }
-        } else {
-            console.warn(`⚠️ Şablon kuralı hiç bulunamadı (SubType yok).`);
         }
     }
 
@@ -1593,8 +1630,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           muvekkil_adi: "Değerli Müvekkilimiz",
           proje_adi: enrichedData.markName,
           
+          // EPATS Bilgileri
           epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
           epats_konu: after.konu || "-",
+          
+          // --- HTML İÇİN YENİ PARAMETRELER ---
+          islem_turu_adi: finalIslemTanimlamasi, // Örn: "başvuruya ilişkin Devir Talebi"
+          teblig_tarihi: enrichedData.tebligTarihiFormatted,
+          resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
+          // -----------------------------------
           
           applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
           markName: enrichedData.markName,
@@ -1603,6 +1647,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           classNumbers: enrichedData.classNumbers,
           applicationDate: enrichedData.applicationDate,
 
+          // Eski/Yedek Parametreler
           basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
           ...client, 
           ...after, 
