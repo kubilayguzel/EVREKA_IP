@@ -1336,15 +1336,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let foundTransactionType = null;
     let triggeringTaskIdFromTxn = null;
 
-    // --- DÜZELTME 1: Transaction ID'yi her iki alandan da kontrol et ---
+    // Transaction ve Kayıt ID'lerini Al
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
-    
-    // Matched Record ID (Varsa işleri hızlandırır)
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
 
     // A) IP Kaydını ve Transaction'ı Çözümle
     try {
-        // 1. Yol: Record ID varsa doğrudan çek (Hızlı)
         if (recordId) {
              const ipDoc = await adminDb.collection("ipRecords").doc(recordId).get();
              if (ipDoc.exists) {
@@ -1361,8 +1358,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  }
              }
         } 
-        // 2. Yol: Record ID yoksa tüm veritabanını tara (Eski Yöntem - Yavaş)
         else if (associatedTransactionId) {
+            // Eski yöntem: Tüm DB tarama (Record ID yoksa)
             const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
             for (const ipDoc of ipRecordsSnapshot.docs) {
                 const txnRef = adminDb.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(associatedTransactionId);
@@ -1374,7 +1371,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     foundTransactionType = txnData.type ?? null;
                     triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
                     
-                    // Parent fallback (triggeringTaskId yoksa)
                     if (!triggeringTaskIdFromTxn && (txnData.transactionHierarchy === "child" || txnData.parentId)) {
                         try {
                             const parentId = txnData.parentId;
@@ -1394,15 +1390,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         console.error("IP/Transaction çözümleme hatası:", error);
     }
 
-    // --- DÜZELTME 2: İşlem Tipini (Marka/Patent) Güvenli Belirle ---
+    // B) İşlem Tipini Belirle
     let rawMainProcessType = after.mainProcessType;
-    
-    // Eğer belgede tip yoksa, bulduğumuz IP kaydından alalım
     if (!rawMainProcessType && ipRecordData) {
         rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
     }
-    
-    // Varsayılan değer 'marka'
     const safeMainProcessType = String(rawMainProcessType || "marka");
 
     const typeMapping = {
@@ -1411,7 +1403,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
     const notificationType = typeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
 
-    // ===== Alıcı belirleme: önce taskOwner, yoksa applicants =====
+    // C) Alıcıları Belirle (TaskOwner > Applicants)
     let toRecipients = [];
     let ccRecipientsSet = new Set();
 
@@ -1427,19 +1419,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           const r = doc.data() || {};
           const email = String(r.email || "").trim();
           const isResponsible = r?.responsible?.[categoryKey] === true;
-          
           if (!email || !isResponsible) return;
-          
           const notify = r?.notify?.[categoryKey] || {};
           if (notify.to === true) to.push(email);
           else if (notify.cc === true) cc.push(email);
-          else to.push(email); // Varsayılan
+          else to.push(email);
         });
       }
       return { to, cc };
     }
 
-   // taskOwnerIds: associatedTaskId varsa onu, yoksa parent'tan bulduğumuz ID'yi kullan
     let taskOwnerIds = [];
     const taskIdToResolve = after.associatedTaskId || triggeringTaskIdFromTxn || null;
     
@@ -1447,23 +1436,21 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       try {
         const t = await adminDb.collection("tasks").doc(String(taskIdToResolve)).get();
         const tData = t.exists ? (t.data() || {}) : {};
-        
         let rawOwner = tData.taskOwner || tData.taskOwnerIds || tData.taskOwnerId;
         if (typeof rawOwner === 'string') rawOwner = [rawOwner];
-        
         taskOwnerIds = Array.isArray(rawOwner) ? rawOwner.filter(Boolean) : [];
       } catch (e) {
         console.warn("taskOwner okunamadı:", e);
       }
     }
 
-    // 1) ÖNCE taskOwner → personsRelated
+    // TaskOwner Mailleri
     if (taskOwnerIds.length > 0) {
       const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
       toRecipients.push(...fromOwners.to);
       fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
       
-      // Eğer personsRelated'dan sonuç çıkmadıysa, taskOwner'ın kendi mailini al
+      // PersonsRelated boşsa, TaskOwner'ın ana mailini al
       if (toRecipients.length === 0 && ccRecipientsSet.size === 0) {
           for (const uid of taskOwnerIds) {
               const p = await adminDb.collection("persons").doc(String(uid)).get();
@@ -1472,41 +1459,35 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       }
     }
 
-    // 2) SADECE taskOwner'dan alıcı bulunamadıysa → applicants fallback
+    // Applicants Mailleri (Fallback)
     if ((toRecipients.length + ccRecipientsSet.size) === 0) {
       const rec = await getRecipientsByApplicantIds(applicants, notificationType);
       (rec.to || []).forEach((e) => toRecipients.push(e));
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
-    // 3) Kurumsal ek CC (transaction tipine göre)
+    // CC Ekle (Evreka List)
     if (foundTransactionType) {
       const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
     }
 
-    // 4) Tekilleştir & CC = CC − TO
     toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
     const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
-    if (toRecipients.length === 0 && ccRecipients.length === 0) status = "missing_info";
-
+    // D) Şablon ve Müşteri Bilgisi Hazırla
     if (!client && after.clientId) {
       const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
       if (clientSnapshot.exists) client = clientSnapshot.data();
     } else if (!client && applicants.length > 0) {
-       // Client bilgisini applicants'dan türet
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- DÜZELTME 3: Şablon Kuralı Sorgusu (Undefined Hatasını Önle) ---
-    // Firestore'a undefined gönderilirse sorgu çöker.
     const querySubType = after.subProcessType || null; 
-
     const rulesSnapshot = await adminDb
       .collection("template_rules")
       .where("sourceType", "==", "document")
-      .where("mainProcessType", "==", safeMainProcessType) // Artık 'marka' vb. dolu gelir
+      .where("mainProcessType", "==", safeMainProcessType)
       .where("subProcessType", "==", querySubType)
       .limit(1)
       .get();
@@ -1520,12 +1501,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (template && client) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
-      const parameters = { ...client, ...after, ...ipRecordData }; // IP verilerini de parametrelere ekle
-      
-      // Parametreleri işle
+      const parameters = { ...client, ...after, ...ipRecordData };
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-      
     } else {
       subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
       body    = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
@@ -1539,26 +1517,27 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
+    // --- HATAYI ÇÖZEN GÜVENLİ VERİ OLUŞTURMA KISMI ---
     const notificationData = {
-      recipientTo: toRecipients,
-      recipientCc: ccRecipients,
-      toList: toRecipients, // Frontend uyumluluğu için
-      ccList: ccRecipients, // Frontend uyumluluğu için
+      recipientTo: toRecipients || [],
+      recipientCc: ccRecipients || [],
+      toList: toRecipients || [], 
+      ccList: ccRecipients || [],
       
-      clientId: after.clientId || (applicants[0]?.id ?? null),
-      subject,
-      body,
-      status: finalStatus,
-      missingFields,
-      sourceDocumentId: docId,
-      notificationType,
+      clientId: after.clientId || (applicants[0]?.id || null),
+      subject: subject || "",
+      body: body || "",
+      status: finalStatus || "missing_info",
+      missingFields: missingFields || [],
+      sourceDocumentId: docId || null,
+      notificationType: notificationType || "marka",
       
-      // Frontend'de doğru görünmesi için
-      taskOwner: taskOwnerIds, 
-      applicantName: client ? (client.name || client.companyName) : null,
+      // HATA BURADAYDI: undefined gitmesini engellemek için '|| null' ekledik
+      taskOwner: taskOwnerIds || [], 
+      applicantName: (client && (client.name || client.companyName)) || null,
       
-      assignedTo_uid: selcanUserId,
-      assignedTo_email: selcanUserEmail,
+      assignedTo_uid: selcanUserId || null,
+      assignedTo_email: selcanUserEmail || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
