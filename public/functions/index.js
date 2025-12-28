@@ -1304,6 +1304,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
 // functions/index.js
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1328,8 +1330,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let rule = null;
     let template = null;
     let client = null;
-    let subject = "";
-    let body = "";
     
     let ipRecordData = null;
     let applicants = [];
@@ -1359,7 +1359,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              }
         } 
         else if (associatedTransactionId) {
-            // Eski yöntem: Tüm DB tarama
+            // Yedek yöntem: Tüm DB tarama (Mevcut mantığınızı koruyoruz)
             const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
             for (const ipDoc of ipRecordsSnapshot.docs) {
                 const txnRef = adminDb.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(associatedTransactionId);
@@ -1390,7 +1390,73 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         console.error("IP/Transaction çözümleme hatası:", error);
     }
 
-    // B) İşlem Tipini (Main Process Type) Belirle
+    // --- YENİ: VERİ ZENGİNLEŞTİRME (Enriched Data) ---
+    // Mail şablonu için temiz veriler hazırlıyoruz
+    let enrichedData = {
+        applicantNames: "-",
+        classNumbers: "-",
+        applicationDate: "-",
+        markImageUrl: "",
+        markName: "-"
+    };
+
+    if (ipRecordData) {
+        // 1. Marka Adı ve Görsel
+        const clean = (val) => (val ? String(val).trim() : "");
+        enrichedData.markName = clean(ipRecordData.title) || clean(ipRecordData.markName) || "-";
+        enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
+
+        // 2. Başvuru Sahipleri
+        try {
+            const namesList = [];
+            // Eğer ipRecordData.applicants doluysa onu kullan, yoksa applicants dizisine bak
+            const apps = ipRecordData.applicants || applicants || [];
+            for (const app of apps) {
+                if (app.id) {
+                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
+                    if (pDoc.exists) {
+                        const pData = pDoc.data();
+                        namesList.push(pData.name || pData.companyName || "-");
+                    }
+                } else if (app.name) {
+                    namesList.push(app.name);
+                }
+            }
+            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
+        } catch (e) { console.error("Applicant fetch error:", e); }
+
+        // 3. Sınıf Numaraları (Sadece Sayılar)
+        const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
+
+        if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass) && ipRecordData.goodsAndServicesByClass.length > 0) {
+            enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass
+                .map(item => extractClassNo(item.classNo))
+                .filter(Boolean)
+                .join(", ");
+        } 
+        else if (ipRecordData.niceClasses && Array.isArray(ipRecordData.niceClasses)) {
+            enrichedData.classNumbers = ipRecordData.niceClasses
+                .map(c => extractClassNo(c))
+                .filter(Boolean)
+                .join(", ");
+        }
+        else if (ipRecordData.niceClass) {
+            const arr = Array.isArray(ipRecordData.niceClass) ? ipRecordData.niceClass : [String(ipRecordData.niceClass)];
+            enrichedData.classNumbers = arr.map(c => extractClassNo(c)).filter(Boolean).join(", ");
+        }
+
+        // 4. Tarih Formatlama
+        const formatDate = (val) => {
+            if (!val) return "-";
+            const date = (val.toDate) ? val.toDate() : new Date(val);
+            if (isNaN(date.getTime())) return "-";
+            return date.toLocaleDateString("tr-TR");
+        };
+        enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
+    }
+    // ------------------------------------------------
+
+    // B) İşlem Tipini Belirle
     let rawMainProcessType = after.mainProcessType;
     if (!rawMainProcessType && ipRecordData) {
         rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
@@ -1403,7 +1469,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
     const notificationType = typeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
 
-    // C) Alıcıları Belirle (TaskOwner > Applicants)
+    // C) Alıcıları Belirle
     let toRecipients = [];
     let ccRecipientsSet = new Set();
 
@@ -1481,9 +1547,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const querySubType = after.subProcessType || foundTransactionType || null; 
     
-    // --- KESİN ÇÖZÜM: Hem Türkçe Hem İngilizce, Hem String Hem Number Ara ---
-    
-    // 1. Aranacak SubType versiyonları (String "24" ve Number 24)
+    // SubType Arama (String ve Number)
     let subTypeOptions = [];
     if (querySubType) {
         subTypeOptions = [String(querySubType), Number(querySubType)].filter(v => !isNaN(v) || typeof v === 'string');
@@ -1493,7 +1557,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     console.log(`🔎 Şablon aranıyor: SubTypeOptions=${JSON.stringify(subTypeOptions)}`);
 
     if (subTypeOptions.length > 0) {
-        // 2. Sadece Source ve SubType ile geniş sorgu yap (MainType'ı JS'de filtreleyeceğiz)
         const rulesSnapshot = await adminDb
           .collection("template_rules")
           .where("sourceType", "==", "document")
@@ -1501,8 +1564,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           .get();
 
         if (!rulesSnapshot.empty) {
-          // 3. Veritabanındaki mainProcessType ile bizim elimizdeki tipi (TR veya EN) eşleştir
-          // "marka" da olsa "trademark" da olsa kabul et
           const dbTypeMapping = {
             'marka': 'trademark', 'trademark': 'trademark',
             'patent': 'patent', 'tasarim': 'design', 'design': 'design',
@@ -1510,16 +1571,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             'genel': 'general', 'general': 'general'
           };
           
-          // Elimizdeki tipin EN karşılığı
           const targetEn = dbTypeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
-          // Elimizdeki tipin kendisi (TR olabilir)
           const targetRaw = safeMainProcessType;
 
-          // Eşleşen kuralı bul
           const matchedDoc = rulesSnapshot.docs.find(doc => {
               const d = doc.data();
               const ruleMainType = String(d.mainProcessType || "").toLowerCase();
-              // Kuraldaki tip "marka" YA DA "trademark" ise kabul et
               return ruleMainType === targetEn || ruleMainType === targetRaw.toLowerCase();
           });
 
@@ -1529,17 +1586,48 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
           } else {
-             console.warn(`⚠️ Uygun subProcessType bulundu ama mainProcessType eşleşmedi. Arananlar: ${targetRaw} veya ${targetEn}`);
+             console.warn(`⚠️ Uygun subProcessType bulundu ama mainProcessType eşleşmedi.`);
           }
         } else {
             console.warn(`⚠️ Şablon kuralı bulunamadı. SubType bulunamadı: ${subTypeOptions}`);
         }
     }
 
+    let subject = "";
+    let body = "";
+
+    // İÇERİK OLUŞTURMA (GÜNCELLENDİ)
     if (template && client) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
-      const parameters = { ...client, ...after, ...ipRecordData };
+      
+      // ✅ GÜNCELLENMİŞ PARAMETRELER
+      const parameters = {
+          // Temel Bilgiler
+          muvekkil_adi: "Değerli Müvekkilimiz",
+          proje_adi: enrichedData.markName,
+          
+          // Doküman Bilgileri
+          epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
+          epats_konu: after.konu || "-",
+          
+          // IP Kaydı Bilgileri (Zenginleştirilmiş)
+          applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
+          markName: enrichedData.markName,
+          markImageUrl: enrichedData.markImageUrl,
+          applicantNames: enrichedData.applicantNames,
+          classNumbers: enrichedData.classNumbers, // Sadece sayılar: "05, 35"
+          applicationDate: enrichedData.applicationDate,
+
+          // Yedekler (Eski şablonlar bozulmasın diye)
+          basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
+          
+          // Diğer ham veriler
+          ...client, 
+          ...after, 
+          ...ipRecordData 
+      };
+
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
     } else {
@@ -1553,6 +1641,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
+
+    // Ek Dosya (EPATS Dokümanı)
+    const epatsAttachment = {
+      storagePath: after.storagePath || null,
+      downloadURL: after.downloadURL || null,
+      fileName: after.name || "epats_document.pdf",
+    };
 
     const notificationData = {
       recipientTo: toRecipients || [],
@@ -1570,6 +1665,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
+      
+      epatsAttachment, // Dosya eki eklendi
       
       assignedTo_uid: selcanUserId || null,
       assignedTo_email: selcanUserEmail || null,
