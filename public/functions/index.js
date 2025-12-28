@@ -1352,12 +1352,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  ipRecordData = ipDoc.data();
                  applicants = ipRecordData.applicants || [];
                  
+                 // Parent Transaction (Bağlı Olduğu İşlem) varsa verisini çek
                  if (associatedTransactionId) {
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      if (txnSnap.exists) {
                          const txnData = txnSnap.data();
+                         // Parent'ın tipini alıyoruz (örn: 'transfer', 'devir', 'renewal' vb.)
                          foundTransactionType = txnData.type ? String(txnData.type) : null;
                          triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
+                         console.log(`🔗 Parent Transaction Bulundu: ID=${associatedTransactionId}, Type=${foundTransactionType}`);
                      }
                  }
              }
@@ -1374,19 +1377,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     applicants = ipRecordData.applicants || [];
                     foundTransactionType = txnData.type ? String(txnData.type) : null;
                     triggeringTaskIdFromTxn = txnData.triggeringTaskId ? String(txnData.triggeringTaskId) : null;
-                    
-                    // Parent Trigger bulma mantığı
-                    if (!triggeringTaskIdFromTxn && (txnData.transactionHierarchy === "child" || txnData.parentId)) {
-                        try {
-                            const parentId = txnData.parentId;
-                            if (parentId) {
-                                const parentSnap = await adminDb.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(parentId).get();
-                                if (parentSnap.exists) {
-                                    triggeringTaskIdFromTxn = parentSnap.data().triggeringTaskId || null;
-                                }
-                            }
-                        } catch (e) {}
-                    }
                     break; 
                 }
             }
@@ -1395,7 +1385,27 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         console.error("IP/Transaction çözümleme hatası:", error);
     }
 
-    // --- ENRICHED DATA (ZENGİNLEŞTİRİLMİŞ VERİ) ---
+    // --- GÜÇLÜ TARİH FORMATLAYICI ---
+    const formatDate = (val) => {
+        if (!val) return "-";
+        let date;
+        // Firestore Timestamp mi?
+        if (typeof val.toDate === 'function') {
+            date = val.toDate();
+        } 
+        // _seconds var mı?
+        else if (val._seconds) {
+            date = new Date(val._seconds * 1000);
+        }
+        // String veya Number mı?
+        else {
+            date = new Date(val);
+        }
+        if (isNaN(date.getTime())) return "-";
+        return date.toLocaleDateString("tr-TR");
+    };
+
+    // --- ENRICHED DATA ---
     let enrichedData = {
         applicantNames: "-",
         classNumbers: "-",
@@ -1406,21 +1416,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         deadlineFormatted: "-"
     };
 
-    // Tarih Formatlayıcı
-    const formatDate = (val) => {
-        if (!val) return "-";
-        const date = (val.toDate) ? val.toDate() : new Date(val);
-        if (isNaN(date.getTime())) return "-";
-        return date.toLocaleDateString("tr-TR");
-    };
-
     if (ipRecordData) {
-        // 1. Marka Adı ve Görsel
         const clean = (val) => (val ? String(val).trim() : "");
         enrichedData.markName = clean(ipRecordData.title) || clean(ipRecordData.markName) || "-";
         enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
+        enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
 
-        // 2. Başvuru Sahipleri
+        // Başvuru Sahipleri
         try {
             const namesList = [];
             const apps = ipRecordData.applicants || applicants || [];
@@ -1438,73 +1440,85 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
         } catch (e) { console.error("Applicant fetch error:", e); }
 
-        // 3. Sınıf Numaraları
+        // Sınıf Numaraları
         const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
-
-        if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass) && ipRecordData.goodsAndServicesByClass.length > 0) {
+        if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
             enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass.map(item => extractClassNo(item.classNo)).filter(Boolean).join(", ");
         } 
         else if (ipRecordData.niceClasses && Array.isArray(ipRecordData.niceClasses)) {
             enrichedData.classNumbers = ipRecordData.niceClasses.map(c => extractClassNo(c)).filter(Boolean).join(", ");
         }
-        else if (ipRecordData.niceClass) {
-            const arr = Array.isArray(ipRecordData.niceClass) ? ipRecordData.niceClass : [String(ipRecordData.niceClass)];
-            enrichedData.classNumbers = arr.map(c => extractClassNo(c)).filter(Boolean).join(", ");
-        }
-
-        enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
     }
 
-    // --- TARİHLERİ DOĞRUDAN İNDEKSLENEN DOKÜMANDAN ALIYORUZ ---
-    // 'tebligTarihi' ve 'deadline' (resmi son tarih) alanları pdf indekslenirken after'a yazılıyor.
-    enrichedData.tebligTarihiFormatted = formatDate(after.tebligTarihi || after.notificationDate);
-    enrichedData.deadlineFormatted = formatDate(after.deadline || after.officialResponseDeadline || after.responseDeadline);
-
-    // --- DİNAMİK İŞLEM ADI OLUŞTURMA ---
-    // İngilizce transaction type'ı Türkçeye ve bağlama uygun hale getiriyoruz.
-    const getParentTransactionName = (type) => {
-        const t = String(type || "").toLowerCase();
-        const map = {
-            'transfer': 'Devir Talebi',
-            'renewal': 'Yenileme Talebi',
-            'merger': 'Birleşme İşlemi',
-            'title_change': 'Unvan Değişikliği',
-            'address_change': 'Adres Değişikliği',
-            'assignment': 'Devir',
-            'withdrawal': 'Geri Çekme Talebi',
-            'opposition': 'İtiraz',
-            'appeal': 'Karara İtiraz',
-            'defense': 'Savunma',
-            'marka': 'Marka Başvurusu',
-            'trademark': 'Marka Başvurusu',
-            'patent': 'Patent Başvurusu',
-            'design': 'Tasarım Başvurusu'
-        };
-        return map[t] || "Başvuru/İşlem";
-    };
-
-    // Eğer foundTransactionType boşsa, mainProcessType (marka vb.) kullanılır.
-    const parentTxNameRaw = getParentTransactionName(foundTransactionType || rawMainProcessType);
+    // --- TARİHLERİ DOĞRUDAN DOKÜMANDAN ALMA ---
+    // Farklı alan isimleri ihtimaline karşı kontrol
+    const rawTeblig = after.tebligTarihi || after.teblig_tarihi || after.notificationDate || after.date;
+    const rawDeadline = after.deadline || after.responseDeadline || after.officialResponseDeadline || after.resmiSonTarih;
     
-    // Cümle yapısını kuruyoruz: "Marka Başvurusu" ise direk onu kullan, "Devir" ise "başvuruya ilişkin Devir Talebi" de.
-    let finalIslemTanimlamasi = parentTxNameRaw;
-    const basicTypes = ['marka','trademark','patent','design','tasarim'];
-    
-    // Eğer temel bir tip değilse (yani alt işlemse: devir, yenileme vb.) başına ekleme yap
-    if (foundTransactionType && !basicTypes.includes(foundTransactionType.toLowerCase())) {
-        finalIslemTanimlamasi = `başvuruya ilişkin ${parentTxNameRaw}`;
-    }
+    enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
+    enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
-    // B) İşlem Tipini Belirle
+
+    // --- DİNAMİK İŞLEM ADI BELİRLEME (Parent Tipine Göre) ---
     let rawMainProcessType = after.mainProcessType;
     if (!rawMainProcessType && ipRecordData) {
         rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
     }
     const safeMainProcessType = String(rawMainProcessType || "marka");
 
+    const getParentTransactionName = (type) => {
+        const t = String(type || "").toLowerCase().trim();
+        const map = {
+            // İngilizce Tipler
+            'transfer': 'Devir Talebi',
+            'assignment': 'Devir Talebi',
+            'renewal': 'Yenileme Talebi',
+            'merger': 'Birleşme İşlemi',
+            'title_change': 'Unvan Değişikliği',
+            'address_change': 'Adres Değişikliği',
+            'withdrawal': 'Geri Çekme Talebi',
+            'opposition': 'İtiraz',
+            'appeal': 'Karara İtiraz',
+            'defense': 'Savunma',
+            'trademark': 'Marka Başvurusu',
+            'patent': 'Patent Başvurusu',
+            'design': 'Tasarım Başvurusu',
+            
+            // Türkçe Tipler (Veritabanında Türkçe tutuluyorsa diye)
+            'devir': 'Devir Talebi',
+            'yenileme': 'Yenileme Talebi',
+            'birlesme': 'Birleşme İşlemi',
+            'unvan degisikligi': 'Unvan Değişikliği',
+            'adres degisikligi': 'Adres Değişikliği',
+            'marka': 'Marka Başvurusu',
+            'tasarim': 'Tasarım Başvurusu'
+        };
+        // Haritada yoksa, kelimenin baş harfini büyütüp döndür
+        return map[t] || (t.length > 2 ? t.charAt(0).toUpperCase() + t.slice(1) : "İşlem");
+    };
+
+    // Hangi tipi kullanacağız?
+    // Eğer Parent Transaction bulunduysa ONUN tipini kullan. Yoksa Ana Dosya tipini kullan.
+    let typeToUseForName = foundTransactionType ? foundTransactionType : safeMainProcessType;
+
+    const parentTxNameRaw = getParentTransactionName(typeToUseForName);
+    
+    // Cümle Yapısı:
+    let finalIslemTanimlamasi = parentTxNameRaw;
+    const basicTypes = ['marka', 'trademark', 'patent', 'design', 'tasarim', 'marka başvurusu', 'patent başvurusu', 'tasarım başvurusu'];
+    
+    // Eğer temel bir tip değilse (yani bir alt işlemse), "başvuruya ilişkin..." ekle
+    if (!basicTypes.includes(String(typeToUseForName).toLowerCase()) && !parentTxNameRaw.includes("Başvurusu")) {
+         finalIslemTanimlamasi = `başvuruya ilişkin ${parentTxNameRaw}`;
+    }
+
+    console.log(`🏷️ İşlem Adı: Type=${typeToUseForName} -> Text="${finalIslemTanimlamasi}"`);
+
+
+    // B) Notification Type
     const typeMapping = {
         'trademark': 'marka', 'patent': 'patent', 'design': 'tasarim', 'litigation': 'dava',
-        'marka': 'marka', 'tasarim': 'tasarim', 'dava': 'dava', 'muhasebe': 'muhasebe'
+        'marka': 'marka', 'tasarim': 'tasarim', 'dava': 'dava'
     };
     const notificationType = typeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
 
@@ -1522,11 +1536,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           const r = doc.data() || {};
           const email = String(r.email || "").trim();
           const isResponsible = r?.responsible?.[categoryKey] === true;
-          if (!email || !isResponsible) return;
-          const notify = r?.notify?.[categoryKey] || {};
-          if (notify.to === true) to.push(email);
-          else if (notify.cc === true) cc.push(email);
-          else to.push(email);
+          if (email && isResponsible) {
+              const notify = r?.notify?.[categoryKey] || {};
+              if (notify.to === true) to.push(email);
+              else if (notify.cc === true) cc.push(email);
+              else to.push(email);
+          }
         });
       }
       return { to, cc };
@@ -1587,8 +1602,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
     }
 
-    console.log(`🔎 Şablon aranıyor: SubTypeOptions=${JSON.stringify(subTypeOptions)}`);
-
     if (subTypeOptions.length > 0) {
         const rulesSnapshot = await adminDb
           .collection("template_rules")
@@ -1601,8 +1614,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
           if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
           if (possibleMainTypes.includes('patent')) possibleMainTypes.push('patent'); 
-          if (possibleMainTypes.includes('tasarim')) possibleMainTypes.push('design');
-          if (possibleMainTypes.includes('design')) possibleMainTypes.push('tasarim');
           
           possibleMainTypes = [...new Set(possibleMainTypes)];
 
@@ -1614,7 +1625,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
           if (matchedDoc) {
              rule = matchedDoc.data();
-             console.log(`✅ Kural EŞLEŞTİ: ${matchedDoc.id}, MainType: ${rule.mainProcessType}`);
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
           }
@@ -1630,15 +1640,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           muvekkil_adi: "Değerli Müvekkilimiz",
           proje_adi: enrichedData.markName,
           
-          // EPATS Bilgileri
           epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
           epats_konu: after.konu || "-",
           
-          // --- HTML İÇİN YENİ PARAMETRELER ---
-          islem_turu_adi: finalIslemTanimlamasi, // Örn: "başvuruya ilişkin Devir Talebi"
+          islem_turu_adi: finalIslemTanimlamasi, 
           teblig_tarihi: enrichedData.tebligTarihiFormatted,
           resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
-          // -----------------------------------
           
           applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
           markName: enrichedData.markName,
@@ -1647,7 +1654,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           classNumbers: enrichedData.classNumbers,
           applicationDate: enrichedData.applicationDate,
 
-          // Eski/Yedek Parametreler
           basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
           ...client, 
           ...after, 
