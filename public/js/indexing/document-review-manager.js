@@ -124,23 +124,46 @@ export class DocumentReviewManager {
     async loadParentTransactions(recordId) {
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (!parentSelect) return;
+        
         parentSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+        
         try {
             const transactionsResult = await ipRecordsService.getRecordTransactions(recordId);
             this.currentTransactions = transactionsResult.success ? transactionsResult.data : [];
+            
             parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçiniz --</option>';
+            
+            // Eğer hiç işlem yoksa bilgi verelim
+            if (this.currentTransactions.length === 0) {
+                const opt = document.createElement('option');
+                opt.textContent = "(Kayıtlı işlem bulunamadı)";
+                opt.disabled = true;
+                parentSelect.appendChild(opt);
+                return;
+            }
+
             const parentTransactions = this.currentTransactions
                 .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
-                .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+                .sort((a, b) => {
+                    // Tarih sıralamasını daha güvenli hale getiriyoruz
+                    const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    return dateB - dateA;
+                });
+
             parentTransactions.forEach(t => {
-                const typeObj = this.allTransactionTypes.find(type => type.id === t.type);
+                // DÜZELTME: Type ID karşılaştırmasını String'e çevirerek yapıyoruz (Number vs String hatasını önler)
+                const typeObj = this.allTransactionTypes.find(type => String(type.id) === String(t.type));
+                
                 const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'Bilinmeyen İşlem');
                 const dateStr = (t.timestamp) ? new Date(t.timestamp).toLocaleDateString('tr-TR') : '-';
+                
                 const opt = document.createElement('option');
                 opt.value = t.id;
                 opt.textContent = `${label} (${dateStr})`;
                 parentSelect.appendChild(opt);
             });
+            
         } catch (error) {
             console.error('Transaction yükleme hatası:', error);
             parentSelect.innerHTML = '<option value="">Hata oluştu</option>';
@@ -151,28 +174,44 @@ export class DocumentReviewManager {
         const parentSelect = document.getElementById('parentTransactionSelect');
         const childSelect = document.getElementById('detectedType');
         const selectedParentTxId = parentSelect.value;
+        
         childSelect.innerHTML = '<option value="">-- İşlem Türü Seçiniz --</option>';
         childSelect.disabled = true;
+        
         if (!selectedParentTxId) return;
+        
         const selectedParentTx = this.currentTransactions.find(t => t.id === selectedParentTxId);
         const parentTypeId = selectedParentTx?.type;
-        const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTypeId);
+        
+        // DÜZELTME: Parent Type ID karşılaştırmasını String'e çevirerek yapıyoruz
+        const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(parentTypeId));
+        
         if (!parentTypeObj || !parentTypeObj.indexFile) {
-            console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı.');
+            console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı veya işlem tipi eşleşmedi.');
+            // Kullanıcının manuel seçim yapabilmesi için tüm listeyi açmak isterseniz burayı açabilirsiniz:
+            // this.populateAllTransactionTypes(childSelect); 
             return;
         }
-        const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile : [];
+        
+        // indexFile dizisindeki ID'leri de String'e çevirerek kontrol ediyoruz
+        const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile.map(String) : [];
+        
         const allowedChildTypes = this.allTransactionTypes
-            .filter(t => allowedChildIds.includes(t.id))
+            .filter(t => allowedChildIds.includes(String(t.id)))
             .sort((a, b) => (a.order || 999) - (b.order || 999));
+            
         allowedChildTypes.forEach(type => {
             const opt = document.createElement('option');
             opt.value = type.id;
             opt.textContent = type.alias || type.name;
             childSelect.appendChild(opt);
         });
+        
         childSelect.disabled = false;
-        if (this.analysisResult && this.analysisResult.detectedType) this.autoSelectChildType(childSelect);
+        
+        if (this.analysisResult && this.analysisResult.detectedType) {
+            this.autoSelectChildType(childSelect);
+        }
     }
 
     autoSelectChildType(selectElement) {
