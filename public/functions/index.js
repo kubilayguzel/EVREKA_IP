@@ -1593,27 +1593,31 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       subject = String(template.subject || "");
       body    = String(template.body || "");
       
-      const parameters = {
-          muvekkil_adi: "Değerli Müvekkilimiz",
-          proje_adi: enrichedData.markName,
-          
-          epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
-          epats_konu: after.konu || "-",
-          
-          // DİNAMİK ALANLAR
-          islem_turu_adi: finalIslemTanimlamasi, 
-          teblig_tarihi: enrichedData.tebligTarihiFormatted,
-          resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
-          
-          applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
-          markName: enrichedData.markName,
-          markImageUrl: enrichedData.markImageUrl,
-          applicantNames: enrichedData.applicantNames,
-          classNumbers: enrichedData.classNumbers,
-          applicationDate: enrichedData.applicationDate,
-          basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
-          ...client, ...after, ...ipRecordData 
-      };
+    const parameters = {
+        // Önce ham verileri yay (spread), böylece alttaki özel tanımlar bunları ezer
+        ...client, 
+        ...after, 
+        ...ipRecordData, 
+
+        muvekkil_adi: "Değerli Müvekkilimiz",
+        proje_adi: enrichedData.markName,
+        
+        epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
+        epats_konu: after.konu || "-",
+        
+        // DİNAMİK ALANLAR (Artık ezilmeyecekler)
+        islem_turu_adi: finalIslemTanimlamasi, 
+        teblig_tarihi: enrichedData.tebligTarihiFormatted, // Formatlanmış tarih
+        resmi_son_cevap_tarihi: enrichedData.deadlineFormatted, // Formatlanmış tarih
+        
+        applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
+        markName: enrichedData.markName,
+        markImageUrl: enrichedData.markImageUrl,
+        applicantNames: enrichedData.applicantNames,
+        classNumbers: enrichedData.classNumbers,
+        applicationDate: enrichedData.applicationDate,
+        basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
+    };
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
