@@ -1458,6 +1458,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             'appeal': 'Karara İtiraz',
             'defense': 'Savunma',
             'objection': 'İtiraz',
+            '24': 'Eksiklik Bildirimi',
             // Ana Dosya Tipleri
             'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
             'patent': 'Patent Başvurusu',
