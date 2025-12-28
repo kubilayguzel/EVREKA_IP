@@ -1304,8 +1304,6 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
 // functions/index.js
 
-// functions/index.js
-
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1332,6 +1330,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let client = null;
     let subject = "";
     let body = "";
+    
     let ipRecordData = null;
     let applicants = [];
     let foundTransactionType = null;
@@ -1445,7 +1444,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       }
     }
 
-    // TaskOwner Mailleri
     if (taskOwnerIds.length > 0) {
       const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
       toRecipients.push(...fromOwners.to);
@@ -1459,14 +1457,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       }
     }
 
-    // Applicants Mailleri (Fallback)
     if ((toRecipients.length + ccRecipientsSet.size) === 0) {
       const rec = await getRecipientsByApplicantIds(applicants, notificationType);
       (rec.to || []).forEach((e) => toRecipients.push(e));
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
-    // CC Ekle (Evreka List)
     if (foundTransactionType) {
       const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
@@ -1485,36 +1481,59 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const querySubType = after.subProcessType || foundTransactionType || null; 
     
-    // Veritabanı Sorgusu İçin İngilizce Çeviri (Template Rules'a Uygun)
-    const dbTypeMapping = {
-        'marka': 'trademark',
-        'trademark': 'trademark',
-        'patent': 'patent',
-        'tasarim': 'design',
-        'design': 'design',
-        'dava': 'suit',
-        'suit': 'suit',
-        'genel': 'general',
-        'general': 'general'
-    };
-    const queryMainType = dbTypeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType;
+    // --- KESİN ÇÖZÜM: Hem Türkçe Hem İngilizce, Hem String Hem Number Ara ---
+    
+    // 1. Aranacak SubType versiyonları (String "24" ve Number 24)
+    let subTypeOptions = [];
+    if (querySubType) {
+        subTypeOptions = [String(querySubType), Number(querySubType)].filter(v => !isNaN(v) || typeof v === 'string');
+        if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
+    }
 
-    console.log(`🔎 Şablon aranıyor (DB): MainType=${queryMainType}, SubType=${querySubType}`);
+    console.log(`🔎 Şablon aranıyor: SubTypeOptions=${JSON.stringify(subTypeOptions)}`);
 
-    const rulesSnapshot = await adminDb
-      .collection("template_rules")
-      .where("sourceType", "==", "document")
-      .where("mainProcessType", "==", queryMainType) 
-      .where("subProcessType", "==", querySubType)
-      .limit(1)
-      .get();
+    if (subTypeOptions.length > 0) {
+        // 2. Sadece Source ve SubType ile geniş sorgu yap (MainType'ı JS'de filtreleyeceğiz)
+        const rulesSnapshot = await adminDb
+          .collection("template_rules")
+          .where("sourceType", "==", "document")
+          .where("subProcessType", "in", subTypeOptions) 
+          .get();
 
-    if (!rulesSnapshot.empty) {
-      rule = rulesSnapshot.docs[0].data();
-      const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
-      if (templateSnapshot.exists) template = templateSnapshot.data();
-    } else {
-        console.warn(`⚠️ Şablon kuralı bulunamadı. Aranan: ${queryMainType} / ${querySubType}`);
+        if (!rulesSnapshot.empty) {
+          // 3. Veritabanındaki mainProcessType ile bizim elimizdeki tipi (TR veya EN) eşleştir
+          // "marka" da olsa "trademark" da olsa kabul et
+          const dbTypeMapping = {
+            'marka': 'trademark', 'trademark': 'trademark',
+            'patent': 'patent', 'tasarim': 'design', 'design': 'design',
+            'dava': 'suit', 'suit': 'suit',
+            'genel': 'general', 'general': 'general'
+          };
+          
+          // Elimizdeki tipin EN karşılığı
+          const targetEn = dbTypeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
+          // Elimizdeki tipin kendisi (TR olabilir)
+          const targetRaw = safeMainProcessType;
+
+          // Eşleşen kuralı bul
+          const matchedDoc = rulesSnapshot.docs.find(doc => {
+              const d = doc.data();
+              const ruleMainType = String(d.mainProcessType || "").toLowerCase();
+              // Kuraldaki tip "marka" YA DA "trademark" ise kabul et
+              return ruleMainType === targetEn || ruleMainType === targetRaw.toLowerCase();
+          });
+
+          if (matchedDoc) {
+             rule = matchedDoc.data();
+             console.log(`✅ Kural bulundu: ${matchedDoc.id}, MainType: ${rule.mainProcessType}`);
+             const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
+             if (templateSnapshot.exists) template = templateSnapshot.data();
+          } else {
+             console.warn(`⚠️ Uygun subProcessType bulundu ama mainProcessType eşleşmedi. Arananlar: ${targetRaw} veya ${targetEn}`);
+          }
+        } else {
+            console.warn(`⚠️ Şablon kuralı bulunamadı. SubType bulunamadı: ${subTypeOptions}`);
+        }
     }
 
     if (template && client) {
@@ -1526,15 +1545,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     } else {
       subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
       body    = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
-      // HATA BURADAYDI: status değişkenini kaldırdık, aşağıda otomatik belirlenecek.
     }
 
     const missingFields = [];
     if (!client) missingFields.push("client");
-    if (!template) missingFields.push("template"); // Template bulunamazsa eksik olarak işaretle
+    if (!template) missingFields.push("template"); 
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
-    // Template veya alıcı yoksa statü "missing_info" olur
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
     const notificationData = {
@@ -1546,7 +1563,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       clientId: after.clientId || (applicants[0]?.id || null),
       subject: subject || "",
       body: body || "",
-      status: finalStatus, // Hata önlendi
+      status: finalStatus, 
       missingFields: missingFields || [],
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
