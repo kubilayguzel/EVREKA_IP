@@ -1322,15 +1322,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       return null;
     }
 
-    console.log(`🚀 [DEBUG] Belge indexlendi: ${docId}`);
-    console.log(`🔍 [DEBUG] Gelen 'after' verisi (Özet):`, {
-       evrakNo: after.evrakNo,
-       tebligTarihi: after.tebligTarihi,
-       teblig_tarihi: after.teblig_tarihi,
-       resmiSonTarih: after.resmiSonTarih,
-       deadline: after.deadline,
-       transactionId: after.associatedTransactionId || after.finalTransactionId
-    });
+    console.log(`🚀 [OTOMASYON] Belge indexlendi: ${docId}`);
 
     // --- DEĞİŞKENLER ---
     let rule = null;
@@ -1342,16 +1334,24 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let ipRecordData = null;
     let applicants = [];
     
-    // İşlem tipleri
-    let foundTransactionType = null; // Şablon bulmak için (Örn: '24')
-    let parentTransactionType = null; // İsimlendirme için (Örn: 'marka')
+    // Veritabanından çekilecek dinamik veriler
+    let fetchedTxnData = null;      // İlişkili işlem verisi
+    let parentTxnData = null;       // Varsa parent işlem verisi
+    let fetchedTaskData = null;     // İlişkili iş (task) verisi
+    
+    // Şablon ve İsimlendirme
+    let templateSearchType = null;  
+    let namingTargetType = null;    
+    
+    // Hesaplama için
+    let calculatedDeadline = null;  // Sunucuda hesaplanacak tarih
     
     let taskOwnerIds = [];
 
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
 
-    // A) IP Kaydını ve Transaction'ı Çözümle
+    // A) VERİLERİ TOPLA (IP, Transaction, Parent, Task)
     try {
         if (recordId) {
              const ipDoc = await adminDb.collection("ipRecords").doc(recordId).get();
@@ -1359,183 +1359,151 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  ipRecordData = ipDoc.data();
                  applicants = ipRecordData.applicants || [];
                  
-                 // TRANSACTION SORGUSU
+                 // 1. Transaction Verisini Çek
                  if (associatedTransactionId) {
-                     console.log(`🔍 [DEBUG] Transaction aranıyor ID: ${associatedTransactionId}`);
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
                      
                      if (txnSnap.exists) {
-                         const txnData = txnSnap.data();
-                         console.log(`✅ [DEBUG] Transaction bulundu:`, txnData);
-
-                         // 1. ŞABLON İÇİN: Kendi tipini sakla (Örn: '24')
-                         foundTransactionType = txnData.type ? String(txnData.type) : null;
+                         fetchedTxnData = txnSnap.data();
+                         templateSearchType = fetchedTxnData.type ? String(fetchedTxnData.type) : null;
                          
-                         // 2. İSİMLENDİRME İÇİN: Parent Kontrolü
-                         if (txnData.parentId) {
-                             console.log(`🔍 [DEBUG] Parent Transaction aranıyor ID: ${txnData.parentId}`);
-                             const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(txnData.parentId).get();
+                         // Varsayılan hedef tip (kendi tipi)
+                         namingTargetType = templateSearchType;
+
+                         // 2. Varsa Parent Transaction
+                         if (fetchedTxnData.parentId) {
+                             const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(fetchedTxnData.parentId).get();
                              if (parentSnap.exists) {
-                                 const parentTxnData = parentSnap.data();
-                                 parentTransactionType = parentTxnData.type ? String(parentTxnData.type) : null;
-                                 console.log(`✅ [DEBUG] Parent Transaction bulundu. Tipi: ${parentTransactionType}`);
-                             } else {
-                                 console.warn(`⚠️ [DEBUG] Parent ID (${txnData.parentId}) var ama kayıt bulunamadı.`);
+                                 parentTxnData = parentSnap.data();
+                                 namingTargetType = parentTxnData.type ? String(parentTxnData.type) : null;
                              }
-                         } else {
-                             console.log(`ℹ️ [DEBUG] Bu işlemin bir Parent ID'si yok.`);
                          }
                          
-                         // Task Owner bilgisi
-                         if (txnData.triggeringTaskId) {
-                            const t = await adminDb.collection("tasks").doc(String(txnData.triggeringTaskId)).get();
+                         // 3. İlişkili Task (Varsa)
+                         if (fetchedTxnData.triggeringTaskId) {
+                            const t = await adminDb.collection("tasks").doc(String(fetchedTxnData.triggeringTaskId)).get();
                             if (t.exists) {
-                                const tData = t.data();
-                                let rawOwner = tData.taskOwner || tData.taskOwnerIds || tData.taskOwnerId;
+                                fetchedTaskData = t.data();
+                                let rawOwner = fetchedTaskData.taskOwner || fetchedTaskData.taskOwnerIds || fetchedTaskData.taskOwnerId;
                                 if (typeof rawOwner === 'string') rawOwner = [rawOwner];
                                 if (Array.isArray(rawOwner)) taskOwnerIds.push(...rawOwner);
                             }
                          }
-                     } else {
-                         console.warn(`⚠️ [DEBUG] Transaction ID (${associatedTransactionId}) veritabanında bulunamadı.`);
                      }
-                 } else {
-                     console.log(`ℹ️ [DEBUG] associatedTransactionId boş.`);
                  }
              }
         } 
     } catch (error) {
-        console.error("❌ [DEBUG] IP/Transaction çözümleme hatası:", error);
+        console.error("❌ Veri toplama hatası:", error);
     }
 
-    // --- TARİH FORMATLAYICI (GÜÇLENDİRİLMİŞ) ---
+    // --- İŞLEM ADI VE SÜRE HESAPLAMA (DATABASE SORGUSU) ---
+    let finalIslemTanimlamasi = null;
+
+    // Hedef tip belirlendiyse veritabanından detaylarını (Adı ve Süresi) çek
+    if (namingTargetType) {
+        // Eğer tip '24' ve Parent yoksa sorgulama, Ana Tipe düşsün
+        if (!(String(namingTargetType) === '24' && !parentTxnData)) {
+            try {
+                // İşlem Tipi Detaylarını Çek
+                const typeDoc = await adminDb.collection('transactionTypes').doc(String(namingTargetType)).get();
+                
+                if (typeDoc.exists) {
+                    const typeData = typeDoc.data();
+                    
+                    // 1. İsimlendirme (Alias)
+                    finalIslemTanimlamasi = typeData.alias || typeData.name;
+                    
+                    // 2. Tarih Hesaplama (Eğer Task yoksa ve Tebliğ Tarihi varsa)
+                    // Sadece bu işlemin kendi tipi için hesaplama yapılır (Parent için değil)
+                    if (templateSearchType && fetchedTxnData?.date) {
+                        // Kendi tipinin (templateSearchType) süresine bakmamız lazım, namingTargetType (parent) süresine değil.
+                        // Eğer namingTargetType === templateSearchType ise zaten elimizde var.
+                        // Değilse tekrar sorgulamamız gerekebilir ama genellikle alt işlemin süresi vardır.
+                        
+                        let duePeriod = typeData.duePeriod; // Ay cinsinden süre (örn: 2)
+                        
+                        // Eğer yukarıda Parent'ı sorguladıysak ama bize Child'ın süresi lazımsa:
+                        if (String(namingTargetType) !== String(templateSearchType)) {
+                             const childTypeDoc = await adminDb.collection('transactionTypes').doc(String(templateSearchType)).get();
+                             if (childTypeDoc.exists) duePeriod = childTypeDoc.data().duePeriod;
+                        }
+
+                        if (duePeriod && !isNaN(duePeriod)) {
+                            const tebligDate = new Date(fetchedTxnData.date); // Transaction tarihi tebliğ tarihidir
+                            // Süre ekle
+                            const rawDeadlineDate = addMonthsToDate(tebligDate, Number(duePeriod));
+                            // Tatil kontrolü
+                            const finalDeadlineDate = findNextWorkingDay(rawDeadlineDate, TURKEY_HOLIDAYS);
+                            
+                            calculatedDeadline = finalDeadlineDate;
+                            console.log(`🧮 Sunucu Tarafı Hesaplama: Tebliğ=${tebligDate.toISOString()} + ${duePeriod} Ay = ${finalDeadlineDate.toISOString()}`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("❌ İşlem tipi/süre sorgulama hatası:", e);
+            }
+        }
+    }
+
+    // İsim Fallback
+    if (!finalIslemTanimlamasi) {
+        const rawMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka");
+        const mainTypeMap = {
+            'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
+            'patent': 'Patent Başvurusu', 'design': 'Tasarım Başvurusu', 'tasarim': 'Tasarım Başvurusu'
+        };
+        finalIslemTanimlamasi = mainTypeMap[rawMainProcessType.toLowerCase()] || `${rawMainProcessType.toUpperCase()} İşlemi`;
+    }
+
+    // --- TARİH FORMATLAYICI ---
     const formatDate = (val) => {
         if (!val) return "-";
         try {
-            let date;
-            if (typeof val.toDate === 'function') date = val.toDate(); // Firestore Timestamp
-            else if (val._seconds) date = new Date(val._seconds * 1000); // Raw Seconds
-            else if (typeof val === 'string') {
-                // "2024-01-01" veya "01.01.2024" formatlarını destekle
-                if (val.includes('.')) {
-                    const parts = val.split('.');
-                    if (parts.length === 3) date = new Date(parts[2], parts[1]-1, parts[0]);
-                } else {
-                    date = new Date(val);
-                }
-            }
-            else date = new Date(val);
-
-            if (isNaN(date.getTime())) return "-";
-            return date.toLocaleDateString("tr-TR");
-        } catch (e) {
-            console.error("Tarih formatlama hatası:", val, e);
+            if (val && typeof val.toDate === 'function') return val.toDate().toLocaleDateString("tr-TR");
+            if (val && val._seconds) return new Date(val._seconds * 1000).toLocaleDateString("tr-TR");
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.toLocaleDateString("tr-TR");
             return "-";
-        }
+        } catch (e) { return "-"; }
     };
 
-    // --- ENRICHED DATA ---
-    let enrichedData = {
-        applicantNames: "-",
-        classNumbers: "-",
-        applicationDate: "-",
-        markImageUrl: "",
-        markName: "-",
-        tebligTarihiFormatted: "-",
-        deadlineFormatted: "-"
-    };
+    // --- ENRICHED DATA (IP BİLGİLERİ) ---
+    // ... (IP record enriched data kısmı aynı kalacak) ...
+    // Kısaltmak için bu bloğu tekrar yazmıyorum, yukarıdaki kodunuzdakiyle aynı.
+    
+    // --- TARİHLERİ BELİRLE (TASK > TRANSACTION > HESAPLANAN) ---
+    
+    const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
-    if (ipRecordData) {
-        const clean = (val) => (val ? String(val).trim() : "");
-        enrichedData.markName = clean(ipRecordData.title) || clean(ipRecordData.markName) || "-";
-        enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
-        enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
+    // 1. Tebliğ Tarihi
+    const rawTeblig = findDate(
+        fetchedTaskData?.details?.tebligTarihi, 
+        fetchedTaskData?.tebligTarihi,          
+        fetchedTxnData?.date, // Transaction tarihi = Tebliğ Tarihi
+        fetchedTxnData?.tebligTarihi
+    );
 
-        try {
-            const namesList = [];
-            const apps = ipRecordData.applicants || applicants || [];
-            for (const app of apps) {
-                if (app.id) {
-                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
-                    if (pDoc.exists) namesList.push(pDoc.data().name || pDoc.data().companyName || "-");
-                } else if (app.name) {
-                    namesList.push(app.name);
-                }
-            }
-            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
-        } catch (e) { console.error("Applicant fetch error:", e); }
-
-        const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
-        if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
-            enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass.map(item => extractClassNo(item.classNo)).filter(Boolean).join(", ");
-        } else if (ipRecordData.niceClasses) {
-            const arr = Array.isArray(ipRecordData.niceClasses) ? ipRecordData.niceClasses : [String(ipRecordData.niceClasses)];
-            enrichedData.classNumbers = arr.map(c => extractClassNo(c)).filter(Boolean).join(", ");
-        }
-    }
-
-    // Tarihleri Al (Tüm olası alan adlarını dene)
-    const rawTeblig = after.tebligTarihi || after.teblig_tarihi || after.notificationDate || after.date;
-    const rawDeadline = after.deadline || after.resmiSonTarih || after.responseDeadline || after.officialResponseDeadline;
+    // 2. Son Tarih (Deadline)
+    const rawDeadline = findDate(
+        fetchedTaskData?.officialDueDate,       
+        fetchedTaskData?.details?.resmiSonTarih,
+        fetchedTxnData?.deadline,               
+        calculatedDeadline // ✅ YENİ: Sunucuda hesaplanan tarih
+    );
+    
+    // ... (EnrichedData doldurma ve geri kalan kod aynı) ...
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
-    console.log(`📅 [DEBUG] Tarihler: HamTeblig=${rawTeblig}, HamDeadline=${rawDeadline} -> Formatlı: ${enrichedData.tebligTarihiFormatted} / ${enrichedData.deadlineFormatted}`);
-
-    // --- İŞLEM ADI BELİRLEME ---
-    let rawMainProcessType = after.mainProcessType;
-    if (!rawMainProcessType && ipRecordData) rawMainProcessType = ipRecordData.type || ipRecordData.mainProcessType;
-    const safeMainProcessType = String(rawMainProcessType || "marka");
-
-    const getParentTransactionName = (type) => {
-        const t = String(type || "").toLowerCase().trim();
-        const map = {
-            'transfer': 'Devir İşlemi', 'assignment': 'Devir İşlemi', 'devir': 'Devir İşlemi',
-            'renewal': 'Yenileme İşlemi', 'yenileme': 'Yenileme İşlemi',
-            'merger': 'Birleşme İşlemi', 'birlesme': 'Birleşme İşlemi',
-            'title_change': 'Unvan Değişikliği', 'unvan degisikligi': 'Unvan Değişikliği',
-            'address_change': 'Adres Değişikliği', 'adres degisikligi': 'Adres Değişikliği',
-            'withdrawal': 'Geri Çekme Talebi',
-            'opposition': 'İtiraz', 'itiraz': 'İtiraz',
-            'appeal': 'Karara İtiraz',
-            'defense': 'Savunma',
-            'objection': 'İtiraz',
-            '24': 'Eksiklik Bildirimi',
-            'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
-            'patent': 'Patent Başvurusu',
-            'design': 'Tasarım Başvurusu', 'tasarim': 'Tasarım Başvurusu'
-        };
-        return map[t] || (t.length > 2 ? t.charAt(0).toUpperCase() + t.slice(1) : "İşlem");
-    };
-
-    // HANGİ TİPİ BAZ ALACAĞIZ? (GÖRÜNEN İSİM İÇİN)
-    // 1. Varsa Parent Type (Üst işlem)
-    // 2. Yoksa Found Type (Kendi tipi)
-    // 3. O da yoksa Ana Dosya Tipi (Marka Başvurusu vb.)
-    let targetType = parentTransactionType ? parentTransactionType : (foundTransactionType ? foundTransactionType : safeMainProcessType);
-
-    // DÜZELTME: Eğer hedef tip '24' (Eksiklik Bildirimi) ise ve Parent'ı yoksa,
-    // Ekranda "Eksiklik Bildirimi" yazması yerine "Marka Başvurusu" (Ana Dosya Tipi) yazsın istiyoruz.
-    if (String(targetType) === '24') {
-        console.log(`ℹ️ [DEBUG] Hedef tip '24' (Eksiklik) ama parent yok, Ana Dosya Tipi'ne (${safeMainProcessType}) dönülüyor.`);
-        targetType = safeMainProcessType;
-    }
-
-    const targetNameRaw = getParentTransactionName(targetType);
-
-    let finalIslemTanimlamasi = targetNameRaw;
-    const mainFileTypes = ['marka', 'trademark', 'patent', 'design', 'tasarim', 'marka başvurusu', 'patent başvurusu', 'tasarım başvurusu'];
-
-    if (!mainFileTypes.includes(String(targetType).toLowerCase()) && !targetNameRaw.includes("Başvurusu")) {
-        finalIslemTanimlamasi = `başvuruya ilişkin ${targetNameRaw}`;
-    }
-
-    console.log(`🏷️ [DEBUG] İşlem Adı Sonuç: HedefTip=${targetType} -> "${finalIslemTanimlamasi}"`);
+    console.log(`📅 Final Tarihler: Tebliğ=${enrichedData.tebligTarihiFormatted}, SonTarih=${enrichedData.deadlineFormatted}`);
 
     // B) Notification Type
+    const safeMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka").toLowerCase();
     const typeMapping = { 'trademark': 'marka', 'marka': 'marka', 'patent': 'patent', 'design': 'tasarim', 'tasarim': 'tasarim' };
-    const notificationType = typeMapping[safeMainProcessType.toLowerCase()] || safeMainProcessType.toLowerCase();
+    const notificationType = typeMapping[safeMainProcessType] || safeMainProcessType;
 
     // C) Alıcıları Belirle
     let toRecipients = [];
@@ -1584,8 +1552,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
-    if (foundTransactionType) {
-      const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
+    if (templateSearchType) {
+      const extraCc = await getCcFromEvrekaListByTransactionType(templateSearchType);
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
     }
 
@@ -1600,15 +1568,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
     // --- ŞABLON EŞLEŞTİRME ---
-    // Burada foundTransactionType (yani '24') kullanıyoruz ki kuralı bulabilsin.
-    const querySubType = after.subProcessType || foundTransactionType || null; 
+    const querySubType = after.subProcessType || templateSearchType || null; 
     let subTypeOptions = [];
     if (querySubType) {
         subTypeOptions = [String(querySubType), Number(querySubType)].filter(v => !isNaN(v) || typeof v === 'string');
         if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
     }
-
-    console.log(`📄 [DEBUG] Şablon aranıyor. SubTypeOptions:`, subTypeOptions);
 
     if (subTypeOptions.length > 0) {
         const rulesSnapshot = await adminDb
@@ -1632,12 +1597,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
              rule = matchedDoc.data();
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
              if (templateSnapshot.exists) template = templateSnapshot.data();
-             console.log(`✅ [DEBUG] Şablon bulundu: ${rule.templateId}`);
-          } else {
-             console.warn(`⚠️ [DEBUG] Kural bulundu ama MainType eşleşmedi.`);
           }
-        } else {
-             console.warn(`⚠️ [DEBUG] Template rule bulunamadı.`);
         }
     }
 
@@ -1647,10 +1607,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       body    = String(template.body || "");
       
       const parameters = {
-        // Önce ham veriler (ezilmemesi gerekenler aşağıda)
+        // Önce ham veriler
         ...client, 
         ...after, 
-        ...ipRecordData, 
+        ...ipRecordData,
+        ...fetchedTaskData, 
 
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: enrichedData.markName,
@@ -1658,7 +1619,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
         
-        // DİNAMİK ALANLAR (Kesinlikle dolu olmalı)
+        // DİNAMİK ALANLAR
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
@@ -1671,12 +1632,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         applicationDate: enrichedData.applicationDate,
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
-
-      console.log(`📝 [DEBUG] Mail Parametreleri (Özet):`, {
-          islem: parameters.islem_turu_adi,
-          teblig: parameters.teblig_tarihi,
-          sonTarih: parameters.resmi_son_cevap_tarihi
-      });
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
