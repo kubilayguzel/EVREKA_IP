@@ -133,30 +133,51 @@ export class DocumentReviewManager {
             
             parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçiniz --</option>';
             
-            // Eğer hiç işlem yoksa bilgi verelim
+            // Veri yoksa uyar
             if (this.currentTransactions.length === 0) {
                 const opt = document.createElement('option');
-                opt.textContent = "(Kayıtlı işlem bulunamadı)";
+                opt.textContent = "(Kayıtlı işlem geçmişi yok)";
                 opt.disabled = true;
                 parentSelect.appendChild(opt);
                 return;
             }
 
+            // --- TARİH ÇÖZÜMLEME YARDIMCISI ---
+            // Veritabanında tarih 'timestamp', 'creationDate' veya 'createdAt' olarak kayıtlı olabilir.
+            // Ayrıca format String veya Firestore Timestamp olabilir. Hepsini kapsıyoruz.
+            const resolveDate = (item) => {
+                try {
+                    if (item.timestamp) return new Date(item.timestamp);
+                    if (item.creationDate) return new Date(item.creationDate);
+                    // Firestore Timestamp nesnesi kontrolü
+                    if (item.createdAt && typeof item.createdAt.toDate === 'function') {
+                        return item.createdAt.toDate();
+                    }
+                    if (item.createdAt) return new Date(item.createdAt);
+                } catch (e) { return null; }
+                return null;
+            };
+
             const parentTransactions = this.currentTransactions
                 .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
                 .sort((a, b) => {
-                    // Tarih sıralamasını daha güvenli hale getiriyoruz
-                    const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                    const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                    return dateB - dateA;
+                    const dateA = resolveDate(a);
+                    const dateB = resolveDate(b);
+                    // Tarih yoksa en sona at (0 kabul et)
+                    const timeA = dateA ? dateA.getTime() : 0;
+                    const timeB = dateB ? dateB.getTime() : 0;
+                    return timeB - timeA; // Yeniden eskiye sırala
                 });
 
             parentTransactions.forEach(t => {
-                // DÜZELTME: Type ID karşılaştırmasını String'e çevirerek yapıyoruz (Number vs String hatasını önler)
+                // Type ID kontrolü (String çevrimi yaparak güvenli eşleştirme)
                 const typeObj = this.allTransactionTypes.find(type => String(type.id) === String(t.type));
                 
-                const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'Bilinmeyen İşlem');
-                const dateStr = (t.timestamp) ? new Date(t.timestamp).toLocaleDateString('tr-TR') : '-';
+                const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'İşlem');
+                
+                // Tarihi formatla
+                const dateObj = resolveDate(t);
+                const dateStr = dateObj ? dateObj.toLocaleDateString('tr-TR') : '-';
                 
                 const opt = document.createElement('option');
                 opt.value = t.id;
@@ -166,7 +187,7 @@ export class DocumentReviewManager {
             
         } catch (error) {
             console.error('Transaction yükleme hatası:', error);
-            parentSelect.innerHTML = '<option value="">Hata oluştu</option>';
+            parentSelect.innerHTML = '<option value="">Hata: İşlemler yüklenemedi</option>';
         }
     }
 
