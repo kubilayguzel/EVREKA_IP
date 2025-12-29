@@ -1317,6 +1317,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const after  = change.after.data()  || {};
     const docId  = event.params.docId;
 
+    // Sadece indexed geçişinde çalış
     if (!(before.status !== "indexed" && after.status === "indexed")) {
       return null;
     }
@@ -1362,6 +1363,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  if (associatedTransactionId) {
                      const txnRef = adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId);
                      let txnSnap = await txnRef.get();
+                     // Transaction henüz yazılmadıysa kısa bir bekleme
                      if (!txnSnap.exists) {
                          await new Promise(r => setTimeout(r, 500));
                          txnSnap = await txnRef.get();
@@ -1383,7 +1385,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                  namingTargetType = parentTxnData.type ? String(parentTxnData.type) : null;
 
                                  // --- İtiraz Bilgilerini Çek (Parent - Varsa üzerine yaz) ---
-                                 // Genelde Parent (Yayına İtiraz) ana bilgiyi tutar
                                  if (parentTxnData.oppositionOwner) oppositionOwner = parentTxnData.oppositionOwner;
                                  if (parentTxnData.oppositionPetitionFileUrl) oppositionFileUrl = parentTxnData.oppositionPetitionFileUrl;
                              }
@@ -1404,7 +1405,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } 
     } catch (error) { console.error("❌ Veri toplama hatası:", error); }
 
-    // --- İŞLEM ADI VE SÜRE HESAPLAMA ---
+    // --- İŞLEM ADI VE RESMİ SÜRE HESAPLAMA ---
     let finalIslemTanimlamasi = null;
 
     if (namingTargetType) {
@@ -1415,6 +1416,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     const typeData = typeDoc.data();
                     finalIslemTanimlamasi = typeData.alias || typeData.name;
                     
+                    // İşlem tipine özel süre hesaplama
                     if (templateSearchType && fetchedTxnData?.date) {
                         let duePeriod = typeData.duePeriod;
                         if (String(namingTargetType) !== String(templateSearchType)) {
@@ -1450,6 +1452,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         finalIslemTanimlamasi = mainTypeMap[rawMainProcessType.toLowerCase()] || `${rawMainProcessType.toUpperCase()} İşlemi`;
     }
 
+    // --- FORMATLAYICI ---
     const formatDate = (val) => {
         if (!val) return "-";
         try {
@@ -1461,10 +1464,38 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
+    // --- DAVA SON TARİHİ HESAPLAMA (YENİ: Tip 29 ve 30 için) ---
+    // YİDK Kararının İptali davası süresi: Tebliğden itibaren 2 Ay
+    let davaSonTarihi = "-";
+    if (namingTargetType === "29" || namingTargetType === "30") {
+        if (fetchedTxnData?.date) {
+            const tebligDate = new Date(fetchedTxnData.date);
+            let targetDate = new Date(tebligDate);
+            const originalDay = targetDate.getDate();
+            
+            // Dava süresi: 2 Ay ekle
+            targetDate.setMonth(targetDate.getMonth() + 2);
+            
+            // Ay sonu taşma kontrolü (Örn: 31 Ocak -> 31 Mart yoksa Mart sonuna çek)
+            if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
+
+            // Hafta sonu ve Tatil Kontrolü
+            const maxIter = 30; 
+            let iter = 0;
+            while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
+                targetDate.setDate(targetDate.getDate() + 1);
+                iter++;
+            }
+            davaSonTarihi = formatDate(targetDate);
+            console.log(`⚖️ Dava Son Tarihi Hesaplandı: ${davaSonTarihi}`);
+        }
+    }
+
+    // --- ENRICHED DATA ---
     let enrichedData = {
         applicantNames: "-", classNumbers: "-", applicationDate: "-",
         markImageUrl: "", markName: "-", tebligTarihiFormatted: "-", deadlineFormatted: "-",
-        itirazSahibi: "-" // Yeni Alan
+        itirazSahibi: "-" 
     };
 
     // İtiraz Sahibini Set Et
@@ -1499,6 +1530,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     
+    // Tarih Önceliklendirme
     const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
     const rawTeblig = findDate(
@@ -1635,7 +1667,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
-        itiraz_sahibi: enrichedData.itirazSahibi, // ✅ PARAMETRE
+        
+        itiraz_sahibi: enrichedData.itirazSahibi, 
+        dava_son_tarihi: davaSonTarihi, // ✅ YENİ PARAMETRE
         
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
