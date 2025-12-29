@@ -1651,6 +1651,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         applicantNames: enrichedData.applicantNames,
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
+        itiraz_sahibi: enrichedData.itirazSahibi,
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
 
