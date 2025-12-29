@@ -875,15 +875,13 @@ export const createObjectionTask = onCall(
 );
 
 
-
 // Send Email Notification (v2 Callable Function)
-
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
   async (request) => {
     const { notificationId, userEmail: userEmailFromClient, mode, overrideSubject, overrideBody } = request.data || {};
     const isReminder = String(mode || "").toLowerCase() === "reminder";
-    console.log("📧 [DEBUG] sendEmailNotificationV2", { notificationId, mode, hasOverrideSubject: !!overrideSubject });
+    console.log("📧 [DEBUG] sendEmailNotificationV2", { notificationId, mode });
 
     if (!notificationId) throw new HttpsError("invalid-argument", "notificationId parametresi zorunludur.");
 
@@ -900,49 +898,44 @@ export const sendEmailNotificationV2 = onCall(
       throw new HttpsError("permission-denied", "Bu kullanıcı adına gönderim yetkisi yok.");
     }
 
-    const norm = (v) => {
-      if (!v) return [];
-      if (Array.isArray(v)) {
-        return v.map(x => {
-            if (typeof x === "string") return x.trim();
-            if (x && typeof x === "object" && x.email) return String(x.email).trim();
-            return "";
-          }).filter(Boolean);
-      }
-      if (typeof v === "string") return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
-      return [];
+    // --- ALICI BELİRLEME MANTIĞI (DÜZELTİLDİ) ---
+    // Helper: Değer null/undefined değilse diziye çevir, yoksa null dön.
+    // ÖNEMLİ: Boş dizi [] geçerli bir değerdir ve null dönmemelidir.
+    const getArrayOrNull = (v) => {
+        if (Array.isArray(v)) {
+            // İçindeki boş stringleri temizle ama diziyi koru
+            return v.map(x => typeof x === 'string' ? x.trim() : x).filter(Boolean);
+        }
+        if (typeof v === "string") {
+            // String ise parse et
+            return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
+        }
+        return null; // Tanımsız
     };
 
-    const firstNonEmpty = (...cands) => {
-      for (const c of cands) {
-        const arr = norm(c);
-        if (arr.length) return arr;
-      }
-      return [];
-    };
-
-    // --- DÜZELTME: İstemciden gelen veriler (request.data) EN ÖNCELİKLİ ---
-    let toArr = firstNonEmpty(
-      request.data.to,          // İstemciden gelen TO
-      request.data.toList,      // İstemciden gelen TO List
-      notificationData.toList,  // DB'den
-      notificationData.toRecipients,
-      notificationData.recipientTo,
-      notificationData.to,
-      notificationData.recipientEmail
-    );
+    // ÖNCELİK SIRASI:
+    // 1. İstemciden gelen istek (request.data.to/cc)
+    // 2. Veritabanındaki güncel taslak hali (notificationData.toList/ccList)
+    // 3. Orijinal oluşturma verisi (notificationData.toRecipients/ccRecipients) - Fallback
     
-    let ccArr = firstNonEmpty(
-      request.data.cc,          // İstemciden gelen CC
-      request.data.ccList,      // İstemciden gelen CC List
-      notificationData.ccList,  // DB'den
-      notificationData.ccRecipients,
-      notificationData.recipientCc,
-      notificationData.cc
-    );
+    // Nullish Coalescing (??) kullanıyoruz. Sol taraf null/undefined değilse (boş dizi olsa bile) onu alır.
+    
+    let toArr = getArrayOrNull(request.data.to) ??
+                getArrayOrNull(request.data.toList) ??
+                getArrayOrNull(notificationData.toList) ??
+                getArrayOrNull(notificationData.toRecipients) ??
+                getArrayOrNull(notificationData.recipientTo) ??
+                [];
+
+    let ccArr = getArrayOrNull(request.data.cc) ??
+                getArrayOrNull(request.data.ccList) ??
+                getArrayOrNull(notificationData.ccList) ??
+                getArrayOrNull(notificationData.ccRecipients) ??
+                getArrayOrNull(notificationData.recipientCc) ??
+                [];
 
     // Tekilleştir ve TO içinde olanı CC'den çıkar
-    const uniq = (a) => Array.from(new Set(a.map(s => s.toLowerCase())));
+    const uniq = (a) => Array.from(new Set(a.map(s => String(s).toLowerCase().trim())));
     toArr = uniq(toArr);
     ccArr = uniq(ccArr).filter(x => !toArr.includes(x));
 
@@ -980,7 +973,6 @@ export const sendEmailNotificationV2 = onCall(
       `;
       attachmentsToSend = undefined;
     } else {
-      // Normal gönderimde de overrideBody varsa kullan
       const safeOverrideBody = overrideBody ? stripBody(overrideBody) : notificationData.body || "";
       
       subject = overrideSubject || notificationData.subject || "";
