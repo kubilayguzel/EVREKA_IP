@@ -1301,6 +1301,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
   }
 );
 
+// functions/index.js
+
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   {
     document: "unindexed_pdfs/{docId}",
@@ -1314,9 +1316,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const after  = change.after.data()  || {};
     const docId  = event.params.docId;
 
-    if (!(before.status !== "indexed" && after.status === "indexed")) {
-      return null;
-    }
+    if (!(before.status !== "indexed" && after.status === "indexed")) return null;
 
     console.log(`🚀 [OTOMASYON] Belge indexlendi: ${docId}`);
 
@@ -1330,14 +1330,14 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let ipRecordData = null;
     let applicants = [];
     
-    // Veritabanından çekilecekler
-    let fetchedTxnData = null;      
-    let parentTxnData = null;       
-    let fetchedTaskData = null;     
+    // Dinamik Veriler
+    let fetchedTxnData = null;
+    let parentTxnData = null;
+    let fetchedTaskData = null;
     
     let templateSearchType = null;  
     let namingTargetType = null;    
-    let calculatedDeadline = null;  // Sunucuda hesaplanan tarih
+    let calculatedDeadline = null;  
     
     let taskOwnerIds = [];
 
@@ -1353,7 +1353,14 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  applicants = ipRecordData.applicants || [];
                  
                  if (associatedTransactionId) {
-                     const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
+                     // Transaction bulunamazsa diye hafif bekleme ve retry
+                     const txnRef = adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId);
+                     let txnSnap = await txnRef.get();
+                     if (!txnSnap.exists) {
+                         await new Promise(r => setTimeout(r, 500));
+                         txnSnap = await txnRef.get();
+                     }
+
                      if (txnSnap.exists) {
                          fetchedTxnData = txnSnap.data();
                          templateSearchType = fetchedTxnData.type ? String(fetchedTxnData.type) : null;
@@ -1393,7 +1400,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     const typeData = typeDoc.data();
                     finalIslemTanimlamasi = typeData.alias || typeData.name;
                     
-                    // TARİH HESAPLAMA
                     if (templateSearchType && fetchedTxnData?.date) {
                         let duePeriod = typeData.duePeriod;
                         if (String(namingTargetType) !== String(templateSearchType)) {
@@ -1404,13 +1410,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         if (duePeriod && !isNaN(duePeriod)) {
                             const tebligDate = new Date(fetchedTxnData.date);
                             let targetDate = new Date(tebligDate);
-                            
-                            // Ay Ekleme (Taşma Kontrollü)
                             const originalDay = targetDate.getDate();
                             targetDate.setMonth(targetDate.getMonth() + Number(duePeriod));
                             if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
 
-                            // Hafta Sonu / Tatil Kontrolü
                             const maxIter = 30; 
                             let iter = 0;
                             while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
@@ -1422,7 +1425,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         }
                     }
                 }
-            } catch (e) { console.error("❌ Tip sorgu hatası:", e); }
+            } catch (e) { console.error("❌ Tip/Süre hatası:", e); }
         }
     }
 
@@ -1475,7 +1478,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     
-    // --- TARİHLERİ BELİRLE (DÜZELTME: HESAPLANAN TARİH EN ÜSTTE) ---
+    // --- TARİHLERİ BELİRLE ---
     const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
     const rawTeblig = findDate(
@@ -1485,7 +1488,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         fetchedTxnData?.tebligTarihi
     );
 
-    // ✅ DÜZELTME BURADA: calculatedDeadline EN BAŞA ALINDI
     const rawDeadline = findDate(
         calculatedDeadline,                     
         fetchedTaskData?.officialDueDate,       
@@ -1496,7 +1498,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
-    // ... (Kalan şablon seçimi, alıcı belirleme ve mail oluşturma kodları aynı) ...
     // B) Notification Type
     const safeMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka").toLowerCase();
     const notificationType = (safeMainProcessType === 'marka' || safeMainProcessType === 'trademark') ? 'marka' : safeMainProcessType;
@@ -1562,7 +1563,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // Şablon
+    // --- ŞABLON EŞLEŞTİRME (GÜNCELLENMİŞ VE ESNEK) ---
     const querySubType = after.subProcessType || templateSearchType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1570,38 +1571,70 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
     }
 
+    console.log(`📄 [DEBUG] Şablon aranıyor. SubType: ${querySubType}, MainType: ${safeMainProcessType}`);
+
     if (subTypeOptions.length > 0) {
-        const rulesSnapshot = await adminDb.collection("template_rules")
+        // SourceType "document" olan ve alt işlem tipi uyan tüm kuralları çek
+        const rulesSnapshot = await adminDb
+          .collection("template_rules")
           .where("sourceType", "==", "document")
-          .where("subProcessType", "in", subTypeOptions).get();
+          .where("subProcessType", "in", subTypeOptions) 
+          .get();
 
         if (!rulesSnapshot.empty) {
+          // Olası ana işlem tipleri (örn: marka, trademark)
           let possibleMainTypes = [safeMainProcessType.toLowerCase()];
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
-          const matchedDoc = rulesSnapshot.docs.find(doc => {
-              return possibleMainTypes.includes(String(doc.data().mainProcessType || "").toLowerCase());
+          if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
+          
+          console.log(`📄 [DEBUG] Eşleşen kural sayısı: ${rulesSnapshot.size}, Aranan tipler: ${possibleMainTypes.join(',')}`);
+
+          // 1. Önce tam eşleşen kuralı bulmaya çalış
+          let matchedDoc = rulesSnapshot.docs.find(doc => {
+              const ruleMainType = String(doc.data().mainProcessType || "").toLowerCase();
+              return possibleMainTypes.includes(ruleMainType);
           });
+
+          // 2. Tam eşleşme yoksa, herhangi bir kuralı al (Fallback)
+          // Bu, veritabanında mainProcessType boş ise veya farklıysa bile çalışmasını sağlar.
+          if (!matchedDoc && rulesSnapshot.size > 0) {
+              console.warn("⚠️ [DEBUG] Tam tip eşleşmesi bulunamadı, ilk kural fallback olarak seçiliyor.");
+              matchedDoc = rulesSnapshot.docs[0];
+          }
+
           if (matchedDoc) {
              rule = matchedDoc.data();
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
-             if (templateSnapshot.exists) template = templateSnapshot.data();
+             if (templateSnapshot.exists) {
+                 template = templateSnapshot.data();
+                 console.log(`✅ [DEBUG] Şablon başarıyla bulundu: ${rule.templateId}`);
+             } else {
+                 console.error(`❌ [DEBUG] Kural bulundu (${rule.id}) ama Template ID (${rule.templateId}) geçersiz.`);
+             }
           }
+        } else {
+            console.warn("⚠️ [DEBUG] Bu subProcessType için hiç kural (template_rule) bulunamadı.");
         }
     }
 
+    // İÇERİK OLUŞTURMA
     if (template && client) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
       
       const parameters = {
         ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
+
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: enrichedData.markName,
+        
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
+        
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
+        
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
         markImageUrl: enrichedData.markImageUrl,
@@ -1613,9 +1646,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-    } else {
-      subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
-      body    = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
     }
 
     const missingFields = [];
@@ -1625,6 +1655,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
+    // Debug: Eksik bilgi varsa konsola yaz
+    if (finalStatus === "missing_info") {
+        console.error(`❌ [DEBUG] EKSİK BİLGİ: ${missingFields.join(', ')}`);
+    }
+
     const epatsAttachment = {
       storagePath: after.storagePath || null,
       downloadURL: after.downloadURL || null,
@@ -1632,12 +1667,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
 
     const notificationData = {
-      recipientTo: toRecipients,
-      recipientCc: ccRecipients,
-      toList: toRecipients, 
-      ccList: ccRecipients,
+      recipientTo: toRecipients || [],
+      recipientCc: ccRecipients || [],
+      toList: toRecipients || [], 
+      ccList: ccRecipients || [],
       clientId: after.clientId || (applicants[0]?.id || null),
-      subject, body, status: finalStatus, missingFields,
+      subject: subject || "",
+      body: body || "",
+      status: finalStatus, 
+      missingFields: missingFields || [],
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
       taskOwner: taskOwnerIds || [], 
