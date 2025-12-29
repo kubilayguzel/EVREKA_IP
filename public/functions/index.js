@@ -1317,7 +1317,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const after  = change.after.data()  || {};
     const docId  = event.params.docId;
 
-    // Sadece indexed geçişinde çalış
     if (!(before.status !== "indexed" && after.status === "indexed")) {
       return null;
     }
@@ -1333,25 +1332,18 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     
     let ipRecordData = null;
     let applicants = [];
-    
-    // Veritabanından çekilecek dinamik veriler
-    let fetchedTxnData = null;      // İlişkili işlem verisi
-    let parentTxnData = null;       // Varsa parent işlem verisi
-    let fetchedTaskData = null;     // İlişkili iş (task) verisi
-    
-    // Şablon ve İsimlendirme
+    let fetchedTxnData = null;      
+    let parentTxnData = null;       
+    let fetchedTaskData = null;     
     let templateSearchType = null;  
     let namingTargetType = null;    
-    
-    // Hesaplama için
-    let calculatedDeadline = null;  // Sunucuda hesaplanacak tarih
-    
+    let calculatedDeadline = null;  
     let taskOwnerIds = [];
 
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
 
-    // A) VERİLERİ TOPLA (IP, Transaction, Parent, Task)
+    // A) VERİLERİ TOPLA
     try {
         if (recordId) {
              const ipDoc = await adminDb.collection("ipRecords").doc(recordId).get();
@@ -1359,18 +1351,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  ipRecordData = ipDoc.data();
                  applicants = ipRecordData.applicants || [];
                  
-                 // 1. Transaction Verisini Çek
                  if (associatedTransactionId) {
                      const txnSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId).get();
-                     
                      if (txnSnap.exists) {
                          fetchedTxnData = txnSnap.data();
                          templateSearchType = fetchedTxnData.type ? String(fetchedTxnData.type) : null;
-                         
-                         // Varsayılan hedef tip (kendi tipi)
                          namingTargetType = templateSearchType;
 
-                         // 2. Varsa Parent Transaction
                          if (fetchedTxnData.parentId) {
                              const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(fetchedTxnData.parentId).get();
                              if (parentSnap.exists) {
@@ -1379,7 +1366,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                              }
                          }
                          
-                         // 3. İlişkili Task (Varsa)
                          if (fetchedTxnData.triggeringTaskId) {
                             const t = await adminDb.collection("tasks").doc(String(fetchedTxnData.triggeringTaskId)).get();
                             if (t.exists) {
@@ -1393,67 +1379,58 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  }
              }
         } 
-    } catch (error) {
-        console.error("❌ Veri toplama hatası:", error);
-    }
+    } catch (error) { console.error("❌ Veri toplama hatası:", error); }
 
-    // --- İŞLEM ADI VE SÜRE HESAPLAMA (DATABASE SORGUSU) ---
+    // --- İŞLEM ADI VE SÜRE HESAPLAMA ---
     let finalIslemTanimlamasi = null;
 
-    // Hedef tip belirlendiyse veritabanından detaylarını (Adı ve Süresi) çek
     if (namingTargetType) {
-        // Eğer tip '24' ve Parent yoksa sorgulama, Ana Tipe düşsün
         if (!(String(namingTargetType) === '24' && !parentTxnData)) {
             try {
-                // İşlem Tipi Detaylarını Çek
                 const typeDoc = await adminDb.collection('transactionTypes').doc(String(namingTargetType)).get();
-                
                 if (typeDoc.exists) {
                     const typeData = typeDoc.data();
-                    
-                    // 1. İsimlendirme (Alias)
                     finalIslemTanimlamasi = typeData.alias || typeData.name;
                     
-                    // 2. Tarih Hesaplama (Eğer Task yoksa ve Tebliğ Tarihi varsa)
-                    // Sadece bu işlemin kendi tipi için hesaplama yapılır (Parent için değil)
+                    // TARİH HESAPLAMA
                     if (templateSearchType && fetchedTxnData?.date) {
-                        let duePeriod = typeData.duePeriod; // Ay cinsinden süre (örn: 2)
-                        
-                        // Eğer yukarıda Parent'ı sorguladıysak ama bize Child'ın süresi lazımsa:
+                        let duePeriod = typeData.duePeriod;
                         if (String(namingTargetType) !== String(templateSearchType)) {
                              const childTypeDoc = await adminDb.collection('transactionTypes').doc(String(templateSearchType)).get();
                              if (childTypeDoc.exists) duePeriod = childTypeDoc.data().duePeriod;
                         }
 
                         if (duePeriod && !isNaN(duePeriod)) {
-                            const tebligDate = new Date(fetchedTxnData.date); // Transaction tarihi tebliğ tarihidir
-                            // Süre ekle
-                            const rawDeadlineDate = addMonthsToDate(tebligDate, Number(duePeriod));
-                            // Tatil kontrolü
-                            const finalDeadlineDate = findNextWorkingDay(rawDeadlineDate, TURKEY_HOLIDAYS);
+                            const tebligDate = new Date(fetchedTxnData.date);
+                            let targetDate = new Date(tebligDate);
                             
-                            calculatedDeadline = finalDeadlineDate;
-                            console.log(`🧮 Sunucu Tarafı Hesaplama: Tebliğ=${tebligDate.toISOString()} + ${duePeriod} Ay = ${finalDeadlineDate.toISOString()}`);
+                            // Ay Ekleme (Taşma Kontrollü)
+                            const originalDay = targetDate.getDate();
+                            targetDate.setMonth(targetDate.getMonth() + Number(duePeriod));
+                            if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
+
+                            // Hafta Sonu / Tatil Kontrolü
+                            const maxIter = 30; 
+                            let iter = 0;
+                            while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
+                                targetDate.setDate(targetDate.getDate() + 1);
+                                iter++;
+                            }
+                            calculatedDeadline = targetDate;
+                            console.log(`✅ Hesaplanan Son Tarih: ${calculatedDeadline.toISOString().split('T')[0]}`);
                         }
                     }
                 }
-            } catch (e) {
-                console.error("❌ İşlem tipi/süre sorgulama hatası:", e);
-            }
+            } catch (e) { console.error("❌ Tip sorgu hatası:", e); }
         }
     }
 
-    // İsim Fallback
     if (!finalIslemTanimlamasi) {
         const rawMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka");
-        const mainTypeMap = {
-            'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu',
-            'patent': 'Patent Başvurusu', 'design': 'Tasarım Başvurusu', 'tasarim': 'Tasarım Başvurusu'
-        };
+        const mainTypeMap = { 'marka': 'Marka Başvurusu', 'trademark': 'Marka Başvurusu', 'patent': 'Patent Başvurusu' };
         finalIslemTanimlamasi = mainTypeMap[rawMainProcessType.toLowerCase()] || `${rawMainProcessType.toUpperCase()} İşlemi`;
     }
 
-    // --- TARİH FORMATLAYICI ---
     const formatDate = (val) => {
         if (!val) return "-";
         try {
@@ -1465,15 +1442,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
-    // --- ENRICHED DATA (IP BİLGİLERİ) - EKSİK KISIM EKLENDİ ---
+    // --- ENRICHED DATA ---
     let enrichedData = {
-        applicantNames: "-",
-        classNumbers: "-",
-        applicationDate: "-",
-        markImageUrl: "",
-        markName: "-",
-        tebligTarihiFormatted: "-",
-        deadlineFormatted: "-"
+        applicantNames: "-", classNumbers: "-", applicationDate: "-",
+        markImageUrl: "", markName: "-", tebligTarihiFormatted: "-", deadlineFormatted: "-"
     };
 
     if (ipRecordData) {
@@ -1482,7 +1454,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
         enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
 
-        // Başvuru Sahipleri
         try {
             const namesList = [];
             const apps = ipRecordData.applicants || applicants || [];
@@ -1490,14 +1461,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 if (app.id) {
                     const pDoc = await adminDb.collection("persons").doc(app.id).get();
                     if (pDoc.exists) namesList.push(pDoc.data().name || pDoc.data().companyName || "-");
-                } else if (app.name) {
-                    namesList.push(app.name);
-                }
+                } else if (app.name) namesList.push(app.name);
             }
             if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
-        } catch (e) { console.error("Applicant fetch error:", e); }
+        } catch (e) {}
 
-        // Sınıf Numaraları
         const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
         if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
             enrichedData.classNumbers = ipRecordData.goodsAndServicesByClass.map(item => extractClassNo(item.classNo)).filter(Boolean).join(", ");
@@ -1507,35 +1475,31 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     
-    // --- TARİHLERİ BELİRLE (TASK > TRANSACTION > HESAPLANAN) ---
-    
+    // --- TARİHLERİ BELİRLE (DÜZELTME: HESAPLANAN TARİH ÖNCELİKLİ) ---
     const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
-    // 1. Tebliğ Tarihi
     const rawTeblig = findDate(
         fetchedTaskData?.details?.tebligTarihi, 
         fetchedTaskData?.tebligTarihi,          
-        fetchedTxnData?.date, // Transaction tarihi = Tebliğ Tarihi
+        fetchedTxnData?.date,
         fetchedTxnData?.tebligTarihi
     );
 
-    // 2. Son Tarih (Deadline)
+    // DÜZELTME: calculatedDeadline en başa alındı!
     const rawDeadline = findDate(
+        calculatedDeadline,                     // <--- EN YÜKSEK ÖNCELİK
         fetchedTaskData?.officialDueDate,       
         fetchedTaskData?.details?.resmiSonTarih,
-        fetchedTxnData?.deadline,               
-        calculatedDeadline // ✅ YENİ: Sunucuda hesaplanan tarih
+        fetchedTxnData?.deadline
     );
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
-    console.log(`📅 Final Tarihler: Tebliğ=${enrichedData.tebligTarihiFormatted}, SonTarih=${enrichedData.deadlineFormatted}`);
-
+    // ... (Kalan şablon seçimi, alıcı belirleme ve mail oluşturma kodları aynı) ...
     // B) Notification Type
     const safeMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka").toLowerCase();
-    const typeMapping = { 'trademark': 'marka', 'marka': 'marka', 'patent': 'patent', 'design': 'tasarim', 'tasarim': 'tasarim' };
-    const notificationType = typeMapping[safeMainProcessType] || safeMainProcessType;
+    const notificationType = (safeMainProcessType === 'marka' || safeMainProcessType === 'trademark') ? 'marka' : safeMainProcessType;
 
     // C) Alıcıları Belirle
     let toRecipients = [];
@@ -1550,8 +1514,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         prs.forEach((doc) => {
           const r = doc.data() || {};
           const email = String(r.email || "").trim();
-          const isResponsible = r?.responsible?.[categoryKey] === true;
-          if (email && isResponsible) {
+          if (email && r?.responsible?.[categoryKey] === true) {
               const notify = r?.notify?.[categoryKey] || {};
               if (notify.to === true) to.push(email);
               else if (notify.cc === true) cc.push(email);
@@ -1599,7 +1562,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- ŞABLON EŞLEŞTİRME ---
+    // Şablon
     const querySubType = after.subProcessType || templateSearchType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1608,23 +1571,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
     if (subTypeOptions.length > 0) {
-        const rulesSnapshot = await adminDb
-          .collection("template_rules")
+        const rulesSnapshot = await adminDb.collection("template_rules")
           .where("sourceType", "==", "document")
-          .where("subProcessType", "in", subTypeOptions) 
-          .get();
+          .where("subProcessType", "in", subTypeOptions).get();
 
         if (!rulesSnapshot.empty) {
           let possibleMainTypes = [safeMainProcessType.toLowerCase()];
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
-          if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
-          possibleMainTypes = [...new Set(possibleMainTypes)];
-
           const matchedDoc = rulesSnapshot.docs.find(doc => {
-              const ruleMainType = String(doc.data().mainProcessType || "").toLowerCase();
-              return possibleMainTypes.includes(ruleMainType);
+              return possibleMainTypes.includes(String(doc.data().mainProcessType || "").toLowerCase());
           });
-
           if (matchedDoc) {
              rule = matchedDoc.data();
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
@@ -1633,29 +1589,19 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
-    // İÇERİK OLUŞTURMA
     if (template && client) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
       
       const parameters = {
-        // Önce ham veriler
-        ...client, 
-        ...after, 
-        ...ipRecordData,
-        ...fetchedTaskData, 
-
+        ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: enrichedData.markName,
-        
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
-        
-        // DİNAMİK ALANLAR
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
-        
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
         markImageUrl: enrichedData.markImageUrl,
@@ -1686,15 +1632,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
 
     const notificationData = {
-      recipientTo: toRecipients || [],
-      recipientCc: ccRecipients || [],
-      toList: toRecipients || [], 
-      ccList: ccRecipients || [],
+      recipientTo: toRecipients,
+      recipientCc: ccRecipients,
+      toList: toRecipients, 
+      ccList: ccRecipients,
       clientId: after.clientId || (applicants[0]?.id || null),
-      subject: subject || "",
-      body: body || "",
-      status: finalStatus, 
-      missingFields: missingFields || [],
+      subject, body, status: finalStatus, missingFields,
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
       taskOwner: taskOwnerIds || [], 
