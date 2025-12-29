@@ -1439,9 +1439,27 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
 
     let enrichedData = {
-        applicantNames: "-", classNumbers: "-", applicationDate: "-",
-        markImageUrl: "", markName: "-", tebligTarihiFormatted: "-", deadlineFormatted: "-"
-    };
+            applicantNames: "-",
+            classNumbers: "-",
+            applicationDate: "-",
+            markImageUrl: "",
+            markName: "-",
+            tebligTarihiFormatted: "-",
+            deadlineFormatted: "-",
+            itirazSahibi: "-" // <--- YENİ ALAN
+        };
+
+        // İtiraz Sahibini Transaction Verisinden Çekme
+        if (fetchedTxnData) {
+            // İndeksleme sırasında verinin hangi alana kaydedildiğine göre burayı düzenleyebilirsiniz.
+            // Genelde 'opponentName', 'itirazSahibi' veya 'details' altında olur.
+            // Örnek: fetchedTxnData.opponentName veya fetchedTxnData.details?.objectionOwner
+            enrichedData.itirazSahibi = fetchedTxnData.opponentName || 
+                                        fetchedTxnData.itirazSahibi || 
+                                        fetchedTxnData.details?.opponentName || 
+                                        fetchedTxnData.details?.itirazSahibi || 
+                                        "-";
+        }
 
     if (ipRecordData) {
         const clean = (val) => (val ? String(val).trim() : "");
