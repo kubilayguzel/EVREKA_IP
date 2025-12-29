@@ -511,6 +511,7 @@ export const validateEtebsTokenV2 = onRequest(
         });
     }
 );
+
 // Storage'taki PDF dosyasını bulup Nodemailer'a eklenti (attachment) olarak vermek.
 async function buildNotificationAttachments(db, notificationData) {
   const result = { attachments: [], footerItems: [] };
@@ -578,7 +579,7 @@ async function buildNotificationAttachments(db, notificationData) {
       sourceDocumentId: notificationData?.sourceDocumentId,
     });
 
-    // 1) ÖNCE: Task → EPATS (TaskComplete akışı)
+    // 1) Task → EPATS (TaskComplete akışı)
     const taskId = notificationData?.associatedTaskId;
     if (taskId) {
       try {
@@ -591,14 +592,13 @@ async function buildNotificationAttachments(db, notificationData) {
             downloadURL: ep.downloadURL || ep.fileUrl || null,
             fileName: ep.name || "epats.pdf",
           });
-          return result; // EPATS bulunduysa burada biter
         }
       } catch (e) {
         console.warn("⚠️ [ATTACH] task/EPATS okunamadı:", e?.message || e);
       }
     }
 
-    // 2) SONRA: unindexed_pdfs (DocumentStatusChange akışı)
+    // 2) unindexed_pdfs (DocumentStatusChange akışı)
     const docId = notificationData?.sourceDocumentId;
     if (docId) {
       try {
@@ -611,14 +611,23 @@ async function buildNotificationAttachments(db, notificationData) {
             downloadURL: d.fileUrl || d.downloadURL || null,
             fileName: d.fileName || "document.pdf",
           });
-          return result;
         }
       } catch (e) {
         console.warn("⚠️ [ATTACH] unindexed_pdfs okunamadı:", e?.message || e);
       }
     }
 
-    // 3) Aksi halde ek yok
+    // 3) Supplementary Attachment (YENİ - İtiraz Dilekçesi vb.)
+    if (notificationData?.supplementaryAttachment) {
+        const sa = notificationData.supplementaryAttachment;
+        let storagePath = sa.storagePath || pathFromURL(sa.downloadURL || sa.fileUrl);
+        await addAsAttachmentOrLink({
+            storagePath,
+            downloadURL: sa.downloadURL || sa.fileUrl,
+            fileName: sa.fileName || "ek_dosya.pdf"
+        });
+    }
+
     return result;
   } catch (err) {
     console.error("❌ [ATTACH] Genel hata:", err);
@@ -1308,7 +1317,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const after  = change.after.data()  || {};
     const docId  = event.params.docId;
 
-    if (!(before.status !== "indexed" && after.status === "indexed")) return null;
+    if (!(before.status !== "indexed" && after.status === "indexed")) {
+      return null;
+    }
 
     console.log(`🚀 [OTOMASYON] Belge indexlendi: ${docId}`);
 
@@ -1322,16 +1333,20 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let ipRecordData = null;
     let applicants = [];
     
-    // Dinamik Veriler
-    let fetchedTxnData = null;
-    let parentTxnData = null;
-    let fetchedTaskData = null;
+    // Veritabanından çekilecekler
+    let fetchedTxnData = null;      
+    let parentTxnData = null;       
+    let fetchedTaskData = null;     
     
     let templateSearchType = null;  
     let namingTargetType = null;    
     let calculatedDeadline = null;  
     
     let taskOwnerIds = [];
+
+    // İtiraz Bilgileri
+    let oppositionOwner = null;
+    let oppositionFileUrl = null;
 
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
@@ -1345,7 +1360,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                  applicants = ipRecordData.applicants || [];
                  
                  if (associatedTransactionId) {
-                     // Transaction bulunamazsa diye hafif bekleme ve retry
                      const txnRef = adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(associatedTransactionId);
                      let txnSnap = await txnRef.get();
                      if (!txnSnap.exists) {
@@ -1358,11 +1372,20 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                          templateSearchType = fetchedTxnData.type ? String(fetchedTxnData.type) : null;
                          namingTargetType = templateSearchType;
 
+                         // --- İtiraz Bilgilerini Çek (Child) ---
+                         if (fetchedTxnData.oppositionOwner) oppositionOwner = fetchedTxnData.oppositionOwner;
+                         if (fetchedTxnData.oppositionPetitionFileUrl) oppositionFileUrl = fetchedTxnData.oppositionPetitionFileUrl;
+
                          if (fetchedTxnData.parentId) {
                              const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(fetchedTxnData.parentId).get();
                              if (parentSnap.exists) {
                                  parentTxnData = parentSnap.data();
                                  namingTargetType = parentTxnData.type ? String(parentTxnData.type) : null;
+
+                                 // --- İtiraz Bilgilerini Çek (Parent - Varsa üzerine yaz) ---
+                                 // Genelde Parent (Yayına İtiraz) ana bilgiyi tutar
+                                 if (parentTxnData.oppositionOwner) oppositionOwner = parentTxnData.oppositionOwner;
+                                 if (parentTxnData.oppositionPetitionFileUrl) oppositionFileUrl = parentTxnData.oppositionPetitionFileUrl;
                              }
                          }
                          
@@ -1417,7 +1440,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         }
                     }
                 }
-            } catch (e) { console.error("❌ Tip/Süre hatası:", e); }
+            } catch (e) { console.error("❌ Tip sorgu hatası:", e); }
         }
     }
 
@@ -1439,27 +1462,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     };
 
     let enrichedData = {
-            applicantNames: "-",
-            classNumbers: "-",
-            applicationDate: "-",
-            markImageUrl: "",
-            markName: "-",
-            tebligTarihiFormatted: "-",
-            deadlineFormatted: "-",
-            itirazSahibi: "-" // <--- YENİ ALAN
-        };
+        applicantNames: "-", classNumbers: "-", applicationDate: "-",
+        markImageUrl: "", markName: "-", tebligTarihiFormatted: "-", deadlineFormatted: "-",
+        itirazSahibi: "-" // Yeni Alan
+    };
 
-        // İtiraz Sahibini Transaction Verisinden Çekme
-        if (fetchedTxnData) {
-            // İndeksleme sırasında verinin hangi alana kaydedildiğine göre burayı düzenleyebilirsiniz.
-            // Genelde 'opponentName', 'itirazSahibi' veya 'details' altında olur.
-            // Örnek: fetchedTxnData.opponentName veya fetchedTxnData.details?.objectionOwner
-            enrichedData.itirazSahibi = fetchedTxnData.opponentName || 
-                                        fetchedTxnData.itirazSahibi || 
-                                        fetchedTxnData.details?.opponentName || 
-                                        fetchedTxnData.details?.itirazSahibi || 
-                                        "-";
-        }
+    // İtiraz Sahibini Set Et
+    if (oppositionOwner) {
+        enrichedData.itirazSahibi = oppositionOwner;
+    }
 
     if (ipRecordData) {
         const clean = (val) => (val ? String(val).trim() : "");
@@ -1488,7 +1499,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     
-    // --- TARİHLERİ BELİRLE ---
     const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
     const rawTeblig = findDate(
@@ -1573,7 +1583,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
        client = { name: applicants[0].name, id: applicants[0].id };
     }
 
-    // --- ŞABLON EŞLEŞTİRME (GÜNCELLENMİŞ VE ESNEK) ---
+    // --- ŞABLON EŞLEŞTİRME ---
     const querySubType = after.subProcessType || templateSearchType || null; 
     let subTypeOptions = [];
     if (querySubType) {
@@ -1581,10 +1591,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
     }
 
-    console.log(`📄 [DEBUG] Şablon aranıyor. SubType: ${querySubType}, MainType: ${safeMainProcessType}`);
-
     if (subTypeOptions.length > 0) {
-        // SourceType "document" olan ve alt işlem tipi uyan tüm kuralları çek
         const rulesSnapshot = await adminDb
           .collection("template_rules")
           .where("sourceType", "==", "document")
@@ -1592,38 +1599,22 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           .get();
 
         if (!rulesSnapshot.empty) {
-          // Olası ana işlem tipleri (örn: marka, trademark)
           let possibleMainTypes = [safeMainProcessType.toLowerCase()];
           if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
           if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
           
-          console.log(`📄 [DEBUG] Eşleşen kural sayısı: ${rulesSnapshot.size}, Aranan tipler: ${possibleMainTypes.join(',')}`);
-
-          // 1. Önce tam eşleşen kuralı bulmaya çalış
           let matchedDoc = rulesSnapshot.docs.find(doc => {
               const ruleMainType = String(doc.data().mainProcessType || "").toLowerCase();
               return possibleMainTypes.includes(ruleMainType);
           });
 
-          // 2. Tam eşleşme yoksa, herhangi bir kuralı al (Fallback)
-          // Bu, veritabanında mainProcessType boş ise veya farklıysa bile çalışmasını sağlar.
-          if (!matchedDoc && rulesSnapshot.size > 0) {
-              console.warn("⚠️ [DEBUG] Tam tip eşleşmesi bulunamadı, ilk kural fallback olarak seçiliyor.");
-              matchedDoc = rulesSnapshot.docs[0];
-          }
+          if (!matchedDoc && rulesSnapshot.size > 0) matchedDoc = rulesSnapshot.docs[0];
 
           if (matchedDoc) {
              rule = matchedDoc.data();
              const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
-             if (templateSnapshot.exists) {
-                 template = templateSnapshot.data();
-                 console.log(`✅ [DEBUG] Şablon başarıyla bulundu: ${rule.templateId}`);
-             } else {
-                 console.error(`❌ [DEBUG] Kural bulundu (${rule.id}) ama Template ID (${rule.templateId}) geçersiz.`);
-             }
+             if (templateSnapshot.exists) template = templateSnapshot.data();
           }
-        } else {
-            console.warn("⚠️ [DEBUG] Bu subProcessType için hiç kural (template_rule) bulunamadı.");
         }
     }
 
@@ -1644,6 +1635,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
+        itiraz_sahibi: enrichedData.itirazSahibi, // ✅ PARAMETRE
         
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
@@ -1651,7 +1643,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         applicantNames: enrichedData.applicantNames,
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
-        itiraz_sahibi: enrichedData.itirazSahibi,
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
 
@@ -1666,16 +1657,20 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
 
-    // Debug: Eksik bilgi varsa konsola yaz
-    if (finalStatus === "missing_info") {
-        console.error(`❌ [DEBUG] EKSİK BİLGİ: ${missingFields.join(', ')}`);
-    }
-
     const epatsAttachment = {
       storagePath: after.storagePath || null,
       downloadURL: after.downloadURL || null,
       fileName: after.name || "epats_document.pdf",
     };
+
+    // EK DOSYA (Dilekçe) HAZIRLIĞI
+    let supplementaryAttachment = null;
+    if (oppositionFileUrl) {
+        supplementaryAttachment = {
+            downloadURL: oppositionFileUrl,
+            fileName: "Itiraz_Dilekcesi.pdf" 
+        };
+    }
 
     const notificationData = {
       recipientTo: toRecipients || [],
@@ -1692,6 +1687,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
       epatsAttachment, 
+      supplementaryAttachment, // ✅ DB'ye Kaydediyoruz
       assignedTo_uid: selcanUserId || null,
       assignedTo_email: selcanUserEmail || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
