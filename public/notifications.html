@@ -1392,39 +1392,52 @@ try {
     }
   }
 
-  // --- YENİ GÖNDERİM FONKSİYONU (Validasyonlu) ---
-    async function sendNotificationWithUI(e, notification) {
-        const btn = e && e.currentTarget ? e.currentTarget : null;
+// --- YENİ GÖNDERİM FONKSİYONU (UI Mesajı Düzeltildi) ---
+  async function sendNotificationWithUI(e, notification) {
+      const btn = e && e.currentTarget ? e.currentTarget : null;
 
-        // Validasyon: To listesini kontrol et
-        const { toList } = getToCcFromNotification(notification);
+      // Validasyon: To listesini kontrol et
+      const { toList } = getToCcFromNotification(notification);
+      
+      if (!toList || toList.length === 0) {
+          alert("HATA: 'Kime' (To) alanı boş. Sadece CC ile veya alıcısız gönderim yapılamaz.\n\nLütfen 'Düzenle' butonuna basarak en az bir alıcı ekleyin.");
+          return; 
+      }
+
+      try {
+        if (btn) btn.disabled = true;
         
-        if (!toList || toList.length === 0) {
-            alert("HATA: 'Kime' (To) alanı boş. Sadece CC ile veya alıcısız gönderim yapılamaz.\n\nLütfen 'Düzenle' butonuna basarak en az bir alıcı ekleyin.");
-            return; 
+        // --- DÜZELTME: Doğru mesajı göster ---
+        // Eğer global __overlay objesi varsa onu kullan, yoksa manuel göster
+        if (typeof __overlay !== 'undefined' && __overlay.show) {
+            __overlay.show('E-posta gönderiliyor...');
+        } else {
+            const overlay = document.getElementById('progressOverlay');
+            const msg = document.getElementById('progressMessage');
+            if (msg) msg.textContent = 'E-posta gönderiliyor...';
+            if (overlay) overlay.style.display = 'flex';
         }
-
-        try {
-          if (btn) btn.disabled = true;
-          // Overlay'i güvenli şekilde bul ve göster
-          const overlay = document.getElementById('progressOverlay');
-          if (overlay) overlay.style.display = 'flex';
-          
-          await sendEmail({ notificationId: notification.id });
-          alert("İşlem başarılı.");
-          
-        } catch (err) {
-            console.error(err);
-            alert("Gönderim sırasında hata oluştu.");
-        } finally {
-          const overlay = document.getElementById('progressOverlay');
-          if (overlay) overlay.style.display = 'none';
-          if (btn) btn.disabled = false;
+        
+        await sendEmail({ notificationId: notification.id });
+        alert("E-posta başarıyla gönderildi.");
+        
+      } catch (err) {
+          console.error(err);
+          alert("Gönderim sırasında hata oluştu: " + (err.message || err));
+      } finally {
+        // Overlay kapat
+        if (typeof __overlay !== 'undefined' && __overlay.hide) {
+            __overlay.hide();
+        } else {
+            const overlay = document.getElementById('progressOverlay');
+            if (overlay) overlay.style.display = 'none';
         }
-    }
-    
-    // Fonksiyonu HTML butonlarının erişebilmesi için dışarı açıyoruz
-    window.sendNotificationWithUI = sendNotificationWithUI;
+        
+        if (btn) btn.disabled = false;
+      }
+  }
+  
+  window.sendNotificationWithUI = sendNotificationWithUI;
 </script>
 
 </body>
