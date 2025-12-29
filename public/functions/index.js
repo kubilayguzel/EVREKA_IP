@@ -875,14 +875,13 @@ export const createObjectionTask = onCall(
 );
 
 
-
 // Send Email Notification (v2 Callable Function)
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
   async (request) => {
     const { notificationId, userEmail: userEmailFromClient, mode, overrideSubject, overrideBody } = request.data || {};
     const isReminder = String(mode || "").toLowerCase() === "reminder";
-    console.log("📧 [DEBUG] sendEmailNotificationV2", { notificationId, mode, hasOverrideSubject: !!overrideSubject, hasOverrideBody: !!overrideBody });
+    console.log("📧 [DEBUG] sendEmailNotificationV2", { notificationId, mode, hasOverrideSubject: !!overrideSubject });
 
     if (!notificationId) throw new HttpsError("invalid-argument", "notificationId parametresi zorunludur.");
 
@@ -899,24 +898,16 @@ export const sendEmailNotificationV2 = onCall(
       throw new HttpsError("permission-denied", "Bu kullanıcı adına gönderim yetkisi yok.");
     }
 
-    // -----------------------------
-    // Alıcılar (öncelik sırası):
-    // toList/ccList > toRecipients/ccRecipients > recipientTo/recipientCc > to/cc > recipientEmail
-    // -----------------------------
     const norm = (v) => {
       if (!v) return [];
       if (Array.isArray(v)) {
-        return v
-          .map(x => {
+        return v.map(x => {
             if (typeof x === "string") return x.trim();
             if (x && typeof x === "object" && x.email) return String(x.email).trim();
             return "";
-          })
-          .filter(Boolean);
+          }).filter(Boolean);
       }
-      if (typeof v === "string") {
-        return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
-      }
+      if (typeof v === "string") return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
       return [];
     };
 
@@ -928,22 +919,28 @@ export const sendEmailNotificationV2 = onCall(
       return [];
     };
 
+    // --- DÜZELTME: İstemciden gelen veriler (request.data) EN ÖNCELİKLİ ---
     let toArr = firstNonEmpty(
-      notificationData.toList,
+      request.data.to,          // İstemciden gelen TO
+      request.data.toList,      // İstemciden gelen TO List
+      notificationData.toList,  // DB'den
       notificationData.toRecipients,
       notificationData.recipientTo,
       notificationData.to,
       notificationData.recipientEmail
     );
+    
     let ccArr = firstNonEmpty(
-      notificationData.ccList,
+      request.data.cc,          // İstemciden gelen CC
+      request.data.ccList,      // İstemciden gelen CC List
+      notificationData.ccList,  // DB'den
       notificationData.ccRecipients,
       notificationData.recipientCc,
       notificationData.cc
     );
 
-    // Tekilleştir ve TO içinde olanı CC'den çıkar (aynı adrese iki kez gitmesin)
-    const uniq = (a) => Array.from(new Set(a.map(s => s.toLowerCase()))); // case-insensitive uniq
+    // Tekilleştir ve TO içinde olanı CC'den çıkar
+    const uniq = (a) => Array.from(new Set(a.map(s => s.toLowerCase())));
     toArr = uniq(toArr);
     ccArr = uniq(ccArr).filter(x => !toArr.includes(x));
 
@@ -956,19 +953,17 @@ export const sendEmailNotificationV2 = onCall(
       throw new HttpsError("failed-precondition", "Gönderilecek alıcı adresi bulunamadı.");
     }
 
-    // Ekleri hazırla (hatırlatmada ekleri kapatacağız)
+    // Ekleri hazırla
     const built = await buildNotificationAttachments(db, notificationData);
     const attachmentsBuilt = built?.attachments || [];
     const footerItems = built?.footerItems || [];
 
-    // Basit <body> ayıklayıcı (TinyMCE gövdesi için)
     const stripBody = (html) => {
       if (!html) return "";
       const m = String(html).match(/<body[^>]*>([\s\S]*?)<\/body>/i);
       return m ? m[1] : String(html);
     };
 
-    // Konu + Gövde
     let subject, htmlBody, attachmentsToSend;
 
     if (isReminder) {
@@ -981,10 +976,13 @@ export const sendEmailNotificationV2 = onCall(
         <p>Konuyu hatırlatmak isteriz.</p>
         <p>Saygılarımızla,</p>
       `;
-      attachmentsToSend = undefined; // hatırlatma yalın gitsin
+      attachmentsToSend = undefined;
     } else {
-      subject = notificationData.subject || "";
-      htmlBody = notificationData.body || "";
+      // Normal gönderimde de overrideBody varsa kullan
+      const safeOverrideBody = overrideBody ? stripBody(overrideBody) : notificationData.body || "";
+      
+      subject = overrideSubject || notificationData.subject || "";
+      htmlBody = safeOverrideBody;
 
       if (footerItems.length > 0) {
         const eklerHtml = footerItems.map(item => `• ${item}`).join("<br>");
@@ -1010,7 +1008,6 @@ export const sendEmailNotificationV2 = onCall(
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null,
         lastAttachmentMode: (attachmentsToSend?.length ? "attachment" : (footerItems.length ? "inline_link" : "none")),
-        // Son kullanılan alıcıları da kayda geçelim (teşhis için faydalı)
         lastUsedTo: toArr,
         lastUsedCc: ccArr
       };
