@@ -1464,10 +1464,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
-    // --- DAVA SON TARİHİ HESAPLAMA (YENİ: Tip 29 ve 30 için) ---
-    // YİDK Kararının İptali davası süresi: Tebliğden itibaren 2 Ay
+    // --- DAVA SON TARİHİ HESAPLAMA (DÜZELTİLDİ: templateSearchType Kullanılıyor) ---
     let davaSonTarihi = "-";
-    if (namingTargetType === "29" || namingTargetType === "30") {
+    // Artık Parent (7) olsa bile, orijinal tip (29 veya 30) kontrol ediliyor
+    if (String(templateSearchType) === "29" || String(templateSearchType) === "30") {
         if (fetchedTxnData?.date) {
             const tebligDate = new Date(fetchedTxnData.date);
             let targetDate = new Date(tebligDate);
@@ -1476,7 +1476,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             // Dava süresi: 2 Ay ekle
             targetDate.setMonth(targetDate.getMonth() + 2);
             
-            // Ay sonu taşma kontrolü (Örn: 31 Ocak -> 31 Mart yoksa Mart sonuna çek)
+            // Ay sonu taşma kontrolü
             if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
 
             // Hafta sonu ve Tatil Kontrolü
@@ -1487,7 +1487,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 iter++;
             }
             davaSonTarihi = formatDate(targetDate);
-            console.log(`⚖️ Dava Son Tarihi Hesaplandı: ${davaSonTarihi}`);
+            console.log(`⚖️ Dava Son Tarihi Hesaplandı (${templateSearchType}): ${davaSonTarihi}`);
         }
     }
 
@@ -1669,7 +1669,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
         
         itiraz_sahibi: enrichedData.itirazSahibi, 
-        dava_son_tarihi: davaSonTarihi, // ✅ YENİ PARAMETRE
+        dava_son_tarihi: davaSonTarihi, // ✅ DAVA TARİHİ EKLENDİ
         
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
