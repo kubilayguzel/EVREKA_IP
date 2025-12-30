@@ -10,18 +10,18 @@ function injectNiceStyles() {
 
     const css = `
         :root {
-            /* Nötr Griler (Mavi tonu yok) */
+            /* Nötr Griler */
             --nice-bg: #ffffff;
-            --nice-bg-alt: #f4f4f5; /* Zinc 100 */
-            --nice-border: #e4e4e7; /* Zinc 200 */
-            --nice-text-main: #27272a; /* Zinc 800 */
-            --nice-text-muted: #71717a; /* Zinc 500 */
+            --nice-bg-alt: #f8fafc; /* Slate 50 */
+            --nice-border: #e2e8f0; /* Slate 200 */
+            --nice-text-main: #1e293b; /* Slate 800 */
+            --nice-text-muted: #64748b; /* Slate 500 */
             
-            /* Kurumsal Yeşil (Emerald) */
-            --nice-brand: #059669; /* Emerald 600 */
-            --nice-brand-hover: #047857; /* Emerald 700 */
-            --nice-brand-light: #ecfdf5; /* Emerald 50 */
-            --nice-brand-border: #10b981; /* Emerald 500 */
+            /* Kurumsal Mavi (Uygulama Teması) */
+            --nice-brand: #1e3c72; /* Ana mavi */
+            --nice-brand-hover: #2a5298; /* Açık mavi */
+            --nice-brand-light: #eff6ff; /* Blue 50 */
+            --nice-brand-border: #3b82f6; /* Blue 500 */
             
             /* Durum Renkleri */
             --nice-danger: #dc2626; /* Red 600 */
@@ -107,7 +107,7 @@ function injectNiceStyles() {
         .nice-header-left { display: flex; align-items: center; gap: 12px; flex: 1; }
         
         .nice-badge {
-            background: #52525b; /* Zinc 600 */
+            background: #475569; /* Slate 600 */
             color: #fff;
             font-size: 12px; font-weight: 700;
             padding: 4px 8px; border-radius: 6px;
@@ -147,7 +147,7 @@ function injectNiceStyles() {
             background-color: var(--nice-brand-light);
         }
         .nice-sub-item.selected .nice-label {
-            color: #064e3b; /* Koyu Yeşil Metin */
+            color: #1e3a8a; /* Koyu Mavi Metin */
             font-weight: 500;
         }
 
