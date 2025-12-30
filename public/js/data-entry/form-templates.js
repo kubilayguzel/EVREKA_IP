@@ -186,7 +186,7 @@ export const FormTemplates = {
                 <div class="tab-pane fade" id="goods-services" role="tabpanel">
                     <div class="nice-classification-container">
                         <div class="row">
-                            <div class="col-lg-8">
+                            <div class="col-12">
                                 <div class="classification-panel mb-3">
                                     <div class="panel-header">
                                         <h5 class="mb-0"><i class="fas fa-list-ul mr-2"></i>Nice Classification - Mal ve Hizmet Sınıfları</h5>
@@ -194,33 +194,26 @@ export const FormTemplates = {
                                     </div>
                                     <div class="search-section">
                                         <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                            </div>
-                                            <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf ara... (örn: kozmetik, kimyasal, teknoloji)">
+                                            <input type="text" class="form-control" id="niceClassSearch" placeholder="🔍 Sınıf numarası veya açıklama ara...">
                                             <div class="input-group-append">
-                                                <button class="btn btn-outline-secondary" type="button" onclick="clearNiceSearch()">
+                                                <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="classes-list" id="niceClassificationList"></div>
-                                </div>
-                                <div class="custom-class-frame">
-                                    <div class="custom-class-section">
-                                        <label class="form-label">Özel Mal/Hizmet Tanımı</label>
-                                        <textarea id="customClassInput" class="form-control" rows="3" placeholder="Standart sınıflarda olmayan özel mal/hizmetlerinizi buraya yazabilirsiniz..."></textarea>
-                                        <div class="d-flex justify-content-between align-items-center mt-2">
-                                            <small class="text-muted"><span id="customClassCharCount">0</span>/500 karakter</small>
-                                            <button type="button" class="btn btn-warning btn-sm" id="addCustomClassBtn">
-                                                <i class="fas fa-plus mr-1"></i>Ekle
-                                            </button>
+                                    <div class="scrollable-list" id="niceClassificationList" style="max-height: 500px; overflow-y: auto; padding: 0;">
+                                        <div class="text-center py-5">
+                                            <div class="spinner-border text-secondary"></div>
+                                            <div class="mt-2 text-muted">Veriler yükleniyor...</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-lg-4">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12">
                                 <div class="selected-classes-panel">
                                     <div class="panel-header">
                                         <div class="d-flex justify-content-between align-items-center">
@@ -233,19 +226,28 @@ export const FormTemplates = {
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="scrollable-list" id="selectedNiceClasses" style="max-height: 700px; overflow-y: auto; padding: 15px;">
+                                    <div class="scrollable-list" id="selectedNiceClasses" style="max-height: 400px; overflow-y: auto; padding: 15px;">
                                         <div class="empty-state text-center py-4">
                                             <i class="fas fa-clipboard-list fa-2x text-muted mb-2"></i>
                                             <p class="text-muted">Henüz sınıf seçilmedi</p>
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <div class="mt-3 p-3 bg-white border rounded">
+                                    <label class="form-label font-weight-bold"><i class="fas fa-edit mr-2"></i>Özel Tanım</label>
+                                    <textarea class="form-control" id="customClassInput" rows="3" placeholder="Listede olmayan özel bir mal/hizmet tanımı ekleyin..." maxlength="50000"></textarea>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted"><span id="customClassCharCount">0</span> / 50,000 karakter</small>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="addCustomClassBtn">
+                                            <i class="fas fa-plus mr-1"></i> Özel Tanım Ekle
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
     `,
     getPatentForm: () => `
         <div class="form-section">
