@@ -140,38 +140,41 @@ export class TaskUIManager {
         </div>`;
     }
 
-_getGoodsServicesTabHtml() {
+    _getGoodsServicesTabHtml() {
         return `
         <div class="tab-pane fade" id="goods-services" role="tabpanel">
             <div class="nice-classification-container mt-3">
                 <div class="row">
                     <div class="col-12">
                         <div class="classification-panel mb-3 shadow-sm border rounded">
-                            <div class="panel-header p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 text-dark font-weight-bold"><i class="fas fa-list-ul mr-2 text-primary"></i>Nice Sınıflandırma Listesi</h5>
+                            <div class="panel-header">
+                                <h5 class="mb-0"><i class="fas fa-list-ul"></i>Nice Sınıflandırma Listesi</h5>
                                 <div class="input-group" style="max-width: 300px;">
-                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf veya mal ara...">
-                                    <div class="input-group-append"><button class="btn btn-outline-secondary" onclick="clearNiceSearch()"><i class="fas fa-times"></i></button></div>
+                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf veya mal ara..." style="border-radius: 6px 0 0 6px;">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-secondary" onclick="clearNiceSearch()" style="border-radius: 0 6px 6px 0; border-left:none;"><i class="fas fa-times"></i></button>
+                                    </div>
                                 </div>
                             </div>
+                            
                             <div class="classes-list nice-container" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff; padding:10px;"></div>
                             
-                            <div class="custom-class-section p-3 bg-light border-top">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="customClassInput" placeholder="Listede olmayan özel bir tanım...">
-                                    <div class="input-group-append"><button class="btn btn-primary" id="addCustomClassBtn">Ekle</button></div>
-                                </div>
+                            <div class="custom-class-section p-3 bg-light border-top d-flex gap-2">
+                                <input type="text" class="form-control" id="customClassInput" placeholder="Listede olmayan özel bir tanım...">
+                                <button class="btn btn-primary" id="addCustomClassBtn">Ekle</button>
                             </div>
                         </div>
                     </div>
 
                     <div class="col-12 mt-3">
                         <div class="selected-classes-panel shadow-sm border rounded">
-                            <div class="panel-header p-3 bg-white border-bottom d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 text-success font-weight-bold"><i class="fas fa-check-circle mr-2"></i>Seçilen Sınıflar (<span id="selectedClassCount">0</span>)</h6>
-                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearAllSelectedClasses()">Temizle</button>
+                            <div class="panel-header">
+                                <h6 class="mb-0 font-weight-bold" style="color:#059669;"><i class="fas fa-check-circle mr-2"></i>Seçilen Sınıflar (<span id="selectedClassCount">0</span>)</h6>
+                                <button type="button" class="btn btn-sm btn-outline-light text-danger border-danger" onclick="clearAllSelectedClasses()">
+                                    <i class="fas fa-trash mr-1"></i>Temizle
+                                </button>
                             </div>
-                            <div class="selected-classes-content p-3" id="selectedNiceClasses" style="min-height: 100px; background: #f8f9fa;"></div>
+                            <div class="selected-classes-content p-3" id="selectedNiceClasses" style="min-height: 100px; background: #fafafa;"></div>
                         </div>
                     </div>
                 </div>
