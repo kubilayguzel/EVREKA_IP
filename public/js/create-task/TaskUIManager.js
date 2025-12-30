@@ -150,23 +150,19 @@ export class TaskUIManager {
                             <div class="panel-header p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0 text-primary"><i class="fas fa-list-ul mr-2"></i>Nice Sınıflandırma Listesi</h5>
                                 <div class="input-group" style="max-width: 300px;">
-                                    <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-muted"></i></span></div>
-                                    <input type="text" class="form-control border-left-0" id="niceClassSearch" placeholder="Sınıf veya mal ara...">
-                                    <div class="input-group-append"><button class="btn btn-outline-secondary" type="button" onclick="clearNiceSearch()"><i class="fas fa-times"></i></button></div>
+                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf ara...">
+                                    <div class="input-group-append"><button class="btn btn-outline-secondary" onclick="clearNiceSearch()"><i class="fas fa-times"></i></button></div>
                                 </div>
                             </div>
-                            
-                            <div class="classes-list" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff;">
-                                <div class="loading-spinner p-4 text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>
-                            </div>
-                            
+                            <div class="classes-list nice-container" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff; padding:10px;">
+                                </div>
                             <div class="custom-class-section p-3 bg-light border-top">
-                                <div class="d-flex align-items-center mb-2"><span class="badge badge-danger mr-2">99</span><strong class="text-danger">Özel Tanım Ekle</strong></div>
                                 <div class="input-group">
-                                    <textarea class="form-control" id="customClassInput" placeholder="Listede olmayan özel bir mal/hizmet tanımı giriniz..." maxlength="50000" rows="2"></textarea>
-                                    <div class="input-group-append"><button class="btn btn-danger" type="button" id="addCustomClassBtn"><i class="fas fa-plus mr-1"></i>Ekle</button></div>
+                                    <textarea class="form-control" id="customClassInput" placeholder="Özel tanım..." rows="1"></textarea>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-primary" id="addCustomClassBtn">Ekle</button>
+                                    </div>
                                 </div>
-                                <small class="form-text text-muted"><span id="customClassCharCount">0</span> / 50.000</small>
                             </div>
                         </div>
                     </div>
@@ -174,21 +170,10 @@ export class TaskUIManager {
                     <div class="col-12 mt-3">
                         <div class="selected-classes-panel shadow-sm border rounded">
                             <div class="panel-header p-3 bg-white border-bottom d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 text-success"><i class="fas fa-check-circle mr-2"></i>Seçilen Sınıflar ve Emtialar</h5>
-                                <div>
-                                    <span class="badge badge-success p-2" style="font-size: 1em;">Toplam: <span id="selectedClassCount">0</span></span>
-                                    <button type="button" class="btn btn-sm btn-outline-danger ml-3" onclick="clearAllSelectedClasses()">
-                                        <i class="fas fa-trash mr-1"></i>Tümünü Temizle
-                                    </button>
-                                </div>
+                                <h6 class="mb-0 text-success font-weight-bold"><i class="fas fa-check-circle mr-2"></i>Seçilen Sınıflar (<span id="selectedClassCount">0</span>)</h6>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearAllSelectedClasses()">Temizle</button>
                             </div>
-                            
-                            <div class="selected-classes-content p-3" id="selectedNiceClasses" style="min-height: 150px; background: #f8f9fa;">
-                                <div class="empty-state text-center text-muted py-4">
-                                    <i class="fas fa-arrow-up mb-2"></i>
-                                    <p>Yukarıdaki listeden sınıf veya mal seçiniz.</p>
-                                </div>
-                            </div>
+                            <div class="selected-classes-content p-3" id="selectedNiceClasses" style="min-height: 100px; background: #f8f9fa;"></div>
                         </div>
                     </div>
                 </div>
