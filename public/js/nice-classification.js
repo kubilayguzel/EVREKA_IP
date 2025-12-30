@@ -1,834 +1,633 @@
-// js/nice-classification.js - Tamamen Revize Edilmiş ve Görselliği Düzeltilmiş Kod
+// public/js/nice-classification.js - Refactored Version
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-let allNiceData = [];
-let selectedClasses = {};  // { key: { classNum, text } }
+/**
+ * 35-5 (Perakende Hizmetleri) Özel Modal Yöneticisi
+ * Bu sınıf sadece 35-5 ile ilgili modal işlemlerini yönetir.
+ */
+class Class35_5Manager {
+    constructor(parentManager) {
+        this.parent = parentManager; // Ana yöneticiye referans
+        this.modalData = []; // 1-34 arası mallar
+        this.selectedItems = {}; // Modal içindeki geçici seçimler
+        this.modalId = 'class35-5-modal';
+    }
 
-// 35-5 özel modal değişkenleri
-let class35_5_modalSelectedItems = {};
-let class35_5_modalAllData = [];
-
-function renderSelectedClasses() {
-    const container = document.getElementById('selectedNiceClasses');
-    const countBadge = document.getElementById('selectedClassCount');
-    if (!container || !countBadge) return;
-
-    countBadge.textContent = Object.keys(selectedClasses).length;
-    
-    // --- DURUM 1: HİÇ SINIF SEÇİLMEDİYSE ---
-    if (Object.keys(selectedClasses).length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-list-alt fa-3x text-muted mb-3"></i>
-                <p class="text-muted">
-                    Henüz hiçbir sınıf seçilmedi.<br>
-                    Sol panelden sınıf başlığına veya alt sınıfları seçin.
-                </p>
-            </div>`;
+    async open() {
+        // Veriyi hazırla (Sadece 1-34 arası mallar)
+        this.modalData = this.parent.allData.filter(cls => cls.classNumber >= 1 && cls.classNumber <= 34);
         
-        // ÖNEMLİ GÜNCELLEME: Olayı container üzerinden ve 'bubbles: true' ile tetikliyoruz.
-        // Böylece main.js'deki (e.target.closest) kontrolü bu değişikliği yakalayabilir.
-        container.dispatchEvent(new Event('input', { bubbles: true })); 
-        return;
+        // Varsa mevcut seçimleri yükle (Ana state'den parse et)
+        this.selectedItems = {}; 
+        // Not: Mevcut yapıda 35-5'in alt detayları saklanmıyor, sadece metin saklanıyor.
+        // Gelişmiş versiyonda buraya geri yükleme mantığı eklenebilir.
+
+        this.renderModal();
+        this.setupEvents();
     }
 
-    // --- DURUM 2: SINIFLAR SEÇİLDİYSE ---
-    const grouped = {};
-    Object.entries(selectedClasses).forEach(([code, item]) => {
-        if (!grouped[item.classNum]) grouped[item.classNum] = [];
-        grouped[item.classNum].push({ code, text: item.text });
-    });
-
-    let html = '';
-    Object.keys(grouped).sort((a, b) => parseInt(a) - parseInt(b)).forEach(classNum => {
-        grouped[classNum].forEach(item => {
-            const isCustom = classNum === '99';
-            const displayCode = isCustom ? classNum : item.code;
-            html += `
-            <div class="selected-class-item ${isCustom ? 'custom' : ''}">
-                <div class="selected-class-number">Sınıf ${displayCode}</div>
-                <p class="selected-class-description">${item.text}</p>
-                <button class="remove-selected-btn" data-key="${item.code}" title="Kaldır">&times;</button>
-            </div>`;
-        });
-    });
-    
-    container.innerHTML = html;
-
-    // ÖNEMLİ GÜNCELLEME: Burada da aynı şekilde bubbles: true ile tetikliyoruz.
-    container.dispatchEvent(new Event('input', { bubbles: true })); 
-}
-
-export function setSelectedNiceClasses(classes) {
-    // Mevcut tüm seçilmiş sınıfları temizle
-    clearAllSelectedClasses();
-
-    classes.forEach(classString => {
-        // Gelen string'i (örn: "1. (1-2) Gübreler ve topraklar" veya "(1-2) Gübreler") parçala
-        // [DEĞİŞİKLİK] Çok satırlı metinleri destekleyen Regex
-        const match = classString.match(/^(?:\d+\.\s*)?\((\d+-\d+)\)\s*([\s\S]*)$/);        
-        if (match) {
-            const code = match[1];
-            const text = match[2];
-            const parts = code.split('-');
-            const classNum = parts[0];
-            
-            // Eğer 35-5 özel bir durumsa, onu ayrı işle
-            if (code === '35-5') {
-                selectedClasses['35-5'] = { classNum: '35', text: 'Müşterilerin malları' };
-            } else {
-                selectedClasses[code] = { classNum, text };
-            }
-        } else {
-            // Eğer string formatı eşleşmezse (örn. özel sınıf 99)
-            const customMatch = classString.match(/^\(99\)\s*(.*)$/);
-            if (customMatch) {
-                const text = customMatch[1];
-                const code = `99-${Date.now()}`; // Yeni bir key oluştur
-                selectedClasses[code] = { classNum: '99', text };
-            }
-        }
-    });
-
-    // Arayüzü güncelle
-    renderSelectedClasses();
-    updateVisualStates();
-}
-
-function toggleAccordion(id) {
-    const el = document.getElementById(`subclasses-${id}`);
-    if (!el) return;
-    el.classList.toggle('show');
-    const header = document.querySelector(`.class-header[data-id="${id}"]`);
-    if (header) header.classList.toggle('expanded');
-}
-
-// TEK selectItem FONKSIYONU - 35-5 DESTEKLİ
-function selectItem(key, classNum, text) {
-    if (key === "35-5") {
-        openClass35_5Modal();
-        return;
-    }
-    
-    if (selectedClasses[key]) return;
-    
-    selectedClasses[key] = { classNum, text };
-    renderSelectedClasses();
-    updateVisualStates();
-
-    const el = document.querySelector(`[data-code="${key}"]`);
-    if (el) el.classList.add('selected');
-}
-
-function removeSelectedClass(key) {
-    if (!selectedClasses[key]) return;
-    delete selectedClasses[key];
-    renderSelectedClasses();
-    updateVisualStates();
-    const el = document.querySelector(`[data-code="${key}"]`);
-    if (el) el.classList.remove('selected');
-}
-
-// ANA SINIF SEÇİMİ FONKSİYONLARI
-function selectWholeClass(classNumber) {
-  const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
-  if (!classData) return;
-
-  // SADECE ALT SINIFLAR:
-  classData.subClasses.forEach((sc, index) => {
-    const code = `${classNumber}-${index + 1}`;
-    selectItem(code, classNumber, sc.subClassDescription);
-  });
-
-  const collapseElement = document.getElementById(`subclasses-${classNumber}`);
-  if (collapseElement) collapseElement.classList.add('show');
-  const header = document.querySelector(`.class-header[data-id="${classNumber}"]`);
-  if (header) header.classList.add('expanded');
-}
-
-function deselectWholeClass(classNumber) {
-    const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
-    if (!classData) return;
-
-    const mainClassCode = `${classNumber}-main`;
-    removeSelectedClass(mainClassCode);
-
-    classData.subClasses.forEach((sc, index) => {
-        const code = `${classNumber}-${index + 1}`;
-        removeSelectedClass(code);
-    });
-}
-
-function isClassFullySelected(classNumber) {
-  const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
-  if (!classData) return false;
-
-  const selectedSubCount = classData.subClasses.filter((sc, index) => {
-    const code = `${classNumber}-${index + 1}`;
-    return selectedClasses[code];
-  }).length;
-
-  return selectedSubCount === classData.subClasses.length && classData.subClasses.length > 0;
-}
-
-function updateVisualStates() {
-  allNiceData.forEach(cls => {
-    const classNumber = cls.classNumber;
-
-    const selectedSubCount = cls.subClasses.filter((sc, index) => {
-      const code = `${classNumber}-${index + 1}`;
-      return selectedClasses[code];
-    }).length;
-
-    const allSubClassesSelected = selectedSubCount === cls.subClasses.length && cls.subClasses.length > 0;
-    const someSubClassesSelected = selectedSubCount > 0;
-
-    const headerElement = document.querySelector(`.class-header[data-id="${classNumber}"]`);
-    const accordionElement = document.getElementById(`subclasses-${classNumber}`);
-
-    if (headerElement) {
-      headerElement.classList.remove('selected', 'partially-selected', 'fully-selected');
-
-      if (allSubClassesSelected) {
-        headerElement.classList.add('selected', 'fully-selected');
-        if (accordionElement) accordionElement.classList.add('show');
-      } else if (someSubClassesSelected) {
-        headerElement.classList.add('selected', 'partially-selected');
-        if (accordionElement) accordionElement.classList.add('show');
-      } else {
-        if (accordionElement) accordionElement.classList.remove('show');
-        headerElement.classList.remove('expanded');
-      }
-    }
-
-    cls.subClasses.forEach((sc, index) => {
-      const code = `${classNumber}-${index + 1}`;
-      const subElement = document.querySelector(`[data-code="${code}"]`);
-      if (subElement) {
-        subElement.classList.toggle('selected', !!selectedClasses[code]);
-      }
-    });
-  });
-}
-
-// 35-5 MODAL FONKSİYONLARI
-function openClass35_5Modal() {
-    const modalHTML = `
-<div id="class35-5-modal" class="modal fade show" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-shopping-cart mr-2"></i>
-                    (35-5) Müşterilerin Malları - Mal Seçimi
-                </h5>
-                <button type="button" class="close" onclick="closeClass35_5Modal(true)">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="nice-classification-container">
-                    <div class="row">
-                        <div class="col-lg-8">
-                            <div class="classification-panel">
-                                <div class="panel-header">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-list-ul mr-2"></i>
-                                        Mal Sınıfları (1-34)
-                                    </h5>
-                                    <small class="text-white-50">35-5 hizmeti için uygun mal sınıflarını seçin</small>
-                                </div>
-                                <div class="search-section">
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text">
-                                                <i class="fas fa-search"></i>
-                                            </span>
-                                        </div>
-                                        <input type="text" class="form-control" id="class35-5-search" 
-                                                placeholder="Mal sınıfı ara...">
-                                        <div class="input-group-append">
-                                            <button class="btn btn-outline-secondary" type="button" onclick="clearClass35_5Search()">
-                                                <i class="fas fa-times"></i>
-                                            </button>
+    renderModal() {
+        // Modal HTML'ini oluştur
+        const modalHTML = `
+        <div id="${this.modalId}" class="modal fade show" tabindex="-1" style="display:block; background: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title"><i class="fas fa-shopping-cart mr-2 text-primary"></i>(35-5) Müşterilerin Malları - Mal Seçimi</h5>
+                        <button type="button" class="close" data-action="close">&times;</button>
+                    </div>
+                    <div class="modal-body bg-light">
+                        <div class="row h-100">
+                            <div class="col-lg-8 d-flex flex-column h-100">
+                                <div class="card shadow-sm flex-grow-1">
+                                    <div class="card-header bg-white py-2">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend"><span class="input-group-text border-0 bg-light"><i class="fas fa-search"></i></span></div>
+                                            <input type="text" class="form-control border-0 bg-light" id="c35-search" placeholder="Mal sınıfı ara (örn: ilaç, giysi)...">
                                         </div>
                                     </div>
-                                </div>
-                                <div class="classes-list" id="class35-5-list" 
-                                        style="height: 450px; overflow-y: auto; background: #fafafa;">
-                                </div>
-                                <div class="custom-class-section">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <span class="badge badge-danger mr-2" style="font-size: 11px;">99</span>
-                                        <strong class="text-danger">Özel Mal Tanımı</strong>
+                                    <div class="card-body p-0 overflow-auto" id="c35-list-container" style="max-height: 500px;">
+                                        ${this._generateListHTML()}
                                     </div>
-                                    <div class="input-group">
-                                        <textarea class="form-control" id="class35-5-custom-input" 
-                                                placeholder="Özel mal tanımınızı yazın..."
-                                                maxlength="1000" rows="2"></textarea>
-                                        <div class="input-group-append">
-                                            <button class="btn btn-danger" type="button" id="class35-5-add-custom">
-                                                <i class="fas fa-plus mr-1"></i>Ekle
-                                            </button>
+                                    <div class="card-footer bg-white">
+                                        <div class="input-group">
+                                            <input type="text" id="c35-custom-input" class="form-control" placeholder="Listedeki olmayan özel bir mal...">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-outline-primary" id="c35-add-custom">Ekle</button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <small class="form-text text-muted">
-                                        <span id="class35-5-char-count">0</span> / 1.000 karakter
-                                    </small>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <div class="selected-classes-panel">
-                                <div class="panel-header d-flex justify-content-between align-items-center">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-check-circle mr-2"></i>
-                                        Seçilen Mallar
-                                    </h5>
-                                    <span class="badge badge-light" id="class35-5-selected-count">0</span>
-                                </div>
-                                <div class="border-top p-3">
-                                    <button type="button" class="btn btn-outline-danger btn-sm btn-block" id="clearGoodsBtn">
-                                        <i class="fas fa-trash mr-1"></i>Tümünü Temizle
-                                    </button>
-                                </div>
-                                <div class="selected-classes-content" id="class35-5-selected-items">
-                                    <div class="empty-state">
-                                        <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
-                                        <p class="text-muted">
-                                            Henüz mal seçilmedi.<br>
-                                            Sol panelden mal sınıflarını seçin.
-                                        </p>
+                            <div class="col-lg-4 d-flex flex-column h-100">
+                                <div class="card shadow-sm h-100">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <span class="font-weight-bold">Seçilenler</span>
+                                        <span class="badge badge-primary badge-pill" id="c35-count">0</span>
+                                    </div>
+                                    <div class="card-body p-2 overflow-auto" id="c35-selected-container" style="max-height: 500px;"></div>
+                                    <div class="card-footer bg-white">
+                                        <button class="btn btn-outline-danger btn-sm btn-block" id="c35-clear">Temizle</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-action="close">İptal</button>
+                        <button type="button" class="btn btn-primary px-4" id="c35-save">Kaydet ve Ekle</button>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeClass35_5Modal(true)">
-                    <i class="fas fa-times mr-1"></i>İptal
-                </button>
-                <button type="button" class="btn btn-primary" id="class35-5-save-btn">
-                    <i class="fas fa-save mr-1"></i>Kaydet
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-`;
-    const modalContainer = document.createElement('div');
-    modalContainer.className = 'modal-backdrop fade show';
-    document.body.appendChild(modalContainer);
+        </div>`;
 
-    const modalElement = document.createElement('div');
-    modalElement.className = 'modal fade show d-block';
-    modalElement.id = 'class35-5-modal';
-    modalElement.setAttribute('tabindex', '-1');
-    modalElement.setAttribute('role', 'dialog');
-    modalElement.setAttribute('aria-labelledby', 'modalLabel');
-    modalElement.setAttribute('aria-hidden', 'true');
-    modalElement.innerHTML = modalHTML;
-    document.body.appendChild(modalElement);
-    
-    // Modal içeriğini yükle
-    loadClass35_5ModalContent();
-    
-    // Event listener'ları kur
-    setupClass35_5ModalEvents();
-}
+        // Varsa eski modalı sil
+        const oldModal = document.getElementById(this.modalId);
+        if (oldModal) oldModal.remove();
 
-function closeClass35_5Modal(isCanceled) {
-    // Modal ve backdrop'ı temizle
-    const modal = document.getElementById('class35-5-modal');
-    if (modal) {
-        modal.remove();
-    }
-    
-    const backdrop = document.querySelector('.modal-backdrop');
-    if (backdrop) {
-        backdrop.remove();
-    }
-
-    // Body'den modal sınıflarını temizle
-    document.body.classList.remove('modal-open');
-    document.body.style.paddingRight = '';
-
-    if (isCanceled) {
-        // İptal edilmişse modal seçimlerini temizle
-        class35_5_modalSelectedItems = {};
-        console.log('Modal iptal edildi, seçimler temizlendi.');
-    } else {
-        console.log('Modal başarıyla kapatıldı.');
-    }
-}
-
-async function loadClass35_5ModalContent() {
-    try {
-        const goodsClasses = allNiceData.filter(cls => cls.classNumber >= 1 && cls.classNumber <= 34);
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        document.body.classList.add('modal-open');
         
-        class35_5_modalAllData = goodsClasses;
-        
-        let html = '';
-        goodsClasses.forEach(c => {
-            html += `
-                <div class="class-item" data-search-text="${(c.classNumber + ' ' + c.classTitle).toLowerCase()}">
-                    <div class="class-header" data-class-number="${c.classNumber}">
-                        <div class="class-header-content">
-                            <i class="fas fa-chevron-down toggle-icon"></i>
-                            <span class="class-number">${c.classNumber}</span>
-                            <span class="class-title">${c.classTitle}</span>
-                        </div>
-                        <div class="class-header-actions">
-                            <button class="select-class-btn" data-class-number="${c.classNumber}" title="Tüm sınıfı seç/kaldır">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="subclasses-container" id="modal-subclasses-${c.classNumber}">`;
-            
-            if (c.subClasses.length > 0) {
-                c.subClasses.forEach((sc, index) => {
-                    const code = `${c.classNumber}-${index + 1}`;
-                    const isSelected = class35_5_modalSelectedItems[code] ? 'selected' : '';
-                    html += `
-                        <div class="subclass-item ${isSelected}" data-code="${code}" data-class-num="${c.classNumber}" data-text="${sc.subClassDescription}">
-                            <span class="subclass-code">(${code})</span> ${sc.subClassDescription}
+        this.updateSelectedUI();
+    }
+
+    _generateListHTML() {
+        return this.modalData.map(cls => `
+            <div class="c35-class-group border-bottom">
+                <div class="p-2 bg-light d-flex justify-content-between align-items-center c35-header" style="cursor:pointer;" data-class="${cls.classNumber}">
+                    <strong><span class="badge badge-secondary mr-2">${cls.classNumber}</span> ${cls.classTitle}</strong>
+                    <i class="fas fa-chevron-down text-muted"></i>
+                </div>
+                <div class="c35-sub-list collapse" id="c35-sub-${cls.classNumber}">
+                    ${cls.subClasses.map((sub, idx) => {
+                        const code = `${cls.classNumber}-${idx + 1}`;
+                        return `
+                        <div class="p-2 border-top pl-4 c35-item-row" data-code="${code}" data-text="${sub.subClassDescription}" style="cursor:pointer;">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="chk-${code}" value="${code}">
+                                <label class="custom-control-label" for="chk-${code}" style="cursor:pointer;">
+                                    <span class="text-muted small">(${code})</span> ${sub.subClassDescription}
+                                </label>
+                            </div>
                         </div>`;
-                });
-            } else {
-                html += `<div class="p-3 text-muted">Bu sınıfta alt kategori bulunmuyor</div>`;
-            }
-            html += `</div></div>`;
-        });
-        
-        document.getElementById('class35-5-list').innerHTML = html;
-        updateClass35_5VisualStates();
-        renderClass35_5Selected();
-
-    } catch (error) {
-        console.error('35-5 modal yüklenirken hata:', error);
-        document.getElementById('class35-5-list').innerHTML = `
-            <div class="alert alert-danger">Mal sınıfları yüklenemedi: ${error.message}</div>
-        `;
+                    }).join('')}
+                </div>
+            </div>
+        `).join('');
     }
-}
 
-function setupClass35_5ModalEvents() {
-    const modal = document.getElementById('class35-5-modal');
-    if (!modal) return;
+    setupEvents() {
+        const modal = document.getElementById(this.modalId);
+        
+        // Event Delegation
+        modal.addEventListener('click', (e) => {
+            const target = e.target;
 
-    modal.addEventListener('click', e => {
-        const target = e.target.closest('.select-class-btn, .subclass-item, .class-header, #clearGoodsBtn, .close');
-        if (!target) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (target.id === 'clearGoodsBtn') {
-            clearClass35_5Selection();
-        } else if (target.classList.contains('select-class-btn')) {
-            const classNumber = parseInt(target.dataset.classNumber);
-            const isFullySelected = class35_5_modalAllData.find(c => c.classNumber === classNumber).subClasses.every((sc, index) => class35_5_modalSelectedItems[`${classNumber}-${index + 1}`]);
-            if (isFullySelected) {
-                deselectWholeClass35_5(classNumber);
-            } else {
-                selectWholeClass35_5(classNumber);
+            // Kapatma
+            if (target.dataset.action === 'close' || target.classList.contains('close')) {
+                this.close();
+                return;
             }
-        } else if (target.classList.contains('subclass-item')) {
-            const code = target.dataset.code;
-            const classNum = target.dataset.classNum;
-            const text = target.dataset.text;
+
+            // Accordion Aç/Kapa
+            const header = target.closest('.c35-header');
+            if (header) {
+                const classNum = header.dataset.class;
+                const content = document.getElementById(`c35-sub-${classNum}`);
+                content.classList.toggle('show');
+                return;
+            }
+
+            // Öğe Seçimi
+            const itemRow = target.closest('.c35-item-row');
+            if (itemRow) {
+                // Checkbox'a tıklanmadıysa manuel tetikle
+                if (target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
+                    const checkbox = itemRow.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+                    this.toggleItem(checkbox.value, itemRow.dataset.text, checkbox.checked);
+                }
+            }
             
-            if (class35_5_modalSelectedItems[code]) {
-                removeClass35_5(code);
-            } else {
-                addClass35_5(code, classNum, text);
+            // Checkbox değişimi (Doğrudan tıklama)
+            if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+                const itemRow = target.closest('.c35-item-row');
+                this.toggleItem(target.value, itemRow.dataset.text, target.checked);
             }
-        } else if (target.classList.contains('class-header') && !e.target.closest('.select-class-btn')) {
-            const classNumber = parseInt(target.dataset.classNumber);
-            const container = document.getElementById(`modal-subclasses-${classNumber}`);
-            if (container) {
-                container.classList.toggle('show');
-                target.classList.toggle('expanded');
-            }
-        }
-    });
+        });
 
-    const searchInput = document.getElementById('class35-5-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
+        // Arama
+        document.getElementById('c35-search').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
-            modal.querySelectorAll('.class-item').forEach(item => {
-                const shouldShow = item.dataset.searchText.includes(term);
-                item.style.display = shouldShow ? '' : 'none';
-                if (shouldShow && term.length > 2) {
-                    const container = item.querySelector('.subclasses-container');
-                    if (container) container.classList.add('show');
-                    const header = item.querySelector('.class-header');
-                    if (header) header.classList.add('expanded');
+            const groups = modal.querySelectorAll('.c35-class-group');
+            
+            groups.forEach(group => {
+                let hasMatch = false;
+                const items = group.querySelectorAll('.c35-item-row');
+                items.forEach(item => {
+                    const text = item.dataset.text.toLowerCase();
+                    if (text.includes(term)) {
+                        item.style.display = '';
+                        hasMatch = true;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+                
+                // Başlık veya içerik eşleşiyorsa grubu göster
+                const title = group.querySelector('.c35-header').innerText.toLowerCase();
+                if (title.includes(term) || hasMatch) {
+                    group.style.display = '';
+                    // Arama yapılıyorsa accordion'u aç
+                    if (term.length > 2) group.querySelector('.c35-sub-list').classList.add('show');
+                } else {
+                    group.style.display = 'none';
                 }
             });
         });
-    }
 
-    const addCustomBtn = document.getElementById('class35-5-add-custom');
-    const customInput = document.getElementById('class35-5-custom-input');
-    const charCount = document.getElementById('class35-5-char-count');
-    if (addCustomBtn) {
-        addCustomBtn.addEventListener('click', () => {
-            const text = customInput.value.trim();
-            if (!text) return alert('Lütfen özel mal tanımını girin');
-            const code = `99-${Date.now()}`;
-            addClass35_5(code, '99', text);
-            customInput.value = '';
-            if (charCount) charCount.textContent = '0';
-        });
-    }
-
-    const saveBtn = document.getElementById('class35-5-save-btn');
-    if (saveBtn) {
-        saveBtn.addEventListener('click', saveClass35_5Selection);
-    }
-    
-    const clearBtn = document.getElementById('clearGoodsBtn');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', clearClass35_5Selection);
-    }
-}
-
-function addClass35_5(code, classNum, text) {
-    if (class35_5_modalSelectedItems[code]) return;
-    class35_5_modalSelectedItems[code] = { classNum, text };
-    renderClass35_5Selected();
-    updateClass35_5VisualStates();
-}
-
-function removeClass35_5(code) {
-    if (!class35_5_modalSelectedItems[code]) return;
-    delete class35_5_modalSelectedItems[code];
-    renderClass35_5Selected();
-    updateClass35_5VisualStates();
-}
-
-function selectWholeClass35_5(classNumber) {
-    const classData = class35_5_modalAllData.find(c => c.classNumber === classNumber);
-    if (!classData) return;
-
-    classData.subClasses.forEach((sc, index) => {
-        const code = `${classNumber}-${index + 1}`;
-        addClass35_5(code, classNumber, sc.subClassDescription);
-    });
-
-    const container = document.getElementById(`modal-subclasses-${classNumber}`);
-    if (container) container.classList.add('show');
-}
-function deselectWholeClass35_5(classNumber) {
-    const classData = class35_5_modalAllData.find(c => c.classNumber === classNumber);
-    if (!classData) return;
-
-    classData.subClasses.forEach((sc, index) => {
-        const code = `${classNumber}-${index + 1}`;
-        removeClass35_5(code);
-    });
-}
-
-function renderClass35_5Selected() {
-    const container = document.getElementById('class35-5-selected-items');
-    const countBadge = document.getElementById('class35-5-selected-count');
-    if (!container || !countBadge) return;
-
-    const count = Object.keys(class35_5_modalSelectedItems).length;
-    countBadge.textContent = count;
-
-    if (count === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
-                <p class="text-muted">
-                    Henüz mal seçilmedi.<br>
-                    Sol panelden mal sınıflarını seçin.
-                </p>
-            </div>`;
-        return;
-    }
-
-    const grouped = {};
-    Object.entries(class35_5_modalSelectedItems).forEach(([code, item]) => {
-        if (!grouped[item.classNum]) grouped[item.classNum] = [];
-        grouped[item.classNum].push({ code, text: item.text });
-    });
-
-    let html = '';
-    Object.keys(grouped).sort((a, b) => parseInt(a) - parseInt(b)).forEach(classNum => {
-        grouped[classNum].forEach(item => {
-            const isCustom = classNum === '99';
-            const displayCode = isCustom ? classNum : item.code;
-            html += `
-                <div class="selected-class-item ${isCustom ? 'custom' : ''}">
-                    <div class="selected-class-number">Sınıf ${displayCode}</div>
-                    <p class="selected-class-description" style="white-space: pre-wrap;">${item.text}</p>
-                    <button class="remove-selected-btn" data-key="${item.code}" title="Kaldır" onclick="removeClass35_5('${item.code}')">&times;</button>
-                </div>`;
-        });
-    });
-    
-    container.innerHTML = html;
-}
-
-function updateClass35_5VisualStates() {
-    class35_5_modalAllData.forEach(cls => {
-        const classNumber = cls.classNumber;
-        
-        const selectedSubCount = Object.keys(class35_5_modalSelectedItems).filter(key => key.startsWith(`${classNumber}-`)).length;
-        const allSelected = selectedSubCount === cls.subClasses.length && cls.subClasses.length > 0;
-        const someSelected = selectedSubCount > 0;
-
-        const header = document.querySelector(`#class35-5-modal .class-header[data-class-number="${classNumber}"]`);
-        if (header) {
-            header.classList.remove('selected', 'partially-selected', 'fully-selected');
+        // Kaydet
+        document.getElementById('c35-save').addEventListener('click', () => {
+            const count = Object.keys(this.selectedItems).length;
+            if (count === 0) return alert('Lütfen en az bir mal seçin.');
             
-            if (allSelected) {
-                header.classList.add('selected', 'fully-selected');
-            } else if (someSelected) {
-                header.classList.add('selected', 'partially-selected');
-            }
-        }
+            // Ana yöneticiye aktar
+            this.parent.addSelection('35-5', '35', 'Müşterilerin malları (seçilen mallar için)');
+            // Seçilen alt malları da ekleyelim (Opsiyonel: Veritabanına detaylı kaydetmek isterseniz)
+            Object.entries(this.selectedItems).forEach(([code, text]) => {
+                this.parent.addSelection(code, code.split('-')[0], text);
+            });
 
-        cls.subClasses.forEach((sc, index) => {
-            const code = `${classNumber}-${index + 1}`;
-            const subElement = document.querySelector(`#class35-5-modal [data-code="${code}"]`);
-            if (subElement) {
-                if (class35_5_modalSelectedItems[code]) {
-                    subElement.classList.add('selected');
+            this.close();
+        });
+        
+        // Özel Ekle
+        document.getElementById('c35-add-custom').addEventListener('click', () => {
+            const input = document.getElementById('c35-custom-input');
+            const val = input.value.trim();
+            if(!val) return;
+            const customCode = `99-${Date.now()}`;
+            this.toggleItem(customCode, val, true);
+            input.value = '';
+        });
+    }
+
+    toggleItem(code, text, isSelected) {
+        if (isSelected) {
+            this.selectedItems[code] = text;
+        } else {
+            delete this.selectedItems[code];
+        }
+        this.updateSelectedUI();
+    }
+
+    updateSelectedUI() {
+        const container = document.getElementById('c35-selected-container');
+        const countBadge = document.getElementById('c35-count');
+        const count = Object.keys(this.selectedItems).length;
+        countBadge.textContent = count;
+
+        let html = '';
+        Object.entries(this.selectedItems).forEach(([code, text]) => {
+            html += `
+                <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                    <span class="text-truncate small" style="max-width: 200px;" title="${text}">(${code}) ${text}</span>
+                    <button class="btn btn-xs text-danger" onclick="document.getElementById('chk-${code}').click()">&times;</button>
+                </div>
+            `;
+        });
+        container.innerHTML = html || '<div class="text-muted text-center mt-4">Seçim yok</div>';
+    }
+
+    close() {
+        const modal = document.getElementById(this.modalId);
+        if (modal) modal.remove();
+        document.body.classList.remove('modal-open');
+    }
+}
+
+/**
+ * Ana Nice Sınıflandırma Yöneticisi
+ */
+class NiceClassificationManager {
+    constructor() {
+        this.allData = [];
+        this.selectedClasses = {}; // { "1-5": { classNum: 1, text: "..." } }
+        this.elements = {
+            listContainer: document.getElementById('niceClassificationList'),
+            selectedContainer: document.getElementById('selectedNiceClasses'),
+            searchInput: document.getElementById('niceClassSearch'),
+            selectedCountBadge: document.getElementById('selectedClassCount'),
+            customInput: document.getElementById('customClassInput'),
+            customAddBtn: document.getElementById('addCustomClassBtn'),
+            customCharCount: document.getElementById('customClassCharCount')
+        };
+        
+        this.class35Manager = new Class35_5Manager(this);
+    }
+
+    async init() {
+        if (!this.elements.listContainer) return; // Sayfada element yoksa çık
+
+        this.elements.listContainer.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div><div class="mt-2">Sınıflar yükleniyor...</div></div>';
+
+        try {
+            const snapshot = await getDocs(collection(db, "niceClassification"));
+            this.allData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    classNumber: parseInt(data.classNumber),
+                    classTitle: data.classTitle,
+                    subClasses: data.subClasses || []
+                };
+            }).sort((a, b) => a.classNumber - b.classNumber);
+
+            this.renderList();
+            this.setupEventListeners();
+            this.updateSelectionUI(); // Başlangıç durumu
+
+        } catch (error) {
+            console.error("Nice sınıfları yüklenemedi:", error);
+            this.elements.listContainer.innerHTML = `<div class="alert alert-danger">Veri yükleme hatası: ${error.message}</div>`;
+        }
+    }
+
+    // Sol Panel: Sınıf Listesini Oluştur
+    renderList() {
+        let html = '';
+        this.allData.forEach(cls => {
+            html += `
+            <div class="class-group-item" data-class-num="${cls.classNumber}" data-search="${(cls.classNumber + ' ' + cls.classTitle).toLowerCase()}">
+                <div class="class-header d-flex align-items-center justify-content-between p-2 border-bottom bg-white">
+                    <div class="d-flex align-items-center flex-grow-1 toggle-sublist" style="cursor:pointer;">
+                        <span class="badge badge-info mr-2" style="width:30px;">${cls.classNumber}</span>
+                        <span class="font-weight-bold text-dark small text-truncate" style="max-width: 250px;">${cls.classTitle}</span>
+                        <i class="fas fa-chevron-down ml-auto text-muted transition-icon"></i>
+                    </div>
+                    <div class="ml-2">
+                        <button class="btn btn-sm btn-outline-secondary select-all-btn" title="Tüm Sınıfı Seç/Kaldır">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="sub-class-list collapse bg-light" id="sublist-${cls.classNumber}">
+                    ${cls.subClasses.map((sub, idx) => {
+                        const code = `${cls.classNumber}-${idx + 1}`;
+                        const is35_5 = code === '35-5';
+                        const specialClass = is35_5 ? 'text-primary font-weight-bold bg-white border border-primary rounded' : '';
+                        const icon = is35_5 ? '<i class="fas fa-shopping-cart mr-1"></i>' : '';
+                        
+                        return `
+                        <div class="sub-item p-2 border-bottom pl-4 d-flex align-items-start ${specialClass}" 
+                             data-code="${code}" data-text="${sub.subClassDescription}" style="cursor:pointer;">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input class-checkbox" id="chk-main-${code}" value="${code}">
+                                <label class="custom-control-label" for="chk-main-${code}" style="cursor:pointer; line-height:1.4;">
+                                    ${icon} <span class="text-muted mr-1">(${code})</span> ${sub.subClassDescription}
+                                </label>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        });
+        this.elements.listContainer.innerHTML = html;
+    }
+
+    // Event Dinleyicileri (Tek bir merkezden yönetim)
+    setupEventListeners() {
+        // Liste üzerindeki tıklamalar (Delegation)
+        this.elements.listContainer.addEventListener('click', (e) => {
+            const target = e.target;
+
+            // 1. Accordion Aç/Kapa
+            const toggleBtn = target.closest('.toggle-sublist');
+            if (toggleBtn) {
+                const parent = toggleBtn.closest('.class-group-item');
+                const list = parent.querySelector('.sub-class-list');
+                const icon = toggleBtn.querySelector('.fa-chevron-down');
+                
+                const isShown = list.classList.contains('show');
+                if (isShown) {
+                    list.classList.remove('show');
+                    icon.style.transform = 'rotate(0deg)';
                 } else {
-                    subElement.classList.remove('selected');
+                    list.classList.add('show');
+                    icon.style.transform = 'rotate(180deg)';
+                }
+                return;
+            }
+
+            // 2. Tüm Sınıfı Seç
+            const selectAllBtn = target.closest('.select-all-btn');
+            if (selectAllBtn) {
+                e.stopPropagation();
+                const parent = selectAllBtn.closest('.class-group-item');
+                const classNum = parseInt(parent.dataset.classNum);
+                this.toggleWholeClass(classNum);
+                return;
+            }
+
+            // 3. Tekil Öğe Seçimi (Satıra tıklama)
+            const subItem = target.closest('.sub-item');
+            if (subItem && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
+                const checkbox = subItem.querySelector('.class-checkbox');
+                // Eğer 35-5 ise checkbox'ı manuel tetikleme, özel fonksiyonu çağır
+                if (subItem.dataset.code === '35-5') {
+                    this.class35Manager.open();
+                } else {
+                    checkbox.checked = !checkbox.checked;
+                    this.handleSelectionChange(checkbox.value, subItem.dataset.text, checkbox.checked);
+                }
+            }
+
+            // 4. Checkbox Değişimi
+            if (target.classList.contains('class-checkbox')) {
+                if (target.value === '35-5') {
+                    e.preventDefault(); // Checkbox'ın hemen işaretlenmesini engelle
+                    this.class35Manager.open();
+                } else {
+                    const subItem = target.closest('.sub-item');
+                    this.handleSelectionChange(target.value, subItem.dataset.text, target.checked);
                 }
             }
         });
-    });
-}
 
-function saveClass35_5Selection() {
-    try {
-        const itemCount = Object.keys(class35_5_modalSelectedItems).length;
-        if (itemCount === 0) {
-            alert('Lütfen en az bir mal seçin.');
-            return;
+        // Sağ Panel: Kaldır Butonu
+        if (this.elements.selectedContainer) {
+            this.elements.selectedContainer.addEventListener('click', (e) => {
+                const removeBtn = e.target.closest('.remove-selected-btn');
+                if (removeBtn) {
+                    this.removeSelection(removeBtn.dataset.key);
+                }
+            });
         }
 
-        // Önce modal'ı kapat
-        closeClass35_5Modal(false);
+        // Arama
+        if (this.elements.searchInput) {
+            this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+        }
 
-        // Seçilen malları ana sisteme aktar
-        Object.entries(class35_5_modalSelectedItems).forEach(([code, item]) => {
-            selectedClasses[code] = { classNum: item.classNum, text: item.text };
-        });
-
-        // 35-5 ana seçimini ekle
-        selectedClasses["35-5"] = { classNum: "35", text: "Müşterilerin malları (seçilen mallar için)" };
-
-        // Ana sistemi güncelle
-        renderSelectedClasses();
-        updateVisualStates();
-
-        // Başarı mesajı
-        alert(`✅ 35-5 hizmeti başarıyla güncellendi!\n${itemCount} mal kategorisi eklendi.`);
+        // Özel Sınıf Ekleme
+        if (this.elements.customAddBtn) {
+            this.elements.customAddBtn.addEventListener('click', () => this.addCustomClass());
+        }
         
-    } catch (error) {
-        console.error('❌ Kaydetme hatası:', error);
-        alert('Kaydetme sırasında hata oluştu:\n' + error.message);
+        // Karakter Sayacı
+        if (this.elements.customInput) {
+            this.elements.customInput.addEventListener('input', (e) => {
+                if(this.elements.customCharCount) 
+                    this.elements.customCharCount.textContent = e.target.value.length.toLocaleString('tr-TR');
+            });
+        }
     }
-}
 
-function clearClass35_5Search() {
-    const searchInput = document.getElementById('class35-5-search');
-    if (searchInput) {
-        searchInput.value = '';
-        const listContainer = document.getElementById('class35-5-list');
-        listContainer.querySelectorAll('.class-item').forEach(item => {
-            item.style.display = '';
-            const container = item.querySelector('.subclasses-container');
-            if (container) container.classList.remove('show');
-            const header = item.querySelector('.class-header');
-            if (header) header.classList.remove('expanded');
+    // İş Mantığı
+    handleSelectionChange(code, text, isSelected) {
+        if (isSelected) {
+            this.addSelection(code, code.split('-')[0], text);
+        } else {
+            this.removeSelection(code);
+        }
+    }
+
+    addSelection(code, classNum, text) {
+        this.selectedClasses[code] = { classNum: String(classNum), text };
+        this.updateSelectionUI();
+    }
+
+    removeSelection(code) {
+        if (this.selectedClasses[code]) {
+            delete this.selectedClasses[code];
+            this.updateSelectionUI();
+        }
+    }
+
+    toggleWholeClass(classNum) {
+        const classData = this.allData.find(c => c.classNumber === classNum);
+        if (!classData) return;
+
+        // Bu sınıfın hepsi seçili mi kontrol et
+        const allCodes = classData.subClasses.map((_, i) => `${classNum}-${i + 1}`);
+        const allSelected = allCodes.every(code => this.selectedClasses[code]);
+
+        if (allSelected) {
+            // Hepsini Kaldır
+            allCodes.forEach(code => this.removeSelection(code));
+        } else {
+            // Hepsini Seç
+            classData.subClasses.forEach((sub, i) => {
+                const code = `${classNum}-${i + 1}`;
+                if (code === '35-5') return; // 35-5 toplu seçimden hariç tutulur (özel işlem gerekir)
+                this.addSelection(code, classNum, sub.subClassDescription);
+            });
+        }
+    }
+
+    addCustomClass() {
+        const val = this.elements.customInput.value.trim();
+        if (!val) return alert('Lütfen bir açıklama girin.');
+        const code = `99-${Date.now()}`;
+        this.addSelection(code, '99', val);
+        this.elements.customInput.value = '';
+        if(this.elements.customCharCount) this.elements.customCharCount.textContent = '0';
+    }
+
+    handleSearch(term) {
+        term = term.toLowerCase();
+        const items = this.elements.listContainer.querySelectorAll('.class-group-item');
+        
+        items.forEach(item => {
+            const searchText = item.dataset.search;
+            const subItems = item.querySelectorAll('.sub-item');
+            let hasSubMatch = false;
+
+            subItems.forEach(sub => {
+                const text = sub.dataset.text.toLowerCase();
+                const code = sub.dataset.code;
+                if (text.includes(term) || code.includes(term)) {
+                    sub.style.display = 'flex';
+                    hasSubMatch = true;
+                } else {
+                    sub.style.display = 'none';
+                }
+            });
+
+            if (searchText.includes(term) || hasSubMatch) {
+                item.style.display = 'block';
+                // Arama varsa aç
+                if (term.length > 1) {
+                    item.querySelector('.sub-class-list').classList.add('show');
+                    item.querySelector('.fa-chevron-down').style.transform = 'rotate(180deg)';
+                }
+            } else {
+                item.style.display = 'none';
+            }
         });
     }
-}
 
-function clearClass35_5Selection() {
-    try {
-        class35_5_modalSelectedItems = {};
-        renderClass35_5Selected();
-        updateClass35_5VisualStates();
-    } catch (error) {
-        console.error('❌ 35-5 seçimlerini temizleme hatası:', error);
+    // UI Güncelleme (Merkezi)
+    updateSelectionUI() {
+        // 1. Sol Paneldeki Checkboxları Güncelle
+        const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
+        allCheckboxes.forEach(chk => {
+            chk.checked = !!this.selectedClasses[chk.value];
+            // Parent satırı boya
+            const row = chk.closest('.sub-item');
+            if (row) {
+                if(chk.checked) row.classList.add('bg-primary-light');
+                else row.classList.remove('bg-primary-light');
+            }
+        });
+
+        // 2. Sağ Paneli Güncelle (Liste)
+        if (this.elements.selectedContainer) {
+            const count = Object.keys(this.selectedClasses).length;
+            if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
+
+            if (count === 0) {
+                this.elements.selectedContainer.innerHTML = `
+                    <div class="text-center text-muted mt-5">
+                        <i class="fas fa-clipboard-list fa-3x mb-3 opacity-50"></i>
+                        <p>Henüz sınıf seçilmedi.</p>
+                    </div>`;
+                // Dışarıya boş olduğunu bildir
+                this.elements.selectedContainer.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+
+            // Gruplama
+            const grouped = {};
+            Object.entries(this.selectedClasses).forEach(([code, data]) => {
+                const num = data.classNum;
+                if (!grouped[num]) grouped[num] = [];
+                grouped[num].push({ code, text: data.text });
+            });
+
+            let html = '';
+            // Sınıf numarasına göre sırala
+            Object.keys(grouped).sort((a,b) => parseInt(a) - parseInt(b)).forEach(num => {
+                const items = grouped[num];
+                const is99 = num === '99';
+                const badgeClass = is99 ? 'badge-danger' : 'badge-primary';
+                
+                html += `
+                <div class="selected-group mb-3 animate-fade-in">
+                    <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-primary">Sınıf ${num}</h6>
+                    ${items.map(item => `
+                        <div class="selected-tag d-flex align-items-start mb-2 p-2 rounded border bg-white shadow-sm position-relative">
+                            <span class="badge ${badgeClass} mr-2 mt-1">${is99 ? 'Özel' : item.code}</span>
+                            <span class="flex-grow-1 text-dark small" style="line-height:1.4;">${item.text}</span>
+                            <button class="btn btn-link text-danger p-0 ml-2 remove-selected-btn" data-key="${item.code}" style="text-decoration:none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>`;
+            });
+
+            this.elements.selectedContainer.innerHTML = html;
+            // Değişikliği bildir (TaskSubmitHandler dinliyor olabilir)
+            this.elements.selectedContainer.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    // --- DIŞARI AÇILAN API ---
+
+    getSelectedData() {
+        return Object.entries(this.selectedClasses).map(([code, val]) => {
+            return val.classNum === '99' ? `(99) ${val.text}` : `(${code}) ${val.text}`;
+        });
+    }
+
+    setSelectedData(classesArray) {
+        this.selectedClasses = {};
+        if (!Array.isArray(classesArray)) return;
+
+        classesArray.forEach(str => {
+            // Regex: "(1-5) Açıklama" veya "(99) Özel Açıklama"
+            const match = str.match(/^\((\d+(?:-\d+)?)\)\s*([\s\S]*)$/);
+            if (match) {
+                const code = match[1];
+                const text = match[2];
+                const classNum = code.includes('-') ? code.split('-')[0] : code;
+                this.addSelection(code, classNum, text);
+            }
+        });
+        this.updateSelectionUI();
+    }
+
+    clearAll() {
+        this.selectedClasses = {};
+        this.updateSelectionUI();
     }
 }
+
+// Global Örneği Başlat
+const niceManager = new NiceClassificationManager();
+
+// --- EXPORT FONKSİYONLAR (Eski yapıyı desteklemek için) ---
 
 export async function initializeNiceClassification() {
-    const listContainer = document.getElementById('niceClassificationList');
-    const searchInput = document.getElementById('niceClassSearch');
-    const addCustomBtn = document.getElementById('addCustomClassBtn');
-    const customInput = document.getElementById('customClassInput');
-    const selectedContainer = document.getElementById('selectedNiceClasses');
-    const charCountElement = document.getElementById('customClassCharCount');
-
-    if (!listContainer) return;
-
-    if (customInput && charCountElement) {
-        customInput.addEventListener('input', (e) => {
-            charCountElement.textContent = e.target.value.length.toLocaleString('tr-TR');
-        });
-    }
-
-    listContainer.innerHTML = '';
-
-    try {
-        const niceCollection = collection(db, "niceClassification");
-        const snapshot = await getDocs(niceCollection);
-        allNiceData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                classNumber: parseInt(data.classNumber),
-                classTitle: data.classTitle,
-                subClasses: data.subClasses || []
-            };
-        }).sort((a, b) => a.classNumber - b.classNumber);
-        
-        let html = '';
-        allNiceData.forEach(c => {
-            html += `
-                <div class="class-item" data-search-text="${(c.classNumber + ' ' + c.classTitle).toLowerCase()}">
-                    <div class="class-header" data-id="${c.classNumber}">
-                        <div class="class-header-content">
-                            <i class="fas fa-chevron-down toggle-icon"></i>
-                            <span class="class-number">${c.classNumber}</span>
-                            <span class="class-title">${c.classTitle}</span>
-                        </div>
-                        <div class="class-header-actions">
-                            <button class="select-class-btn" data-class-number="${c.classNumber}" title="Tüm sınıfı seç/kaldır">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="subclasses-container" id="subclasses-${c.classNumber}">`;
-            if (c.subClasses.length > 0) {
-                c.subClasses.forEach((sc, index) => {
-                    const code = `${c.classNumber}-${index + 1}`;
-                    const isSelected = selectedClasses[code] ? 'selected' : '';
-                    html += `
-                        <div class="subclass-item ${isSelected}" data-code="${code}" data-class-num="${c.classNumber}" data-text="${sc.subClassDescription}">
-                            <span class="subclass-code">(${code})</span> ${sc.subClassDescription}
-                        </div>`;
-                });
-            } else {
-                html += `<div class="p-3 text-muted">Bu sınıfta alt kategori bulunmuyor</div>`;
-            }
-            html += `</div></div>`;
-        });
-        listContainer.innerHTML = html;
-
-        listContainer.addEventListener('click', e => {
-            const selectBtn = e.target.closest('.select-class-btn');
-            if (selectBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                const classNumber = parseInt(selectBtn.dataset.classNumber);
-                if (isClassFullySelected(classNumber)) {
-                    deselectWholeClass(classNumber);
-                } else {
-                    selectWholeClass(classNumber);
-                }
-                return;
-            }
-
-            const header = e.target.closest('.class-header');
-            const sub = e.target.closest('.subclass-item');
-            
-            if (sub) {
-                const code = sub.dataset.code;
-                const classNum = sub.dataset.classNum;
-                const text = sub.dataset.text;
-                
-                if (code === '35-5') {
-                    openClass35_5Modal();
-                } else {
-                    if (selectedClasses[code]) {
-                        removeSelectedClass(code);
-                    } else {
-                        selectItem(code, classNum, text);
-                    }
-                }
-                return;
-            }
-            
-            if (header && !e.target.closest('.select-class-btn')) {
-                toggleAccordion(parseInt(header.dataset.id));
-            }
-        });
-
-        selectedContainer.addEventListener('click', e => {
-            const btn = e.target.closest('.remove-selected-btn');
-            if (btn) removeSelectedClass(btn.dataset.key);
-        });
-
-        searchInput.addEventListener('input', e => {
-            const term = e.target.value.toLowerCase();
-            document.querySelectorAll('#niceClassificationList .class-item').forEach(el => {
-                const shouldShow = el.dataset.searchText.includes(term);
-                el.style.display = shouldShow ? '' : 'none';
-                
-                if (shouldShow && term.length > 2) {
-                    const collapseElement = el.querySelector('.subclasses-container');
-                    if (collapseElement) collapseElement.classList.add('show');
-                    const header = el.querySelector('.class-header');
-                    if (header) header.classList.add('expanded');
-                }
-            });
-        });
-
-        addCustomBtn?.addEventListener('click', () => {
-            const text = customInput.value.trim();
-            if (!text) return alert('Lütfen özel sınıf metnini girin');
-            const code = `99-${Date.now()}`;
-            selectItem(code, '99', text);
-            customInput.value = '';
-            if (charCountElement) charCountElement.textContent = '0';
-        });
-
-        customInput?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                addCustomBtn.click();
-            }
-        });
-
-        renderSelectedClasses();
-        updateVisualStates();
-
-    } catch (err) {
-        console.error("Nice sınıfları yüklenirken hata:", err);
-        listContainer.innerHTML = `<div class="error-state">Sınıflar yüklenemedi: ${err.message}</div>`;
-    }
-}
-
-export function clearAllSelectedClasses() {
-    selectedClasses = {};
-    renderSelectedClasses();
-    updateVisualStates();
-    document.querySelectorAll('.subclass-item.selected').forEach(el => el.classList.remove('selected'));
+    await niceManager.init();
 }
 
 export function getSelectedNiceClasses() {
-    return Object.entries(selectedClasses).map(([k, v]) => {
-        return v.classNum === '99' ? `(99) ${v.text}` : `(${k}) ${v.text}`;
-    });
+    return niceManager.getSelectedData();
 }
 
-window.clearAllSelectedClasses = clearAllSelectedClasses;
+export function setSelectedNiceClasses(classes) {
+    niceManager.setSelectedData(classes);
+}
+
+export function clearAllSelectedClasses() {
+    niceManager.clearAll();
+}
+
+// Window Global Erişim (HTML onclick için gerekiyorsa - minimize edildi)
+window.clearAllSelectedClasses = () => niceManager.clearAll();
 window.clearNiceSearch = () => {
     const input = document.getElementById('niceClassSearch');
     if (input) {
@@ -836,9 +635,3 @@ window.clearNiceSearch = () => {
         input.dispatchEvent(new Event('input'));
     }
 };
-
-window.openClass35_5Modal = openClass35_5Modal;
-window.closeClass35_5Modal = closeClass35_5Modal;
-window.clearClass35_5Search = clearClass35_5Search;
-window.removeClass35_5 = removeClass35_5;
-window.addClass35_5 = addClass35_5;
