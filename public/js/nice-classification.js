@@ -1,4 +1,4 @@
-// public/js/nice-classification.js - Modern UI & Fixed Accordion
+// public/js/nice-classification.js - DOM Element Selection Fix
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -228,7 +228,6 @@ class Class35_5Manager {
     }
 
     renderModal() {
-        // Modal HTML (Bootstrap Modal yapısını kullanmaya devam ediyoruz ama içeriği temizledik)
         const modalHTML = `
         <div id="${this.modalId}" class="modal fade show" tabindex="-1" style="display:block; background: rgba(0,0,0,0.5); z-index: 1060;">
             <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -290,7 +289,6 @@ class Class35_5Manager {
     }
 
     _generateListHTML() {
-        // Modal içi liste için de yeni CSS sınıflarını kullanıyoruz
         return this.modalData.map(cls => `
             <div class="nice-class-group c35-group" data-class="${cls.classNumber}">
                 <div class="nice-class-header c35-header">
@@ -324,13 +322,11 @@ class Class35_5Manager {
         modal.addEventListener('click', (e) => {
             const target = e.target;
 
-            // Kapatma
             if (target.dataset.action === 'close' || target.classList.contains('close')) {
                 this.close();
                 return;
             }
 
-            // Accordion Aç/Kapa
             const header = target.closest('.c35-header');
             if (header) {
                 const group = header.parentElement;
@@ -347,7 +343,6 @@ class Class35_5Manager {
                 return;
             }
 
-            // Öğe Seçimi (Satıra tıklama)
             const itemRow = target.closest('.c35-item-row');
             if (itemRow && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
                 const checkbox = itemRow.querySelector('input[type="checkbox"]');
@@ -355,14 +350,12 @@ class Class35_5Manager {
                 this.toggleItem(checkbox.value, itemRow.dataset.text, checkbox.checked);
             }
             
-            // Checkbox değişimi
             if (target.tagName === 'INPUT' && target.type === 'checkbox') {
                 const itemRow = target.closest('.c35-item-row');
                 this.toggleItem(target.value, itemRow.dataset.text, target.checked);
             }
         });
 
-        // Arama
         document.getElementById('c35-search').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             const groups = modal.querySelectorAll('.c35-group');
@@ -381,10 +374,8 @@ class Class35_5Manager {
                 });
                 
                 const title = group.querySelector('.nice-title').innerText.toLowerCase();
-                // Başlık eşleşirse veya içinde eşleşen öğe varsa göster
                 if (title.includes(term) || hasMatch) {
                     group.style.display = '';
-                    // Arama yapılıyorsa accordion'u otomatik aç
                     if (term.length > 2) {
                         group.querySelector('.nice-sub-list').classList.add('open');
                         group.classList.add('open');
@@ -395,7 +386,6 @@ class Class35_5Manager {
             });
         });
 
-        // Kaydet
         document.getElementById('c35-save').addEventListener('click', () => {
             const count = Object.keys(this.selectedItems).length;
             if (count === 0) return alert('Lütfen en az bir mal seçin.');
@@ -408,7 +398,6 @@ class Class35_5Manager {
             this.close();
         });
         
-        // Özel Ekle
         document.getElementById('c35-add-custom').addEventListener('click', () => {
             const input = document.getElementById('c35-custom-input');
             const val = input.value.trim();
@@ -418,7 +407,6 @@ class Class35_5Manager {
             input.value = '';
         });
 
-        // Temizle
         document.getElementById('c35-clear').addEventListener('click', () => {
             this.selectedItems = {};
             this.updateSelectedUI();
@@ -469,6 +457,12 @@ class NiceClassificationManager {
     constructor() {
         this.allData = [];
         this.selectedClasses = {};
+        this.elements = {}; // Elemanları burada tutuyoruz ama içi boş başlıyor
+        this.class35Manager = new Class35_5Manager(this);
+    }
+
+    async init() {
+        // !!! KRİTİK DEĞİŞİKLİK: DOM elementlerini INIT anında seçiyoruz !!!
         this.elements = {
             listContainer: document.getElementById('niceClassificationList'),
             selectedContainer: document.getElementById('selectedNiceClasses'),
@@ -478,14 +472,12 @@ class NiceClassificationManager {
             customAddBtn: document.getElementById('addCustomClassBtn'),
             customCharCount: document.getElementById('customClassCharCount')
         };
-        
-        this.class35Manager = new Class35_5Manager(this);
-    }
 
-    async init() {
-        if (!this.elements.listContainer) return;
+        if (!this.elements.listContainer) {
+            console.warn('NiceClassification: Container not found yet.');
+            return;
+        }
 
-        // Loading Durumu
         this.elements.listContainer.innerHTML = `
             <div class="text-center p-5">
                 <div class="spinner-border text-primary mb-3"></div>
@@ -493,10 +485,8 @@ class NiceClassificationManager {
             </div>`;
 
         try {
-            // Stilleri Yükle
             injectNiceStyles();
 
-            // Veriyi Çek
             const snapshot = await getDocs(collection(db, "niceClassification"));
             this.allData = snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -558,26 +548,25 @@ class NiceClassificationManager {
     }
 
     setupEventListeners() {
+        if (!this.elements.listContainer) return;
+
         this.elements.listContainer.addEventListener('click', (e) => {
             const target = e.target;
 
-            // 1. Tüm Sınıfı Seç Butonu
             const selectAllBtn = target.closest('.nice-btn-select-all');
             if (selectAllBtn) {
-                e.stopPropagation(); // Accordion açılmasını engelle
+                e.stopPropagation();
                 const parent = selectAllBtn.closest('.nice-class-group');
                 const classNum = parseInt(parent.dataset.classNum);
                 this.toggleWholeClass(classNum);
                 return;
             }
 
-            // 2. Accordion Aç/Kapa (Header'a tıklanınca)
             const header = target.closest('.nice-class-header');
             if (header) {
                 const group = header.parentElement;
                 const list = group.querySelector('.nice-sub-list');
                 
-                // Basit Class Toggle Mantığı (Bootstrap bağımsız)
                 const isOpen = list.classList.contains('open');
                 if (isOpen) {
                     list.classList.remove('open');
@@ -589,7 +578,6 @@ class NiceClassificationManager {
                 return;
             }
 
-            // 3. Tekil Öğe Seçimi (Satıra tıklama)
             const subItem = target.closest('.sub-item');
             if (subItem && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
                 const code = subItem.dataset.code;
@@ -602,7 +590,6 @@ class NiceClassificationManager {
                 }
             }
 
-            // 4. Checkbox Değişimi
             if (target.classList.contains('class-checkbox')) {
                 if (target.value === '35-5') {
                     e.preventDefault();
@@ -614,24 +601,20 @@ class NiceClassificationManager {
             }
         });
 
-        // Sağ Panel Kaldır Butonu
         if (this.elements.selectedContainer) {
             this.elements.selectedContainer.addEventListener('click', (e) => {
                 const removeBtn = e.target.closest('.btn-remove');
                 if (removeBtn) {
-                    // Butonun parent'ı olan karttan key'i bulma (HTML yapısına göre data attribute ekliyoruz)
                     const key = removeBtn.dataset.key;
                     if (key) this.removeSelection(key);
                 }
             });
         }
 
-        // Arama
         if (this.elements.searchInput) {
             this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
         }
 
-        // Özel Ekleme
         if (this.elements.customAddBtn) {
             this.elements.customAddBtn.addEventListener('click', () => this.addCustomClass());
         }
@@ -697,7 +680,7 @@ class NiceClassificationManager {
                 const text = sub.dataset.text.toLowerCase();
                 const code = sub.dataset.code;
                 if (text.includes(term) || code.includes(term)) {
-                    sub.style.display = 'block'; // veya flex
+                    sub.style.display = 'block';
                     hasSubMatch = true;
                 } else {
                     sub.style.display = 'none';
@@ -717,7 +700,6 @@ class NiceClassificationManager {
     }
 
     updateSelectionUI() {
-        // Sol Panel Checkboxları
         const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
         allCheckboxes.forEach(chk => {
             chk.checked = !!this.selectedClasses[chk.value];
@@ -728,7 +710,6 @@ class NiceClassificationManager {
             }
         });
 
-        // Sağ Panel
         if (this.elements.selectedContainer) {
             const count = Object.keys(this.selectedClasses).length;
             if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
