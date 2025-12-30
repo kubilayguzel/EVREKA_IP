@@ -1363,72 +1363,53 @@ class DataEntryModule {
         if (this.saveBtn) this.saveBtn.disabled = !isComplete;
     }
 
- // ============================================================
-    // 6. POPULATE FIELDS (EDIT MODE) - FINAL VERSION
+    // ============================================================
+    // 6. POPULATE FIELDS (EDIT MODE)
     // ============================================================
     populateFormFields(recordData) {
         if (!recordData) return;
-        console.log('🔄 Edit Modu: Veriler dolduruluyor...', recordData);
+        console.log('🔄 Edit Modu: Veriler dolduruluyor...');
 
-        // Hiyerarşiyi Kaydet
+        // 🔥 Hiyerarşiyi Kaydet (Düzeltmenin kalbi burası)
         this.currentTransactionHierarchy = recordData.transactionHierarchy || 'parent';
 
         const ipType = recordData.type || recordData.ipType || 'trademark';
+        this.ipTypeSelect.value = ipType;
+        this.handleIPTypeChange(ipType);
         
-        // IP Type Select elementini kontrol et
-        if (this.ipTypeSelect) {
-            this.ipTypeSelect.value = ipType;
-            this.handleIPTypeChange(ipType);
-            this.ipTypeSelect.disabled = true; // Düzenleme modunda tip değişmez
-        }
-        
-        if (this.recordOwnerTypeSelect) {
-            this.recordOwnerTypeSelect.value = recordData.recordOwnerType || 'self';
-        }
+        if (this.recordOwnerTypeSelect) this.recordOwnerTypeSelect.value = recordData.recordOwnerType || 'self';
 
-        // DOM elementlerinin render edilmesi için kısa bir gecikme
         setTimeout(() => {
             const titleEl = document.getElementById('formTitle');
-            if (titleEl) titleEl.textContent = 'Kayıt Düzenle';
+            if(titleEl) titleEl.textContent = 'Kayıt Düzenle';
 
-            const setVal = (id, val) => { 
-                const el = document.getElementById(id); 
-                if (el) el.value = val || ''; 
-            };
+            const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
             
-            // Temel Bilgiler
             setVal('applicationNumber', recordData.applicationNumber);
             setVal('registrationNumber', recordData.registrationNumber || recordData.wipoIR || recordData.aripoIR);
             setVal('applicationDate', recordData.applicationDate);
             setVal('registrationDate', recordData.registrationDate);
             setVal('renewalDate', recordData.renewalDate);
             
-            // Menşe (Origin) İşlemleri
             const originSelect = document.getElementById('originSelect');
             if (originSelect && recordData.origin) {
                 this.populateOriginDropdown('originSelect', recordData.origin, ipType);
                 this.updateRegistrationInputUI(recordData.origin);
-                originSelect.value = recordData.origin;
-                originSelect.disabled = true; // Düzenleme modunda menşe değişmez
                 
-                // Child Kayıt (Read-Only Ülke)
+                // Child Kayıt Kontrolü (Read-Only Ülke)
                 if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
                     this.selectedCountries = recordData.country 
                         ? [{code: recordData.country, name: recordData.country}] 
                         : [];
                     this.renderSelectedCountries();
-                    
                     const container = document.getElementById('multiCountrySelectWrapper');
-                    if (container) {
+                    if(container) {
                         container.style.display = 'block';
-                        const inputEl = document.getElementById('countriesMultiSelectInput');
-                        if(inputEl) inputEl.style.display = 'none';
-                        
-                        const labelEl = document.getElementById('countrySelectionTitle');
-                        if(labelEl) labelEl.textContent = 'Ülke (Değiştirilemez)';
+                        document.getElementById('countriesMultiSelectInput').style.display = 'none';
+                        document.getElementById('countrySelectionTitle').textContent = 'Ülke (Değiştirilemez)';
                     }
                 } 
-                // Parent Kayıt (WIPO/ARIPO)
+                // Parent Kayıt (WIPO)
                 else if (['WIPO', 'ARIPO'].includes(recordData.origin)) {
                     this.handleOriginChange(recordData.origin);
                     if (Array.isArray(recordData.countries)) {
@@ -1437,84 +1418,59 @@ class DataEntryModule {
                     }
                 }
                 // Ulusal
-                else if (recordData.origin === 'Yurtdışı Ulusal' || recordData.origin === 'FOREIGN_NATIONAL') {
+                else if (recordData.origin === 'Yurtdışı Ulusal') {
                     this.handleOriginChange(recordData.origin);
-                    setTimeout(() => setVal('countrySelect', recordData.countryCode || recordData.country), 100);
+                    setTimeout(() => setVal('countrySelect', recordData.country), 100);
                 }
             }
 
-            // Marka Özel Alanları
             if (ipType === 'trademark') {
                 setVal('brandType', recordData.brandType);
                 setVal('brandCategory', recordData.brandCategory);
                 setVal('brandExampleText', recordData.title || recordData.brandText);
                 setVal('brandDescription', recordData.description);
                 setVal('trademarkStatus', recordData.status);
-                setVal('nonLatinAlphabet', recordData.nonLatinAlphabet); // Varsa
                 
-                // Görsel Önizleme
                 if (recordData.brandImageUrl) {
                     this.uploadedBrandImage = recordData.brandImageUrl;
-                    const previewImg = document.getElementById('brandExamplePreview');
-                    const previewContainer = document.getElementById('brandExamplePreviewContainer');
-                    
-                    if (previewImg && previewContainer) {
-                        previewImg.src = recordData.brandImageUrl;
-                        previewContainer.style.display = 'block';
-                    }
+                    document.getElementById('brandExamplePreview').src = recordData.brandImageUrl;
+                    document.getElementById('brandExamplePreviewContainer').style.display = 'block';
                 }
 
-                // --- NICE SINIFLANDIRMA GERİ YÜKLEME ---
-                if (recordData.goodsAndServicesByClass && Array.isArray(recordData.goodsAndServicesByClass)) {
-                     // 1. Veritabanı formatından (Obje) UI formatına (String Array) çevir
-                     // Örn: {classNo: 5, items: ["İlaç"]} -> "(5-1) İlaç"
-                     const formattedClasses = recordData.goodsAndServicesByClass.map(g => {
-                         const itemText = (g.items && g.items.length > 0) ? g.items.join(', ') : '';
-                         return `(${g.classNo}-1) ${itemText}`; 
-                     });
-
-                     this.storedNiceClasses = formattedClasses;
-                     
-                     // 2. Liste initialize edilmişse yükle, yoksa tab değişince yüklenecek
-                     if (document.getElementById('niceClassificationList')) {
-                         if (typeof setSelectedNiceClasses === 'function') {
-                             setSelectedNiceClasses(formattedClasses);
-                         } else {
-                             console.warn('NiceClassification modülü henüz yüklenmedi veya fonksiyon bulunamadı.');
-                         }
-                     }
+                if (recordData.goodsAndServicesByClass && typeof setSelectedNiceClasses === 'function') {
+                     const formatted = recordData.goodsAndServicesByClass.map(g => `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`);
+                     this.storedNiceClasses = formatted;
+                     setSelectedNiceClasses(formatted);
                 }
             }
-            // Patent/Tasarım Alanları
             else {
                 setVal(`${ipType}Title`, recordData.title);
                 setVal(`${ipType}ApplicationNumber`, recordData.applicationNumber);
                 setVal(`${ipType}Description`, recordData.description);
             }
 
-            // Başvuru Sahipleri (Applicants)
             if (recordData.applicants && recordData.applicants.length > 0) {
                 this.selectedApplicants = recordData.applicants.map(applicant => {
                     const personFromList = this.allPersons.find(p => p.id === applicant.id);
                     return {
                         id: applicant.id,
                         name: applicant.name || (personFromList ? personFromList.name : 'İsimsiz Kişi'),
-                        email: applicant.email || (personFromList ? personFromList.email : ''),
-                        role: applicant.role || 'applicant'
+                        email: applicant.email || (personFromList ? personFromList.email : '')
                     };
                 });
                 this.renderSelectedApplicants();
             }
-            
-            // Rüçhanlar (Priorities)
-            if (recordData.priorities && Array.isArray(recordData.priorities)) {
+            if (recordData.priorities) {
                 this.priorities = recordData.priorities;
                 this.renderPriorities();
             }
 
+            if (this.ipTypeSelect) this.ipTypeSelect.disabled = true;
+            if (originSelect) originSelect.disabled = true;
+
             this.updateSaveButtonState();
 
-        }, 500); // 500ms gecikme (DOM render için)
+        }, 500);
     }
 }
 
