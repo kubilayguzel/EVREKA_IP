@@ -1,4 +1,4 @@
-// public/js/nice-classification.js - DOM Element Selection Fix
+// public/js/nice-classification.js - Layout & Logic Update (Final)
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -9,30 +9,32 @@ function injectNiceStyles() {
     if (document.getElementById(styleId)) return;
 
     const css = `
-        /* Genel Konteyner */
-        .nice-container {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        }
+        .nice-container { font-family: 'Segoe UI', sans-serif; }
 
-        /* Liste Öğesi (Ana Sınıf) */
+        /* ANA LİSTE GRUBU */
         .nice-class-group {
             background: #fff;
             border: 1px solid #e2e8f0;
             margin-bottom: 8px;
             border-radius: 8px;
             overflow: hidden;
-            transition: box-shadow 0.2s, border-color 0.2s;
+            transition: all 0.2s;
         }
-        .nice-class-group:hover {
-            border-color: #cbd5e0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        
+        /* SEÇİM YAPILMIŞ GRUP STİLİ (YENİ) */
+        .nice-class-group.has-selection {
+            border-color: #48bb78; /* Yeşil Çerçeve */
+            background-color: #f0fff4; /* Açık Yeşil Arkaplan */
+            box-shadow: 0 0 0 1px #48bb78;
         }
-        .nice-class-group.active-group {
-            border-color: #3182ce;
-            box-shadow: 0 0 0 1px #3182ce;
+        .nice-class-group.has-selection .nice-class-header {
+            background-color: #f0fff4;
+        }
+        .nice-class-group.has-selection .nice-badge {
+            background-color: #2f855a; /* Koyu Yeşil Badge */
         }
 
-        /* Başlık (Header) */
+        /* Başlık */
         .nice-class-header {
             padding: 12px 16px;
             background: #f8fafc;
@@ -40,168 +42,56 @@ function injectNiceStyles() {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            user-select: none;
         }
-        .nice-class-header:hover {
-            background: #f1f5f9;
-        }
+        .nice-class-header:hover { background: #f1f5f9; }
         
-        /* Başlık İçeriği */
-        .nice-header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-            min-width: 0; /* Text truncate için */
-        }
+        .nice-header-left { display: flex; align-items: center; gap: 12px; flex: 1; }
+        
         .nice-badge {
-            background: #3b82f6;
-            color: white;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 4px 8px;
-            border-radius: 6px;
-            min-width: 28px;
-            text-align: center;
+            background: #3b82f6; color: white; font-size: 13px; font-weight: 700;
+            padding: 5px 10px; border-radius: 6px; min-width: 32px; text-align: center;
         }
-        .nice-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #334155;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        .nice-title { font-size: 15px; font-weight: 600; color: #334155; }
         
-        /* İkonlar ve Butonlar */
-        .nice-icon-chevron {
-            color: #94a3b8;
-            transition: transform 0.2s ease;
-        }
-        .nice-class-group.open .nice-icon-chevron {
-            transform: rotate(180deg);
-            color: #3182ce;
-        }
-        
-        .nice-btn-select-all {
-            padding: 4px 8px;
-            border-radius: 4px;
-            color: #64748b;
-            background: transparent;
-            border: 1px solid transparent;
-            transition: all 0.2s;
-        }
-        .nice-btn-select-all:hover {
-            background: #e2e8f0;
-            color: #1e293b;
-        }
+        .nice-sub-list { display: none; border-top: 1px solid #e2e8f0; background: #fff; }
+        .nice-sub-list.open { display: block; }
 
-        /* Alt Liste (Accordion Content) */
-        .nice-sub-list {
-            display: none;
-            border-top: 1px solid #e2e8f0;
-            background: #fff;
-            animation: slideDown 0.2s ease-out;
-        }
-        .nice-sub-list.open {
-            display: block;
-        }
-
-        /* Alt Öğe (Sub Item) */
         .nice-sub-item {
-            padding: 10px 16px 10px 48px; /* Soldan girintili */
-            border-bottom: 1px solid #f1f5f9;
-            cursor: pointer;
-            transition: background 0.15s;
-            position: relative;
+            padding: 10px 16px 10px 50px; border-bottom: 1px solid #f1f5f9; cursor: pointer;
         }
-        .nice-sub-item:last-child {
-            border-bottom: none;
-        }
-        .nice-sub-item:hover {
-            background: #f8fafc;
-        }
+        .nice-sub-item:hover { background: #f8fafc; }
+        
+        /* Seçili Alt Öğe */
         .nice-sub-item.selected {
-            background: #eff6ff;
+            background: #e6fffa;
+            color: #2c7a7b;
+            font-weight: 500;
         }
         
-        /* Checkbox Tasarımı */
-        .nice-checkbox-wrapper {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-        .nice-checkbox {
-            margin-top: 3px;
-            cursor: pointer;
-            accent-color: #3182ce;
-            width: 16px;
-            height: 16px;
-        }
-        .nice-label {
-            font-size: 13px;
-            color: #475569;
-            line-height: 1.5;
-            cursor: pointer;
-        }
-        .nice-code {
-            color: #94a3b8;
-            font-size: 12px;
-            margin-right: 4px;
-        }
-
-        /* Sağ Panel (Seçilenler) */
-        .selected-item-card {
+        /* SAĞ/ALT PANEL KARTLARI */
+        .selected-group-card {
             background: #fff;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: transform 0.1s;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
-        .selected-item-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        .selected-group-title {
+            font-weight: 700; color: #2d3748; border-bottom: 2px solid #edf2f7;
+            padding-bottom: 8px; margin-bottom: 10px; font-size: 1.1em;
         }
-        .selected-badge {
-            background: #e0f2fe;
-            color: #0369a1;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 4px;
-            white-space: nowrap;
+        .selected-tag {
+            display: inline-flex; align-items: center;
+            background: #ebf8ff; border: 1px solid #bee3f8; color: #2c5282;
+            padding: 6px 12px; border-radius: 20px; font-size: 13px;
+            margin-right: 8px; margin-bottom: 8px; max-width: 100%;
         }
-        .selected-badge.custom {
-            background: #fee2e2;
-            color: #b91c1c;
-        }
-        .selected-text {
-            font-size: 13px;
-            color: #334155;
-            flex: 1;
-        }
-        .btn-remove {
-            color: #94a3b8;
-            background: none;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-        }
-        .btn-remove:hover {
-            color: #ef4444;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .selected-tag.custom { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
+        
+        .tag-text { white-space: normal; margin-right: 8px; line-height: 1.4; }
+        .tag-remove { cursor: pointer; color: #e53e3e; font-weight: bold; font-size: 16px; margin-left: 5px; }
+        .tag-remove:hover { color: #c53030; }
     `;
     const style = document.createElement('style');
     style.id = styleId;
@@ -221,6 +111,7 @@ class Class35_5Manager {
     }
 
     async open() {
+        // Ana veriden 1-34 arası malları filtrele
         this.modalData = this.parent.allData.filter(cls => cls.classNumber >= 1 && cls.classNumber <= 34);
         this.selectedItems = {}; 
         this.renderModal();
@@ -231,50 +122,33 @@ class Class35_5Manager {
         const modalHTML = `
         <div id="${this.modalId}" class="modal fade show" tabindex="-1" style="display:block; background: rgba(0,0,0,0.5); z-index: 1060;">
             <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-                    <div class="modal-header border-bottom bg-white py-3">
-                        <h5 class="modal-title font-weight-bold text-dark">
-                            <span class="badge badge-primary mr-2" style="font-size:14px;">35-5</span> 
-                            Müşterilerin Malları - Mal Seçimi
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header bg-white">
+                        <h5 class="modal-title font-weight-bold">
+                            <span class="badge badge-primary mr-2">35-5</span> Müşterilerin Malları
                         </h5>
-                        <button type="button" class="close" data-action="close" style="outline:none;">&times;</button>
+                        <button type="button" class="close" data-action="close">&times;</button>
                     </div>
                     <div class="modal-body bg-light">
                         <div class="row h-100">
                             <div class="col-lg-8 d-flex flex-column h-100">
-                                <div class="bg-white p-3 rounded shadow-sm mb-3">
-                                    <input type="text" class="form-control border-0 bg-light" id="c35-search" 
-                                           placeholder="🔍 Mal sınıfı ara (örn: ilaç, giysi)..." style="font-size:14px;">
-                                </div>
-                                <div class="bg-white rounded shadow-sm flex-grow-1 overflow-auto nice-container" id="c35-list-container" style="max-height: 500px; padding: 10px;">
+                                <input type="text" class="form-control mb-3 shadow-sm" id="c35-search" placeholder="🔍 Mal sınıfı ara...">
+                                <div class="bg-white rounded shadow-sm flex-grow-1 overflow-auto p-2" id="c35-list-container" style="max-height: 500px;">
                                     ${this._generateListHTML()}
-                                </div>
-                                <div class="mt-3">
-                                    <div class="input-group">
-                                        <input type="text" id="c35-custom-input" class="form-control border-0 shadow-sm" placeholder="Listede olmayan özel bir mal...">
-                                        <div class="input-group-append">
-                                            <button class="btn btn-primary shadow-sm" id="c35-add-custom">Ekle</button>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                             <div class="col-lg-4 d-flex flex-column h-100">
-                                <div class="bg-white rounded shadow-sm h-100 d-flex flex-column">
-                                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                                        <span class="font-weight-bold text-secondary">Seçilenler</span>
-                                        <span class="badge badge-pill badge-primary" id="c35-count">0</span>
-                                    </div>
-                                    <div class="flex-grow-1 overflow-auto p-2" id="c35-selected-container" style="max-height: 500px;"></div>
-                                    <div class="p-3 border-top">
-                                        <button class="btn btn-outline-danger btn-sm btn-block" id="c35-clear">Hepsini Temizle</button>
-                                    </div>
+                                <div class="bg-white rounded shadow-sm h-100 p-3 d-flex flex-column">
+                                    <h6 class="border-bottom pb-2 font-weight-bold">Seçilen Mallar (<span id="c35-count">0</span>)</h6>
+                                    <div class="flex-grow-1 overflow-auto" id="c35-selected-container"></div>
+                                    <button class="btn btn-outline-danger btn-sm btn-block mt-2" id="c35-clear">Temizle</button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-top bg-white">
-                        <button type="button" class="btn btn-light text-secondary font-weight-bold" data-action="close">İptal</button>
-                        <button type="button" class="btn btn-primary px-4 font-weight-bold shadow-sm" id="c35-save">Kaydet ve Ekle</button>
+                    <div class="modal-footer bg-white">
+                        <button type="button" class="btn btn-secondary" data-action="close">İptal</button>
+                        <button type="button" class="btn btn-success px-4 font-weight-bold" id="c35-save">Onayla ve Ekle</button>
                     </div>
                 </div>
             </div>
@@ -290,27 +164,18 @@ class Class35_5Manager {
 
     _generateListHTML() {
         return this.modalData.map(cls => `
-            <div class="nice-class-group c35-group" data-class="${cls.classNumber}">
-                <div class="nice-class-header c35-header">
-                    <div class="nice-header-left">
-                        <span class="nice-badge">${cls.classNumber}</span>
-                        <span class="nice-title">${cls.classTitle}</span>
-                    </div>
-                    <i class="fas fa-chevron-down nice-icon-chevron"></i>
+            <div class="mb-2 border rounded c35-group">
+                <div class="p-2 bg-light c35-header d-flex justify-content-between align-items-center" style="cursor:pointer">
+                    <strong><span class="badge badge-secondary mr-2">${cls.classNumber}</span> ${cls.classTitle}</strong>
+                    <i class="fas fa-chevron-down text-muted"></i>
                 </div>
-                <div class="nice-sub-list" id="c35-sub-${cls.classNumber}">
-                    ${cls.subClasses.map((sub, idx) => {
-                        const code = `${cls.classNumber}-${idx + 1}`;
-                        return `
-                        <div class="nice-sub-item c35-item-row" data-code="${code}" data-text="${sub.subClassDescription}">
-                            <div class="nice-checkbox-wrapper">
-                                <input type="checkbox" class="nice-checkbox" id="chk-${code}" value="${code}">
-                                <label class="nice-label" for="chk-${code}">
-                                    <span class="nice-code">(${code})</span> ${sub.subClassDescription}
-                                </label>
-                            </div>
-                        </div>`;
-                    }).join('')}
+                <div class="c35-sub-list collapse">
+                    ${cls.subClasses.map((sub, idx) => `
+                        <div class="p-2 border-top pl-4 c35-item-row" data-text="${sub.subClassDescription}" style="cursor:pointer">
+                            <input type="checkbox" class="mr-2" value="${cls.classNumber}-${idx+1}"> 
+                            <span>${sub.subClassDescription}</span>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         `).join('');
@@ -321,133 +186,79 @@ class Class35_5Manager {
         
         modal.addEventListener('click', (e) => {
             const target = e.target;
+            if (target.dataset.action === 'close' || target.classList.contains('close')) return this.close();
 
-            if (target.dataset.action === 'close' || target.classList.contains('close')) {
-                this.close();
-                return;
-            }
-
+            // Accordion
             const header = target.closest('.c35-header');
             if (header) {
-                const group = header.parentElement;
-                const content = group.querySelector('.nice-sub-list');
-                const isOpen = content.classList.contains('open');
-                
-                if (isOpen) {
-                    content.classList.remove('open');
-                    group.classList.remove('open');
-                } else {
-                    content.classList.add('open');
-                    group.classList.add('open');
-                }
+                header.nextElementSibling.classList.toggle('show');
                 return;
             }
 
-            const itemRow = target.closest('.c35-item-row');
-            if (itemRow && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
-                const checkbox = itemRow.querySelector('input[type="checkbox"]');
-                checkbox.checked = !checkbox.checked;
-                this.toggleItem(checkbox.value, itemRow.dataset.text, checkbox.checked);
-            }
-            
-            if (target.tagName === 'INPUT' && target.type === 'checkbox') {
-                const itemRow = target.closest('.c35-item-row');
-                this.toggleItem(target.value, itemRow.dataset.text, target.checked);
+            // Seçim
+            const row = target.closest('.c35-item-row');
+            if (row) {
+                const cb = row.querySelector('input');
+                if (target !== cb) cb.checked = !cb.checked;
+                
+                if (cb.checked) this.selectedItems[cb.value] = row.dataset.text;
+                else delete this.selectedItems[cb.value];
+                
+                this.updateSelectedUI();
             }
         });
 
+        // Arama
         document.getElementById('c35-search').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
-            const groups = modal.querySelectorAll('.c35-group');
-            
-            groups.forEach(group => {
-                let hasMatch = false;
+            modal.querySelectorAll('.c35-group').forEach(group => {
+                const title = group.querySelector('.c35-header').innerText.toLowerCase();
                 const items = group.querySelectorAll('.c35-item-row');
+                let match = false;
+                
                 items.forEach(item => {
-                    const text = item.dataset.text.toLowerCase();
-                    if (text.includes(term)) {
-                        item.style.display = '';
-                        hasMatch = true;
+                    if(item.innerText.toLowerCase().includes(term)) {
+                        item.style.display = ''; match = true;
                     } else {
                         item.style.display = 'none';
                     }
                 });
-                
-                const title = group.querySelector('.nice-title').innerText.toLowerCase();
-                if (title.includes(term) || hasMatch) {
+
+                if (title.includes(term) || match) {
                     group.style.display = '';
-                    if (term.length > 2) {
-                        group.querySelector('.nice-sub-list').classList.add('open');
-                        group.classList.add('open');
-                    }
+                    if (term.length > 2) group.querySelector('.c35-sub-list').classList.add('show');
                 } else {
                     group.style.display = 'none';
                 }
             });
         });
 
+        // --- 35-5 KAYDETME MANTIĞI (DÜZELTİLDİ) ---
         document.getElementById('c35-save').addEventListener('click', () => {
-            const count = Object.keys(this.selectedItems).length;
-            if (count === 0) return alert('Lütfen en az bir mal seçin.');
+            const items = Object.values(this.selectedItems);
+            if (items.length === 0) return alert('Lütfen en az bir mal seçin.');
             
-            this.parent.addSelection('35-5', '35', 'Müşterilerin malları (seçilen mallar için)');
-            Object.entries(this.selectedItems).forEach(([code, text]) => {
-                this.parent.addSelection(code, code.split('-')[0], text);
-            });
-
+            // Seçilen malları birleştirerek TEK BİR string oluşturuyoruz
+            const combinedText = `Müşterilerin malları; şu malların bir araya getirilmesi hizmetleri (nakliyesi hariç): ${items.join(', ')}`;
+            
+            // Ana listeye sadece bu birleştirilmiş metni ekliyoruz
+            this.parent.addSelection('35-5', '35', combinedText);
+            
             this.close();
         });
-        
-        document.getElementById('c35-add-custom').addEventListener('click', () => {
-            const input = document.getElementById('c35-custom-input');
-            const val = input.value.trim();
-            if(!val) return;
-            const customCode = `99-${Date.now()}`;
-            this.toggleItem(customCode, val, true);
-            input.value = '';
-        });
 
-        document.getElementById('c35-clear').addEventListener('click', () => {
-            this.selectedItems = {};
-            this.updateSelectedUI();
-            const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(cb => cb.checked = false);
-        });
-    }
-
-    toggleItem(code, text, isSelected) {
-        if (isSelected) {
-            this.selectedItems[code] = text;
-        } else {
-            delete this.selectedItems[code];
-        }
-        this.updateSelectedUI();
+        document.getElementById('c35-clear').onclick = () => { this.selectedItems = {}; this.updateSelectedUI(); modal.querySelectorAll('input').forEach(i=>i.checked=false); };
     }
 
     updateSelectedUI() {
         const container = document.getElementById('c35-selected-container');
-        const countBadge = document.getElementById('c35-count');
-        const count = Object.keys(this.selectedItems).length;
-        countBadge.textContent = count;
-
-        let html = '';
-        Object.entries(this.selectedItems).forEach(([code, text]) => {
-            html += `
-                <div class="selected-item-card">
-                    <span class="selected-badge">${code}</span>
-                    <span class="selected-text text-truncate">${text}</span>
-                    <button class="btn-remove" onclick="document.getElementById('chk-${code}').click()">&times;</button>
-                </div>
-            `;
-        });
-        container.innerHTML = html || '<div class="text-muted text-center mt-4 small">Henüz seçim yapılmadı</div>';
+        document.getElementById('c35-count').innerText = Object.keys(this.selectedItems).length;
+        container.innerHTML = Object.entries(this.selectedItems).map(([k,v]) => 
+            `<div class="border-bottom py-1 small">${v}</div>`
+        ).join('');
     }
 
-    close() {
-        const modal = document.getElementById(this.modalId);
-        if (modal) modal.remove();
-        document.body.classList.remove('modal-open');
-    }
+    close() { document.getElementById(this.modalId)?.remove(); document.body.classList.remove('modal-open'); }
 }
 
 /**
@@ -457,12 +268,11 @@ class NiceClassificationManager {
     constructor() {
         this.allData = [];
         this.selectedClasses = {};
-        this.elements = {}; // Elemanları burada tutuyoruz ama içi boş başlıyor
+        this.elements = {}; 
         this.class35Manager = new Class35_5Manager(this);
     }
 
     async init() {
-        // !!! KRİTİK DEĞİŞİKLİK: DOM elementlerini INIT anında seçiyoruz !!!
         this.elements = {
             listContainer: document.getElementById('niceClassificationList'),
             selectedContainer: document.getElementById('selectedNiceClasses'),
@@ -473,37 +283,22 @@ class NiceClassificationManager {
             customCharCount: document.getElementById('customClassCharCount')
         };
 
-        if (!this.elements.listContainer) {
-            console.warn('NiceClassification: Container not found yet.');
-            return;
-        }
+        if (!this.elements.listContainer) return;
 
-        this.elements.listContainer.innerHTML = `
-            <div class="text-center p-5">
-                <div class="spinner-border text-primary mb-3"></div>
-                <div class="text-muted">Sınıflandırma verileri yükleniyor...</div>
-            </div>`;
+        this.elements.listContainer.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>`;
 
         try {
             injectNiceStyles();
-
             const snapshot = await getDocs(collection(db, "niceClassification"));
-            this.allData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    classNumber: parseInt(data.classNumber),
-                    classTitle: data.classTitle,
-                    subClasses: data.subClasses || []
-                };
-            }).sort((a, b) => a.classNumber - b.classNumber);
+            this.allData = snapshot.docs.map(doc => ({ ...doc.data(), classNumber: parseInt(doc.data().classNumber) })).sort((a, b) => a.classNumber - b.classNumber);
 
             this.renderList();
             this.setupEventListeners();
             this.updateSelectionUI();
 
         } catch (error) {
-            console.error("Nice sınıfları yüklenemedi:", error);
-            this.elements.listContainer.innerHTML = `<div class="alert alert-danger m-3">Veri yükleme hatası: ${error.message}</div>`;
+            console.error("Nice error:", error);
+            this.elements.listContainer.innerHTML = `<div class="alert alert-danger">Hata: ${error.message}</div>`;
         }
     }
 
@@ -518,9 +313,7 @@ class NiceClassificationManager {
                         <span class="nice-title">${cls.classTitle}</span>
                     </div>
                     <div class="d-flex align-items-center">
-                        <button class="nice-btn-select-all mr-2" title="Tüm Sınıfı Seç/Kaldır">
-                            <i class="fas fa-check-double"></i>
-                        </button>
+                        <button class="nice-btn-select-all mr-2" title="Tümünü Seç"><i class="fas fa-check-double"></i></button>
                         <i class="fas fa-chevron-down nice-icon-chevron"></i>
                     </div>
                 </div>
@@ -553,61 +346,54 @@ class NiceClassificationManager {
         this.elements.listContainer.addEventListener('click', (e) => {
             const target = e.target;
 
+            // Tümünü Seç
             const selectAllBtn = target.closest('.nice-btn-select-all');
             if (selectAllBtn) {
                 e.stopPropagation();
-                const parent = selectAllBtn.closest('.nice-class-group');
-                const classNum = parseInt(parent.dataset.classNum);
-                this.toggleWholeClass(classNum);
+                this.toggleWholeClass(parseInt(selectAllBtn.closest('.nice-class-group').dataset.classNum));
                 return;
             }
 
+            // Accordion Aç/Kapa
             const header = target.closest('.nice-class-header');
             if (header) {
                 const group = header.parentElement;
                 const list = group.querySelector('.nice-sub-list');
-                
                 const isOpen = list.classList.contains('open');
-                if (isOpen) {
-                    list.classList.remove('open');
-                    group.classList.remove('open');
-                } else {
-                    list.classList.add('open');
-                    group.classList.add('open');
-                }
+                
+                list.classList.toggle('open');
+                group.classList.toggle('open');
                 return;
             }
 
+            // Checkbox veya Satır Tıklama
             const subItem = target.closest('.sub-item');
-            if (subItem && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
-                const code = subItem.dataset.code;
-                if (code === '35-5') {
-                    this.class35Manager.open();
-                } else {
+            if (subItem) {
+                // Label veya Input değilse manuel tetikle
+                const isDirectInput = target.tagName === 'INPUT';
+                if (!isDirectInput && target.tagName !== 'LABEL') {
                     const checkbox = subItem.querySelector('.class-checkbox');
-                    checkbox.checked = !checkbox.checked;
-                    this.handleSelectionChange(checkbox.value, subItem.dataset.text, checkbox.checked);
-                }
-            }
-
-            if (target.classList.contains('class-checkbox')) {
-                if (target.value === '35-5') {
-                    e.preventDefault();
-                    this.class35Manager.open();
-                } else {
-                    const subItem = target.closest('.sub-item');
-                    this.handleSelectionChange(target.value, subItem.dataset.text, target.checked);
+                    if(subItem.dataset.code === '35-5') {
+                        e.preventDefault(); // 35-5 için checkbox'ı elle değiştirme, modal açacak
+                    } else {
+                        checkbox.checked = !checkbox.checked;
+                    }
+                    // Event'i simüle et
+                    this.handleCheckboxAction(subItem.dataset.code, subItem.dataset.text, checkbox.checked);
+                } 
+                // Input ise
+                else if (isDirectInput) {
+                    if (target.value === '35-5') e.preventDefault(); // 35-5 için iptal et
+                    this.handleCheckboxAction(target.value, subItem.dataset.text, target.checked);
                 }
             }
         });
 
+        // Kaldır Butonu
         if (this.elements.selectedContainer) {
             this.elements.selectedContainer.addEventListener('click', (e) => {
-                const removeBtn = e.target.closest('.btn-remove');
-                if (removeBtn) {
-                    const key = removeBtn.dataset.key;
-                    if (key) this.removeSelection(key);
-                }
+                const removeBtn = e.target.closest('.tag-remove');
+                if (removeBtn) this.removeSelection(removeBtn.dataset.key);
             });
         }
 
@@ -616,15 +402,22 @@ class NiceClassificationManager {
         }
 
         if (this.elements.customAddBtn) {
-            this.elements.customAddBtn.addEventListener('click', () => this.addCustomClass());
+            this.elements.customAddBtn.addEventListener('click', () => {
+                const val = this.elements.customInput.value.trim();
+                if(val) {
+                    this.addSelection(`99-${Date.now()}`, '99', val);
+                    this.elements.customInput.value = '';
+                }
+            });
         }
     }
 
-    handleSelectionChange(code, text, isSelected) {
-        if (isSelected) {
-            this.addSelection(code, code.split('-')[0], text);
+    handleCheckboxAction(code, text, isChecked) {
+        if (code === '35-5') {
+            this.class35Manager.open();
         } else {
-            this.removeSelection(code);
+            if (isChecked) this.addSelection(code, code.split('-')[0], text);
+            else this.removeSelection(code);
         }
     }
 
@@ -634,119 +427,111 @@ class NiceClassificationManager {
     }
 
     removeSelection(code) {
-        if (this.selectedClasses[code]) {
-            delete this.selectedClasses[code];
-            this.updateSelectionUI();
-        }
+        delete this.selectedClasses[code];
+        this.updateSelectionUI();
     }
 
     toggleWholeClass(classNum) {
         const classData = this.allData.find(c => c.classNumber === classNum);
         if (!classData) return;
-
-        const allCodes = classData.subClasses.map((_, i) => `${classNum}-${i + 1}`);
-        const allSelected = allCodes.every(code => this.selectedClasses[code] || code === '35-5');
-
-        if (allSelected) {
-            allCodes.forEach(code => this.removeSelection(code));
-        } else {
+        const subCodes = classData.subClasses.map((_, i) => `${classNum}-${i+1}`).filter(c => c !== '35-5');
+        
+        const allSelected = subCodes.every(c => this.selectedClasses[c]);
+        
+        if (allSelected) subCodes.forEach(c => this.removeSelection(c));
+        else {
             classData.subClasses.forEach((sub, i) => {
-                const code = `${classNum}-${i + 1}`;
-                if (code === '35-5') return;
-                this.addSelection(code, classNum, sub.subClassDescription);
+                const c = `${classNum}-${i+1}`;
+                if (c !== '35-5') this.addSelection(c, classNum, sub.subClassDescription);
             });
         }
     }
 
-    addCustomClass() {
-        const val = this.elements.customInput.value.trim();
-        if (!val) return alert('Lütfen bir açıklama girin.');
-        const code = `99-${Date.now()}`;
-        this.addSelection(code, '99', val);
-        this.elements.customInput.value = '';
-        if(this.elements.customCharCount) this.elements.customCharCount.textContent = '0';
-    }
-
     handleSearch(term) {
         term = term.toLowerCase();
-        const items = this.elements.listContainer.querySelectorAll('.nice-class-group');
+        const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
         
-        items.forEach(item => {
-            const searchText = item.dataset.search;
-            const subItems = item.querySelectorAll('.nice-sub-item');
-            let hasSubMatch = false;
+        groups.forEach(group => {
+            const searchText = group.dataset.search;
+            const items = group.querySelectorAll('.nice-sub-item');
+            let match = false;
 
-            subItems.forEach(sub => {
-                const text = sub.dataset.text.toLowerCase();
-                const code = sub.dataset.code;
-                if (text.includes(term) || code.includes(term)) {
-                    sub.style.display = 'block';
-                    hasSubMatch = true;
+            items.forEach(item => {
+                if (item.innerText.toLowerCase().includes(term) || item.dataset.code.includes(term)) {
+                    item.style.display = 'block'; match = true;
                 } else {
-                    sub.style.display = 'none';
+                    item.style.display = 'none';
                 }
             });
 
-            if (searchText.includes(term) || hasSubMatch) {
-                item.style.display = 'block';
+            if (searchText.includes(term) || match) {
+                group.style.display = 'block';
                 if (term.length > 2) {
-                    item.querySelector('.nice-sub-list').classList.add('open');
-                    item.classList.add('open');
+                    group.classList.add('open');
+                    group.querySelector('.nice-sub-list').classList.add('open');
                 }
             } else {
-                item.style.display = 'none';
+                group.style.display = 'none';
             }
         });
     }
 
     updateSelectionUI() {
+        // 1. Sol Panel Görsel Güncelleme (Checkbox + Renklendirme)
         const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
+        const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
+        
+        // Önce tüm gruplardan renklendirmeyi kaldır
+        groups.forEach(g => g.classList.remove('has-selection'));
+
         allCheckboxes.forEach(chk => {
-            chk.checked = !!this.selectedClasses[chk.value];
+            const isSelected = !!this.selectedClasses[chk.value];
+            chk.checked = isSelected;
+            
             const row = chk.closest('.nice-sub-item');
             if (row) {
-                if(chk.checked) row.classList.add('selected');
+                if(isSelected) row.classList.add('selected');
                 else row.classList.remove('selected');
+            }
+
+            // Grubu renklendir
+            if (isSelected) {
+                const group = chk.closest('.nice-class-group');
+                if (group) group.classList.add('has-selection');
             }
         });
 
+        // 2. Alt Panel (Seçilenler) Listesi
         if (this.elements.selectedContainer) {
             const count = Object.keys(this.selectedClasses).length;
             if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
 
             if (count === 0) {
-                this.elements.selectedContainer.innerHTML = `
-                    <div class="text-center text-muted mt-5">
-                        <i class="fas fa-clipboard-list fa-3x mb-3 text-secondary opacity-50"></i>
-                        <p>Henüz sınıf seçilmedi.</p>
-                    </div>`;
+                this.elements.selectedContainer.innerHTML = `<div class="text-center text-muted py-4"><p>Henüz seçim yok.</p></div>`;
                 this.elements.selectedContainer.dispatchEvent(new Event('input', { bubbles: true }));
                 return;
             }
 
             const grouped = {};
-            Object.entries(this.selectedClasses).forEach(([code, data]) => {
-                const num = data.classNum;
-                if (!grouped[num]) grouped[num] = [];
-                grouped[num].push({ code, text: data.text });
+            Object.entries(this.selectedClasses).forEach(([code, val]) => {
+                if (!grouped[val.classNum]) grouped[val.classNum] = [];
+                grouped[val.classNum].push({code, text: val.text});
             });
 
             let html = '';
-            Object.keys(grouped).sort((a,b) => parseInt(a) - parseInt(b)).forEach(num => {
-                const items = grouped[num];
-                const is99 = num === '99';
-                const badgeClass = is99 ? 'custom' : '';
-                
+            Object.keys(grouped).sort((a,b) => a-b).forEach(num => {
                 html += `
-                <div class="mb-3">
-                    <h6 class="border-bottom pb-2 mb-2 font-weight-bold text-dark" style="font-size:14px;">Sınıf ${num}</h6>
-                    ${items.map(item => `
-                        <div class="selected-item-card">
-                            <span class="selected-badge ${badgeClass}">${is99 ? 'Özel' : item.code}</span>
-                            <span class="selected-text">${item.text}</span>
-                            <button class="btn-remove" data-key="${item.code}" title="Kaldır">&times;</button>
-                        </div>
-                    `).join('')}
+                <div class="selected-group-card">
+                    <div class="selected-group-title">Sınıf ${num}</div>
+                    <div>
+                        ${grouped[num].map(item => `
+                            <div class="selected-tag ${num==='99'?'custom':''}">
+                                <span class="font-weight-bold mr-2">(${item.code})</span>
+                                <span class="tag-text">${item.text}</span>
+                                <span class="tag-remove" data-key="${item.code}">&times;</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>`;
             });
 
@@ -755,50 +540,36 @@ class NiceClassificationManager {
         }
     }
 
-    // --- API Methods ---
+    // API
     getSelectedData() {
-        return Object.entries(this.selectedClasses).map(([code, val]) => {
-            return val.classNum === '99' ? `(99) ${val.text}` : `(${code}) ${val.text}`;
-        });
+        return Object.entries(this.selectedClasses).map(([k, v]) => 
+            v.classNum === '99' ? `(99) ${v.text}` : `(${k}) ${v.text}`
+        );
     }
 
-    setSelectedData(classesArray) {
+    setSelectedData(arr) {
         this.selectedClasses = {};
-        if (!Array.isArray(classesArray)) return;
-
-        classesArray.forEach(str => {
-            const match = str.match(/^\((\d+(?:-\d+)?)\)\s*([\s\S]*)$/);
-            if (match) {
-                const code = match[1];
-                const text = match[2];
-                const classNum = code.includes('-') ? code.split('-')[0] : code;
-                this.addSelection(code, classNum, text);
-            }
-        });
+        if (Array.isArray(arr)) {
+            arr.forEach(s => {
+                const m = s.match(/^\((\d+(?:-\d+)?)\)\s*([\s\S]*)$/);
+                if (m) this.addSelection(m[1], m[1].split('-')[0], m[2]);
+            });
+        }
         this.updateSelectionUI();
     }
 
-    clearAll() {
-        this.selectedClasses = {};
-        this.updateSelectionUI();
-    }
+    clearAll() { this.selectedClasses = {}; this.updateSelectionUI(); }
 }
 
-// Global Örnek
 const niceManager = new NiceClassificationManager();
 
-// Exportlar
 export async function initializeNiceClassification() { await niceManager.init(); }
 export function getSelectedNiceClasses() { return niceManager.getSelectedData(); }
 export function setSelectedNiceClasses(classes) { niceManager.setSelectedData(classes); }
 export function clearAllSelectedClasses() { niceManager.clearAll(); }
 
-// Window Helpers
 window.clearAllSelectedClasses = () => niceManager.clearAll();
 window.clearNiceSearch = () => {
     const input = document.getElementById('niceClassSearch');
-    if (input) {
-        input.value = '';
-        input.dispatchEvent(new Event('input'));
-    }
+    if(input) { input.value = ''; input.dispatchEvent(new Event('input')); }
 };
