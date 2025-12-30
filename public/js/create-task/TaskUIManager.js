@@ -140,7 +140,7 @@ export class TaskUIManager {
         </div>`;
     }
 
-    _getGoodsServicesTabHtml() {
+_getGoodsServicesTabHtml() {
         return `
         <div class="tab-pane fade" id="goods-services" role="tabpanel">
             <div class="nice-classification-container mt-3">
@@ -148,20 +148,18 @@ export class TaskUIManager {
                     <div class="col-12">
                         <div class="classification-panel mb-3 shadow-sm border rounded">
                             <div class="panel-header p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 text-primary"><i class="fas fa-list-ul mr-2"></i>Nice Sınıflandırma Listesi</h5>
+                                <h5 class="mb-0 text-dark font-weight-bold"><i class="fas fa-list-ul mr-2 text-primary"></i>Nice Sınıflandırma Listesi</h5>
                                 <div class="input-group" style="max-width: 300px;">
-                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf ara...">
+                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf veya mal ara...">
                                     <div class="input-group-append"><button class="btn btn-outline-secondary" onclick="clearNiceSearch()"><i class="fas fa-times"></i></button></div>
                                 </div>
                             </div>
-                            <div class="classes-list nice-container" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff; padding:10px;">
-                                </div>
+                            <div class="classes-list nice-container" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff; padding:10px;"></div>
+                            
                             <div class="custom-class-section p-3 bg-light border-top">
                                 <div class="input-group">
-                                    <textarea class="form-control" id="customClassInput" placeholder="Özel tanım..." rows="1"></textarea>
-                                    <div class="input-group-append">
-                                        <button class="btn btn-primary" id="addCustomClassBtn">Ekle</button>
-                                    </div>
+                                    <input type="text" class="form-control" id="customClassInput" placeholder="Listede olmayan özel bir tanım...">
+                                    <div class="input-group-append"><button class="btn btn-primary" id="addCustomClassBtn">Ekle</button></div>
                                 </div>
                             </div>
                         </div>
