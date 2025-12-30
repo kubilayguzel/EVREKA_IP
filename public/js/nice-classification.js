@@ -1,4 +1,4 @@
-// public/js/nice-classification.js - Professional Neutral & Green Theme
+// public/js/nice-classification.js - Fully Isolated & Consistent Modal
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -6,232 +6,208 @@ import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/f
 // --- TASARIM ENJEKSİYONU (CSS) ---
 function injectNiceStyles() {
     const styleId = 'nice-classification-styles';
-    if (document.getElementById(styleId)) return;
+    // Eski stil varsa sil (Anlık güncelleme için)
+    const oldStyle = document.getElementById(styleId);
+    if (oldStyle) oldStyle.remove();
 
     const css = `
         :root {
-            /* Nötr Griler */
+            /* Renk Paleti (Zinc & Emerald) */
             --nice-bg: #ffffff;
-            --nice-bg-alt: #f8fafc; /* Slate 50 */
-            --nice-border: #e2e8f0; /* Slate 200 */
-            --nice-text-main: #1e293b; /* Slate 800 */
-            --nice-text-muted: #64748b; /* Slate 500 */
+            --nice-bg-alt: #f4f4f5;      
+            --nice-border: #e4e4e7;      
+            --nice-text-main: #27272a;   
+            --nice-text-muted: #52525b;  
+            --nice-text-light: #a1a1aa;  
             
-            /* Kurumsal Mavi (Uygulama Teması) */
-            --nice-brand: #1e3c72; /* Ana mavi */
-            --nice-brand-hover: #2a5298; /* Açık mavi */
-            --nice-brand-light: #eff6ff; /* Blue 50 */
-            --nice-brand-border: #3b82f6; /* Blue 500 */
+            --nice-brand: #059669;       
+            --nice-brand-hover: #047857; 
+            --nice-brand-light: #d1fae5; 
+            --nice-brand-bg: #ecfdf5;    
             
-            /* Durum Renkleri */
-            --nice-danger: #dc2626; /* Red 600 */
+            --nice-danger: #dc2626;      
+            --nice-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --nice-modal-z: 99999; /* En üstte olmasını garanti eder */
         }
 
         .nice-container { 
             font-family: 'Inter', system-ui, -apple-system, sans-serif; 
             color: var(--nice-text-main); 
             font-size: 14px;
+            line-height: 1.5;
         }
 
-        /* --- BUTONLAR --- */
-        .nice-btn {
-            border: 1px solid var(--nice-border);
-            background: #fff;
-            color: var(--nice-text-main);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex; align-items: center; justify-content: center;
-        }
-        .nice-btn:hover { background: var(--nice-bg-alt); border-color: #d4d4d8; }
-        
-        .nice-btn-primary {
-            background: var(--nice-brand);
-            border-color: var(--nice-brand);
-            color: #fff;
-        }
-        .nice-btn-primary:hover { background: var(--nice-brand-hover); border-color: var(--nice-brand-hover); color: #fff; }
-
-        .nice-btn-danger-outline {
-            color: var(--nice-danger);
-            border-color: #fecaca;
-            background: #fff;
-        }
-        .nice-btn-danger-outline:hover { background: #fef2f2; border-color: var(--nice-danger); }
-
-        .nice-btn-sm { padding: 4px 8px; font-size: 12px; }
-        .nice-btn-block { width: 100%; display: flex; }
-
-        /* --- LİSTE GRUBU KARTLARI --- */
+        /* --- ANA LİSTE ELEMANLARI --- */
         .nice-class-group {
             background: var(--nice-bg);
             border: 1px solid var(--nice-border);
             margin-bottom: 8px;
             border-radius: 8px;
             overflow: hidden;
-            transition: box-shadow 0.2s, border-color 0.2s;
+            transition: all 0.2s ease;
         }
-        .nice-class-group:hover {
-            border-color: #a1a1aa;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
+        .nice-class-group:hover { border-color: #a1a1aa; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         
-        /* Seçili Grup Stili */
         .nice-class-group.has-selection {
-            border-color: var(--nice-brand-border);
-            background-color: #fff;
-            box-shadow: 0 0 0 1px var(--nice-brand-border);
+            border-color: var(--nice-brand);
+            box-shadow: 0 0 0 1px var(--nice-brand);
         }
-        .nice-class-group.has-selection .nice-class-header {
-            background-color: var(--nice-brand-light);
-            border-bottom: 1px solid var(--nice-brand-border);
-        }
-        .nice-class-group.has-selection .nice-badge {
-            background-color: var(--nice-brand);
-            color: white;
-        }
+        .nice-class-group.has-selection .nice-class-header { background-color: var(--nice-brand-bg); }
+        .nice-class-group.has-selection .nice-badge { background-color: var(--nice-brand); color:white; }
 
-        /* Başlık Alanı */
         .nice-class-header {
-            padding: 12px 16px;
-            background: var(--nice-bg-alt);
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: space-between;
-            border-bottom: 1px solid transparent;
-            user-select: none;
+            padding: 10px 14px; background: var(--nice-bg-alt);
+            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid transparent; user-select: none;
         }
         
-        .nice-header-left { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .nice-header-left { display: flex; align-items: center; gap: 10px; flex: 1; }
         
         .nice-badge {
-            background: #475569; /* Slate 600 */
-            color: #fff;
-            font-size: 12px; font-weight: 700;
-            padding: 4px 8px; border-radius: 6px;
-            min-width: 32px; text-align: center;
+            background: #52525b; color: #fff; font-size: 11px; font-weight: 700;
+            padding: 2px 8px; border-radius: 4px; min-width: 28px; text-align: center;
             transition: background 0.2s;
         }
         
-        .nice-title { font-weight: 600; color: var(--nice-text-main); font-size: 14px; }
-        
-        .nice-icon-chevron { color: var(--nice-text-muted); transition: transform 0.2s; }
+        .nice-title { font-weight: 600; color: var(--nice-text-main); font-size: 13px; }
+        .nice-icon-chevron { color: var(--nice-text-light); transition: transform 0.2s; font-size: 12px; }
         .nice-class-group.open .nice-icon-chevron { transform: rotate(180deg); color: var(--nice-text-main); }
 
-        /* Tümünü Seç Butonu */
         .nice-btn-select-all {
-            background: transparent; border: 1px solid #d4d4d8; 
+            background: #fff; border: 1px solid var(--nice-border); 
             color: var(--nice-text-muted); border-radius: 4px; 
-            padding: 2px 8px; font-size: 11px; margin-right: 12px; 
-            transition: all 0.2s;
+            padding: 2px 8px; font-size: 11px; margin-right: 10px; 
+            transition: all 0.2s; cursor: pointer;
         }
-        .nice-btn-select-all:hover { border-color: var(--nice-brand); color: var(--nice-brand); background: #fff; }
+        .nice-btn-select-all:hover { border-color: var(--nice-brand); color: var(--nice-brand); }
 
-        /* Alt Liste (Accordion) */
         .nice-sub-list { display: none; background: #fff; border-top: 1px solid var(--nice-border); }
-        .nice-sub-list.open { display: block; animation: slideDown 0.15s ease-out; }
+        .nice-sub-list.open { display: block; animation: niceSlideDown 0.15s ease-out; }
 
         .nice-sub-item {
-            padding: 10px 16px 10px 50px;
-            border-bottom: 1px solid var(--nice-border);
-            cursor: pointer;
-            display: flex; align-items: start; gap: 10px;
-            transition: background 0.15s;
+            padding: 8px 14px 8px 45px; border-bottom: 1px solid var(--nice-border);
+            cursor: pointer; display: flex; align-items: flex-start; gap: 10px;
+            transition: background 0.1s;
         }
         .nice-sub-item:last-child { border-bottom: none; }
         .nice-sub-item:hover { background: var(--nice-bg-alt); }
-        
-        .nice-sub-item.selected {
-            background-color: var(--nice-brand-light);
-        }
-        .nice-sub-item.selected .nice-label {
-            color: #1e3a8a; /* Koyu Mavi Metin */
-            font-weight: 500;
-        }
+        .nice-sub-item.selected { background-color: var(--nice-brand-bg); }
+        .nice-sub-item.selected .nice-label { color: var(--nice-brand-hover); font-weight: 600; }
 
-        /* Checkbox */
-        .nice-checkbox {
-            width: 16px; height: 16px;
-            accent-color: var(--nice-brand);
-            margin-top: 3px; cursor: pointer;
-        }
-        .nice-label {
-            font-size: 13px; color: var(--nice-text-muted);
-            line-height: 1.5; cursor: pointer; flex: 1;
-        }
+        .nice-checkbox { width: 15px; height: 15px; accent-color: var(--nice-brand); margin-top: 3px; cursor: pointer; }
+        .nice-label { font-size: 13px; color: var(--nice-text-muted); line-height: 1.4; cursor: pointer; flex: 1; margin: 0; }
 
-        /* --- SAĞ/ALT PANEL (SEÇİLENLER) --- */
+        /* --- SEÇİLENLER PANELİ --- */
         .selected-group-card {
-            background: #fff;
-            border: 1px solid var(--nice-border);
-            border-radius: 8px;
-            margin-bottom: 12px;
-            overflow: hidden;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            background: #fff; border: 1px solid var(--nice-border); border-radius: 8px;
+            margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
         .selected-group-header {
-            background: var(--nice-bg-alt);
-            padding: 8px 16px;
-            font-weight: 600;
-            color: var(--nice-text-main);
-            border-bottom: 1px solid var(--nice-border);
-            font-size: 13px;
-            display: flex; align-items: center;
+            background: var(--nice-bg-alt); padding: 6px 12px; font-weight: 600;
+            color: var(--nice-text-main); border-bottom: 1px solid var(--nice-border);
+            font-size: 12px; display: flex; align-items: center;
         }
         .selected-group-header::before {
             content: ''; display: inline-block; width: 6px; height: 6px;
-            background: var(--nice-brand); border-radius: 50%; margin-right: 10px;
+            background: var(--nice-brand); border-radius: 50%; margin-right: 8px;
         }
-        
         .selected-item-row {
-            padding: 8px 16px;
-            border-bottom: 1px solid var(--nice-border);
-            display: flex; align-items: flex-start; gap: 12px;
-            transition: background 0.1s;
+            padding: 8px 12px; border-bottom: 1px solid var(--nice-border);
+            display: flex; align-items: flex-start; gap: 10px;
         }
-        .selected-item-row:last-child { border-bottom: none; }
         .selected-item-row:hover { background: #fafafa; }
-
         .selected-code-badge {
-            background: #e4e4e7; color: #3f3f46;
-            font-size: 11px; font-weight: 700;
-            padding: 2px 6px; border-radius: 4px;
+            background: var(--nice-bg-alt); color: var(--nice-text-main); font-size: 11px;
+            font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--nice-border);
             white-space: nowrap; font-family: monospace;
         }
-        .selected-text { font-size: 13px; color: var(--nice-text-main); flex: 1; line-height: 1.5; }
-        
-        .btn-remove-item {
-            color: #a1a1aa; border: none; background: none; 
-            padding: 2px; cursor: pointer; transition: color 0.2s;
-        }
+        .btn-remove-item { color: var(--nice-text-light); border: none; background: none; padding: 2px; cursor: pointer; }
         .btn-remove-item:hover { color: var(--nice-danger); }
 
-        /* Input Alanları */
+        /* --- ÖZEL MODAL STİLLERİ (İZOLE EDİLMİŞ) --- */
+        .nice-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+            z-index: var(--nice-modal-z); display: flex; align-items: center; justify-content: center;
+            opacity: 0; animation: niceFadeIn 0.2s forwards;
+        }
+        
+        .nice-modal-container {
+            background: #fff; width: 90%; max-width: 1100px; height: 85vh;
+            border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex; flex-direction: column; overflow: hidden;
+            transform: scale(0.95); opacity: 0; animation: niceZoomIn 0.2s 0.1s forwards;
+        }
+
+        .nice-modal-header {
+            padding: 16px 24px; border-bottom: 1px solid var(--nice-border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: #fff;
+        }
+        .nice-modal-title { font-size: 18px; font-weight: 700; color: #18181b; display: flex; align-items: center; gap: 10px; }
+        .nice-modal-close { background: none; border: none; font-size: 24px; color: #a1a1aa; cursor: pointer; line-height: 1; }
+        .nice-modal-close:hover { color: #18181b; }
+
+        .nice-modal-body {
+            flex: 1; overflow: hidden; display: flex; background: var(--nice-bg-alt);
+        }
+        
+        .nice-modal-col-left { flex: 2; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid var(--nice-border); }
+        .nice-modal-col-right { flex: 1; padding: 20px; display: flex; flex-direction: column; background: #fff; }
+
+        .nice-modal-list-box {
+            background: #fff; border: 1px solid var(--nice-border); border-radius: 8px;
+            flex: 1; overflow-y: auto; padding: 10px; margin-top: 10px;
+        }
+
+        .nice-modal-footer {
+            padding: 16px 24px; border-top: 1px solid var(--nice-border);
+            background: #fff; display: flex; justify-content: flex-end; gap: 12px;
+        }
+
+        /* Modal içi Inputlar ve Butonlar */
         .nice-input {
-            width: 100%; padding: 8px 12px;
-            border: 1px solid var(--nice-border);
-            border-radius: 6px; font-size: 14px;
-            outline: none; transition: border-color 0.2s;
+            width: 100%; padding: 8px 12px; border: 1px solid var(--nice-border);
+            border-radius: 6px; font-size: 14px; outline: none; transition: all 0.2s;
         }
         .nice-input:focus { border-color: var(--nice-brand); box-shadow: 0 0 0 2px var(--nice-brand-light); }
 
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .nice-btn-primary {
+            background: var(--nice-brand); color: white; border: none;
+            padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .nice-btn-primary:hover { background: var(--nice-brand-hover); }
+        
+        .nice-btn-secondary {
+            background: #fff; border: 1px solid var(--nice-border); color: var(--nice-text-main);
+            padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer;
+        }
+        .nice-btn-secondary:hover { background: var(--nice-bg-alt); }
+
+        .nice-btn-danger-outline {
+            background: #fff; border: 1px solid #fecaca; color: var(--nice-danger);
+            padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 100%; cursor: pointer;
+        }
+        .nice-btn-danger-outline:hover { background: #fef2f2; }
+
+        @keyframes niceFadeIn { to { opacity: 1; } }
+        @keyframes niceZoomIn { to { opacity: 1; transform: scale(1); } }
+        @keyframes niceSlideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     `;
     const style = document.createElement('style');
     style.id = styleId; style.textContent = css; document.head.appendChild(style);
 }
 
 /**
- * 35-5 (Perakende Hizmetleri) Özel Modal Yöneticisi
+ * 35-5 (Perakende Hizmetleri) Modal Yöneticisi - İZOLE EDİLMİŞ VERSİYON
  */
 class Class35_5Manager {
     constructor(parentManager) {
         this.parent = parentManager; 
         this.modalData = []; 
         this.selectedItems = {}; 
-        this.modalId = 'class35-5-modal';
+        this.modalId = 'nice-custom-modal-35-5';
     }
 
     async open() {
@@ -242,49 +218,49 @@ class Class35_5Manager {
     }
 
     renderModal() {
+        // Tamamen özel sınıflar (nice-modal-*) kullanarak sayfa CSS'inden bağımsızlaştırıyoruz
         const modalHTML = `
-        <div id="${this.modalId}" class="modal fade show" tabindex="-1" style="display:block; background: rgba(0,0,0,0.6); z-index: 1060; backdrop-filter: blur(2px);">
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content border-0 shadow-xl" style="border-radius: 12px;">
-                    <div class="modal-header border-bottom py-3" style="background: #fff;">
-                        <h5 class="modal-title font-weight-bold" style="color: #18181b;">
-                            <span class="nice-badge mr-2" style="background: var(--nice-brand);">35-5</span> 
-                            Müşterilerin Malları (Perakende)
-                        </h5>
-                        <button type="button" class="close" data-action="close" style="outline:none;">&times;</button>
+        <div id="${this.modalId}" class="nice-modal-overlay">
+            <div class="nice-modal-container">
+                <div class="nice-modal-header">
+                    <div class="nice-modal-title">
+                        <span class="nice-badge" style="background: var(--nice-brand); font-size: 14px;">35-5</span> 
+                        Müşterilerin Malları (Perakende)
                     </div>
-                    <div class="modal-body" style="background: #f8fafc;">
-                        <div class="row h-100">
-                            <div class="col-lg-8 d-flex flex-column h-100">
-                                <div class="bg-white p-3 rounded border mb-3">
-                                    <input type="text" class="nice-input" id="c35-search" placeholder="🔍 Mal sınıfı ara (örn: ilaç, giysi)...">
-                                </div>
-                                <div class="bg-white rounded border flex-grow-1 overflow-auto nice-container" id="c35-list-container" style="max-height: 500px; padding: 10px;">
-                                    ${this._generateListHTML()}
-                                </div>
-                                <div class="mt-3 d-flex gap-2">
-                                    <input type="text" id="c35-custom-input" class="nice-input" placeholder="Listede olmayan özel bir mal...">
-                                    <button class="nice-btn nice-btn-primary ml-2" id="c35-add-custom">Ekle</button>
-                                </div>
-                            </div>
-                            <div class="col-lg-4 d-flex flex-column h-100">
-                                <div class="bg-white rounded border h-100 d-flex flex-column">
-                                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light">
-                                        <span class="font-weight-bold" style="color: #3f3f46;">Seçilen Mallar</span>
-                                        <span class="nice-badge" id="c35-count">0</span>
-                                    </div>
-                                    <div class="flex-grow-1 overflow-auto p-0" id="c35-selected-container" style="max-height: 500px;"></div>
-                                    <div class="p-3 border-top bg-light">
-                                        <button class="nice-btn nice-btn-danger-outline nice-btn-block" id="c35-clear">Tümünü Temizle</button>
-                                    </div>
-                                </div>
-                            </div>
+                    <button class="nice-modal-close" data-action="close">&times;</button>
+                </div>
+
+                <div class="nice-modal-body">
+                    <div class="nice-modal-col-left">
+                        <input type="text" class="nice-input" id="c35-search" placeholder="🔍 Mal sınıfı ara (örn: ilaç, giysi)...">
+                        
+                        <div class="nice-modal-list-box nice-container" id="c35-list-container">
+                            ${this._generateListHTML()}
+                        </div>
+                        
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <input type="text" id="c35-custom-input" class="nice-input" placeholder="Listede olmayan özel bir mal...">
+                            <button class="nice-btn-primary" id="c35-add-custom">Ekle</button>
                         </div>
                     </div>
-                    <div class="modal-footer border-top bg-white">
-                        <button type="button" class="nice-btn" data-action="close">İptal</button>
-                        <button type="button" class="nice-btn nice-btn-primary px-4" id="c35-save">Kaydet ve Ekle</button>
+
+                    <div class="nice-modal-col-right">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #e4e4e7;">
+                            <span style="font-weight:600; color:#3f3f46; font-size:13px;">SEÇİLENLER</span>
+                            <span class="nice-badge" id="c35-count">0</span>
+                        </div>
+                        
+                        <div style="flex:1; overflow-y:auto;" id="c35-selected-container"></div>
+                        
+                        <div style="margin-top:15px;">
+                            <button class="nice-btn-danger-outline" id="c35-clear">Tümünü Temizle</button>
+                        </div>
                     </div>
+                </div>
+
+                <div class="nice-modal-footer">
+                    <button class="nice-btn-secondary" data-action="close">İptal</button>
+                    <button class="nice-btn-primary" id="c35-save">Kaydet ve Ekle</button>
                 </div>
             </div>
         </div>`;
@@ -293,7 +269,6 @@ class Class35_5Manager {
         if (oldModal) oldModal.remove();
 
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        document.body.classList.add('modal-open');
         this.updateSelectedUI();
     }
 
@@ -314,7 +289,7 @@ class Class35_5Manager {
                         <div class="nice-sub-item c35-item-row" data-code="${code}" data-text="${sub.subClassDescription}">
                             <input type="checkbox" class="nice-checkbox" id="chk-${code}" value="${code}">
                             <label class="nice-label ml-2" for="chk-${code}">
-                                <span style="color:#a1a1aa; font-size:12px;">(${code})</span> ${sub.subClassDescription}
+                                <span style="color:#a1a1aa; font-size:11px;">(${code})</span> ${sub.subClassDescription}
                             </label>
                         </div>`;
                     }).join('')}
@@ -328,7 +303,10 @@ class Class35_5Manager {
         
         modal.addEventListener('click', (e) => {
             const target = e.target;
-            if (target.dataset.action === 'close' || target.classList.contains('close')) return this.close();
+            if (target.dataset.action === 'close') return this.close();
+            
+            // Overlay tıklandığında kapat (Opsiyonel)
+            if (target === modal) return this.close();
 
             const header = target.closest('.c35-header');
             if (header) {
@@ -341,6 +319,7 @@ class Class35_5Manager {
                 return;
             }
 
+            // Satıra tıklayınca checkbox tetikle
             const itemRow = target.closest('.c35-item-row');
             if (itemRow && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
                 const checkbox = itemRow.querySelector('input[type="checkbox"]');
@@ -354,6 +333,7 @@ class Class35_5Manager {
             }
         });
 
+        // Arama
         document.getElementById('c35-search').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             modal.querySelectorAll('.c35-group').forEach(group => {
@@ -378,16 +358,16 @@ class Class35_5Manager {
             });
         });
 
+        // Kaydet
         document.getElementById('c35-save').addEventListener('click', () => {
             const items = Object.values(this.selectedItems);
             if (items.length === 0) return alert('Lütfen en az bir mal seçin.');
-            
             const combinedText = `Müşterilerin malları; şu malların bir araya getirilmesi hizmetleri (nakliyesi hariç): ${items.join(', ')}`;
-            
             this.parent.addSelection('35-5', '35', combinedText);
             this.close();
         });
 
+        // Özel Ekle
         document.getElementById('c35-add-custom').addEventListener('click', () => {
             const input = document.getElementById('c35-custom-input');
             const val = input.value.trim();
@@ -397,6 +377,7 @@ class Class35_5Manager {
             input.value = '';
         });
 
+        // Temizle
         document.getElementById('c35-clear').onclick = () => { 
             this.selectedItems = {}; 
             this.updateSelectedUI(); 
@@ -422,7 +403,10 @@ class Class35_5Manager {
         ).join('');
     }
 
-    close() { document.getElementById(this.modalId)?.remove(); document.body.classList.remove('modal-open'); }
+    close() { 
+        const modal = document.getElementById(this.modalId);
+        if (modal) modal.remove();
+    }
 }
 
 /**
@@ -477,7 +461,7 @@ class NiceClassificationManager {
                         <span class="nice-title">${cls.classTitle}</span>
                     </div>
                     <div class="d-flex align-items-center">
-                        <button class="nice-btn-select-all mr-2" title="Tümünü Seç"><i class="fas fa-check-double"></i></button>
+                        <button class="nice-btn-select-all mr-2" title="Tümünü Seç">Tümü</button>
                         <i class="fas fa-chevron-down nice-icon-chevron"></i>
                     </div>
                 </div>
@@ -509,51 +493,39 @@ class NiceClassificationManager {
         this.elements.listContainer.addEventListener('click', (e) => {
             const target = e.target;
 
-            // Tümünü Seç
-            const selectAllBtn = target.closest('.nice-btn-select-all');
-            if (selectAllBtn) {
+            if (target.closest('.nice-btn-select-all')) {
                 e.stopPropagation();
-                this.toggleWholeClass(parseInt(selectAllBtn.closest('.nice-class-group').dataset.classNum));
+                this.toggleWholeClass(parseInt(target.closest('.nice-class-group').dataset.classNum));
                 return;
             }
 
-            // Accordion Aç/Kapa
-            const header = target.closest('.nice-class-header');
-            if (header) {
-                const group = header.parentElement;
+            if (target.closest('.nice-class-header')) {
+                const group = target.closest('.nice-class-header').parentElement;
                 const list = group.querySelector('.nice-sub-list');
                 const isOpen = list.classList.contains('open');
-                
                 if (isOpen) { list.classList.remove('open'); group.classList.remove('open'); }
                 else { list.classList.add('open'); group.classList.add('open'); }
                 return;
             }
 
-            // Satır Tıklama
             const subItem = target.closest('.sub-item');
-            if (subItem && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
+            if (subItem) {
                 const checkbox = subItem.querySelector('.class-checkbox');
                 if(subItem.dataset.code === '35-5') {
+                    if (target.tagName === 'INPUT') target.checked = !target.checked; 
                     this.class35Manager.open();
-                } else {
+                    return;
+                }
+                
+                if (target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
                     checkbox.checked = !checkbox.checked;
                     this.handleCheckboxAction(checkbox.value, subItem.dataset.text, checkbox.checked);
-                }
-            }
-
-            // Checkbox Tıklama
-            if (target.classList.contains('class-checkbox')) {
-                if (target.value === '35-5') {
-                    e.preventDefault();
-                    this.class35Manager.open();
-                } else {
-                    const subItem = target.closest('.sub-item');
+                } else if (target.tagName === 'INPUT') {
                     this.handleCheckboxAction(target.value, subItem.dataset.text, target.checked);
                 }
             }
         });
 
-        // Sağ Panel Kaldır
         if (this.elements.selectedContainer) {
             this.elements.selectedContainer.addEventListener('click', (e) => {
                 const removeBtn = e.target.closest('.btn-remove-item');
@@ -561,12 +533,10 @@ class NiceClassificationManager {
             });
         }
 
-        // Arama
         if (this.elements.searchInput) {
             this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
         }
 
-        // Özel Ekle
         if (this.elements.customAddBtn) {
             this.elements.customAddBtn.addEventListener('click', () => {
                 const val = this.elements.customInput.value.trim();
@@ -598,7 +568,6 @@ class NiceClassificationManager {
         const classData = this.allData.find(c => c.classNumber === classNum);
         if (!classData) return;
         const subCodes = classData.subClasses.map((_, i) => `${classNum}-${i+1}`).filter(c => c !== '35-5');
-        
         const allSelected = subCodes.every(c => this.selectedClasses[c]);
         
         if (allSelected) subCodes.forEach(c => this.removeSelection(c));
