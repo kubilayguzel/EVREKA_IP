@@ -1,25 +1,25 @@
-// public/js/nice-classification.js - Professional UI & Logic
+// public/js/nice-classification.js - FINAL STABLE (Slate & Emerald Theme)
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- PROFESYONEL TASARIM (CSS ENJEKSİYONU) ---
+// --- TASARIM (CSS) ---
 function injectNiceStyles() {
     const styleId = 'nice-classification-styles';
     if (document.getElementById(styleId)) return;
 
     const css = `
         :root {
-            --nice-primary: #334155; /* Slate 700 - Ana Metin */
-            --nice-secondary: #64748b; /* Slate 500 - Yan Metin */
-            --nice-accent: #10b981; /* Emerald 500 - Seçim Rengi */
-            --nice-accent-light: #ecfdf5; /* Emerald 50 - Seçim Arkaplanı */
-            --nice-border: #e2e8f0; /* Slate 200 - Çerçeve */
-            --nice-bg-hover: #f8fafc; /* Slate 50 - Hover */
-            --nice-danger: #ef4444; /* Red 500 - Silme */
+            --nice-primary: #334155; /* Slate 700 */
+            --nice-secondary: #64748b; /* Slate 500 */
+            --nice-accent: #10b981; /* Emerald 500 */
+            --nice-accent-light: #ecfdf5; /* Emerald 50 */
+            --nice-border: #e2e8f0; /* Slate 200 */
+            --nice-bg-hover: #f8fafc; /* Slate 50 */
+            --nice-danger: #ef4444; /* Red 500 */
         }
 
-        .nice-container { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--nice-primary); }
+        .nice-container { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--nice-primary); }
 
         /* ANA LİSTE KARTLARI */
         .nice-class-group {
@@ -37,7 +37,6 @@ function injectNiceStyles() {
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
         }
 
-        /* SEÇİM YAPILMIŞ GRUP (VURGULU) */
         .nice-class-group.has-selection {
             border-color: var(--nice-accent);
             background-color: #f0fdf4;
@@ -51,7 +50,7 @@ function injectNiceStyles() {
             background-color: var(--nice-accent);
         }
 
-        /* HEADER (BAŞLIK) */
+        /* HEADER */
         .nice-class-header {
             padding: 14px 18px;
             background: #fff;
@@ -66,7 +65,7 @@ function injectNiceStyles() {
         .nice-header-left { display: flex; align-items: center; gap: 12px; flex: 1; }
         
         .nice-badge {
-            background: #475569; /* Koyu Gri Badge */
+            background: #475569;
             color: #fff;
             font-size: 12px;
             font-weight: 700;
@@ -78,7 +77,6 @@ function injectNiceStyles() {
         }
         
         .nice-title { font-size: 15px; font-weight: 600; color: #1e293b; }
-        
         .nice-icon-chevron { color: #94a3b8; transition: transform 0.2s; }
         .nice-class-group.open .nice-icon-chevron { transform: rotate(180deg); color: var(--nice-accent); }
 
@@ -89,7 +87,7 @@ function injectNiceStyles() {
         }
         .nice-btn-select-all:hover { border-color: var(--nice-accent); color: var(--nice-accent); background: #fff; }
 
-        /* ALT LİSTE (ACCORDION) */
+        /* ALT LİSTE */
         .nice-sub-list { display: none; background: #fff; border-top: 1px solid var(--nice-border); }
         .nice-sub-list.open { display: block; animation: niceSlideDown 0.2s ease-out; }
 
@@ -104,7 +102,6 @@ function injectNiceStyles() {
         .nice-sub-item:last-child { border-bottom: none; }
         .nice-sub-item:hover { background-color: var(--nice-bg-hover); }
         
-        /* SEÇİLİ ALT ÖĞE */
         .nice-sub-item.selected {
             background-color: var(--nice-accent-light);
             color: #065f46;
@@ -113,22 +110,15 @@ function injectNiceStyles() {
             content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--nice-accent);
         }
 
-        /* SEÇİLENLER PANELİ (ALTTA) */
+        /* SEÇİLENLER PANELİ */
         .selected-group-card {
-            background: #fff;
-            border: 1px solid var(--nice-border);
-            border-radius: 8px;
-            margin-bottom: 16px;
-            overflow: hidden;
+            background: #fff; border: 1px solid var(--nice-border);
+            border-radius: 8px; margin-bottom: 16px; overflow: hidden;
             box-shadow: 0 2px 4px rgba(0,0,0,0.03);
         }
         .selected-group-header {
-            background: #f8fafc;
-            padding: 10px 16px;
-            font-weight: 700;
-            color: #334155;
-            border-bottom: 1px solid var(--nice-border);
-            font-size: 14px;
+            background: #f8fafc; padding: 10px 16px; font-weight: 700; color: #334155;
+            border-bottom: 1px solid var(--nice-border); font-size: 14px;
             display: flex; align-items: center;
         }
         .selected-group-header::before {
@@ -137,19 +127,15 @@ function injectNiceStyles() {
         }
         
         .selected-item-row {
-            padding: 12px 16px;
-            border-bottom: 1px solid #f1f5f9;
-            display: flex; align-items: flex-start; gap: 12px;
-            transition: background 0.1s;
+            padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
+            display: flex; align-items: flex-start; gap: 12px; transition: background 0.1s;
         }
         .selected-item-row:last-child { border-bottom: none; }
         .selected-item-row:hover { background: #fffdf5; }
 
         .selected-code-badge {
-            background: #e2e8f0; color: #475569;
-            font-size: 11px; font-weight: 700;
-            padding: 2px 6px; border-radius: 4px;
-            white-space: nowrap;
+            background: #e2e8f0; color: #475569; font-size: 11px; font-weight: 700;
+            padding: 2px 6px; border-radius: 4px; white-space: nowrap;
         }
         .selected-text { font-size: 14px; color: #334155; flex: 1; line-height: 1.5; }
         
@@ -159,12 +145,11 @@ function injectNiceStyles() {
         }
         .btn-remove-item:hover { color: var(--nice-danger); }
 
-        /* CHECKBOX */
         .nice-checkbox {
             width: 18px; height: 18px; accent-color: var(--nice-accent);
             margin-top: 3px; cursor: pointer;
         }
-        .nice-label { cursor: pointer; font-size: 14px; line-height: 1.5; color: #475569; }
+        .nice-label { cursor: pointer; font-size: 14px; line-height: 1.5; color: #475569; margin-bottom: 0; }
 
         @keyframes niceSlideDown {
             from { opacity: 0; transform: translateY(-5px); }
@@ -172,13 +157,11 @@ function injectNiceStyles() {
         }
     `;
     const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = css;
-    document.head.appendChild(style);
+    style.id = styleId; style.textContent = css; document.head.appendChild(style);
 }
 
 /**
- * 35-5 (Perakende) Modal Yöneticisi
+ * 35-5 Modal Yöneticisi
  */
 class Class35_5Manager {
     constructor(parentManager) {
@@ -336,14 +319,10 @@ class Class35_5Manager {
             });
         });
 
-        // 35-5 TEK MADDE EKLEME
         document.getElementById('c35-save').addEventListener('click', () => {
             const items = Object.values(this.selectedItems);
             if (items.length === 0) return alert('Lütfen en az bir mal seçin.');
-            
-            // Tüm malları tek string yap
             const combinedText = `Müşterilerin malları; şu malların bir araya getirilmesi hizmetleri (nakliyesi hariç): ${items.join(', ')}`;
-            
             this.parent.addSelection('35-5', '35', combinedText);
             this.close();
         });
@@ -357,7 +336,11 @@ class Class35_5Manager {
             input.value = '';
         });
 
-        document.getElementById('c35-clear').onclick = () => { this.selectedItems = {}; this.updateSelectedUI(); modal.querySelectorAll('input').forEach(i=>i.checked=false); };
+        document.getElementById('c35-clear').onclick = () => { 
+            this.selectedItems = {}; 
+            this.updateSelectedUI(); 
+            modal.querySelectorAll('input').forEach(i=>i.checked=false); 
+        };
     }
 
     toggleItem(code, text, isSelected) {
@@ -409,14 +392,7 @@ class NiceClassificationManager {
         try {
             injectNiceStyles();
             const snapshot = await getDocs(collection(db, "niceClassification"));
-            this.allData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    classNumber: parseInt(data.classNumber),
-                    classTitle: data.classTitle,
-                    subClasses: data.subClasses || []
-                };
-            }).sort((a, b) => a.classNumber - b.classNumber);
+            this.allData = snapshot.docs.map(doc => ({ ...doc.data(), classNumber: parseInt(doc.data().classNumber) })).sort((a, b) => a.classNumber - b.classNumber);
 
             this.renderList();
             this.setupEventListeners();
@@ -495,7 +471,6 @@ class NiceClassificationManager {
             const subItem = target.closest('.sub-item');
             if (subItem && target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
                 const checkbox = subItem.querySelector('.class-checkbox');
-                // 35-5 ise direkt modal
                 if(subItem.dataset.code === '35-5') {
                     this.class35Manager.open();
                 } else {
@@ -603,11 +578,10 @@ class NiceClassificationManager {
     }
 
     updateSelectionUI() {
-        // 1. Sol Paneli Güncelle (Checkbox + Renkli Vurgu)
         const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
         const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
         
-        groups.forEach(g => g.classList.remove('has-selection')); // Önce temizle
+        groups.forEach(g => g.classList.remove('has-selection'));
 
         allCheckboxes.forEach(chk => {
             const isSelected = !!this.selectedClasses[chk.value];
@@ -619,14 +593,12 @@ class NiceClassificationManager {
                 else row.classList.remove('selected');
             }
 
-            // Eğer seçiliyse, üst grubu yeşillendir
             if (isSelected) {
                 const group = chk.closest('.nice-class-group');
                 if (group) group.classList.add('has-selection');
             }
         });
 
-        // 2. Alt Paneli Güncelle (Detaylı Liste)
         if (this.elements.selectedContainer) {
             const count = Object.keys(this.selectedClasses).length;
             if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
