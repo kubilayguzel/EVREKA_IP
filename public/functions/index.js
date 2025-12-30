@@ -1464,41 +1464,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
-    // --- DAVA SON TARİHİ HESAPLAMA (GÜNCELLENDİ) ---
-    // YİDK Kararının İptali davası süresi: Tebliğden itibaren 2 Ay
-    let davaSonTarihi = "-";
-    
-    // Dava takvimi oluşturulacak işlem tipleri:
-    // 29 (Kısmen Kabul), 30 (Ret)
-    // 31, 32, 33, 34, 35, 36 (YİDK Kararları)
-    const lawsuitTypes = ["29", "30", "31", "32", "33", "34", "35", "36"];
-
-    if (lawsuitTypes.includes(String(templateSearchType))) {
-        if (fetchedTxnData?.date) {
-            const tebligDate = new Date(fetchedTxnData.date);
-            let targetDate = new Date(tebligDate);
-            const originalDay = targetDate.getDate();
-            
-            // Dava süresi: 2 Ay ekle
-            targetDate.setMonth(targetDate.getMonth() + 2);
-            
-            // Ay sonu taşma kontrolü (Örn: 31 Ocak -> 31 Mart yoksa Mart sonuna çek)
-            if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
-
-            // Hafta sonu ve Tatil Kontrolü
-            const maxIter = 30; 
-            let iter = 0;
-            while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
-                targetDate.setDate(targetDate.getDate() + 1);
-                iter++;
-            }
-            davaSonTarihi = formatDate(targetDate);
-            console.log(`⚖️ Dava Son Tarihi Hesaplandı (${templateSearchType}): ${davaSonTarihi}`);
-        } else {
-            console.warn("⚠️ Dava tarihi hesaplanamadı: Tebliğ tarihi (fetchedTxnData.date) yok.");
-        }
-    }
-
     // --- ENRICHED DATA ---
     let enrichedData = {
         applicantNames: "-", classNumbers: "-", applicationDate: "-",
@@ -1506,7 +1471,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         itirazSahibi: "-" 
     };
 
-    // İtiraz Sahibini Set Et
     if (oppositionOwner) {
         enrichedData.itirazSahibi = oppositionOwner;
     }
@@ -1538,7 +1502,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     
-    // Tarih Önceliklendirme
     const findDate = (...candidates) => candidates.find(d => d !== undefined && d !== null);
 
     const rawTeblig = findDate(
@@ -1557,6 +1520,175 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     
     enrichedData.tebligTarihiFormatted = formatDate(rawTeblig);
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
+
+    // ===============================================================
+    //  DİNAMİK KARAR VE DAVA ANALİZİ (GÜNCELLENDİ)
+    // ===============================================================
+    
+    // 1. Portföy Kontrolü (Self mi?)
+    const isPortfolio = ipRecordData?.recordOwnerType === 'self';
+
+    let decisionAnalysis = {
+        isLawsuitRequired: false,
+        resultText: "-",          
+        statusText: "-",          
+        statusColor: "#333",      
+        summaryText: "",          
+        boxColor: "#e8f0fe",      
+        boxBorder: "#0d6efd"      
+    };
+
+    const txType = String(templateSearchType);
+
+    // Tip 31-36 Mantık Tablosu
+    if (["31", "32", "33", "34", "35", "36"].includes(txType)) {
+        
+        // --- 31: Başvuru Sahibi - İtiraz Kabul ---
+        if (txType === "31") {
+            decisionAnalysis.resultText = "BAŞVURU SAHİBİ - İTİRAZ KABUL";
+            if (isPortfolio) { 
+                // Self -> Lehimize (Başvurumuz Kabul Edildi / İtiraz Süreci Bitti)
+                decisionAnalysis.statusText = "LEHİMİZE (Kazanıldı)";
+                decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
+                decisionAnalysis.summaryText = "Başvurumuza ilişkin yapılan itiraz kabul edilmiştir (Başvuru Sahibi lehine sonuç). Tescil süreci devam edecektir.";
+            } else { 
+                // 3. Taraf -> Aleyhimize (Rakip Kazandı, Biz Kaybettik)
+                decisionAnalysis.statusText = "ALEYHİMİZE (Rakip Kazandı)";
+                decisionAnalysis.statusColor = "#d32f2f";
+                decisionAnalysis.isLawsuitRequired = true;
+                decisionAnalysis.summaryText = "Rakip başvuru lehine karar verilmiştir (Bizim itirazımız reddedilmiş gibi işlem görür). Bu karara karşı dava açılması gerekmektedir.";
+            }
+        }
+        
+        // --- 32: Başvuru Sahibi - İtiraz Kısmen Kabul ---
+        else if (txType === "32") {
+            decisionAnalysis.resultText = "KISMEN KABUL";
+            decisionAnalysis.statusText = "KISMEN ALEYHE";
+            decisionAnalysis.statusColor = "#d97706";
+            decisionAnalysis.isLawsuitRequired = true; // Her iki taraf için de kayıp kısımlar olabilir
+            
+            if (isPortfolio) {
+                decisionAnalysis.summaryText = "Başvurumuz kısmen kabul edilmiş, kısmen reddedilmiştir. Reddedilen sınıflar için dava açma hakkımız doğmuştur.";
+            } else {
+                decisionAnalysis.summaryText = "Rakip başvuru kısmen kabul edilmiştir. Rakibin kazandığı (bizim itirazımızın reddedildiği) kısımlar için dava açma hakkımız vardır.";
+            }
+        }
+
+        // --- 33: Başvuru Sahibi - İtiraz Ret ---
+        else if (txType === "33") {
+            decisionAnalysis.resultText = "BAŞVURU SAHİBİ - İTİRAZ RET";
+            if (isPortfolio) { 
+                // Self -> Aleyhimize (Başvurumuz Reddedildi)
+                decisionAnalysis.statusText = "ALEYHİMİZE (Başvurumuz Reddedildi)";
+                decisionAnalysis.statusColor = "#d32f2f";
+                decisionAnalysis.isLawsuitRequired = true;
+                decisionAnalysis.summaryText = "Başvurumuza ilişkin itiraz süreci aleyhimize sonuçlanmış ve başvurumuz reddedilmiştir. Dava açılması gerekmektedir.";
+            } else { 
+                // 3. Taraf -> Lehimize (Rakip Reddedildi)
+                decisionAnalysis.statusText = "LEHİMİZE (Rakip Reddedildi)";
+                decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
+                decisionAnalysis.summaryText = "Rakip başvurunun reddedilmesine karar verilmiştir. Karar lehimizedir.";
+            }
+        }
+
+        // --- 34: İtiraz Sahibi - İtiraz Kabul ---
+        else if (txType === "34") {
+            decisionAnalysis.resultText = "İTİRAZ SAHİBİ - İTİRAZ KABUL";
+            if (isPortfolio) { 
+                // Self -> Aleyhimize (Bizim Yaptığımız İtiraz Kabul Edilmedi / Başvuru Aleyhine Sonuçlanan Durum?)
+                // DÜZELTME: "İtiraz Sahibi Kabul" genelde "İtiraz Edenin Talebi Kabul" demektir.
+                // Eğer Self isek ve İtiraz Sahibiysek -> Kazanmışızdır.
+                // Ancak "itiraz sahibi kabul ise benim aleyhime" dediniz (Self senaryosunda).
+                // BU, SİZİN VERDİĞİNİZ KURALA GÖRE AYARLANIYOR:
+                decisionAnalysis.statusText = "ALEYHİMİZE (Karşı Taraf Kazandı)";
+                decisionAnalysis.statusColor = "#d32f2f";
+                decisionAnalysis.isLawsuitRequired = true;
+                decisionAnalysis.summaryText = "İtiraz sahibi lehine karar verilmiştir (Aleyhimize). Dava açılması gerekmektedir.";
+            } else { 
+                // 3. Taraf -> Lehimize
+                decisionAnalysis.statusText = "LEHİMİZE";
+                decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
+                decisionAnalysis.summaryText = "İtiraz sahibi lehine verilen karar bizim lehimizedir.";
+            }
+        }
+
+        // --- 35: İtiraz Sahibi - İtiraz Kısmen Kabul ---
+        else if (txType === "35") {
+            decisionAnalysis.resultText = "KISMEN KABUL";
+            decisionAnalysis.statusText = "KISMEN ALEYHE";
+            decisionAnalysis.statusColor = "#d97706";
+            decisionAnalysis.isLawsuitRequired = true;
+            
+            if (isPortfolio) {
+                decisionAnalysis.summaryText = "Karar kısmen aleyhimize sonuçlanmıştır. Kaybettiğimiz kısımlar için dava açma hakkımız vardır.";
+            } else {
+                decisionAnalysis.summaryText = "Karar kısmen lehimize, kısmen aleyhimizedir. Aleyhe olan kısımlar için dava açılabilir.";
+            }
+        }
+
+        // --- 36: İtiraz Sahibi - İtiraz Ret ---
+        else if (txType === "36") {
+            decisionAnalysis.resultText = "İTİRAZ SAHİBİ - İTİRAZ RET";
+            if (isPortfolio) { 
+                // Self -> Lehimize (İtiraz Sahibi Reddedildi -> Biz Kurtulduk)
+                // Kuralınız: "itiraz sahibi ret ise benim lehime"
+                decisionAnalysis.statusText = "LEHİMİZE (İtiraz Reddedildi)";
+                decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
+                decisionAnalysis.summaryText = "İtiraz sahibinin talebi reddedilmiştir. Karar lehimizedir.";
+            } else { 
+                // 3. Taraf -> Aleyhimize (Biz İtiraz Ettik, Reddedildi)
+                decisionAnalysis.statusText = "ALEYHİMİZE (İtirazımız Reddedildi)";
+                decisionAnalysis.statusColor = "#d32f2f";
+                decisionAnalysis.isLawsuitRequired = true;
+                decisionAnalysis.summaryText = "Yaptığımız itiraz reddedilmiştir. Karşı taraf tescil alacaktır. Dava açma hakkımız vardır.";
+            }
+        }
+    } 
+    // Tip 29 (Kısmen) ve 30 (Ret) Standart
+    else if (txType === "29") {
+        decisionAnalysis = { isLawsuitRequired: true, resultText: "KISMEN KABUL", statusText: "KISMEN RET", statusColor: "#d97706", summaryText: "Karara itirazımız kısmen kabul edilmiştir." };
+    } 
+    else if (txType === "30") {
+        decisionAnalysis = { isLawsuitRequired: true, resultText: "RET", statusText: "NİHAİ RET", statusColor: "#d32f2f", summaryText: "Karara itirazımız reddedilmiştir." };
+    }
+
+    // --- DAVA TARİHİ HESAPLAMA (Eğer Dava Gerekliyse) ---
+    // Sadece lawsuitRequired true ise ve 31-36 veya 29-30 ise hesapla
+    let davaSonTarihi = "-";
+    const lawsuitTypes = ["29", "30", "31", "32", "33", "34", "35", "36"];
+    
+    if (decisionAnalysis.isLawsuitRequired && lawsuitTypes.includes(txType) && fetchedTxnData?.date) {
+        const tebligDate = new Date(fetchedTxnData.date);
+        let targetDate = new Date(tebligDate);
+        const originalDay = targetDate.getDate();
+        
+        targetDate.setMonth(targetDate.getMonth() + 2);
+        if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
+
+        const maxIter = 30; 
+        let iter = 0;
+        while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
+            targetDate.setDate(targetDate.getDate() + 1);
+            iter++;
+        }
+        davaSonTarihi = formatDate(targetDate);
+        console.log(`⚖️ Dava Tarihi (${txType}): ${davaSonTarihi}`);
+    }
+
+    // Renk Ayarları (UI için)
+    if (decisionAnalysis.isLawsuitRequired) {
+        decisionAnalysis.boxColor = "#fff2f0"; 
+        decisionAnalysis.boxBorder = "#ff4d4f";
+    } else {
+        decisionAnalysis.boxColor = "#f6ffed"; 
+        decisionAnalysis.boxBorder = "#52c41a";
+    }
+
+    // ===============================================================
 
     // B) Notification Type
     const safeMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka").toLowerCase();
@@ -1677,8 +1809,19 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
         
         itiraz_sahibi: enrichedData.itirazSahibi, 
-        dava_son_tarihi: davaSonTarihi, // ✅ DAVA TARİHİ EKLENDİ
         
+        // --- DİNAMİK PARAMETRELER (YENİ) ---
+        dava_son_tarihi: davaSonTarihi,
+        dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
+        
+        karar_sonucu_baslik: decisionAnalysis.resultText,
+        karar_durumu_metni: decisionAnalysis.statusText,
+        karar_durumu_renk: decisionAnalysis.statusColor,
+        aksiyon_kutusu_bg: decisionAnalysis.boxColor,
+        aksiyon_kutusu_border: decisionAnalysis.boxBorder,
+        karar_ozeti_detay: decisionAnalysis.summaryText + (decisionAnalysis.isLawsuitRequired ? "<br><br>Bu karara karşı belirtilen tarihe kadar <strong>YİDK Kararının İptali davası</strong> açma hakkınız bulunmaktadır." : "<br><br>Şu an için tarafınızca yapılması gereken bir işlem bulunmamaktadır."),
+        // ------------------------------------
+
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
         markImageUrl: enrichedData.markImageUrl,
