@@ -86,7 +86,7 @@ export class TrademarkStrategy extends BaseStrategy {
             ipType: 'trademark',
             type: 'trademark',
             portfoyStatus: 'active',
-
+            recordOwnerType: getVal('recordOwnerType') || 'self',
             title: brandText,
             brandText: brandText,
             
