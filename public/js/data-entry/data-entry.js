@@ -1438,9 +1438,15 @@ class DataEntryModule {
                 }
 
                 if (recordData.goodsAndServicesByClass && typeof setSelectedNiceClasses === 'function') {
+                     // Veritabanı formatından (Obje) UI formatına (String Array) çevir
                      const formatted = recordData.goodsAndServicesByClass.map(g => `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`);
                      this.storedNiceClasses = formatted;
-                     setSelectedNiceClasses(formatted);
+                     
+                     // Eğer liste zaten initialize edilmişse (DOM'da varsa) yükle
+                     // Yoksa handleTabChange içinde yüklenecek
+                     if (document.getElementById('niceClassificationList')) {
+                         setSelectedNiceClasses(formatted);
+                     }
                 }
             }
             else {
