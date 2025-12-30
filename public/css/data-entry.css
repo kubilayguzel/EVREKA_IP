@@ -25,13 +25,30 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .nav-tabs .nav-link:hover:not(.active) { background-color: #f8f9fa; border-radius: 0; }
 .tab-content-card { padding: 1.5rem; border: 1px solid #dee2e6; border-top: none; border-bottom-left-radius: 0.25rem; border-bottom-right-radius: 0.25rem; background-color: #fff; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); }
 
-/* Nice Classification */
+/* --- NICE CLASSIFICATION (DÜZELTİLEN KISIM) --- */
 .nice-classification-container { background: #f8f9fa; border-radius: 10px; padding: 20px; margin-top: 15px; }
-.classification-panel { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 10px; overflow: hidden; margin-bottom: 15px; }
-.selected-classes-panel { background: #fff; border: 1px solid #dee2e6; border-radius: 10px; overflow: hidden; margin-bottom: 15px; }
-.classification-panel .panel-header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; text-align: center; }
+
+/* Hem sol hem sağ panel için ortak stil */
+.classification-panel, .selected-classes-panel { 
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+    color: white; 
+    border-radius: 10px; 
+    overflow: hidden; 
+    margin-bottom: 15px; 
+}
+
+/* Header stili (Padding eklendi) */
+.classification-panel .panel-header,
+.selected-classes-panel .panel-header { 
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+    color: white; 
+    padding: 20px; /* Bu satır kritik! */
+    text-align: center; 
+}
+
 .panel-header h5 { color: white !important; margin: 0; font-size: 1.2rem; font-weight: 600; }
 .panel-header small { color: rgba(255,255,255,0.8) !important; display: block; margin-top: 5px; }
+
 .search-section { padding: 0 20px 20px; }
 .search-section .input-group { border-radius: 8px; overflow: hidden; }
 .search-section .form-control { border: none; padding: 12px 15px; }
