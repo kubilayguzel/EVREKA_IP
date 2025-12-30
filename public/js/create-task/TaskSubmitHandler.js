@@ -387,105 +387,151 @@ export class TaskSubmitHandler {
     }
 
 // C) MARKA BAŞVURUSU (DÜZELTİLDİ: Yalın Marka Adı Kullanımı)
-    async _handleTrademarkApplication(state, taskData) {
-        const { selectedApplicants, priorities, uploadedFiles, selectedTaskType } = state;
-        
-        // 1. Görsel Yükleme
-        let brandImageUrl = null;
-        if (uploadedFiles.length > 0) {
-            const file = uploadedFiles[0];
-            const path = `brand-images/${Date.now()}_${file.name}`;
-            try {
-                brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
-            } catch (e) { console.error('Görsel yükleme hatası:', e); }
-        }
 
-        // 2. DOM'dan Verileri Çek
-        const brandType = document.getElementById('brandType')?.value || '';
-        const brandCategory = document.getElementById('brandCategory')?.value || '';
-        // "Marka Örneği Yazılı İfadesi" bizim asıl yalın marka adımızdır.
-        const visualDescription = document.getElementById('brandExampleText')?.value?.trim() || ''; 
-        const nonLatin = document.getElementById('nonLatinAlphabet')?.value || '';
-        
-        // --- İSİM DÜZELTME MANTIĞI ---
-        // Task başlığında "Marka Başvurusu" yazar ama portföy kaydında sadece marka adı yazmalı.
-        // Eğer visualDescription varsa onu kullan (En doğrusu budur).
-        // Eğer yoksa (örn: Sadece Şekil), taskData.title içinden "Marka Başvurusu" ibaresini temizle.
-        let cleanBrandName = visualDescription;
-        if (!cleanBrandName && taskData.title) {
-             cleanBrandName = taskData.title.replace(/ Marka Başvurusu$/i, '').trim();
-        }
-        // -----------------------------
-
-        // Menşe Bilgisi
-        let origin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
-        let originCountry = 'TR'; 
-        
-        if (origin === 'Yurtdışı Ulusal' || origin === 'FOREIGN_NATIONAL') {
-            origin = 'FOREIGN_NATIONAL';
-            originCountry = document.getElementById('countrySelect')?.value || '';
-        }
-
-        const niceClasses = getSelectedNiceClasses();
-        const recordOwnerType = 'self'; 
-
-        // Başvuru Sahipleri
-        const applicantsData = selectedApplicants.map(p => ({
-            id: p.id,
-            name: p.name,
-            address: p.address || '',
-            country: p.country || '',
-            role: 'applicant'
-        }));
-
-        // YENİ PORTFÖY KAYDI
-        const newRecordData = {
-            // -- Kimlik Bilgileri --
-            title: cleanBrandName,
-            brandText: cleanBrandName, // ✅ DÜZELTME: markName yerine brandText kullanıldı.          
-            type: 'trademark',
-            recordOwnerType: recordOwnerType, // ('self')
-            portfoyStatus: 'active', // ✅ DÜZELTME: Artık "Aktif" olarak işaretleniyor.
-            
-            // -- Statü ve Tarihler --
-            status: 'filed',
-            currentStatus: 'Başvuru Yapıldı',
-            applicationDate: new Date().toISOString().split('T')[0],
-            applicationNumber: null,
-            
-            // -- Marka Detayları --
-            brandType: brandType,
-            brandCategory: brandCategory,
-            visualDescription: visualDescription, // Orijinal tanım
-            nonLatinAlphabet: nonLatin,
-            
-            // -- Görsel --
-            brandImageUrl: brandImageUrl,
-            imagePath: brandImageUrl,
-            
-            // -- Sınıflar ve Kişiler --
-            goodsAndServices: niceClasses,
-            niceClasses: niceClasses,
-            applicants: applicantsData,
-            holder: applicantsData,
-            
-            // -- Rüçhan --
-            priorities: priorities || [],
-            
-            // -- Menşe --
-            origin: origin,
-            countryCode: originCountry,
-
-            // -- Sistem --
-            source: 'task_creation',
-            createdViaTaskId: taskData.id || null, // Task ID henüz belli olmayabilir, null gitmesi normal
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        const result = await ipRecordsService.createRecord(newRecordData);
-        return result.success ? result.id : null;
+async _handleTrademarkApplication(state, taskData) {
+    const { selectedApplicants, priorities, uploadedFiles, selectedTaskType } = state;
+    
+    // 1. Görsel Yükleme (Aynı kalıyor)
+    let brandImageUrl = null;
+    if (uploadedFiles.length > 0) {
+        const file = uploadedFiles[0];
+        const path = `brand-images/${Date.now()}_${file.name}`;
+        try {
+            brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
+        } catch (e) { console.error('Görsel yükleme hatası:', e); }
     }
+
+    // 2. DOM'dan Verileri Çek (Aynı kalıyor)
+    const brandType = document.getElementById('brandType')?.value || '';
+    const brandCategory = document.getElementById('brandCategory')?.value || '';
+    const visualDescription = document.getElementById('brandExampleText')?.value?.trim() || ''; 
+    const nonLatin = document.getElementById('nonLatinAlphabet')?.value || '';
+    
+    // İsim Düzeltme (Aynı kalıyor)
+    let cleanBrandName = visualDescription;
+    if (!cleanBrandName && taskData.title) {
+            cleanBrandName = taskData.title.replace(/ Marka Başvurusu$/i, '').trim();
+    }
+
+    // Menşe Bilgisi (Aynı kalıyor)
+    let origin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
+    let originCountry = 'TR'; 
+    if (origin === 'Yurtdışı Ulusal' || origin === 'FOREIGN_NATIONAL') {
+        origin = 'FOREIGN_NATIONAL';
+        originCountry = document.getElementById('countrySelect')?.value || '';
+    }
+
+    // ✅ YENİ: Sınıflandırma Verisini Standartlaştırma (Parsing Logic)
+    // Manuel Giriş (Strategies.js) içindeki mantığı buraya taşıdık.
+    let goodsAndServicesByClass = [];
+    let niceClassesSimple = [];
+
+    try {
+        const rawNiceClasses = getSelectedNiceClasses(); // Örn: ["(5) İlaçlar...", "(35) Mağazacılık..."]
+        
+        if (Array.isArray(rawNiceClasses)) {
+            // A) Detaylı Obje Yapısını Oluştur (goodsAndServicesByClass)
+            goodsAndServicesByClass = rawNiceClasses.reduce((acc, item) => {
+                // "(5) Metin" formatını yakala
+                const match = item.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
+                if (match) {
+                    const classNo = parseInt(match[1]);
+                    const rawText = match[2].trim();
+                    
+                    let classObj = acc.find(obj => obj.classNo === classNo);
+                    if (!classObj) {
+                        classObj = { classNo, items: [] };
+                        acc.push(classObj);
+                    }
+                    // Metni satırlara böl ve temizle
+                    if (rawText) {
+                        const lines = rawText.split(/[\n]/).map(l => l.trim()).filter(Boolean);
+                        lines.forEach(line => {
+                            const cleanLine = line.replace(/^\)+|\)+$/g, '').trim(); 
+                            if (cleanLine && !classObj.items.includes(cleanLine)) {
+                                classObj.items.push(cleanLine);
+                            }
+                        });
+                    }
+                }
+                return acc;
+            }, []).sort((a, b) => a.classNo - b.classNo);
+
+            // B) Basit Sayı Dizisini Oluştur (niceClasses)
+            niceClassesSimple = goodsAndServicesByClass.map(g => g.classNo);
+        }
+    } catch (e) { console.warn('Nice classes parsing hatası:', e); }
+
+    const recordOwnerType = 'self'; 
+
+    // Başvuru Sahipleri
+    const applicantsData = selectedApplicants.map(p => ({
+        id: p.id,
+        name: p.name,
+        address: p.address || '',
+        country: p.country || '',
+        role: 'applicant'
+    }));
+
+    // YENİ PORTFÖY KAYDI (Güncellenmiş Yapı)
+    const newRecordData = {
+        // -- Kimlik Bilgileri --
+        title: cleanBrandName,
+        brandText: cleanBrandName,   // ✅ EKLENDİ
+        // markName: cleanBrandName, // 🗑️ SİLİNDİ
+        
+        type: 'trademark',
+        recordOwnerType: recordOwnerType,
+        
+        // -- Statü ve Tarihler --
+        portfoyStatus: 'active',     // ✅ EKLENDİ
+        status: 'filed',
+        // currentStatus: 'Başvuru Yapıldı', // 🗑️ SİLİNDİ
+        
+        applicationDate: new Date().toISOString().split('T')[0],
+        applicationNumber: null,
+        registrationDate: null,      // ✅ Standart olması için null set edildi
+        registrationNumber: null,    // ✅ Standart olması için null set edildi
+        
+        // -- Marka Detayları --
+        brandType: brandType,
+        brandCategory: brandCategory,
+        visualDescription: visualDescription,
+        nonLatinAlphabet: nonLatin,
+        
+        // -- Görsel --
+        brandImageUrl: brandImageUrl,
+        // imagePath: brandImageUrl, // 🗑️ SİLİNDİ
+        
+        // -- Sınıflar --
+        niceClasses: niceClassesSimple,             // ✅ DÜZELTİLDİ: Sadece sayılar [1, 35]
+        goodsAndServicesByClass: goodsAndServicesByClass, // ✅ DÜZELTİLDİ: Detaylı obje
+        // goodsAndServices: ...,                   // 🗑️ SİLİNDİ
+        
+        // -- Kişiler --
+        applicants: applicantsData,
+        holder: applicantsData,      // 🗑️ SİLİNDİ (Ama kodunuzda applicantsData kullanılıyor, holder'ı kaldırdık)
+        
+        // -- Rüçhan --
+        priorities: priorities || [],
+        
+        // -- Menşe --
+        origin: origin,
+        countryCode: originCountry,
+
+        // -- Sistem --
+        source: 'task_creation',
+        createdViaTaskId: taskData.id || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    
+    // holder alanını gerçekten siliyoruz (yukarıdaki objede yorum satırı yaptım ama temizlik için):
+    delete newRecordData.holder;
+
+    const result = await ipRecordsService.createRecord(newRecordData);
+    return result.success ? result.id : null;
+}
     
 // D) DAVA KAYDI VE İLK TRANSACTION (GÜVENLİ VERSİYON)
 
