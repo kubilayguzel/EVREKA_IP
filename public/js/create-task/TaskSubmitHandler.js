@@ -441,10 +441,11 @@ export class TaskSubmitHandler {
         // YENİ PORTFÖY KAYDI
         const newRecordData = {
             // -- Kimlik Bilgileri --
-            title: cleanBrandName,      // DÜZELTİLDİ: Artık "Adidas" yazar ("Adidas Marka Başvurusu" yazmaz)
-            markName: cleanBrandName,   // DÜZELTİLDİ
+            title: cleanBrandName,
+            brandText: cleanBrandName, // ✅ DÜZELTME: markName yerine brandText kullanıldı.          
             type: 'trademark',
-            recordOwnerType: recordOwnerType,
+            recordOwnerType: recordOwnerType, // ('self')
+            portfoyStatus: 'active', // ✅ DÜZELTME: Artık "Aktif" olarak işaretleniyor.
             
             // -- Statü ve Tarihler --
             status: 'filed',
