@@ -145,36 +145,36 @@ export class TaskUIManager {
         <div class="tab-pane fade" id="goods-services" role="tabpanel">
             <div class="nice-classification-container mt-3">
                 <div class="row">
-                    <div class="col-12">
-                        <div class="classification-panel mb-3 shadow-sm border rounded">
-                            <div class="panel-header">
-                                <h5 class="mb-0"><i class="fas fa-list-ul"></i>Nice Sınıflandırma Listesi</h5>
-                                <div class="input-group" style="max-width: 300px;">
-                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf veya mal ara..." style="border-radius: 6px 0 0 6px;">
-                                    <div class="input-group-append">
-                                        <button class="btn btn-secondary" onclick="clearNiceSearch()" style="border-radius: 0 6px 6px 0; border-left:none;"><i class="fas fa-times"></i></button>
-                                    </div>
+                    <div class="col-lg-8">
+                        <div class="classification-panel mb-3">
+                            <div class="panel-header"><h5 class="mb-0"><i class="fas fa-list-ul mr-2"></i>Nice Classification</h5></div>
+                            <div class="search-section">
+                                <div class="input-group">
+                                    <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-search"></i></span></div>
+                                    <input type="text" class="form-control" id="niceClassSearch" placeholder="Sınıf ara...">
+                                    <div class="input-group-append"><button class="btn btn-outline-secondary" type="button" onclick="clearNiceSearch()"><i class="fas fa-times"></i></button></div>
                                 </div>
                             </div>
-                            
-                            <div class="classes-list nice-container" id="niceClassificationList" style="height: 400px; overflow-y: auto; background: #fff; padding:10px;"></div>
-                            
-                            <div class="custom-class-section p-3 bg-light border-top d-flex gap-2">
-                                <input type="text" class="form-control" id="customClassInput" placeholder="Listede olmayan özel bir tanım...">
-                                <button class="btn btn-primary" id="addCustomClassBtn">Ekle</button>
+                            <div class="classes-list" id="niceClassificationList" style="height: 450px; overflow-y: auto; background: #fafafa;">
+                                <div class="loading-spinner"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Yükleniyor...</p></div>
+                            </div>
+                        </div>
+                        <div class="custom-class-frame">
+                            <div class="custom-class-section">
+                                <div class="d-flex align-items-center mb-2"><span class="badge badge-danger mr-2">99</span><strong class="text-danger">Özel Tanım</strong></div>
+                                <div class="input-group">
+                                    <textarea class="form-control" id="customClassInput" placeholder="Özel mal/hizmet tanımı..." maxlength="50000" rows="3"></textarea>
+                                    <div class="input-group-append"><button class="btn btn-danger" type="button" id="addCustomClassBtn"><i class="fas fa-plus mr-1"></i>Ekle</button></div>
+                                </div>
+                                <small class="form-text text-muted"><span id="customClassCharCount">0</span> / 50.000</small>
                             </div>
                         </div>
                     </div>
-
-                    <div class="col-12 mt-3">
-                        <div class="selected-classes-panel shadow-sm border rounded">
-                            <div class="panel-header">
-                                <h6 class="mb-0 font-weight-bold" style="color:#059669;"><i class="fas fa-check-circle mr-2"></i>Seçilen Sınıflar (<span id="selectedClassCount">0</span>)</h6>
-                                <button type="button" class="btn btn-sm btn-outline-light text-danger border-danger" onclick="clearAllSelectedClasses()">
-                                    <i class="fas fa-trash mr-1"></i>Temizle
-                                </button>
-                            </div>
-                            <div class="selected-classes-content p-3" id="selectedNiceClasses" style="min-height: 100px; background: #fafafa;"></div>
+                    <div class="col-lg-4 d-flex flex-column">
+                        <div class="selected-classes-panel flex-grow-1 d-flex flex-column">
+                            <div class="panel-header d-flex justify-content-between align-items-center"><h5 class="mb-0"><i class="fas fa-check-circle mr-2"></i>Seçilenler</h5><span class="badge badge-light" id="selectedClassCount">0</span></div>
+                            <div class="selected-classes-content" id="selectedNiceClasses" style="height: 570px; overflow-y: auto; padding: 15px;"><div class="empty-state"><p class="text-muted">Seçim yok.</p></div></div>
+                            <div class="border-top p-3"><button type="button" class="btn btn-outline-danger btn-sm btn-block" onclick="clearAllSelectedClasses()"><i class="fas fa-trash mr-1"></i>Temizle</button></div>
                         </div>
                     </div>
                 </div>
