@@ -1464,10 +1464,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (e) { return "-"; }
     };
 
-    // --- DAVA SON TARİHİ HESAPLAMA (DÜZELTİLDİ: templateSearchType Kullanılıyor) ---
+    // --- DAVA SON TARİHİ HESAPLAMA (GÜNCELLENDİ) ---
+    // YİDK Kararının İptali davası süresi: Tebliğden itibaren 2 Ay
     let davaSonTarihi = "-";
-    // Artık Parent (7) olsa bile, orijinal tip (29 veya 30) kontrol ediliyor
-    if (String(templateSearchType) === "29" || String(templateSearchType) === "30") {
+    
+    // Dava takvimi oluşturulacak işlem tipleri:
+    // 29 (Kısmen Kabul), 30 (Ret)
+    // 31, 32, 33, 34, 35, 36 (YİDK Kararları)
+    const lawsuitTypes = ["29", "30", "31", "32", "33", "34", "35", "36"];
+
+    if (lawsuitTypes.includes(String(templateSearchType))) {
         if (fetchedTxnData?.date) {
             const tebligDate = new Date(fetchedTxnData.date);
             let targetDate = new Date(tebligDate);
@@ -1476,7 +1482,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             // Dava süresi: 2 Ay ekle
             targetDate.setMonth(targetDate.getMonth() + 2);
             
-            // Ay sonu taşma kontrolü
+            // Ay sonu taşma kontrolü (Örn: 31 Ocak -> 31 Mart yoksa Mart sonuna çek)
             if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
 
             // Hafta sonu ve Tatil Kontrolü
@@ -1488,6 +1494,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             }
             davaSonTarihi = formatDate(targetDate);
             console.log(`⚖️ Dava Son Tarihi Hesaplandı (${templateSearchType}): ${davaSonTarihi}`);
+        } else {
+            console.warn("⚠️ Dava tarihi hesaplanamadı: Tebliğ tarihi (fetchedTxnData.date) yok.");
         }
     }
 
