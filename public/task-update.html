@@ -105,6 +105,22 @@
                             </h3>
                             <p class="text-muted small">Bu alan sadece resmi kurumdan gelen veya kuruma sunulan nihai evraklar içindir.</p>
                             
+                            <div id="updatedApplicationInfoArea" class="p-3 mb-3 bg-light rounded border" style="display: none;">
+                                <h6 class="text-dark font-weight-bold mb-2" style="font-size: 0.9em;">
+                                    <i class="fas fa-check-circle text-success mr-1"></i>
+                                    Varlığa İşlenecek Başvuru Bilgisi
+                                </h6>
+                                <div class="form-row">
+                                    <div class="col-md-6">
+                                        <label class="small text-muted mb-1">Başvuru No</label>
+                                        <input type="text" id="displayModalAppNo" class="form-control form-control-sm bg-white" readonly>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="small text-muted mb-1">Başvuru Tarihi</label>
+                                        <input type="text" id="displayModalAppDate" class="form-control form-control-sm bg-white" readonly>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-grid mb-3">
                                 <div class="form-group">
                                     <label class="form-label">TürkPatent Evrak No</label>
@@ -116,9 +132,7 @@
                                 </div>
                             </div>
 
-                            <div id="epatsFileListContainer">
-                                </div>
-
+                            <div id="epatsFileListContainer"></div>
                             <div class="file-upload-area" id="epatsFileUploadArea" style="border-color: #f8ccde; background: #fff0f6;">
                                 <i class="fas fa-file-signature upload-icon" style="color: #d63384;"></i>
                                 <div class="upload-text">EPATS Evrakı Yükle</div>
