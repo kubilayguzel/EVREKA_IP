@@ -29,6 +29,10 @@ class TaskUpdateController {
         await loadSharedLayout();
         ensurePersonModal();
 
+        // 🔥 YENİ: Başvuru Modalı HTML'ini sayfa açılır açılmaz enjekte et
+        this.uiManager.ensureApplicationDataModal();
+        this.setupApplicationModalEvents();
+
         this.taskId = new URLSearchParams(window.location.search).get('id');
         if (!this.taskId) return window.location.href = 'task-management.html';
 
@@ -40,11 +44,6 @@ class TaskUpdateController {
                 await this.refreshTaskData();
                 this.setupEvents();
                 this.setupAccrualModal();
-                
-                // Başvuru Modalı HTML'ini hemen DOM'a ekle
-                this.uiManager.ensureApplicationDataModal();
-                this.setupApplicationModalEvents();
-
             } catch (e) {
                 console.error('Başlatma hatası:', e);
                 alert('Sayfa yüklenemedi: ' + e.message);
@@ -283,12 +282,10 @@ class TaskUpdateController {
         await this.saveTaskChanges(); 
     }
 
-    isApplicationTask(typeId) {
-        // Tip ID'si içinde "application" geçiyorsa veya belirli ID'lerdensen
-        const lowerType = String(typeId).toLowerCase();
-        const validIds = ['trademark_application', 'patent_application', 'design_application'];
-        
-        return validIds.includes(typeId) || lowerType.includes('application') || lowerType.includes('başvuru');
+    isApplicationTask(taskType) {
+        if (!taskType) return false;
+        const applicationTypeIds = ['2', '5', '8'];
+        return applicationTypeIds.includes(String(taskType));
     }
 
     // --- TAHAKKUK ---
