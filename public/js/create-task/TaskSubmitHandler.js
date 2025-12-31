@@ -77,6 +77,27 @@ export class TaskSubmitHandler {
 
             // 2. İlgili Taraflar
             this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty, selectedIpRecord);
+
+            // Eğer Marka Başvurusu ise ve Başvuru Sahibi seçilmişse, bunları Task Owner yap
+            if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
+                if (selectedApplicants && selectedApplicants.length > 0) {
+                    // Task Owner (ID Dizisi)
+                    taskData.taskOwner = selectedApplicants.map(p => String(p.id));
+                    
+                    // Detaylara da ekleyelim (Opsiyonel ama önerilir)
+                    taskData.details.applicants = selectedApplicants.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        email: p.email
+                    }));
+                    
+                    // Eğer relatedParties boş geldiyse (ki boş gelir), bunu applicants ile doldur ki detay ekranında görünsün
+                    if (!taskData.details.relatedParties) {
+                         taskData.details.relatedParties = taskData.details.applicants;
+                    }
+                }
+            }
+            
             // 3. Marka Başvurusu Kaydı
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 const newRecordId = await this._handleTrademarkApplication(state, taskData);
