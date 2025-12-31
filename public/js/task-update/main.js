@@ -1,3 +1,5 @@
+// public/js/task-update/main.js - GÜNCELLENMİŞ
+
 import { authService, auth, generateUUID } from '../../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal } from '../layout-loader.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -20,11 +22,10 @@ class TaskUpdateController {
         this.currentDocuments = [];
         this.uploadedEpatsFile = null;
         this.statusBeforeEpatsUpload = null;
-        this.tempApplicationData = null; // Modal verisi için geçici hafıza
+        this.tempApplicationData = null; 
     }
 
     async init() {
-        // Layout yüklenmesini bekleyelim
         await loadSharedLayout();
         ensurePersonModal();
 
@@ -40,7 +41,7 @@ class TaskUpdateController {
                 this.setupEvents();
                 this.setupAccrualModal();
                 
-                // Başvuru Modalı HTML'ini hazırla
+                // Başvuru Modalı HTML'ini hemen DOM'a ekle
                 this.uiManager.ensureApplicationDataModal();
                 this.setupApplicationModalEvents();
 
@@ -75,7 +76,6 @@ class TaskUpdateController {
         if (this.taskData.details?.epatsDocument) {
             this.uploadedEpatsFile = this.taskData.details.epatsDocument;
             this.statusBeforeEpatsUpload = this.taskData.details.statusBeforeEpatsUpload;
-            // EPATS verilerini form alanlarına doldurmak için render çağırıyoruz
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
         }
     }
@@ -125,25 +125,30 @@ class TaskUpdateController {
     }
 
     setupApplicationModalEvents() {
-        // Modalın Kaydet Butonu
         const btn = document.getElementById('btnSaveApplicationData');
         if(btn) {
-            btn.addEventListener('click', () => {
+            // Önceki listener'ları temizlemek iyi olurdu ama simple click yeterli
+            btn.onclick = (e) => {
+                e.preventDefault();
                 const appNo = document.getElementById('modalAppNumber').value;
                 const appDate = document.getElementById('modalAppDate').value;
                 
                 if(!appNo) { alert('Başvuru numarası zorunludur!'); return; }
                 
-                // Veriyi hafızaya al (Ana kaydetme işleminde kullanılacak)
+                // Veriyi hafızaya al
                 this.tempApplicationData = { appNo, appDate };
                 
-                // Arayüzde İlgili Varlığın Başvuru No'sunu güncelle (Görsel feedback)
+                // Form alanlarına da yansıt (EPATS altındaki inputlara)
+                document.getElementById('turkpatentEvrakNo').value = appNo;
+                if(appDate) document.getElementById('epatsDocumentDate').value = appDate;
+                
+                // İlgili Varlığın Başvuru No'sunu güncelle (Görsel)
                 const displayNo = document.getElementById('displayAppNumber');
                 if(displayNo) displayNo.textContent = appNo;
                 
                 // Modalı Kapat
                 if(window.$) $('#applicationDataModal').modal('hide');
-            });
+            };
         }
     }
 
@@ -194,7 +199,7 @@ class TaskUpdateController {
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
 
-    // --- EPATS YÜKLEME VE MODAL TETİKLEME ---
+    // --- EPATS YÜKLEME VE MODAL TETİKLEME (DÜZELTİLDİ) ---
     async uploadEpatsDocument(file) {
         if (!file) return;
         
@@ -204,23 +209,50 @@ class TaskUpdateController {
 
         const id = generateUUID();
         const path = `epats_documents/${id}_${file.name}`;
-        const url = await this.dataManager.uploadFile(file, path);
         
-        this.uploadedEpatsFile = {
-            id, name: file.name, url, storagePath: path, size: file.size,
-            uploadedAt: new Date().toISOString()
-        };
-
-        // Render et (Inputları korur)
-        this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
-
-        // 🔥 MODAL KONTROLÜ
-        if (this.isApplicationTask(this.taskData.taskType)) {
-            // Modalı açmadan önce inputları temizle veya mevcut varsa doldur
-            const currentAppNo = document.getElementById('displayAppNumber')?.textContent;
-            if(currentAppNo && currentAppNo !== '-') document.getElementById('modalAppNumber').value = currentAppNo;
+        try {
+            const url = await this.dataManager.uploadFile(file, path);
             
-            if(window.$) $('#applicationDataModal').modal('show');
+            this.uploadedEpatsFile = {
+                id, name: file.name, url, storagePath: path, size: file.size,
+                uploadedAt: new Date().toISOString()
+            };
+
+            // Render et
+            this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
+
+            // --- MODAL KONTROLÜ ---
+            // 1. İş tipi başvuru mu?
+            const isApp = this.isApplicationTask(this.taskData.taskType);
+            
+            // 2. İlgili IP kaydında başvuru no eksik mi?
+            let isMissingData = false;
+            if (this.taskData.relatedIpRecordId) {
+                const rec = this.masterData.ipRecords.find(r => r.id === this.taskData.relatedIpRecordId);
+                if (rec && (!rec.applicationNumber || !rec.applicationDate)) {
+                    isMissingData = true;
+                }
+            }
+
+            // Başvuru işi ise VE (veri eksikse VEYA her zaman sormak istiyorsanız)
+            if (isApp) {
+                console.log('Başvuru Modalı Tetikleniyor...');
+                
+                // Varsa mevcut veriyi doldur
+                const currentAppNo = document.getElementById('turkpatentEvrakNo').value;
+                if(currentAppNo) document.getElementById('modalAppNumber').value = currentAppNo;
+
+                // Modalı aç (jQuery ile)
+                if (window.$ && $('#applicationDataModal').length > 0) {
+                    $('#applicationDataModal').modal('show');
+                } else {
+                    console.error('Modal açılamadı: jQuery veya Modal HTML eksik.');
+                }
+            }
+
+        } catch (e) {
+            console.error('EPATS yükleme hatası:', e);
+            alert('Dosya yüklenirken hata oluştu.');
         }
     }
 
@@ -234,12 +266,15 @@ class TaskUpdateController {
         if (this.statusBeforeEpatsUpload) {
             document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
         }
-        await this.saveTaskChanges(); // Hemen kaydet
+        await this.saveTaskChanges(); 
     }
 
     isApplicationTask(typeId) {
+        // Tip ID'si içinde "application" geçiyorsa veya belirli ID'lerdensen
+        const lowerType = String(typeId).toLowerCase();
         const validIds = ['trademark_application', 'patent_application', 'design_application'];
-        return validIds.includes(typeId);
+        
+        return validIds.includes(typeId) || lowerType.includes('application') || lowerType.includes('başvuru');
     }
 
     // --- TAHAKKUK ---
@@ -326,27 +361,21 @@ class TaskUpdateController {
         return amountData;
     }
 
-    // --- KAYDETME (ANA FONKSİYON) ---
+    // --- KAYDETME VE YÖNLENDİRME (DÜZELTİLDİ) ---
     async saveTaskChanges() {
-        // 🔥 ZORUNLU ALAN KONTROLÜ (EPATS)
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
             
             if (!evrakNo || !evrakDate) {
                 alert('UYARI: EPATS evrakı yüklediniz. Lütfen "TürkPatent Evrak No" ve "Evrak Tarihi" alanlarını doldurunuz.');
-                // İlgili alana scroll yap (Kullanıcı deneyimi için)
                 document.getElementById('turkpatentEvrakNo').focus();
                 return;
             }
-            
-            // EPATS objesine bu bilgileri ekle
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        const form = document.getElementById('taskDetailForm');
-        
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -364,11 +393,9 @@ class TaskUpdateController {
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
         }
 
-        // Güncelle
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
-            // Eğer Modal'dan gelen Başvuru Verisi (App No) varsa, onu da IP Record'a kaydet
             if (this.tempApplicationData && this.taskData.relatedIpRecordId) {
                 await this.dataManager.updateIpRecord(this.taskData.relatedIpRecordId, {
                     applicationNumber: this.tempApplicationData.appNo,
@@ -377,6 +404,11 @@ class TaskUpdateController {
             }
             
             showNotification('Değişiklikler kaydedildi.', 'success');
+            
+            // --- Geri Yönlendirme ---
+            setTimeout(() => {
+                window.location.href = 'task-management.html';
+            }, 1000); // Kullanıcı mesajı görsün diye 1 saniye bekle
         } else {
             alert('Hata: ' + res.error);
         }
