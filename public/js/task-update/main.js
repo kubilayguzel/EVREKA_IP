@@ -447,33 +447,45 @@ class TaskUpdateController {
 
             // KART TASARIMI (Sade ve Net)
             return `
-            <div class="card mb-2 shadow-sm border-light">
-                <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                    
-                    <div style="flex: 1;">
-                        <div class="d-flex align-items-center mb-1">
-                            <h6 class="font-weight-bold text-dark m-0 mr-2" style="font-size: 1.1rem;">
-                                ${amountStr}
-                            </h6>
-                            ${statusHtml}
+            <div class="card mb-3 shadow-sm border-light">
+                <div class="card-body">
+
+                    <!-- Üst Satır: Tutar + Durum -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0 font-weight-bold text-dark">${amountStr}</h5>
+                        ${statusHtml}
+                    </div>
+
+                    <!-- Orta Alan: Bilgiler blok görünümünde -->
+                    <div class="row text-sm">
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Tarih</small>
+                            <span>${dateStr}</span>
                         </div>
-                        <div class="text-muted small">
-                            <i class="far fa-calendar-alt mr-1"></i> ${dateStr}
-                            <span class="mx-2 text-light">|</span>
+
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Açıklama</small>
                             <span>${itemsSummary}</span>
-                            <span class="mx-2 text-light">|</span>
+                        </div>
+
+                        <div class="col-md-4 mb-2">
+                            <small class="text-muted d-block">Kayıt No</small>
                             <span class="text-monospace">#${a.id.substring(0,6)}</span>
                         </div>
                     </div>
 
-                    <div class="pl-3 border-left ml-3">
-                        <button class="btn btn-light btn-sm text-primary edit-accrual-btn" data-id="${a.id}" title="Düzenle">
-                            <i class="fas fa-pen fa-lg"></i>
+                    <hr/>
+
+                    <!-- Alt Satır: Düzenle butonu -->
+                    <div class="text-right">
+                        <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
+                            <i class="fas fa-pen mr-1"></i>Düzenle
                         </button>
                     </div>
-                    
+
                 </div>
-            </div>`;
+            </div>
+            `;
         }).join('');
     }
 
