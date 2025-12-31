@@ -432,61 +432,64 @@ class TaskUpdateController {
             return;
         }
 
-        container.innerHTML = accruals.map(a => {
-            // Veri Formatlama
-            const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
-            const itemsSummary = a.items && a.items.length > 0 
-                ? a.items.map(i => i.description).join(', ') 
-                : 'Detay girilmemiş';
-            
-            const amountStr = this.formatCurrency(a.totalAmount);
-            
-            const statusHtml = a.status === 'paid' 
-                ? '<span class="badge badge-success ml-2">Ödendi</span>' 
-                : '<span class="badge badge-warning ml-2">Ödenmedi</span>';
+        // ÖNEMLİ: Kartları bir satıra sarıyoruz ve her kartı col-12 (tam genişlik) yapıyoruz
+        container.innerHTML = `
+            <div class="row w-100 m-0">
+                ${accruals.map(a => {
+                    const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
+                    const itemsSummary = a.items && a.items.length > 0 
+                        ? a.items.map(i => i.description).join(', ') 
+                        : 'Detay girilmemiş';
 
-            // KART TASARIMI (Sade ve Net)
-            return `
-            <div class="card mb-3 shadow-sm border-light">
-                <div class="card-body">
+                    const amountStr = this.formatCurrency(a.totalAmount);
 
-                    <!-- Üst Satır: Tutar + Durum -->
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0 font-weight-bold text-dark">${amountStr}</h5>
-                        ${statusHtml}
-                    </div>
+                    const statusHtml = a.status === 'paid' 
+                        ? '<span class="badge badge-success ml-2">Ödendi</span>' 
+                        : '<span class="badge badge-warning ml-2">Ödenmedi</span>';
 
-                    <!-- Orta Alan: Bilgiler blok görünümünde -->
-                    <div class="row text-sm">
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Tarih</small>
-                            <span>${dateStr}</span>
+                    return `
+                    <div class="col-12 mb-3">
+                        <div class="card shadow-sm border-light w-100 h-100">
+                            <div class="card-body">
+
+                                <!-- Üst Satır: Tutar + Durum -->
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0 font-weight-bold text-dark">${amountStr}</h5>
+                                    ${statusHtml}
+                                </div>
+
+                                <!-- Orta Alan: Bilgiler blok blok -->
+                                <div class="row text-sm">
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Tarih</small>
+                                        <span>${dateStr}</span>
+                                    </div>
+
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Açıklama</small>
+                                        <span>${itemsSummary}</span>
+                                    </div>
+
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Kayıt No</small>
+                                        <span class="text-monospace">#${a.id.substring(0,6)}</span>
+                                    </div>
+                                </div>
+
+                                <hr/>
+
+                                <!-- Alt Satır: Düzenle butonu -->
+                                <div class="text-right">
+                                    <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
+                                        <i class="fas fa-pen mr-1"></i>Düzenle
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Açıklama</small>
-                            <span>${itemsSummary}</span>
-                        </div>
-
-                        <div class="col-md-4 mb-2">
-                            <small class="text-muted d-block">Kayıt No</small>
-                            <span class="text-monospace">#${a.id.substring(0,6)}</span>
-                        </div>
-                    </div>
-
-                    <hr/>
-
-                    <!-- Alt Satır: Düzenle butonu -->
-                    <div class="text-right">
-                        <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
-                            <i class="fas fa-pen mr-1"></i>Düzenle
-                        </button>
-                    </div>
-
-                </div>
+                    </div>`;
+                }).join('')}
             </div>
-            `;
-        }).join('');
+        `;
     }
 
     formatCurrency(amountData) {
