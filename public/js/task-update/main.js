@@ -258,14 +258,28 @@ class TaskUpdateController {
 
     async removeEpatsDocument() {
         if (!confirm('EPATS evrakı silinecek. Emin misiniz?')) return;
+        
+        // 1. Storage'dan silmeye çalış (Hata olsa bile devam et)
         if (this.uploadedEpatsFile?.storagePath) {
-            await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
+            try {
+                await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
+            } catch (e) {
+                console.error("Storage silme hatası (Önemli değil, DB'den silinecek):", e);
+            }
         }
+        
+        // 2. Hafızadan sil
         this.uploadedEpatsFile = null;
+        
+        // 3. Arayüzü temizle
         this.uiManager.renderEpatsDocument(null);
+        
+        // 4. Statüyü geri al
         if (this.statusBeforeEpatsUpload) {
             document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
         }
+        
+        // 5. Veritabanını güncelle
         await this.saveTaskChanges(); 
     }
 
