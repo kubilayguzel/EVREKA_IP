@@ -374,6 +374,7 @@ class TaskUpdateController {
 
     // --- KAYDETME VE YÖNLENDİRME (DÜZELTİLDİ) ---
     async saveTaskChanges() {
+        // 1. EPATS Validasyonu (Eğer dosya varsa zorunlu alanları kontrol et)
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
@@ -383,10 +384,13 @@ class TaskUpdateController {
                 document.getElementById('turkpatentEvrakNo').focus();
                 return;
             }
+            
+            // Objeyi güncelle
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
+        // 2. Temel Veri Objesini Hazırla
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -395,18 +399,28 @@ class TaskUpdateController {
             deliveryDate: document.getElementById('deliveryDate').value || null,
             dueDate: document.getElementById('taskDueDate').value || null,
             updatedAt: new Date().toISOString(),
-            documents: this.currentDocuments
+            documents: this.currentDocuments,
+            
+            // Mevcut details objesini al (yoksa boş obje oluştur)
+            details: this.taskData.details || {} 
         };
 
+        // 3. EPATS Evrak Durumunu İşle (Ekleme veya SİLME)
         if (this.uploadedEpatsFile) {
-            updateData.details = this.taskData.details || {};
+            // Dosya varsa kaydet
             updateData.details.epatsDocument = this.uploadedEpatsFile;
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
+        } else {
+            // 🔥 KRİTİK KISIM: Dosya silinmişse (null ise), veritabanındaki alanı da NULL yap
+            // Bunu yapmazsak dosya silinmez!
+            updateData.details.epatsDocument = null; 
         }
 
+        // 4. Güncelleme İsteğini Gönder
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
+            // Eğer Modal'dan gelen Başvuru Verisi (App No) varsa, onu da IP Record'a işle
             if (this.tempApplicationData && this.taskData.relatedIpRecordId) {
                 await this.dataManager.updateIpRecord(this.taskData.relatedIpRecordId, {
                     applicationNumber: this.tempApplicationData.appNo,
@@ -419,7 +433,7 @@ class TaskUpdateController {
             // --- Geri Yönlendirme ---
             setTimeout(() => {
                 window.location.href = 'task-management.html';
-            }, 1000); // Kullanıcı mesajı görsün diye 1 saniye bekle
+            }, 1000); 
         } else {
             alert('Hata: ' + res.error);
         }
