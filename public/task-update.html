@@ -11,7 +11,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     
     <link rel="stylesheet" href="css/shared-styles.css">
-    <link rel="stylesheet" href="css/task-update.css"> </head>
+    <link rel="stylesheet" href="css/task-update.css"> 
+</head>
 <body>
 
     <div class="page-wrapper">
@@ -24,14 +25,6 @@
                 <div>
                     <h1 class="page-title">İş Detayı</h1>
                     <p class="page-subtitle">İşin detaylarını görüntüleyin, güncelleyin ve yönetin.</p>
-                </div>
-                <div class="header-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelEditBtn">
-                        <i class="fas fa-arrow-left"></i> Geri Dön
-                    </button>
-                    <button type="button" class="btn btn-primary" id="saveTaskChangesBtn">
-                        <i class="fas fa-save"></i> Değişiklikleri Kaydet
-                    </button>
                 </div>
             </div>
 
@@ -106,7 +99,8 @@
                             </div>
                         </div>
 
-                        <div class="section-card" style="border-left: 5px solid #d63384;"> <h3 class="section-title" style="color: #d63384;">
+                        <div class="section-card" style="border-left: 5px solid #d63384;"> 
+                            <h3 class="section-title" style="color: #d63384;">
                                 <span>Resmi Kurum (EPATS) Evrakı</span>
                             </h3>
                             <p class="text-muted small">Bu alan sadece resmi kurumdan gelen veya kuruma sunulan nihai evraklar içindir.</p>
@@ -135,8 +129,8 @@
                         <div class="section-card">
                             <h3 class="section-title">
                                 <span>Finansal Hareketler (Tahakkuk)</span>
-                                <button type="button" class="btn btn-sm btn-success" id="addAccrualBtn" onclick="document.getElementById('accrualModal').style.display='flex'">
-                                    <i class="fas fa-plus"></i> Yeni Ekle
+                                <button type="button" class="btn btn-sm btn-success" id="addAccrualBtn">
+                                    <i class="fas fa-plus mr-1"></i> Yeni Ekle
                                 </button>
                             </h3>
                             
@@ -173,25 +167,37 @@
                         </div>
 
                     </div>
+                </div> <div class="form-actions-footer bg-white p-4 rounded shadow-sm mt-4 border d-flex justify-content-end align-items-center" style="gap: 15px;">
+                    <button type="button" class="btn btn-secondary btn-lg" id="cancelEditBtn">
+                        <i class="fas fa-times mr-2"></i>İptal
+                    </button>
+                    <button type="button" class="btn btn-primary btn-lg px-5" id="saveTaskChangesBtn">
+                        <i class="fas fa-save mr-2"></i>Değişiklikleri Kaydet
+                    </button>
                 </div>
-            </form>
 
+            </form>
         </div>
     </div>
 
-    <div id="accrualModal" class="modal" style="display: none; background: rgba(0,0,0,0.5); position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1050; justify-content: center; align-items: center;">
-        <div class="modal-dialog modal-lg" style="max-width: 800px; width: 90%; background: white; padding: 0; border-radius: 12px; overflow: hidden;">
-            <div class="modal-content" style="border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                <div class="modal-header bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h5 class="modal-title m-0 font-weight-bold text-primary">Tahakkuk İşlemi</h5>
-                    <button type="button" class="close" id="cancelAccrualBtn" style="font-size: 1.5rem; outline: none;">&times;</button>
+    <div id="accrualModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title font-weight-bold text-primary">
+                        <i class="fas fa-file-invoice-dollar mr-2"></i>Finansal Hareket (Tahakkuk)
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Kapat" onclick="$('#accrualModal').modal('hide')">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
-                    <div id="accrualFormContainer"></div>
+                <div class="modal-body p-0">
+                    <div id="accrualFormContainer" class="p-4"></div>
                 </div>
-                <div class="modal-footer p-3 border-top bg-light">
-                    <button type="button" class="btn btn-primary btn-block" id="saveAccrualBtn">
-                        <i class="fas fa-check-circle mr-2"></i>Tahakkuku Kaydet
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="$('#accrualModal').modal('hide')">İptal</button>
+                    <button type="button" class="btn btn-primary" id="saveAccrualBtn">
+                        <i class="fas fa-check mr-2"></i>Kaydet
                     </button>
                 </div>
             </div>
