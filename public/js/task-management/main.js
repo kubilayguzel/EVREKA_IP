@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (task && (String(task.taskType) === '53' || task.taskType === 'accrual_creation')) {
                             this.openCompleteAccrualModal(taskId);
                         } else {
-                            window.location.href = `task-detail.html?id=${taskId}`;
+                            window.location.href = `task-update.html?id=${taskId}`;
                         }
                     } else if (btn.classList.contains('delete-btn')) {
                         this.deleteTask(taskId);
