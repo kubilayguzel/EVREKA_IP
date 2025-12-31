@@ -119,26 +119,6 @@ export class TaskUpdateUIManager {
         `;
     }
 
-    renderHistory(history) {
-        const container = this.elements.historyContainer;
-        if (!history || history.length === 0) {
-            container.innerHTML = '<p class="text-muted">Geçmiş yok.</p>';
-            return;
-        }
-        const sorted = [...history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        container.innerHTML = sorted.map(h => `
-            <div class="history-item">
-                <div class="history-item-content">
-                    <div class="history-action">${h.action}</div>
-                    <div class="history-meta">
-                        <span>${h.userEmail}</span>
-                        <span>${new Date(h.timestamp).toLocaleString('tr-TR')}</span>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
     renderSelectedIpRecord(record) {
         const display = this.elements.ipDisplay;
         if (!record) {
