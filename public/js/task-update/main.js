@@ -137,21 +137,21 @@ class TaskUpdateController {
                     return; 
                 }
                 
-                // 1. Veriyi hafızaya al (Kaydet butonu için)
+                // 1. Veriyi hafızaya al
                 this.tempApplicationData = { appNo, appDate };
                 
-                // 2. 🔥 YENİ: EPATS kartındaki "Yeni Kutucukları" doldur ve göster
+                // 2. Yeni kutucukları doldur
                 document.getElementById('displayModalAppNo').value = appNo;
                 document.getElementById('displayModalAppDate').value = appDate;
                 
-                // Alanı görünür yap (jQuery ile slideDown efekti şık durur)
-                if(window.$) {
-                    $('#updatedApplicationInfoArea').slideDown();
-                } else {
-                    document.getElementById('updatedApplicationInfoArea').style.display = 'block';
+                // 3. Alanı görünür yap (HATA DÜZELTİLDİ)
+                // slideDown yerine standart display özelliğini kullanıyoruz
+                const infoArea = document.getElementById('updatedApplicationInfoArea');
+                if (infoArea) {
+                    infoArea.style.display = 'block';
                 }
 
-                // 3. Sağ taraftaki "İlgili Varlık" kartını da güncelle (Görsel bütünlük için)
+                // 4. Sağ taraftaki "İlgili Varlık" kartını güncelle
                 const displayNo = document.getElementById('displayAppNumber');
                 if(displayNo) displayNo.textContent = appNo;
                 
