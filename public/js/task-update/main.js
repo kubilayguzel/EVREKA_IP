@@ -76,8 +76,55 @@ class TaskUpdateController {
             this.statusBeforeEpatsUpload = this.taskData.details.statusBeforeEpatsUpload;
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
         }
+        this.lockFieldsIfApplicationTask();
     }
 
+    // --- YENİ FONKSİYON: Alanları Kilitleme Mantığı ---
+    lockFieldsIfApplicationTask() {
+        // Hangi tiplerde kilitlenecek? (Başvuru ID'leri)
+        // 2: Marka Başvurusu, 5: Patent Başvurusu, 8: Tasarım Başvurusu
+        // veya string ID'ler: 'trademark_application', 'patent_application', 'design_application'
+        const lockedTypes = [
+            '2', '5', '8', 
+            'trademark_application', 
+            'patent_application', 
+            'design_application'
+        ];
+        
+        // İş tipi string veya number gelebilir, string'e çevirip kontrol et
+        const isLocked = lockedTypes.includes(String(this.taskData.taskType));
+        
+        if (isLocked) {
+            console.log('🔒 Başvuru işlemi tespit edildi, ilgili alanlar kilitleniyor.');
+            
+            // 1. İlgili Varlık Alanını Kilitle
+            const ipSearchInput = document.getElementById('relatedIpRecordSearch');
+            const ipRemoveBtn = document.querySelector('#selectedIpRecordDisplay #removeIpRecordBtn');
+            
+            if (ipSearchInput) {
+                ipSearchInput.disabled = true;
+                ipSearchInput.placeholder = "Bu iş tipi için varlık değiştirilemez.";
+                ipSearchInput.style.backgroundColor = "#e9ecef"; // Readonly gri tonu
+            }
+            if (ipRemoveBtn) {
+                ipRemoveBtn.style.display = 'none'; // Çarpı butonunu gizle
+            }
+            
+            // 2. İlgili Taraf Alanını Kilitle
+            const partySearchInput = document.getElementById('relatedPartySearch');
+            const partyRemoveBtn = document.querySelector('#selectedRelatedPartyDisplay #removeRelatedPartyBtn');
+            
+            if (partySearchInput) {
+                partySearchInput.disabled = true;
+                partySearchInput.placeholder = "Bu iş tipi için taraf değiştirilemez.";
+                partySearchInput.style.backgroundColor = "#e9ecef";
+            }
+            if (partyRemoveBtn) {
+                partyRemoveBtn.style.display = 'none';
+            }
+        }
+    }
+    
     setupEvents() {
         document.getElementById('saveTaskChangesBtn').addEventListener('click', (e) => {
             e.preventDefault();
