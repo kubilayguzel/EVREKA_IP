@@ -2032,40 +2032,17 @@ async removeEpatsDocument() {
             // ---- Başvuru (application) tipi kontrolü ----
             isApplicationTask() {
                 const taskType = this.currentTask?.taskType;
-                console.log('🔍 DEBUG isApplicationTask - taskType:', taskType, typeof taskType);
                 
-                // TaskType'ı allTransactionTypes'tan bul
-                if (taskType && this.allTransactionTypes) {
-                    const transaction = this.allTransactionTypes.find(t => 
-                        t.id === taskType || 
-                        String(t.id) === String(taskType) || 
-                        t.id === Number(taskType)
-                    );
-                    console.log('🔍 DEBUG isApplicationTask - bulunan transaction:', transaction);
-                    
-                    if (transaction) {
-                        const alias = (transaction.alias || '').toLowerCase();
-                        const name = (transaction.name || '').toLowerCase();
-                        console.log('🔍 DEBUG isApplicationTask - alias:', alias, 'name:', name);
-                        
-                        const result = alias === 'başvuru' || name === 'başvuru' || 
-                                      alias.includes('application') || name.includes('application') ||
-                                      alias.includes('başvuru') || name.includes('başvuru');
-                        console.log('🔍 DEBUG isApplicationTask - sonuç:', result);
-                        return result;
-                    }
-                }
-                
-                // Fallback: String kontrolü
-                if (typeof taskType === 'string') {
-                    const t = taskType.toLowerCase();
-                    const stringResult = t.startsWith('application') || t.includes('başvuru') || t.includes('basvuru');
-                    console.log('🔍 DEBUG isApplicationTask - string fallback sonucu:', stringResult);
-                    return stringResult;
-                }
-                
-                console.log('🔍 DEBUG isApplicationTask - hiçbir koşul sağlanmadı, false');
-                return false;
+                // Modalın açılmasını istediğimiz işlem tiplerinin ID'leri
+                // Bu ID'ler data/transactionTypes.json dosyasından alınmıştır.
+                const APPLICATION_TYPE_IDS = ['2', '5', '8'];
+
+                console.log('🔍 DEBUG isApplicationTask - taskType:', taskType);
+
+                if (!taskType) return false;
+
+                // Sadece listedeki ID'lerden biriyle eşleşirse TRUE döner
+                return APPLICATION_TYPE_IDS.includes(String(taskType));
             }
 
             // ---- Modal iskeletini oluştur (tek sefer) ----
