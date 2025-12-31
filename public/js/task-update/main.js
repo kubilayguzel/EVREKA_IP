@@ -137,15 +137,23 @@ class TaskUpdateController {
                     return; 
                 }
                 
-                // 1. Veriyi hafızaya al (IP Record güncellenecek)
+                // 1. Veriyi hafızaya al (Kaydet butonu için)
                 this.tempApplicationData = { appNo, appDate };
                 
-                // 2. Görsel güncelleme (Sadece "İlgili Varlık" kartındaki görünüm)
+                // 2. 🔥 YENİ: EPATS kartındaki "Yeni Kutucukları" doldur ve göster
+                document.getElementById('displayModalAppNo').value = appNo;
+                document.getElementById('displayModalAppDate').value = appDate;
+                
+                // Alanı görünür yap (jQuery ile slideDown efekti şık durur)
+                if(window.$) {
+                    $('#updatedApplicationInfoArea').slideDown();
+                } else {
+                    document.getElementById('updatedApplicationInfoArea').style.display = 'block';
+                }
+
+                // 3. Sağ taraftaki "İlgili Varlık" kartını da güncelle (Görsel bütünlük için)
                 const displayNo = document.getElementById('displayAppNumber');
                 if(displayNo) displayNo.textContent = appNo;
-                
-                // NOT: EPATS inputlarını (turkpatentEvrakNo) güncellemiyoruz.
-                // Kullanıcı orayı kendisi dolduracak.
                 
                 // Modalı kapat
                 if(window.$) $('#applicationDataModal').modal('hide');
