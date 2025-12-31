@@ -426,64 +426,55 @@ class TaskUpdateController {
         
         if (!accruals || accruals.length === 0) {
             container.innerHTML = `
-                <div class="text-center p-4 text-muted bg-light rounded border border-light">
-                    <i class="fas fa-receipt fa-2x mb-2 text-secondary"></i>
-                    <p class="m-0">Henüz finansal bir hareket eklenmemiş.</p>
+                <div class="text-center p-3 text-muted border rounded bg-light">
+                    <i class="fas fa-receipt mr-2"></i>Kayıt bulunamadı.
                 </div>`;
             return;
         }
 
-        // TABLO YAPISI (Hizalamayı Garanti Eder)
-        let html = `
-            <div class="table-responsive border rounded bg-white">
-                <table class="table table-hover mb-0" style="min-width: 600px;">
-                    <thead class="thead-light">
-                        <tr>
-                            <th style="width: 100px;" class="pl-3">Ref No</th>
-                            <th style="width: 120px;">Tarih</th>
-                            <th>Açıklama / Kalemler</th>
-                            <th style="width: 150px; text-align: right;">Tutar</th>
-                            <th style="width: 120px; text-align: center;">Durum</th>
-                            <th style="width: 80px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        // Satırlar
-        html += accruals.map(a => {
+        container.innerHTML = accruals.map(a => {
+            // Veri Formatlama
             const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
-            
-            // Kalemlerin özetini çıkar
             const itemsSummary = a.items && a.items.length > 0 
                 ? a.items.map(i => i.description).join(', ') 
-                : '<span class="text-muted font-italic">Detay girilmemiş</span>';
+                : 'Detay girilmemiş';
             
             const amountStr = this.formatCurrency(a.totalAmount);
-            const statusClass = a.status === 'paid' ? 'badge-success' : 'badge-warning';
-            const statusText = a.status === 'paid' ? 'Ödendi' : 'Ödenmedi';
+            
+            const statusHtml = a.status === 'paid' 
+                ? '<span class="badge badge-success ml-2">Ödendi</span>' 
+                : '<span class="badge badge-warning ml-2">Ödenmedi</span>';
 
+            // KART TASARIMI (Sade ve Net)
             return `
-            <tr>
-                <td class="pl-3 align-middle text-monospace text-muted small">#${a.id.substring(0,6)}</td>
-                <td class="align-middle">${dateStr}</td>
-                <td class="align-middle text-truncate" style="max-width: 250px;" title="${itemsSummary.replace(/<[^>]*>?/gm, '')}">
-                    ${itemsSummary}
-                </td>
-                <td class="align-middle text-right font-weight-bold">${amountStr}</td>
-                <td class="align-middle text-center">
-                    <span class="badge ${statusClass} px-2 py-1">${statusText}</span>
-                </td>
-                <td class="align-middle text-right pr-3">
-                    <button class="btn btn-sm btn-light border text-primary edit-accrual-btn" data-id="${a.id}" title="Düzenle">
-                        <i class="fas fa-pen"></i>
-                    </button>
-                </td>
-            </tr>`;
-        }).join('');
+            <div class="card mb-2 shadow-sm border-light">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    
+                    <div style="flex: 1;">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="font-weight-bold text-dark m-0 mr-2" style="font-size: 1.1rem;">
+                                ${amountStr}
+                            </h6>
+                            ${statusHtml}
+                        </div>
+                        <div class="text-muted small">
+                            <i class="far fa-calendar-alt mr-1"></i> ${dateStr}
+                            <span class="mx-2 text-light">|</span>
+                            <span>${itemsSummary}</span>
+                            <span class="mx-2 text-light">|</span>
+                            <span class="text-monospace">#${a.id.substring(0,6)}</span>
+                        </div>
+                    </div>
 
-        html += '</tbody></table></div>';
-        container.innerHTML = html;
+                    <div class="pl-3 border-left ml-3">
+                        <button class="btn btn-light btn-sm text-primary edit-accrual-btn" data-id="${a.id}" title="Düzenle">
+                            <i class="fas fa-pen fa-lg"></i>
+                        </button>
+                    </div>
+                    
+                </div>
+            </div>`;
+        }).join('');
     }
 
     formatCurrency(amountData) {
