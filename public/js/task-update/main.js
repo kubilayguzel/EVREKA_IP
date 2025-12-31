@@ -248,44 +248,51 @@ class TaskUpdateController {
 
     // --- TAHAKKUK ---
     setupAccrualModal() {
-        // AccrualFormManager'ı modal içine mount et
+        // Manager'ı başlat
         this.accrualManager = new AccrualFormManager('accrualFormContainer', 'taskUpdate', this.masterData.persons);
-        this.accrualManager.render();
         
         // Modal Butonları
-        const modal = document.getElementById('accrualModal');
         const saveBtn = document.getElementById('saveAccrualBtn');
-        const cancelBtn = document.getElementById('cancelAccrualBtn');
 
-        // Listeden Düzenle'ye basınca
+        // Yeni Ekle Butonu
+        document.getElementById('addAccrualBtn').onclick = (e) => {
+            e.preventDefault(); // Form submit olmasın
+            this.openAccrualModal(); 
+        };
+
+        // Listeden Düzenle Butonları (Delegation)
         document.getElementById('accrualsContainer').addEventListener('click', (e) => {
             if (e.target.classList.contains('edit-accrual-btn')) {
+                e.preventDefault();
                 const accId = e.target.dataset.id;
                 this.openAccrualModal(accId);
             }
         });
-        
-        // Yeni Ekle (Eğer buton varsa)
-        // document.getElementById('addAccrualBtn').onclick = () => this.openAccrualModal();
 
-        cancelBtn.onclick = () => modal.style.display = 'none';
-        
+        // Kaydet Butonu
         saveBtn.onclick = async () => {
-            const result = this.accrualManager.getData();
+            const result = this.accrualManager.getData(); // Manager'dan veriyi al
+            
             if (result.success) {
                 const data = result.data;
                 data.taskId = this.taskId;
                 
-                // Eğer düzenleme ise ID ekle
-                const editingId = modal.dataset.editingId;
+                // Eğer düzenleme modundaysak ID'yi ekle
+                const modalEl = document.getElementById('accrualModal');
+                const editingId = modalEl.dataset.editingId;
                 if (editingId) data.id = editingId;
 
-                await this.dataManager.saveAccrual(data, !!editingId);
-                modal.style.display = 'none';
-                this.renderAccruals(); // Listeyi yenile
-                showNotification('Tahakkuk kaydedildi.', 'success');
+                try {
+                    await this.dataManager.saveAccrual(data, !!editingId);
+                    $('#accrualModal').modal('hide'); // Bootstrap ile kapat
+                    this.renderAccruals(); // Listeyi yenile
+                    showNotification('Tahakkuk başarıyla kaydedildi.', 'success');
+                } catch (error) {
+                    alert('Kaydetme hatası: ' + error.message);
+                }
             } else {
-                alert(result.error);
+                // Validasyon hatası varsa göster
+                alert(result.error || 'Lütfen zorunlu alanları doldurun.');
             }
         };
     }
@@ -310,13 +317,38 @@ class TaskUpdateController {
         `).join('');
     }
 
-    openAccrualModal(accId) {
-        const modal = document.getElementById('accrualModal');
-        const acc = this.accrualsCache?.find(a => a.id === accId); // Cache'den bulmak lazım
-        // Basitlik için yeniden çekebiliriz veya bu class içinde saklayabiliriz.
-        // Şimdilik boş açalım
-        modal.style.display = 'flex';
-        // this.accrualManager.setData(acc);
+    openAccrualModal(accId = null) {
+        const modalEl = document.getElementById('accrualModal');
+        
+        // 1. Formu Temizle / Hazırla
+        this.accrualManager.render(); // Formu sıfırdan çiz (veya resetle)
+
+        if (accId) {
+            // DÜZENLEME MODU
+            modalEl.dataset.editingId = accId;
+            document.querySelector('#accrualModal .modal-title').textContent = 'Tahakkuk Düzenle';
+            
+            // Mevcut veriyi bul ve forma doldur
+            // (Not: Gerçek uygulamada this.accrualsCache'den alınmalı veya tekrar fetch edilmeli)
+            this.dataManager.getAccrualsByTaskId(this.taskId).then(accruals => {
+                const acc = accruals.find(a => a.id === accId);
+                if (acc) this.accrualManager.setData(acc); // AccrualManager'da setData metodu olmalı
+            });
+        } else {
+            // YENİ EKLEME MODU
+            delete modalEl.dataset.editingId;
+            document.querySelector('#accrualModal .modal-title').textContent = 'Yeni Tahakkuk Ekle';
+            // Form zaten boş render edildi
+        }
+
+        // 2. Modalı Göster (Bootstrap Yöntemiyle)
+        if (window.$) {
+            $('#accrualModal').modal('show');
+        } else {
+            // Fallback (jQuery yoksa)
+            modalEl.style.display = 'block';
+            modalEl.classList.add('show');
+        }
     }
     
     formatCurrency(amountData) {
