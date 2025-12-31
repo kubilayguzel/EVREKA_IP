@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (btn.classList.contains('view-btn') || btn.dataset.action === 'view') {
                     this.showTaskDetailModal(taskId);
                 } else if (btn.classList.contains('edit-btn') || btn.dataset.action === 'edit') {
-                    window.location.href = `task-detail.html?id=${taskId}`;
+                    window.location.href = `task-update.html?id=${taskId}`;
                 } else if (btn.classList.contains('add-accrual-btn')) {
                     this.showCreateAccrualModal(taskId);
                 }
