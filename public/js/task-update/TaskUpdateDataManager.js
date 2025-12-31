@@ -55,8 +55,29 @@ export class TaskUpdateDataManager {
     }
 
     async deleteFileFromStorage(path) {
-        const storageRef = ref(storage, path);
-        await deleteObject(storageRef);
+        if (!path) return; // Path yoksa işlem yapma
+        
+        // URL encoded karakterleri çöz (Örn: %20 -> Boşluk)
+        // Firebase bazen encoded path'i bulamayabilir
+        const decodedPath = decodeURIComponent(path);
+        
+        const storageRef = ref(storage, decodedPath);
+        
+        try {
+            await deleteObject(storageRef);
+            console.log('Dosya Storage\'dan silindi:', decodedPath);
+        } catch (error) {
+            // Eğer dosya zaten yoksa (object-not-found), bunu bir hata olarak görme
+            // ve işleme devam et (böylece veritabanından da silinebilsin).
+            if (error.code === 'storage/object-not-found') {
+                console.warn('Dosya Storage\'da bulunamadı (zaten silinmiş olabilir), veritabanı temizleniyor...', decodedPath);
+                return; // Başarılı say
+            }
+            
+            // Başka bir hataysa (yetki vs.) fırlat
+            console.error('Dosya silme hatası:', error);
+            throw error;
+        }
     }
 
     // --- ARAMA İŞLEMLERİ ---
