@@ -423,20 +423,58 @@ class TaskUpdateController {
     async renderAccruals() {
         const accruals = await this.dataManager.getAccrualsByTaskId(this.taskId);
         const container = document.getElementById('accrualsContainer');
-        container.innerHTML = accruals.map(a => `
-            <div class="accrual-card">
-                <div class="accrual-card-header">
-                    <span class="accrual-id">#${a.id.substring(0,8)}</span>
-                    <span class="status-badge status-${a.status}">${a.status === 'paid' ? 'Ödendi' : 'Ödenmedi'}</span>
-                </div>
-                <div class="accrual-card-body">
-                    <p><span>Toplam:</span> <strong>${this.formatCurrency(a.totalAmount)}</strong></p>
-                </div>
-                <div class="text-right mt-2">
-                    <button class="btn btn-sm btn-outline-warning edit-accrual-btn" data-id="${a.id}">Düzenle</button>
-                </div>
+        
+        if (accruals.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center p-3">Henüz tahakkuk eklenmemiş.</div>';
+            return;
+        }
+
+        // Başlık Satırı (Opsiyonel ama şık durur)
+        let html = `
+            <div class="accrual-list-header d-flex justify-content-between align-items-center bg-light p-2 rounded-top border-bottom font-weight-bold text-muted small">
+                <div style="flex: 1;">Ref No</div>
+                <div style="flex: 1;">Tarih</div>
+                <div style="flex: 2;">Açıklama/Kalemler</div>
+                <div style="flex: 1; text-align: right;">Toplam Tutar</div>
+                <div style="flex: 1; text-align: center;">Durum</div>
+                <div style="flex: 0 0 80px;"></div>
             </div>
-        `).join('');
+            <div class="accrual-list-body border rounded-bottom bg-white">
+        `;
+
+        html += accruals.map(a => {
+            // Tarihi formatla
+            const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
+            
+            // Kalemleri özetle (Örn: "Hizmet Bedeli + Harç")
+            const itemsSummary = a.items ? a.items.map(i => i.description).join(', ') : '-';
+            
+            // Tutarı formatla
+            const amountStr = this.formatCurrency(a.totalAmount);
+
+            // Durum Badge Rengi
+            const statusClass = a.status === 'paid' ? 'badge-success' : 'badge-warning';
+            const statusText = a.status === 'paid' ? 'Ödendi' : 'Ödenmedi';
+
+            return `
+            <div class="accrual-row d-flex justify-content-between align-items-center p-3 border-bottom hover-bg-light" style="transition: background 0.2s;">
+                <div style="flex: 1;" class="text-monospace small text-muted">#${a.id.substring(0,6)}</div>
+                <div style="flex: 1;">${dateStr}</div>
+                <div style="flex: 2;" class="text-truncate" title="${itemsSummary}">${itemsSummary}</div>
+                <div style="flex: 1; text-align: right;" class="font-weight-bold text-dark">${amountStr}</div>
+                <div style="flex: 1; text-align: center;">
+                    <span class="badge ${statusClass} px-2 py-1">${statusText}</span>
+                </div>
+                <div style="flex: 0 0 80px; text-align: right;">
+                    <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+        html += '</div>'; // Kapanış
+        container.innerHTML = html;
     }
 
     formatCurrency(amountData) {
