@@ -19,17 +19,16 @@ export class TaskValidator {
         let isComplete = false;
         let checks = {}; // Konsol raporu için
 
-        // --- SENARYO 1: MARKA BAŞVURUSU ---
-        if (isTrademarkApp) {
-            
-            // 1. Marka Adı
-            const brandText = document.getElementById('brandExampleText')?.value?.trim();
+            // --- SENARYO 1: MARKA BAŞVURUSU ---
+            if (isTrademarkApp) {
+                
+                // 1. Marka Adı
+                const brandText = document.getElementById('brandExampleText')?.value?.trim();
             
             // 2. Sınıf Seçimi (Genişletilmiş Seçici)
-            // Hem .selected-class-item hem de .selected-item sınıflarını sayar
             const niceContainer = document.getElementById('selectedNiceClasses');
             const domClassCount = niceContainer 
-                ? niceContainer.querySelectorAll('.selected-class-item, .selected-item').length 
+                ? niceContainer.querySelectorAll('.selected-class-item, .selected-item, .selected-item-row').length 
                 : 0;
             
             // 3. Başvuru Sahibi
