@@ -140,14 +140,12 @@ class TaskUpdateController {
                 // 1. Veriyi hafızaya al (IP Record güncellenecek)
                 this.tempApplicationData = { appNo, appDate };
                 
-                // 2. Görsel güncelleme (Sağ taraftaki 'İlgili Varlık' kartı)
+                // 2. Görsel güncelleme (Sadece "İlgili Varlık" kartındaki görünüm)
                 const displayNo = document.getElementById('displayAppNumber');
                 if(displayNo) displayNo.textContent = appNo;
                 
-                // 3. 🔥 YENİ: EPATS Kartındaki Inputları Doldur
-                // Kullanıcı modalı kapattığında verileri burada görecek.
-                document.getElementById('turkpatentEvrakNo').value = appNo;
-                document.getElementById('epatsDocumentDate').value = appDate;
+                // NOT: EPATS inputlarını (turkpatentEvrakNo) güncellemiyoruz.
+                // Kullanıcı orayı kendisi dolduracak.
                 
                 // Modalı kapat
                 if(window.$) $('#applicationDataModal').modal('hide');
@@ -257,7 +255,7 @@ class TaskUpdateController {
             alert('Dosya yüklenirken hata oluştu: ' + e.message);
         }
     }
-
+    
     async removeEpatsDocument() {
         if (!confirm('EPATS evrakı silinecek. Emin misiniz?')) return;
         
