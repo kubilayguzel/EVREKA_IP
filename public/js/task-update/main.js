@@ -57,7 +57,6 @@ class TaskUpdateController {
         
         this.uiManager.fillForm(this.taskData, this.masterData.users);
         this.uiManager.renderDocuments(this.currentDocuments);
-        this.uiManager.renderHistory(this.taskData.history);
         this.renderAccruals();
         
         if (this.taskData.relatedIpRecordId) {
