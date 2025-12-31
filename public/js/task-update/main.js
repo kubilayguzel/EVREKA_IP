@@ -420,7 +420,7 @@ class TaskUpdateController {
         if (window.$) $('#accrualModal').modal('show');
     }
 
-async renderAccruals() {
+    async renderAccruals() {
         const accruals = await this.dataManager.getAccrualsByTaskId(this.taskId);
         const container = document.getElementById('accrualsContainer');
         
@@ -432,50 +432,66 @@ async renderAccruals() {
             return;
         }
 
-        container.innerHTML = accruals.map(a => {
-            // Veri Formatlama
-            const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
-            const itemsSummary = a.items && a.items.length > 0 
-                ? a.items.map(i => i.description).join(', ') 
-                : 'Detay girilmemiş';
-            
-            const amountStr = this.formatCurrency(a.totalAmount);
-            
-            const statusHtml = a.status === 'paid' 
-                ? '<span class="badge badge-success ml-2">Ödendi</span>' 
-                : '<span class="badge badge-warning ml-2">Ödenmedi</span>';
+        // ÖNEMLİ: Kartları bir satıra sarıyoruz ve her kartı col-12 (tam genişlik) yapıyoruz
+        container.innerHTML = `
+            <div class="row w-100 m-0">
+                ${accruals.map(a => {
+                    const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
+                    const itemsSummary = a.items && a.items.length > 0 
+                        ? a.items.map(i => i.description).join(', ') 
+                        : 'Detay girilmemiş';
 
-            // KART TASARIMI (Sade ve Net)
-            return `
-            <div class="card mb-2 shadow-sm border-light">
-                <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                    
-                    <div style="flex: 1;">
-                        <div class="d-flex align-items-center mb-1">
-                            <h6 class="font-weight-bold text-dark m-0 mr-2" style="font-size: 1.1rem;">
-                                ${amountStr}
-                            </h6>
-                            ${statusHtml}
-                        </div>
-                        <div class="text-muted small">
-                            <i class="far fa-calendar-alt mr-1"></i> ${dateStr}
-                            <span class="mx-2 text-light">|</span>
-                            <span>${itemsSummary}</span>
-                            <span class="mx-2 text-light">|</span>
-                            <span class="text-monospace">#${a.id.substring(0,6)}</span>
-                        </div>
-                    </div>
+                    const amountStr = this.formatCurrency(a.totalAmount);
 
-                    <div class="pl-3 border-left ml-3">
-                        <button class="btn btn-light btn-sm text-primary edit-accrual-btn" data-id="${a.id}" title="Düzenle">
-                            <i class="fas fa-pen fa-lg"></i>
-                        </button>
-                    </div>
-                    
-                </div>
-            </div>`;
-        }).join('');
+                    const statusHtml = a.status === 'paid' 
+                        ? '<span class="badge badge-success ml-2">Ödendi</span>' 
+                        : '<span class="badge badge-warning ml-2">Ödenmedi</span>';
+
+                    return `
+                    <div class="col-12 mb-3">
+                        <div class="card shadow-sm border-light w-100 h-100">
+                            <div class="card-body">
+
+                                <!-- Üst Satır: Tutar + Durum -->
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0 font-weight-bold text-dark">${amountStr}</h5>
+                                    ${statusHtml}
+                                </div>
+
+                                <!-- Orta Alan: Bilgiler blok blok -->
+                                <div class="row text-sm">
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Tarih</small>
+                                        <span>${dateStr}</span>
+                                    </div>
+
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Açıklama</small>
+                                        <span>${itemsSummary}</span>
+                                    </div>
+
+                                    <div class="col-md-4 mb-2">
+                                        <small class="text-muted d-block">Kayıt No</small>
+                                        <span class="text-monospace">#${a.id.substring(0,6)}</span>
+                                    </div>
+                                </div>
+
+                                <hr/>
+
+                                <!-- Alt Satır: Düzenle butonu -->
+                                <div class="text-right">
+                                    <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
+                                        <i class="fas fa-pen mr-1"></i>Düzenle
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
     }
+
 
     formatCurrency(amountData) {
         if (Array.isArray(amountData)) return amountData.map(x => `${x.amount} ${x.currency}`).join(' + ');
