@@ -1,11 +1,8 @@
-// public/js/task-update/main.js
-
 import { authService, auth, generateUUID } from '../../firebase-config.js';
-import { loadSharedLayout, ensurePersonModal, openPersonModal } from '../layout-loader.js';
+import { loadSharedLayout, ensurePersonModal } from '../layout-loader.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { showNotification } from '../../utils.js';
 
-// Modüller
 import { TaskUpdateDataManager } from './TaskUpdateDataManager.js';
 import { TaskUpdateUIManager } from './TaskUpdateUIManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
@@ -14,18 +11,20 @@ class TaskUpdateController {
     constructor() {
         this.dataManager = new TaskUpdateDataManager();
         this.uiManager = new TaskUpdateUIManager();
-        this.accrualManager = null; // Tahakkuk Modal Yöneticisi
+        this.accrualManager = null; 
 
         this.taskId = null;
         this.taskData = null;
-        this.masterData = {}; // ipRecords, persons, users...
+        this.masterData = {}; 
         
         this.currentDocuments = [];
         this.uploadedEpatsFile = null;
         this.statusBeforeEpatsUpload = null;
+        this.tempApplicationData = null; // Modal verisi için geçici hafıza
     }
 
     async init() {
+        // Layout yüklenmesini bekleyelim
         await loadSharedLayout();
         ensurePersonModal();
 
@@ -36,13 +35,14 @@ class TaskUpdateController {
             if (!user) return window.location.href = 'index.html';
             
             try {
-                // 1. Verileri Çek
                 this.masterData = await this.dataManager.loadAllInitialData();
                 await this.refreshTaskData();
-
-                // 2. Event Listenerları Kur
                 this.setupEvents();
-                this.setupAccrualModal(); // Tahakkuk modalını hazırla
+                this.setupAccrualModal();
+                
+                // Başvuru Modalı HTML'ini hazırla
+                this.uiManager.ensureApplicationDataModal();
+                this.setupApplicationModalEvents();
 
             } catch (e) {
                 console.error('Başlatma hatası:', e);
@@ -55,83 +55,67 @@ class TaskUpdateController {
         this.taskData = await this.dataManager.getTaskById(this.taskId);
         this.currentDocuments = this.taskData.documents || [];
         
-        // Formu Doldur
         this.uiManager.fillForm(this.taskData, this.masterData.users);
-        
-        // Listeleri Çiz
         this.uiManager.renderDocuments(this.currentDocuments);
         this.uiManager.renderHistory(this.taskData.history);
-        this.renderAccruals(); // Tahakkukları listele
+        this.renderAccruals();
         
-        // İlişkili Kayıtları Göster
         if (this.taskData.relatedIpRecordId) {
             const rec = this.masterData.ipRecords.find(r => r.id === this.taskData.relatedIpRecordId);
             this.uiManager.renderSelectedIpRecord(rec);
         }
 
-        // İlgili Tarafı Göster (Array'in ilk elemanı veya string ID)
         let ownerId = this.taskData.taskOwner;
         if (Array.isArray(ownerId)) ownerId = ownerId[0];
-        
         if (ownerId) {
             const p = this.masterData.persons.find(x => String(x.id) === String(ownerId));
             this.uiManager.renderSelectedPerson(p);
         }
 
-        // EPATS Belgesi
         if (this.taskData.details?.epatsDocument) {
             this.uploadedEpatsFile = this.taskData.details.epatsDocument;
             this.statusBeforeEpatsUpload = this.taskData.details.statusBeforeEpatsUpload;
+            // EPATS verilerini form alanlarına doldurmak için render çağırıyoruz
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
         }
     }
 
     setupEvents() {
-        // Kaydet Butonu
         document.getElementById('saveTaskChangesBtn').addEventListener('click', (e) => {
             e.preventDefault();
             this.saveTaskChanges();
         });
 
-        // İptal Butonu
         document.getElementById('cancelEditBtn').addEventListener('click', () => {
             window.location.href = 'task-management.html';
         });
 
-        // Dosya Yükleme (Genel)
+        // Genel Dosyalar
         document.getElementById('fileUploadArea').addEventListener('click', () => document.getElementById('fileInput').click());
         document.getElementById('fileInput').addEventListener('change', (e) => this.uploadDocuments(e.target.files));
-
-        // Dosya Silme (Delegation)
         document.getElementById('fileListContainer').addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-remove-file');
             if (btn) this.removeDocument(btn.dataset.id);
         });
 
-        // EPATS Yükleme
+        // EPATS İşlemleri
         document.getElementById('epatsFileUploadArea').addEventListener('click', () => document.getElementById('epatsFileInput').click());
         document.getElementById('epatsFileInput').addEventListener('change', (e) => this.uploadEpatsDocument(e.target.files[0]));
-        
-        // EPATS Silme
         document.getElementById('epatsFileListContainer').addEventListener('click', (e) => {
-            if (e.target.id === 'removeEpatsFileBtn' || e.target.closest('#removeEpatsFileBtn')) {
+            if (e.target.closest('#removeEpatsFileBtn')) {
                 this.removeEpatsDocument();
             }
         });
 
-        // Arama (IP Record)
+        // Aramalar
         document.getElementById('relatedIpRecordSearch').addEventListener('input', (e) => {
             const results = this.dataManager.searchIpRecords(this.masterData.ipRecords, e.target.value);
             this.renderSearchResults(results, 'ipRecord');
         });
-
-        // Arama (Person)
         document.getElementById('relatedPartySearch').addEventListener('input', (e) => {
             const results = this.dataManager.searchPersons(this.masterData.persons, e.target.value);
             this.renderSearchResults(results, 'person');
         });
-
-        // Seçim Kaldırma
         document.getElementById('selectedIpRecordDisplay').addEventListener('click', (e) => {
             if(e.target.closest('#removeIpRecordBtn')) this.uiManager.renderSelectedIpRecord(null);
         });
@@ -140,16 +124,36 @@ class TaskUpdateController {
         });
     }
 
-    // --- ARAMA SONUÇLARI RENDER (Controller içinde basitçe) ---
+    setupApplicationModalEvents() {
+        // Modalın Kaydet Butonu
+        const btn = document.getElementById('btnSaveApplicationData');
+        if(btn) {
+            btn.addEventListener('click', () => {
+                const appNo = document.getElementById('modalAppNumber').value;
+                const appDate = document.getElementById('modalAppDate').value;
+                
+                if(!appNo) { alert('Başvuru numarası zorunludur!'); return; }
+                
+                // Veriyi hafızaya al (Ana kaydetme işleminde kullanılacak)
+                this.tempApplicationData = { appNo, appDate };
+                
+                // Arayüzde İlgili Varlığın Başvuru No'sunu güncelle (Görsel feedback)
+                const displayNo = document.getElementById('displayAppNumber');
+                if(displayNo) displayNo.textContent = appNo;
+                
+                // Modalı Kapat
+                if(window.$) $('#applicationDataModal').modal('hide');
+            });
+        }
+    }
+
     renderSearchResults(items, type) {
         const container = type === 'ipRecord' ? this.uiManager.elements.ipResults : this.uiManager.elements.partyResults;
         container.innerHTML = '';
-        
         if (items.length === 0) {
             container.style.display = 'none';
             return;
         }
-
         items.slice(0, 10).forEach(item => {
             const div = document.createElement('div');
             div.className = 'search-result-item';
@@ -164,14 +168,11 @@ class TaskUpdateController {
         container.style.display = 'block';
     }
 
-    // --- DOSYA İŞLEMLERİ ---
     async uploadDocuments(files) {
         if (!files.length) return;
-        
         for (const file of files) {
             const id = generateUUID();
             const path = `task_documents/${this.taskId}/${id}_${file.name}`;
-            
             try {
                 const url = await this.dataManager.uploadFile(file, path);
                 this.currentDocuments.push({
@@ -180,7 +181,6 @@ class TaskUpdateController {
                 });
             } catch (e) { console.error(e); }
         }
-        
         this.uiManager.renderDocuments(this.currentDocuments);
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
@@ -189,17 +189,15 @@ class TaskUpdateController {
         if (!confirm('Silmek istediğinize emin misiniz?')) return;
         const doc = this.currentDocuments.find(d => d.id === id);
         if (doc && doc.storagePath) await this.dataManager.deleteFileFromStorage(doc.storagePath);
-        
         this.currentDocuments = this.currentDocuments.filter(d => d.id !== id);
         this.uiManager.renderDocuments(this.currentDocuments);
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
 
-    // --- EPATS & MODAL ---
+    // --- EPATS YÜKLEME VE MODAL TETİKLEME ---
     async uploadEpatsDocument(file) {
         if (!file) return;
         
-        // Mevcut statüyü yedekle
         if (!this.uploadedEpatsFile) {
             this.statusBeforeEpatsUpload = document.getElementById('taskStatus').value;
         }
@@ -213,13 +211,16 @@ class TaskUpdateController {
             uploadedAt: new Date().toISOString()
         };
 
+        // Render et (Inputları korur)
         this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
 
-        // Başvuru Modalı Kontrolü
+        // 🔥 MODAL KONTROLÜ
         if (this.isApplicationTask(this.taskData.taskType)) {
-            // Modal kodları buraya gelecek (Application Data Modal)
-            // Şimdilik alert ile simüle edelim, sonra modal yapısını ekleriz
-            // this.openApplicationDataModal();
+            // Modalı açmadan önce inputları temizle veya mevcut varsa doldur
+            const currentAppNo = document.getElementById('displayAppNumber')?.textContent;
+            if(currentAppNo && currentAppNo !== '-') document.getElementById('modalAppNumber').value = currentAppNo;
+            
+            if(window.$) $('#applicationDataModal').modal('show');
         }
     }
 
@@ -230,37 +231,27 @@ class TaskUpdateController {
         }
         this.uploadedEpatsFile = null;
         this.uiManager.renderEpatsDocument(null);
-        
-        // Statüyü geri al
         if (this.statusBeforeEpatsUpload) {
             document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
         }
-        
-        await this.saveTaskChanges();
+        await this.saveTaskChanges(); // Hemen kaydet
     }
 
     isApplicationTask(typeId) {
-        const t = this.masterData.transactionTypes.find(x => x.id === typeId);
-        // data/transactionTypes.json'daki ID'ler
         const validIds = ['trademark_application', 'patent_application', 'design_application'];
-        return validIds.includes(typeId) || (t && validIds.includes(t.id));
+        return validIds.includes(typeId);
     }
 
     // --- TAHAKKUK ---
     setupAccrualModal() {
-        // Manager'ı başlat
         this.accrualManager = new AccrualFormManager('accrualFormContainer', 'taskUpdate', this.masterData.persons);
+        this.accrualManager.render();
         
-        // Modal Butonları
-        const saveBtn = document.getElementById('saveAccrualBtn');
-
-        // Yeni Ekle Butonu
         document.getElementById('addAccrualBtn').onclick = (e) => {
-            e.preventDefault(); // Form submit olmasın
+            e.preventDefault();
             this.openAccrualModal(); 
         };
 
-        // Listeden Düzenle Butonları (Delegation)
         document.getElementById('accrualsContainer').addEventListener('click', (e) => {
             if (e.target.classList.contains('edit-accrual-btn')) {
                 e.preventDefault();
@@ -269,37 +260,50 @@ class TaskUpdateController {
             }
         });
 
-        // Kaydet Butonu
-        saveBtn.onclick = async () => {
-            const result = this.accrualManager.getData(); // Manager'dan veriyi al
-            
+        document.getElementById('saveAccrualBtn').onclick = async () => {
+            const result = this.accrualManager.getData();
             if (result.success) {
                 const data = result.data;
                 data.taskId = this.taskId;
-                
-                // Eğer düzenleme modundaysak ID'yi ekle
                 const modalEl = document.getElementById('accrualModal');
                 const editingId = modalEl.dataset.editingId;
                 if (editingId) data.id = editingId;
 
                 try {
                     await this.dataManager.saveAccrual(data, !!editingId);
-                    $('#accrualModal').modal('hide'); // Bootstrap ile kapat
-                    this.renderAccruals(); // Listeyi yenile
-                    showNotification('Tahakkuk başarıyla kaydedildi.', 'success');
+                    $('#accrualModal').modal('hide');
+                    this.renderAccruals();
+                    showNotification('Tahakkuk kaydedildi.', 'success');
                 } catch (error) {
                     alert('Kaydetme hatası: ' + error.message);
                 }
             } else {
-                // Validasyon hatası varsa göster
-                alert(result.error || 'Lütfen zorunlu alanları doldurun.');
+                alert(result.error);
             }
         };
     }
 
+    openAccrualModal(accId = null) {
+        const modalEl = document.getElementById('accrualModal');
+        this.accrualManager.render(); 
+
+        if (accId) {
+            modalEl.dataset.editingId = accId;
+            document.querySelector('#accrualModal .modal-title').textContent = 'Tahakkuk Düzenle';
+            this.dataManager.getAccrualsByTaskId(this.taskId).then(accruals => {
+                const acc = accruals.find(a => a.id === accId);
+                if (acc) this.accrualManager.setData(acc);
+            });
+        } else {
+            delete modalEl.dataset.editingId;
+            document.querySelector('#accrualModal .modal-title').textContent = 'Yeni Tahakkuk Ekle';
+        }
+        
+        if (window.$) $('#accrualModal').modal('show');
+    }
+
     async renderAccruals() {
         const accruals = await this.dataManager.getAccrualsByTaskId(this.taskId);
-        // HTML oluşturma işi UIManager'a da verilebilir ama burada basitçe yapalım
         const container = document.getElementById('accrualsContainer');
         container.innerHTML = accruals.map(a => `
             <div class="accrual-card">
@@ -317,53 +321,32 @@ class TaskUpdateController {
         `).join('');
     }
 
-    openAccrualModal(accId = null) {
-        const modalEl = document.getElementById('accrualModal');
-        
-        // 1. Formu Temizle / Hazırla
-        this.accrualManager.render(); // Formu sıfırdan çiz (veya resetle)
-
-        if (accId) {
-            // DÜZENLEME MODU
-            modalEl.dataset.editingId = accId;
-            document.querySelector('#accrualModal .modal-title').textContent = 'Tahakkuk Düzenle';
-            
-            // Mevcut veriyi bul ve forma doldur
-            // (Not: Gerçek uygulamada this.accrualsCache'den alınmalı veya tekrar fetch edilmeli)
-            this.dataManager.getAccrualsByTaskId(this.taskId).then(accruals => {
-                const acc = accruals.find(a => a.id === accId);
-                if (acc) this.accrualManager.setData(acc); // AccrualManager'da setData metodu olmalı
-            });
-        } else {
-            // YENİ EKLEME MODU
-            delete modalEl.dataset.editingId;
-            document.querySelector('#accrualModal .modal-title').textContent = 'Yeni Tahakkuk Ekle';
-            // Form zaten boş render edildi
-        }
-
-        // 2. Modalı Göster (Bootstrap Yöntemiyle)
-        if (window.$) {
-            $('#accrualModal').modal('show');
-        } else {
-            // Fallback (jQuery yoksa)
-            modalEl.style.display = 'block';
-            modalEl.classList.add('show');
-        }
-    }
-    
     formatCurrency(amountData) {
-        // [{amount: 100, currency: 'TRY'}] yapısını destekle
-        if (Array.isArray(amountData)) {
-            return amountData.map(x => `${x.amount} ${x.currency}`).join(' + ');
-        }
+        if (Array.isArray(amountData)) return amountData.map(x => `${x.amount} ${x.currency}`).join(' + ');
         return amountData;
     }
 
     // --- KAYDETME (ANA FONKSİYON) ---
     async saveTaskChanges() {
+        // 🔥 ZORUNLU ALAN KONTROLÜ (EPATS)
+        if (this.uploadedEpatsFile) {
+            const evrakNo = document.getElementById('turkpatentEvrakNo').value;
+            const evrakDate = document.getElementById('epatsDocumentDate').value;
+            
+            if (!evrakNo || !evrakDate) {
+                alert('UYARI: EPATS evrakı yüklediniz. Lütfen "TürkPatent Evrak No" ve "Evrak Tarihi" alanlarını doldurunuz.');
+                // İlgili alana scroll yap (Kullanıcı deneyimi için)
+                document.getElementById('turkpatentEvrakNo').focus();
+                return;
+            }
+            
+            // EPATS objesine bu bilgileri ekle
+            this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
+            this.uploadedEpatsFile.documentDate = evrakDate;
+        }
+
         const form = document.getElementById('taskDetailForm');
         
-        // Verileri Topla
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -375,20 +358,24 @@ class TaskUpdateController {
             documents: this.currentDocuments
         };
 
-        // EPATS Detayları
         if (this.uploadedEpatsFile) {
             updateData.details = this.taskData.details || {};
-            updateData.details.epatsDocument = {
-                ...this.uploadedEpatsFile,
-                turkpatentEvrakNo: document.getElementById('turkpatentEvrakNo').value,
-                documentDate: document.getElementById('epatsDocumentDate').value
-            };
+            updateData.details.epatsDocument = this.uploadedEpatsFile;
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
         }
 
         // Güncelle
         const res = await this.dataManager.updateTask(this.taskId, updateData);
+        
         if (res.success) {
+            // Eğer Modal'dan gelen Başvuru Verisi (App No) varsa, onu da IP Record'a kaydet
+            if (this.tempApplicationData && this.taskData.relatedIpRecordId) {
+                await this.dataManager.updateIpRecord(this.taskData.relatedIpRecordId, {
+                    applicationNumber: this.tempApplicationData.appNo,
+                    applicationDate: this.tempApplicationData.appDate
+                });
+            }
+            
             showNotification('Değişiklikler kaydedildi.', 'success');
         } else {
             alert('Hata: ' + res.error);
