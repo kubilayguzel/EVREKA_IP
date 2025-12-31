@@ -249,7 +249,7 @@ body {
     text-decoration: underline;
 }
 
-/* Geri dön butonu (task-detail.html gibi sayfalarda kullanılabilir) */
+/* Geri dön butonu (task-update.html gibi sayfalarda kullanılabilir) */
 .back-to-list-btn {
     background: #6c757d; /* Gri */
     color: white;
