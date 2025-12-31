@@ -116,6 +116,10 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .status-unpaid { background: #fff3cd; color: #856404; }
 .accrual-card-body p { margin: 5px 0; font-size: 0.9em; display: flex; justify-content: space-between; }
 .accrual-total { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee; font-weight: 700; font-size: 1.1em; color: #1e3c72; text-align: right; }
+#accrualsContainer {
+    width: 100%;
+    display: block; /* Eğer parent flex ise kart küçülmesin */
+}
 
 /* Timeline (İşlem Geçmişi - Suit Detail Stili) */
 .history-list { position: relative; padding-left: 20px; border-left: 2px solid #e9ecef; margin-top: 10px; }
@@ -132,3 +136,4 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 /* Modal Z-Index Düzeltmesi */
 .modal { z-index: 1060 !important; } /* Bootstrap backdrop 1040 veya 1050 olabilir, 1060 güvenlidir */
 .modal-backdrop { z-index: 1050 !important; }
+
