@@ -424,56 +424,65 @@ class TaskUpdateController {
         const accruals = await this.dataManager.getAccrualsByTaskId(this.taskId);
         const container = document.getElementById('accrualsContainer');
         
-        if (accruals.length === 0) {
-            container.innerHTML = '<div class="text-muted text-center p-3">Henüz tahakkuk eklenmemiş.</div>';
+        if (!accruals || accruals.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-4 text-muted bg-light rounded border border-light">
+                    <i class="fas fa-receipt fa-2x mb-2 text-secondary"></i>
+                    <p class="m-0">Henüz finansal bir hareket eklenmemiş.</p>
+                </div>`;
             return;
         }
 
-        // Başlık Satırı (Opsiyonel ama şık durur)
+        // TABLO YAPISI (Hizalamayı Garanti Eder)
         let html = `
-            <div class="accrual-list-header d-flex justify-content-between align-items-center bg-light p-2 rounded-top border-bottom font-weight-bold text-muted small">
-                <div style="flex: 1;">Ref No</div>
-                <div style="flex: 1;">Tarih</div>
-                <div style="flex: 2;">Açıklama/Kalemler</div>
-                <div style="flex: 1; text-align: right;">Toplam Tutar</div>
-                <div style="flex: 1; text-align: center;">Durum</div>
-                <div style="flex: 0 0 80px;"></div>
-            </div>
-            <div class="accrual-list-body border rounded-bottom bg-white">
+            <div class="table-responsive border rounded bg-white">
+                <table class="table table-hover mb-0" style="min-width: 600px;">
+                    <thead class="thead-light">
+                        <tr>
+                            <th style="width: 100px;" class="pl-3">Ref No</th>
+                            <th style="width: 120px;">Tarih</th>
+                            <th>Açıklama / Kalemler</th>
+                            <th style="width: 150px; text-align: right;">Tutar</th>
+                            <th style="width: 120px; text-align: center;">Durum</th>
+                            <th style="width: 80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
 
+        // Satırlar
         html += accruals.map(a => {
-            // Tarihi formatla
             const dateStr = a.date ? new Date(a.date).toLocaleDateString('tr-TR') : '-';
             
-            // Kalemleri özetle (Örn: "Hizmet Bedeli + Harç")
-            const itemsSummary = a.items ? a.items.map(i => i.description).join(', ') : '-';
+            // Kalemlerin özetini çıkar
+            const itemsSummary = a.items && a.items.length > 0 
+                ? a.items.map(i => i.description).join(', ') 
+                : '<span class="text-muted font-italic">Detay girilmemiş</span>';
             
-            // Tutarı formatla
             const amountStr = this.formatCurrency(a.totalAmount);
-
-            // Durum Badge Rengi
             const statusClass = a.status === 'paid' ? 'badge-success' : 'badge-warning';
             const statusText = a.status === 'paid' ? 'Ödendi' : 'Ödenmedi';
 
             return `
-            <div class="accrual-row d-flex justify-content-between align-items-center p-3 border-bottom hover-bg-light" style="transition: background 0.2s;">
-                <div style="flex: 1;" class="text-monospace small text-muted">#${a.id.substring(0,6)}</div>
-                <div style="flex: 1;">${dateStr}</div>
-                <div style="flex: 2;" class="text-truncate" title="${itemsSummary}">${itemsSummary}</div>
-                <div style="flex: 1; text-align: right;" class="font-weight-bold text-dark">${amountStr}</div>
-                <div style="flex: 1; text-align: center;">
+            <tr>
+                <td class="pl-3 align-middle text-monospace text-muted small">#${a.id.substring(0,6)}</td>
+                <td class="align-middle">${dateStr}</td>
+                <td class="align-middle text-truncate" style="max-width: 250px;" title="${itemsSummary.replace(/<[^>]*>?/gm, '')}">
+                    ${itemsSummary}
+                </td>
+                <td class="align-middle text-right font-weight-bold">${amountStr}</td>
+                <td class="align-middle text-center">
                     <span class="badge ${statusClass} px-2 py-1">${statusText}</span>
-                </div>
-                <div style="flex: 0 0 80px; text-align: right;">
-                    <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
-                        <i class="fas fa-edit"></i>
+                </td>
+                <td class="align-middle text-right pr-3">
+                    <button class="btn btn-sm btn-light border text-primary edit-accrual-btn" data-id="${a.id}" title="Düzenle">
+                        <i class="fas fa-pen"></i>
                     </button>
-                </div>
-            </div>`;
+                </td>
+            </tr>`;
         }).join('');
 
-        html += '</div>'; // Kapanış
+        html += '</tbody></table></div>';
         container.innerHTML = html;
     }
 
