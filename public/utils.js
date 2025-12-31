@@ -108,7 +108,7 @@ export function generateUUID() {
     });
 }
 
-// Görev durumları (task-management.html ve task-detail.html'de kullanılır)
+// Görev durumları (task-management.html ve task-update.html'de kullanılır)
 export const TASK_STATUSES = [
     { value: 'open', text: 'Açık' },
     { value: 'in-progress', text: 'Devam Ediyor' },
