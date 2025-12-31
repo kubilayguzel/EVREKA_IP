@@ -14,7 +14,6 @@ export class TaskUpdateUIManager {
             
             filesContainer: document.getElementById('fileListContainer'),
             epatsContainer: document.getElementById('epatsFileListContainer'), // EPATS listesi
-            historyContainer: document.getElementById('historyList'),
             accrualsContainer: document.getElementById('accrualsContainer'),
             
             ipSearch: document.getElementById('relatedIpRecordSearch'),
