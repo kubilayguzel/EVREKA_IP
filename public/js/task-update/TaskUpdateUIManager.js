@@ -7,7 +7,7 @@ export class TaskUpdateUIManager {
             desc: document.getElementById('taskDescription'),
             priority: document.getElementById('taskPriority'),
             status: document.getElementById('taskStatus'),
-            typeDisplay: document.getElementById('taskTypeDisplay'),
+            taskIdDisplay: document.getElementById('taskIdDisplay'),
             assignedDisplay: document.getElementById('assignedToDisplay'),
             dueDate: document.getElementById('taskDueDate'),
             deliveryDate: document.getElementById('deliveryDate'),
@@ -36,7 +36,7 @@ export class TaskUpdateUIManager {
         const typeParts = (task.taskType || '').split('_');
         const main = typeParts[0] || '';
         const sub = typeParts.slice(1).join(' ');
-        this.elements.typeDisplay.value = `${main.toUpperCase()} - ${sub}`;
+        this.elements.taskIdDisplay.value = task.id ? `#${task.id}` : '-';
 
         const user = users.find(u => u.id === task.assignedTo_uid);
         this.elements.assignedDisplay.value = user ? (user.displayName || user.email) : 'Atanmamış';
