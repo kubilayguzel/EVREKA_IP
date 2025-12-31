@@ -198,10 +198,11 @@ class TaskUpdateController {
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
 
-    // --- EPATS YÜKLEME VE MODAL TETİKLEME (DÜZELTİLDİ) ---
+// --- EPATS YÜKLEME VE MODAL TETİKLEME (GÜNCELLENMİŞ TAM KOD) ---
     async uploadEpatsDocument(file) {
         if (!file) return;
         
+        // Eğer ilk kez yükleniyorsa, yükleme öncesi statüyü hafızaya al (Silinirse geri dönmek için)
         if (!this.uploadedEpatsFile) {
             this.statusBeforeEpatsUpload = document.getElementById('taskStatus').value;
         }
@@ -210,48 +211,49 @@ class TaskUpdateController {
         const path = `epats_documents/${id}_${file.name}`;
         
         try {
+            // 1. Dosyayı Storage'a yükle
             const url = await this.dataManager.uploadFile(file, path);
             
+            // 2. Dosya objesini oluştur
             this.uploadedEpatsFile = {
                 id, name: file.name, url, storagePath: path, size: file.size,
                 uploadedAt: new Date().toISOString()
             };
 
-            // Render et
+            // 3. Ekrana bas (Inputları korur)
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
 
             // --- MODAL KONTROLÜ ---
-            // 1. İş tipi başvuru mu?
+            // İş tipi "Başvuru" ise modalı zorunlu olarak aç
             const isApp = this.isApplicationTask(this.taskData.taskType);
             
-            // 2. İlgili IP kaydında başvuru no eksik mi?
-            let isMissingData = false;
-            if (this.taskData.relatedIpRecordId) {
-                const rec = this.masterData.ipRecords.find(r => r.id === this.taskData.relatedIpRecordId);
-                if (rec && (!rec.applicationNumber || !rec.applicationDate)) {
-                    isMissingData = true;
-                }
-            }
-
-            // Başvuru işi ise VE (veri eksikse VEYA her zaman sormak istiyorsanız)
             if (isApp) {
-                console.log('Başvuru Modalı Tetikleniyor...');
-                
-                // Varsa mevcut veriyi doldur
+                // Eğer inputta halihazırda bir değer varsa (örn: sayfayı yenilemeden 2. kez yükleme),
+                // modalın içindeki inputu o değerle doldur.
                 const currentAppNo = document.getElementById('turkpatentEvrakNo').value;
                 if(currentAppNo) document.getElementById('modalAppNumber').value = currentAppNo;
 
-                // Modalı aç (jQuery ile)
-                if (window.$ && $('#applicationDataModal').length > 0) {
-                    $('#applicationDataModal').modal('show');
+                // Modalı jQuery ile ÖZEL AYARLARLA aç
+                if (typeof $ !== 'undefined') {
+                    // Modal HTML'i sayfada yoksa oluştur
+                    this.uiManager.ensureApplicationDataModal();
+                    
+                    // DOM'un hazır olması için minik bir gecikme ve AYARLAR
+                    setTimeout(() => {
+                        $('#applicationDataModal').modal({
+                            backdrop: 'static', // Dışarı tıklayınca kapanmaz
+                            keyboard: false,    // ESC tuşuyla kapanmaz
+                            show: true          // Modalı göster
+                        });
+                    }, 100);
                 } else {
-                    console.error('Modal açılamadı: jQuery veya Modal HTML eksik.');
+                    console.error('jQuery eksik, modal açılamadı.');
                 }
             }
 
         } catch (e) {
             console.error('EPATS yükleme hatası:', e);
-            alert('Dosya yüklenirken hata oluştu.');
+            alert('Dosya yüklenirken hata oluştu: ' + e.message);
         }
     }
 
