@@ -1,5 +1,3 @@
-// public/js/task-update/main.js - GÜNCELLENMİŞ
-
 import { authService, auth, generateUUID } from '../../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal } from '../layout-loader.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -23,13 +21,17 @@ class TaskUpdateController {
         this.uploadedEpatsFile = null;
         this.statusBeforeEpatsUpload = null;
         this.tempApplicationData = null; 
+
+        // 🔥 STATE: Seçili İlişkileri Hafızada Tutmak İçin
+        this.selectedIpRecordId = null;
+        this.selectedPersonId = null;
     }
 
     async init() {
         await loadSharedLayout();
         ensurePersonModal();
 
-        // 🔥 YENİ: Başvuru Modalı HTML'ini sayfa açılır açılmaz enjekte et
+        // Başvuru Modalı HTML'ini sayfa açılır açılmaz enjekte et
         this.uiManager.ensureApplicationDataModal();
         this.setupApplicationModalEvents();
 
@@ -55,19 +57,28 @@ class TaskUpdateController {
         this.taskData = await this.dataManager.getTaskById(this.taskId);
         this.currentDocuments = this.taskData.documents || [];
         
+        // --- 🔥 DÜZELTME 1: Mevcut İlişkileri Hafızaya Al ---
+        this.selectedIpRecordId = this.taskData.relatedIpRecordId || null;
+        
+        // Task Owner bazen array ([id]) bazen string (id) gelebilir, düzeltiyoruz:
+        let ownerId = this.taskData.taskOwner;
+        if (Array.isArray(ownerId)) ownerId = ownerId[0];
+        this.selectedPersonId = ownerId || null;
+        // ---------------------------------------------------
+
         this.uiManager.fillForm(this.taskData, this.masterData.users);
         this.uiManager.renderDocuments(this.currentDocuments);
         this.renderAccruals();
         
-        if (this.taskData.relatedIpRecordId) {
-            const rec = this.masterData.ipRecords.find(r => r.id === this.taskData.relatedIpRecordId);
+        // İlgili Varlığı Ekrana Bas
+        if (this.selectedIpRecordId) {
+            const rec = this.masterData.ipRecords.find(r => r.id === this.selectedIpRecordId);
             this.uiManager.renderSelectedIpRecord(rec);
         }
 
-        let ownerId = this.taskData.taskOwner;
-        if (Array.isArray(ownerId)) ownerId = ownerId[0];
-        if (ownerId) {
-            const p = this.masterData.persons.find(x => String(x.id) === String(ownerId));
+        // İlgili Tarafı Ekrana Bas
+        if (this.selectedPersonId) {
+            const p = this.masterData.persons.find(x => String(x.id) === String(this.selectedPersonId));
             this.uiManager.renderSelectedPerson(p);
         }
 
@@ -76,14 +87,14 @@ class TaskUpdateController {
             this.statusBeforeEpatsUpload = this.taskData.details.statusBeforeEpatsUpload;
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
         }
+
+        // Başvuru ise alanları kilitle
         this.lockFieldsIfApplicationTask();
     }
 
     // --- YENİ FONKSİYON: Alanları Kilitleme Mantığı ---
     lockFieldsIfApplicationTask() {
         // Hangi tiplerde kilitlenecek? (Başvuru ID'leri)
-        // 2: Marka Başvurusu, 5: Patent Başvurusu, 8: Tasarım Başvurusu
-        // veya string ID'ler: 'trademark_application', 'patent_application', 'design_application'
         const lockedTypes = [
             '2', '5', '8', 
             'trademark_application', 
@@ -91,7 +102,6 @@ class TaskUpdateController {
             'design_application'
         ];
         
-        // İş tipi string veya number gelebilir, string'e çevirip kontrol et
         const isLocked = lockedTypes.includes(String(this.taskData.taskType));
         
         if (isLocked) {
@@ -161,11 +171,19 @@ class TaskUpdateController {
             const results = this.dataManager.searchPersons(this.masterData.persons, e.target.value);
             this.renderSearchResults(results, 'person');
         });
+
+        // --- 🔥 DÜZELTME 2: Silme Butonları (Hafızadan Silme) ---
         document.getElementById('selectedIpRecordDisplay').addEventListener('click', (e) => {
-            if(e.target.closest('#removeIpRecordBtn')) this.uiManager.renderSelectedIpRecord(null);
+            if(e.target.closest('#removeIpRecordBtn')) {
+                this.selectedIpRecordId = null; // Hafızayı temizle
+                this.uiManager.renderSelectedIpRecord(null);
+            }
         });
         document.getElementById('selectedRelatedPartyDisplay').addEventListener('click', (e) => {
-            if(e.target.closest('#removeRelatedPartyBtn')) this.uiManager.renderSelectedPerson(null);
+            if(e.target.closest('#removeRelatedPartyBtn')) {
+                this.selectedPersonId = null; // Hafızayı temizle
+                this.uiManager.renderSelectedPerson(null);
+            }
         });
     }
 
@@ -190,8 +208,7 @@ class TaskUpdateController {
                 document.getElementById('displayModalAppNo').value = appNo;
                 document.getElementById('displayModalAppDate').value = appDate;
                 
-                // 3. Alanı görünür yap (HATA DÜZELTİLDİ)
-                // slideDown yerine standart display özelliğini kullanıyoruz
+                // 3. Alanı görünür yap (Standart JS ile)
                 const infoArea = document.getElementById('updatedApplicationInfoArea');
                 if (infoArea) {
                     infoArea.style.display = 'block';
@@ -219,8 +236,14 @@ class TaskUpdateController {
             div.className = 'search-result-item';
             div.textContent = type === 'ipRecord' ? item.title : item.name;
             div.onclick = () => {
-                if (type === 'ipRecord') this.uiManager.renderSelectedIpRecord(item);
-                else this.uiManager.renderSelectedPerson(item);
+                // --- 🔥 DÜZELTME 3: Seçim Anında Hafızayı Güncelle ---
+                if (type === 'ipRecord') {
+                    this.selectedIpRecordId = item.id;
+                    this.uiManager.renderSelectedIpRecord(item);
+                } else {
+                    this.selectedPersonId = item.id;
+                    this.uiManager.renderSelectedPerson(item);
+                }
                 container.style.display = 'none';
             };
             container.appendChild(div);
@@ -254,7 +277,7 @@ class TaskUpdateController {
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
 
-// --- EPATS YÜKLEME (GÜNCELLENMİŞ: Statü Değişikliği Ekli) ---
+    // --- EPATS YÜKLEME ---
     async uploadEpatsDocument(file) {
         if (!file) return;
         
@@ -275,23 +298,17 @@ class TaskUpdateController {
 
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
 
-            // 🔥 YENİ ÖZELLİK: Statüyü "Tamamlandı" yap
+            // Statüyü "Tamamlandı" yap
             const statusSelect = document.getElementById('taskStatus');
             if(statusSelect) {
-                // 'completed' değeri projenizdeki utils.js/TASK_STATUSES ile aynı olmalı
                 statusSelect.value = 'completed'; 
-                
-                // Görsel uyarı (İsteğe bağlı - yanıp sönme efekti vs. eklenebilir)
-                statusSelect.style.border = "2px solid #28a745"; // Yeşil çerçeve
+                statusSelect.style.border = "2px solid #28a745";
                 setTimeout(() => statusSelect.style.border = "", 2000);
             }
 
-            // Modal Kontrolü (Aynı kalıyor)
+            // Modal Kontrolü
             const isApp = this.isApplicationTask(this.taskData.taskType);
             if (isApp) {
-                // Modalda daha önce veri varsa onu koru yoksa boş gelsin
-                // (Artık EPATS inputundan veri kopyalamıyoruz)
-                
                 if (typeof $ !== 'undefined') {
                     this.uiManager.ensureApplicationDataModal();
                     setTimeout(() => {
@@ -313,7 +330,7 @@ class TaskUpdateController {
     async removeEpatsDocument() {
         if (!confirm('EPATS evrakı silinecek. Emin misiniz?')) return;
         
-        // 1. Storage'dan silmeye çalış (Hata olsa bile devam et)
+        // 1. Storage'dan silmeye çalış
         if (this.uploadedEpatsFile?.storagePath) {
             try {
                 await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
@@ -339,7 +356,7 @@ class TaskUpdateController {
 
     isApplicationTask(taskType) {
         if (!taskType) return false;
-        const applicationTypeIds = ['2', '5', '8'];
+        const applicationTypeIds = ['2', '5', '8', 'trademark_application', 'patent_application', 'design_application'];
         return applicationTypeIds.includes(String(taskType));
     }
 
@@ -427,9 +444,9 @@ class TaskUpdateController {
         return amountData;
     }
 
-    // --- KAYDETME VE YÖNLENDİRME (DÜZELTİLDİ) ---
+    // --- KAYDETME VE YÖNLENDİRME ---
     async saveTaskChanges() {
-        // 1. EPATS Validasyonu (Eğer dosya varsa zorunlu alanları kontrol et)
+        // 1. EPATS Validasyonu
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
@@ -440,12 +457,11 @@ class TaskUpdateController {
                 return;
             }
             
-            // Objeyi güncelle
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        // 2. Temel Veri Objesini Hazırla
+        // 2. Veri Objesini Hazırla
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -455,27 +471,27 @@ class TaskUpdateController {
             dueDate: document.getElementById('taskDueDate').value || null,
             updatedAt: new Date().toISOString(),
             documents: this.currentDocuments,
-            
-            // Mevcut details objesini al (yoksa boş obje oluştur)
-            details: this.taskData.details || {} 
+            details: this.taskData.details || {},
+
+            // --- 🔥 DÜZELTME 4: Yeni İlişkileri Pakete Ekle ---
+            relatedIpRecordId: this.selectedIpRecordId, // Marka/Patent ID
+            taskOwner: this.selectedPersonId            // Taraf ID
         };
 
-        // 3. EPATS Evrak Durumunu İşle (Ekleme veya SİLME)
+        // 3. EPATS Evrak Durumu
         if (this.uploadedEpatsFile) {
-            // Dosya varsa kaydet
             updateData.details.epatsDocument = this.uploadedEpatsFile;
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
         } else {
-            // 🔥 KRİTİK KISIM: Dosya silinmişse (null ise), veritabanındaki alanı da NULL yap
-            // Bunu yapmazsak dosya silinmez!
+            // Dosya silinmişse NULL yap
             updateData.details.epatsDocument = null; 
         }
 
-        // 4. Güncelleme İsteğini Gönder
+        // 4. Gönder
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
-            // Eğer Modal'dan gelen Başvuru Verisi (App No) varsa, onu da IP Record'a işle
+            // Başvuru Verisi (App No) varsa IP Record'a işle
             if (this.tempApplicationData && this.taskData.relatedIpRecordId) {
                 await this.dataManager.updateIpRecord(this.taskData.relatedIpRecordId, {
                     applicationNumber: this.tempApplicationData.appNo,
@@ -485,7 +501,6 @@ class TaskUpdateController {
             
             showNotification('Değişiklikler kaydedildi.', 'success');
             
-            // --- Geri Yönlendirme ---
             setTimeout(() => {
                 window.location.href = 'task-management.html';
             }, 1000); 
