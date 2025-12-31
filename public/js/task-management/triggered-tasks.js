@@ -437,7 +437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const taskId = btn.dataset.id;
 
                 if (btn.classList.contains('view-btn')) this.showTaskDetail(taskId);
-                else if (btn.classList.contains('edit-btn')) window.location.href = `task-detail.html?id=${taskId}`;
+                else if (btn.classList.contains('edit-btn')) window.location.href = `task-update.html?id=${taskId}`;
                 else if (btn.classList.contains('add-accrual-btn')) this.showAccrualModal(taskId);
                 else if (btn.classList.contains('change-status-btn')) this.showStatusChangeModal(taskId);
             });
