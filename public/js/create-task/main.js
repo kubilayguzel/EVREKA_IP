@@ -62,22 +62,9 @@ class CreateTaskController {
     }
 
 // --- GÜNCELLENEN METOT: Tüm Butonlar İçin Global Dinleyici ---
-setupEventListeners() {
+    setupEventListeners() {
         if (this._eventsBound) return;
         this._eventsBound = true;
-
-        // --- MUTATION OBSERVER EKLEMESİ (NICE SINIFLARI İÇİN) ---
-        // Nice sınıf listesine bir eleman eklendiğinde veya çıkarıldığında validator'ı otomatik çalıştırır.
-        const niceListObserver = new MutationObserver(() => {
-            console.log('🔄 Nice sınıf listesi değişti (Observer)');
-            this.validator.checkCompleteness(this.state);
-        });
-
-        const niceListContainer = document.getElementById('selectedNiceClasses');
-        if (niceListContainer) {
-            niceListObserver.observe(niceListContainer, { childList: true, subtree: true });
-        }
-        // ---------------------------------------------------------
         
         // 1. Statik Alanlar (Değişmeyenler)
         document.getElementById('mainIpType')?.addEventListener('change', (e) => this.handleMainTypeChange(e));
@@ -397,6 +384,18 @@ setupEventListeners() {
         this.setupBrandExample();
     }
 
+    setupNiceListObserver() {
+        const niceListContainer = document.getElementById('selectedNiceClasses');
+        if (niceListContainer) {
+            // Varsa eski observer'ı temizlemek iyi olur ama basitlik adına direkt yenisini kuralım
+            const niceListObserver = new MutationObserver(() => {
+                console.log('🔄 Nice sınıf listesi değişti (Observer Aktif)');
+                this.validator.checkCompleteness(this.state);
+            });
+            niceListObserver.observe(niceListContainer, { childList: true, subtree: true });
+        }
+    }
+
     handleNextTab() {
         // Aktif sekmeyi bul
         const activeTab = document.querySelector('#myTaskTabs .nav-link.active');
@@ -460,6 +459,7 @@ setupEventListeners() {
         if (isMarkaBasvuru) {
             // Eğer Marka Başvurusu ise özel sekmeli formu bas
             this.uiManager.renderTrademarkApplicationForm();
+            setTimeout(() => this.setupNiceListObserver(), 100);
         } else {
             // Değilse standart formu (Varlık Arama + Detaylar) bas
             this.uiManager.renderBaseForm(
