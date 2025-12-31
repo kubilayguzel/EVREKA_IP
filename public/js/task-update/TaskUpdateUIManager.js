@@ -178,58 +178,42 @@ export class TaskUpdateUIManager {
         this.elements.partyResults.style.display = 'none';
     }
     
-// --- BAŞVURU MODALI (Application Data Modal - GÜNCELLENMİŞ TASARIM) ---
+// --- BAŞVURU MODALI (SADE TASARIM) ---
     ensureApplicationDataModal() {
         if (document.getElementById('applicationDataModal')) return;
 
         const modalHtml = `
         <div class="modal fade" id="applicationDataModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
             <div class="modal-dialog modal-dialog-centered" role="document">
-                <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                <div class="modal-content shadow-sm">
                     
-                    <div class="modal-header text-white p-4" style="background: linear-gradient(135deg, #d63384 0%, #a61e4d 100%);">
-                        <div>
-                            <h5 class="modal-title font-weight-bold" style="font-size: 1.25rem;">
-                                <i class="fas fa-file-contract mr-2"></i>Başvuru Bilgileri
-                            </h5>
-                            <p class="m-0 mt-2" style="opacity: 0.9; font-size: 0.9rem;">
-                                EPATS evrakı tespit edildi. İşleme devam etmek için lütfen aşağıdaki bilgileri giriniz.
-                            </p>
+                    <div class="modal-header bg-light text-dark border-bottom">
+                        <h5 class="modal-title font-weight-bold">
+                            <i class="fas fa-file-contract mr-2"></i>Başvuru Bilgileri
+                        </h5>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <div class="alert alert-secondary border-0 mb-4" style="font-size: 0.9em;">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Yüklenen evrak bir başvuru işlemidir. Lütfen ilgili varlığın (Marka/Patent) başvuru bilgilerini güncelleyiniz.
+                        </div>
+
+                        <div class="form-group">
+                            <label class="font-weight-bold mb-1">Başvuru Numarası</label>
+                            <input type="text" id="modalAppNumber" class="form-control" placeholder="Örn: 2025/12345">
+                            <small class="text-muted">Bu bilgi Marka/Patent kartına işlenecektir.</small>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label class="font-weight-bold mb-1">Başvuru Tarihi</label>
+                            <input type="date" id="modalAppDate" class="form-control">
                         </div>
                     </div>
 
-                    <div class="modal-body p-4 bg-light">
-                        <div class="bg-white p-4 rounded shadow-sm border">
-                            <div class="form-group">
-                                <label class="font-weight-bold text-dark mb-2">
-                                    Başvuru Numarası <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text bg-white border-right-0 text-muted"><i class="fas fa-hashtag"></i></span>
-                                    </div>
-                                    <input type="text" id="modalAppNumber" class="form-control border-left-0 pl-0" placeholder="Örn: 2025/12345" style="height: 45px;">
-                                </div>
-                                <small class="text-muted">Resmi evrak üzerindeki başvuru numarası.</small>
-                            </div>
-
-                            <div class="form-group mb-0 mt-3">
-                                <label class="font-weight-bold text-dark mb-2">
-                                    Başvuru Tarihi <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text bg-white border-right-0 text-muted"><i class="fas fa-calendar-alt"></i></span>
-                                    </div>
-                                    <input type="date" id="modalAppDate" class="form-control border-left-0 pl-0" style="height: 45px;">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer p-3 bg-white border-top-0 justify-content-center">
-                        <button type="button" class="btn btn-primary btn-lg btn-block px-5 py-2 shadow-sm" id="btnSaveApplicationData" style="background: #d63384; border: none; border-radius: 10px;">
-                            <i class="fas fa-check-circle mr-2"></i>Bilgileri Onayla ve Devam Et
+                    <div class="modal-footer bg-light border-top">
+                        <button type="button" class="btn btn-primary px-4" id="btnSaveApplicationData">
+                            <i class="fas fa-check mr-2"></i>Kaydet ve Kapat
                         </button>
                     </div>
                 </div>
