@@ -1,9 +1,9 @@
-// public/js/nice-classification.js - Fully Isolated & Consistent Modal
+// public/js/nice-classification.js - Final Professional Version (Text Format Fixed)
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- TASARIM ENJEKSİYONU (CSS) ---
+// --- TASARIM ENJEKSİYONU (ZORUNLU GÜNCELLEME) ---
 function injectNiceStyles() {
     const styleId = 'nice-classification-styles';
     // Eski stil varsa sil (Anlık güncelleme için)
@@ -12,7 +12,7 @@ function injectNiceStyles() {
 
     const css = `
         :root {
-            /* Renk Paleti (Zinc & Emerald) */
+            /* Renk Paleti (Zinc & Emerald - Nötr Gri ve Yeşil) */
             --nice-bg: #ffffff;
             --nice-bg-alt: #f4f4f5;      
             --nice-border: #e4e4e7;      
@@ -305,7 +305,7 @@ class Class35_5Manager {
             const target = e.target;
             if (target.dataset.action === 'close') return this.close();
             
-            // Overlay tıklandığında kapat (Opsiyonel)
+            // Overlay tıklandığında kapat
             if (target === modal) return this.close();
 
             const header = target.closest('.c35-header');
@@ -358,11 +358,13 @@ class Class35_5Manager {
             });
         });
 
-        // Kaydet
+        // Kaydet (DÜZELTİLDİ: İstenen metin formatı uygulandı)
         document.getElementById('c35-save').addEventListener('click', () => {
             const items = Object.values(this.selectedItems);
             if (items.length === 0) return alert('Lütfen en az bir mal seçin.');
-            const combinedText = `Müşterilerin malları; şu malların bir araya getirilmesi hizmetleri (nakliyesi hariç): ${items.join(', ')}`;
+            
+            const combinedText = `Müşterilerin malları elverişli bir şekilde görüp satın alabilmeleri için ${items.join(', ')} mallarının bir araya getirilmesi hizmetleri (belirtilen hizmetler perakende satış mağazaları, toptan satış mağazaları, elektronik ortamlar, katalog ve benzeri diğer yöntemler ile sağlanabilir)`;
+            
             this.parent.addSelection('35-5', '35', combinedText);
             this.close();
         });
