@@ -737,10 +737,17 @@ class CreateTaskController {
             this.state.searchSource = 'suits';
             this.state.targetSuitTypes = selectedType.targetSuitTypes || [];
         } 
-        // 2. Yoksa Eski Mantık Devam Etsin
+        // 2. Yoksa Eski Mantık Devam Etsin (Else Bloğunun İçi)
         else {
-            const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
+            // "isType20" kontrolünü siliyoruz veya false yapıyoruz.
+            // Çünkü 20'yi aşağıya, hibrit grubuna taşıyacağız.
+            const isType20 = false; 
+
             const isHybrid = [
+                // YAYINA İTİRAZ (20) BURAYA EKLENDİ
+                '20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN,
+                
+                // Diğer Hibrit İşlemler (Tam Portföy + Bülten)
                 '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
                 '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
                 '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
@@ -906,11 +913,21 @@ class CreateTaskController {
         
         const typeId = String(this.state.selectedTaskType?.id || '');
         
-        // 3. Taraf kayıtlarının görünmesine izin verilen işlem tipleri
-        // 19: Yeniden İnceleme, 20: Yayına İtiraz, 8: Karara İtirazı G.Ç., 21: Yayına İtirazı G.Ç.
-        const allowThirdParty = [
-            '19', '20', '8', '21',
-            TASK_IDS.ITIRAZ_YAYIN, 
+        // GRUP A: SADECE 3. TARAF (RAKİPLER)
+        // Bu gruptaki işler portföyde arama yaparken ASLA sizin kendi dosyalarınızı (Self) getirmez.
+        // Yayına İtiraz (20) buraya eklenerek 'Self' dosyalar filtrelenir.
+        const isThirdPartyOnly = [
+            'itiraza_ek_belge', 
+            'trademark_third_party_opinion_process',
+            '20', 
+            'trademark_publication_objection', 
+            TASK_IDS.ITIRAZ_YAYIN
+        ].includes(typeId);
+
+        // GRUP B: KARIŞIK (SELF + 3. TARAF)
+        // Bu gruptaki işler portföydeki her şeyi getirir.
+        const allowThirdPartyMixed = [
+            '19', '8', '21',
             TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
             TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
             TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
@@ -919,14 +936,21 @@ class CreateTaskController {
         const lowerTerm = term.toLowerCase();
         
         return this.state.allIpRecords.filter(r => {
-            // 1. Sahiplik Kontrolü
-            if (!allowThirdParty) {
-                // Sadece 'self' olanları getir
-                const ownerType = String(r.recordOwnerType || 'self').toLowerCase();
+            const ownerType = String(r.recordOwnerType || 'self').toLowerCase();
+
+            // KURAL 1: "Sadece 3. Taraf" grubundaysa -> 'third_party' olmayanları (Self) ele.
+            if (isThirdPartyOnly) {
+                if (ownerType !== 'third_party') return false;
+            }
+            // KURAL 2: "Karışık" grupta DEĞİLSE -> 'third_party' olanları (Rakipleri) ele.
+            // (Yani standart işlemler sadece Self getirir)
+            else if (!allowThirdPartyMixed) {
                 if (ownerType === 'third_party') return false; 
             }
+            
+            // KURAL 3: Eğer "Karışık" gruptaysa (19, 8, 21) -> Hepsini geçir (Filtre yok).
 
-            // 2. Metin Eşleşmesi
+            // 4. Metin Eşleşmesi (Standart Arama)
             return (
                 (r.title || '').toLowerCase().includes(lowerTerm) ||
                 (r.markName || '').toLowerCase().includes(lowerTerm) ||
