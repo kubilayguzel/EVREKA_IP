@@ -915,12 +915,10 @@ class CreateTaskController {
         
         // GRUP A: SADECE 3. TARAF (RAKİPLER)
         // Bu gruptaki işler portföyde arama yaparken ASLA sizin kendi dosyalarınızı (Self) getirmez.
-        // Yayına İtiraz (20) buraya eklenerek 'Self' dosyalar filtrelenir.
         const isThirdPartyOnly = [
-            'itiraza_ek_belge', 
-            'trademark_third_party_opinion_process',
+            '1',
             '20', 
-            'trademark_publication_objection', 
+            '37', 
             TASK_IDS.ITIRAZ_YAYIN
         ].includes(typeId);
 
