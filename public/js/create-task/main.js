@@ -452,7 +452,34 @@ class CreateTaskController {
 
         const tIdStr = String(typeId);
         this.state.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
-        
+
+        if (['79', '80', '81'].includes(tIdStr)) {
+            console.log('⚡ Özel İşlem Seçildi:', selectedType.name);
+            
+            // 1. Özel Formu Çiz
+            this.uiManager.renderOtherTaskForm(selectedType);
+            
+            // 2. Accrual Manager'ı Başlat (Tahakkuk için)
+            if (document.getElementById('createTaskAccrualContainer')) {
+                this.accrualFormManager = new AccrualFormManager(
+                    'createTaskAccrualContainer', 
+                    'createTaskAcc', 
+                    this.state.allPersons 
+                );
+                this.accrualFormManager.render();
+            }
+
+            // 3. Arama ve Validasyon Ayarları
+            this.setupMultiAssetSearch(tIdStr);
+            this.applyAssignmentRule(await this.dataManager.getAssignmentRule(typeId));
+            this.dedupeActionButtons();
+            
+            // Standart tarih seçicileri başlat (Datepicker)
+            setTimeout(() => initTaskDatePickers(), 100);
+            
+            return; // Aşağıdaki standart kodların çalışmasını engelle
+        }
+
         const isMarkaBasvuru = selectedType.alias === 'Başvuru' && selectedType.ipType === 'trademark';
         
         // 1. UI'ı Çizdir (Bu işlem DOM'a HTML stringini basar)
@@ -508,7 +535,16 @@ class CreateTaskController {
     }
 
 // --- MENŞE VE ÜLKE SEÇİMİ (DÜZELTİLDİ) ---
+
     handleOriginChange(val) {
+        // 1. Önceki seçimleri temizle (Kaynak değiştiği için eski veriler geçersiz olabilir)
+        this.resetSelections();
+        this.uiManager.unlockAndClearLawsuitFields();
+        
+        const ipRecordContainer = document.getElementById('selectedIpRecordContainer');
+        if(ipRecordContainer) ipRecordContainer.style.display = 'none';
+
+        // 2. Görünürlük Ayarları (Mevcut mantığın korunmuş hali)
         const container = document.getElementById('countrySelectionContainer');
         const singleWrapper = document.getElementById('singleCountrySelectWrapper');
         const multiWrapper = document.getElementById('multiCountrySelectWrapper');
@@ -516,36 +552,26 @@ class CreateTaskController {
         
         if (!container || !singleWrapper || !multiWrapper) return;
 
-        // 1. Önce Hepsini Gizle (Varsayılan Durum)
+        // Varsayılan: Hepsini gizle
         container.style.display = 'none';
         singleWrapper.style.display = 'none';
         multiWrapper.style.display = 'none';
 
-        // 2. KONTROL: İşlem Tipi Nedir?
+        // 3. İşlem Tipine Göre Kontrol
         const t = this.state.selectedTaskType;
-        
-        // "Ülke Seçimi" alanı SADECE şu durumlarda açılmalı:
-        // A) Marka Başvurusu (Yeni Kayıt)
-        // B) Dava İşlemi (Suit)
         const isApplication = (t && (t.alias === 'Başvuru' || t.name === 'Başvuru'));
         const isSuit = (t && t.ipType === 'suit') || (document.getElementById('mainIpType')?.value === 'suit');
 
-        // Eğer bu bir Yenileme, Devir, İtiraz vb. ise (yani Başvuru veya Dava değilse),
-        // menşe WIPO/ARIPO olsa bile ülke seçim kutusunu AÇMA.
-        if (!isApplication && !isSuit) {
-            return; 
-        }
+        // Sadece Başvuru veya Dava ise ülke seçimi aç
+        if (!isApplication && !isSuit) return; 
 
-        // 3. Menşeye Göre Alanı Aç (Sadece yukarıdaki koşul sağlandıysa buraya gelir)
-        
-        // Yurtdışı Ulusal (Tekli Seçim)
+        // 4. Seçime Göre Alanı Aç
         if (['Yurtdışı Ulusal', 'FOREIGN_NATIONAL'].includes(val)) {
             container.style.display = 'block';
             singleWrapper.style.display = 'block';
             if(title) title.textContent = 'Menşe Ülke Seçimi';
             this.uiManager.populateDropdown('countrySelect', this.state.allCountries, 'code', 'name');
         } 
-        // WIPO / ARIPO (Çoklu Seçim)
         else if (['WIPO', 'ARIPO'].includes(val)) {
             container.style.display = 'block';
             multiWrapper.style.display = 'block';
@@ -840,6 +866,33 @@ class CreateTaskController {
         
         document.addEventListener('click', (e) => {
             if (!results.contains(e.target) && e.target !== newInput) results.style.display = 'none';
+        });
+    }
+
+    setupMultiAssetSearch(typeId) {
+        console.log('🛠️ Özel İşlem Modu Hazırlanıyor: ID', typeId);
+        
+        // 1. Arama Başlığını Güncelle
+        // TaskUIManager'daki updateAssetSearchLabel metodunu kullanıyoruz
+        if (typeId === '81') {
+            this.uiManager.updateAssetSearchLabel('research'); // "Araştırma için Varlık Seçimi" gibi
+        } else {
+            this.uiManager.updateAssetSearchLabel('portfolio');
+        }
+
+        // 2. Varlık Arama Listener'ını Tekrar Başlat (Gerekirse modu değiştirerek)
+        // searchSource state'ini güncelle
+        this.state.searchSource = 'portfolio'; // Bu işlemler genelde portföydeki mevcut dosya üzerinden yapılır
+        
+        this.setupIpRecordSearch();
+        
+        // 3. Validator Kontrolü için Listener Ekle (Yeni inputlar için)
+        const newInputs = ['newTitleInput', 'newTypeInput', 'searchKeywordInput'];
+        newInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => this.validator.checkCompleteness(this.state));
+            }
         });
     }
 
