@@ -439,7 +439,7 @@ setupEventListeners() {
         // ============================================================
         // ---> ÖZEL İŞLEMLER (Unvan, Nevi, Araştırma - ID 79, 80, 81)
         // ============================================================
-        if (['79', '80', '81'].includes(tIdStr)) {
+        if (['79', '80', '81', '82'].includes(tIdStr)) {
             console.log('⚡ Özel İşlem Seçildi:', selectedType.name);
             
             // 1. Formu Çiz
@@ -473,15 +473,15 @@ setupEventListeners() {
             // 6. Tarihçiler ve Validasyon
             setTimeout(() => initTaskDatePickers(), 100);
             
-            // Yeni inputlar için validator'ı tetikle
-            const newInputs = ['newTitleInput', 'newTypeInput', 'taxNumberInput', 'searchKeywordInput'];
+        // ---> VALIDATOR İÇİN YENİ INPUT EKLENDİ: 'newAddressInput' <---
+            const newInputs = ['newTitleInput', 'newTypeInput', 'taxNumberInput', 'searchKeywordInput', 'newAddressInput'];
             newInputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('input', () => this.validator.checkCompleteness(this.state));
             });
 
             this.validator.checkCompleteness(this.state);
-            return; // Standart akışı durdur
+            return;
         }
 
 
@@ -587,7 +587,7 @@ setupEventListeners() {
         const container = document.getElementById('assetSearchContainer');
         
         // Sadece container varsa ve işlem Unvan (79) veya Nevi (80) ise çalışır
-        if (container && ['79', '80'].includes(typeId)) {
+        if (container && ['79', '80', '82'].includes(typeId)) {
             if (originValue === 'TÜRKPATENT') {
                 container.style.display = 'none';
                 console.log('🙈 TÜRKPATENT seçildiği için Varlık Arama gizlendi.');
