@@ -42,8 +42,10 @@ class CreateTaskController {
             selectedIpRecord: null, selectedTaskType: null, selectedRelatedParties: [], selectedRelatedParty: null,
             selectedTpInvoiceParty: null, selectedServiceInvoiceParty: null, selectedApplicants: [], priorities: [],
             selectedCountries: [], uploadedFiles: [],
+            selectedOwners: [],
             isWithdrawalTask: false, searchSource: 'portfolio', isNiceClassificationInitialized: false, selectedWipoAripoChildren: []
         };
+        
     }
 
     async init() {
@@ -62,7 +64,7 @@ class CreateTaskController {
     }
 
 // --- GÜNCELLENEN METOT: Tüm Butonlar İçin Global Dinleyici ---
-    setupEventListeners() {
+setupEventListeners() {
         if (this._eventsBound) return;
         this._eventsBound = true;
         
@@ -77,28 +79,22 @@ class CreateTaskController {
 
         // 1.5. VALIDATOR TETİKLEYİCİLERİ (Input ve Change Eventleri)
         document.addEventListener('input', (e) => {
-            // e.target kontrolü ekle
             if (!e.target) {
-                console.log('🔄 Nice sınıf değişikliği algılandı (target yok)');
                 this.validator.checkCompleteness(this.state);
                 return;
             }
-            
-            const inputTriggerIds = ['brandExampleText', 'taskTitle'];
-            if (inputTriggerIds.includes(e.target.id)) {
-                console.log('🔄 Validator tetiklendi (input):', e.target.id, e.target.value);
-                this.validator.checkCompleteness(this.state);
+            // Fiyat hesaplama alanları
+            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) {
+                this.calculateTotalAmount();
             }
-            
+            // Genel kontrol (Her tuşta çalışır)
+            this.validator.checkCompleteness(this.state);
         });
-
                 
         document.addEventListener('change', (e) => {
-            const changeTriggerIds = ['assignedTo', 'originSelect', 'countrySelect', 'taskDueDate'];
-            if (changeTriggerIds.includes(e.target.id)) {
-                console.log('🔄 Validator tetiklendi (change):', e.target.id, e.target.value);
-                this.validator.checkCompleteness(this.state);
-            }
+            // Checkbox ve Select değişimlerinde hesapla/kontrol et
+            if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
+            this.validator.checkCompleteness(this.state);
         });
 
         // 2. GLOBAL TIKLAMA YÖNETİCİSİ
@@ -157,9 +153,13 @@ class CreateTaskController {
                 if(imgEl) imgEl.src = '';
 
                 this.uiManager.unlockAndClearLawsuitFields();
+                // İlişkili her şeyi temizle
                 this.state.selectedRelatedParties = [];
                 this.state.selectedWipoAripoChildren = [];
+                this.state.selectedOwners = []; // Sahipleri de temizle
+
                 this.uiManager.renderWipoAripoChildRecords([]);
+                this.uiManager.renderSelectedOwners([]); // UI temizle
 
                 const originSelect = document.getElementById('originSelect');
                 const mainIpTypeSelect = document.getElementById('mainIpType');
@@ -178,12 +178,27 @@ class CreateTaskController {
                 this.validator.checkCompleteness(this.state);
             }
 
-            // Başvuru Sahibi Sil
-            const removeApplicantBtn = e.target.closest('.remove-selected-item-btn');
-            if (removeApplicantBtn) {
-                const id = removeApplicantBtn.dataset.id;
-                this.state.selectedApplicants = this.state.selectedApplicants.filter(p => String(p.id) !== String(id));
-                this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+            // YENİ: Sahip (Owner) Silme
+            const removeOwnerBtn = e.target.closest('.remove-owner-btn');
+            if (removeOwnerBtn) {
+                const id = removeOwnerBtn.dataset.id;
+                if (this.state.selectedOwners) {
+                    this.state.selectedOwners = this.state.selectedOwners.filter(p => String(p.id) !== String(id));
+                    this.uiManager.renderSelectedOwners(this.state.selectedOwners);
+                    this.validator.checkCompleteness(this.state);
+                }
+            }
+
+            // Başvuru Sahibi Sil / Liste Öğesi Sil (Genel)
+            const removeListItemBtn = e.target.closest('.remove-selected-item-btn');
+            if (removeListItemBtn) {
+                const id = removeListItemBtn.dataset.id;
+                // Sadece başvuru sahipleri listesindeyse oradan sil
+                if (this.state.selectedApplicants.some(a=>a.id === id)) {
+                    this.state.selectedApplicants = this.state.selectedApplicants.filter(p => String(p.id) !== String(id));
+                    this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                }
+                // Ülke silme işlemi 'setupMultiCountrySelect' içinde ayrı yönetiliyor olabilir ama burada da check edilebilir
                 this.validator.checkCompleteness(this.state);
             }
 
@@ -198,23 +213,30 @@ class CreateTaskController {
 
             // --- C) MODAL VE EKLEME ---
 
-            // Yeni Kişi Ekleme
-            if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn')) {
+            // Yeni Kişi Ekleme (GÜNCELLENDİ: Owner Desteği)
+            if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn') || e.target.closest('#addNewOwnerBtn')) {
                 const isApplicant = e.target.closest('#addNewApplicantBtn'); 
+                const isOwner = e.target.closest('#addNewOwnerBtn'); // YENİ
 
                 openPersonModal((newPerson) => { 
                     this.state.allPersons.push(newPerson); 
+                    
                     if (isApplicant) {
                         if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
                             this.state.selectedApplicants.push(newPerson);
                             this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
                         }
-                    } else {
+                    } 
+                    else if (isOwner) { // YENİ
+                        this.handlePersonSelection(newPerson, 'owner');
+                    }
+                    else {
                         this.handlePersonSelection(newPerson, 'relatedParty'); 
                     }
                     this.validator.checkCompleteness(this.state);
                 });
 
+                // Ülke seçimini tetikle (varsa)
                 setTimeout(() => {
                     const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
                     if (countrySelect && ['Turkey','TR','Türkiye'].includes(countrySelect.value)) {
@@ -223,22 +245,17 @@ class CreateTaskController {
                 }, 300);
             }
             
-            // Parent Transaction Seçim (Modal)
-            if (e.target.closest('.list-group-item') && document.getElementById('parentListContainer')?.contains(e.target)) {
-                 // Yedek listener
-            }
-
             // --- D) TAHAKKUK UI ---
             if (e.target.id === 'toggleAccrualFormBtn' || e.target.closest('#toggleAccrualFormBtn')) {
                 const wrapper = document.getElementById('accrualToggleWrapper'); 
                 const btn = document.getElementById('toggleAccrualFormBtn');
                 
                 if (wrapper && wrapper.style.display === 'none') {
-                    $(wrapper).slideDown(300);
+                    if (window.$) $(wrapper).slideDown(300); else wrapper.style.display = 'block';
                     btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i> Tahakkuk Formunu Gizle';
                     btn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
                 } else if (wrapper) {
-                    $(wrapper).slideUp(300);
+                    if (window.$) $(wrapper).slideUp(300); else wrapper.style.display = 'none';
                     btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
                     btn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
                 }
@@ -298,84 +315,50 @@ class CreateTaskController {
                 this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
                 e.target.value = ''; 
             }
+        });
 
-            // Dosya Silme
-            if (e.target.closest('.remove-file-btn')) {
-                const btn = e.target.closest('.remove-file-btn');
-                const index = parseInt(btn.dataset.index);
-                if (this.state.uploadedFiles) {
-                    this.state.uploadedFiles.splice(index, 1);
-                    this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
+        // 5. TAB DEĞİŞİMİ VE VERİ YÜKLEME
+        if (window.$) {
+            $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
+                const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
+                const activeTab = e.target;
+                const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
+
+                this.uiManager.updateButtonsAndTabs(isLastTab);
+
+                const targetTabId = e.target.getAttribute('href').substring(1);
+                
+                if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
+                    if (typeof initializeNiceClassification === 'function') {
+                         await initializeNiceClassification();
+                         this.state.isNiceClassificationInitialized = true;
+                    }
                 }
-            }
-            
-            // Validator Tetikleyiciler (Change)
-            if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
-            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) {
+                
+                if (targetTabId === 'applicants') {
+                    this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                }
+                
+                if (targetTabId === 'priority') {
+                    const prioSelect = document.getElementById('priorityCountry');
+                    if (prioSelect && prioSelect.options.length <= 1) {
+                        this.uiManager.populateDropdown('priorityCountry', this.state.allCountries, 'code', 'name');
+                    }
+                    this.uiManager.renderPriorities(this.state.priorities);
+                }
+                
+                if (targetTabId === 'summary') {
+                    this.uiManager.renderSummaryTab(this.state);
+                }
+
                 this.validator.checkCompleteness(this.state);
-            }
-        });
-
-// 5. TAB DEĞİŞİMİ VE VERİ YÜKLEME
-        $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
-            const allTabs = document.querySelectorAll('#myTaskTabs .nav-link');
-            const activeTab = e.target;
-            const isLastTab = (allTabs[allTabs.length - 1] === activeTab);
-
-            // Butonları güncelle (İlerle / Kaydet)
-            // DİKKAT: Buton burada yeniden oluşturuluyor (default disabled)
-            this.uiManager.updateButtonsAndTabs(isLastTab);
-
-            const targetTabId = e.target.getAttribute('href').substring(1);
-            
-            // Mal/Hizmet Sekmesi
-            if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
-                await initializeNiceClassification();
-                this.state.isNiceClassificationInitialized = true;
-            }
-            
-            // Başvuru Sahibi Sekmesi
-            if (targetTabId === 'applicants') {
-                this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
-            }
-            
-            // Rüçhan Sekmesi
-            if (targetTabId === 'priority') {
-                const prioSelect = document.getElementById('priorityCountry');
-                if (prioSelect && prioSelect.options.length <= 1) {
-                    this.uiManager.populateDropdown('priorityCountry', this.state.allCountries, 'code', 'name');
-                }
-                this.uiManager.renderPriorities(this.state.priorities);
-            }
-            
-            // Özet Sekmesi
-            if (targetTabId === 'summary') {
-                this.uiManager.renderSummaryTab(this.state);
-            }
-
-            // --- EKLEMENİZ GEREKEN KRİTİK SATIR ---
-            // Son sekmeye gelindiğinde buton yeni oluşturulduğu için 
-            // validator'ı elle tetikleyip durumunu güncellememiz lazım.
-            this.validator.checkCompleteness(this.state);
-        });
+            });
+        }
         
-        // --- KRİTİK GÜNCELLEME: GARANTİLİ INPUT DİNLEYİCİSİ ---
-        
-        // 1. Genel Input Takipçisi (Her tuşa basıldığında çalışır)
-        document.addEventListener('input', (e) => {
-            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) {
-                this.calculateTotalAmount();
-            }
-            // Her türlü veri girişinde validator çalışsın
-            this.validator.checkCompleteness(this.state);
-        });
-        
-        // 2. ÖZEL TAKİPÇİ (Marka Adı İçin)
-        // Kutuya tıklandığı an ona özel bir takipçi yapıştırır, böylece kaçırma şansı olmaz.
+        // 6. ÖZEL TAKİPÇİ (Marka Adı İçin)
         document.addEventListener('focusin', (e) => {
             if (e.target.id === 'brandExampleText') {
                 e.target.oninput = () => {
-                    console.log('📝 Marka adı yazılıyor...');
                     this.validator.checkCompleteness(this.state);
                 };
             }
@@ -476,7 +459,7 @@ class CreateTaskController {
             
             const currentOrigin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
             this.toggleAssetSearchVisibility(currentOrigin);
-            
+
             // Standart tarih seçicileri başlat (Datepicker)
             setTimeout(() => initTaskDatePickers(), 100);
             
@@ -1267,81 +1250,108 @@ async selectIpRecord(record) {
 
     // --- KİŞİ SEÇİMİ ---
     setupPersonSearchListeners() {
-        const inputs = {'personSearchInput':'relatedParty', 'tpInvoicePartySearch':'tpInvoiceParty', 'serviceInvoicePartySearch':'serviceInvoiceParty'};
-        
+        // Hangi input'un hangi role karşılık geldiği
+        const inputs = {
+            'personSearchInput': 'relatedParty',
+            'tpInvoicePartySearch': 'tpInvoiceParty',
+            'serviceInvoicePartySearch': 'serviceInvoiceParty',
+            'ownerSearchInput': 'owner' // YENİ: Sahip (Owner) rolü eklendi
+        };
+
         for (const [iid, role] of Object.entries(inputs)) {
             const inp = document.getElementById(iid);
             if (!inp) continue;
 
-            // DÜZELTME: resDiv tanımı buraya, olayların dışına taşındı.
-            // Böylece hem 'input' hem de 'click' olayları bu değişkene erişebilir.
-            const resId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
+            // Sonuç kutusunun ID'sini role göre belirle
+            let resId = 'personSearchResults'; // Varsayılan
+            if (role === 'tpInvoiceParty') resId = 'tpInvoicePartyResults';
+            if (role === 'serviceInvoiceParty') resId = 'serviceInvoicePartyResults';
+            if (role === 'owner') resId = 'ownerSearchResults'; // YENİ: Sahip sonuç kutusu
+
             const resDiv = document.getElementById(resId);
+            if (!resDiv) continue; // Eğer HTML'de yoksa (örneğin Marka Başvuru sayfasındaysak) hata vermesin
 
-            // Eğer sonuç kutusu HTML'de yoksa devam etme
-            if (!resDiv) continue;
-
+            // Input Dinleyici
             inp.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase();
-                
-                if (term.length < 2) { resDiv.style.display = 'none'; return; }
-                
-                const found = this.state.allPersons.filter(p => p.name.toLowerCase().includes(term)).slice(0, 10);
-                
+
+                if (term.length < 2) {
+                    resDiv.style.display = 'none';
+                    return;
+                }
+
+                // Kişiler arasında arama yap
+                const found = this.state.allPersons.filter(p =>
+                    p.name.toLowerCase().includes(term)
+                ).slice(0, 10);
+
+                // Sonuçları HTML olarak oluştur
                 resDiv.innerHTML = found.map(p => `
                     <div class="search-result-item p-2 border-bottom" data-id="${p.id}" style="cursor:pointer;">
                         ${p.name}
                     </div>`).join('');
-                
+
                 resDiv.style.display = 'block';
 
-                // Tıklama Olayları
+                // Tıklama olaylarını ekle (Delegasyon yerine her öğeye ekliyoruz, daha güvenli)
                 resDiv.querySelectorAll('.search-result-item').forEach(el => {
                     el.addEventListener('click', () => {
                         const selectedPerson = this.state.allPersons.find(p => String(p.id) === String(el.dataset.id));
-                        
+
                         if (selectedPerson) {
                             this.handlePersonSelection(selectedPerson, role);
-                            inp.value = ''; 
+                            inp.value = '';
                             resDiv.style.display = 'none';
                         }
                     });
                 });
             });
-            
+
             // Dışarı tıklayınca kapatma
             document.addEventListener('click', (e) => {
-                // Artık resDiv burada tanımlı
                 if (resDiv.style.display === 'block' && e.target !== inp && !resDiv.contains(e.target)) {
                     resDiv.style.display = 'none';
                 }
             });
         }
-        
-        document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
-            openPersonModal((p) => { 
-                this.state.allPersons.push(p); 
-                this.handlePersonSelection(p, 'relatedParty'); 
-            });
-        });
     }
 
     handlePersonSelection(person, role) {
         if (role === 'relatedParty') {
             if (!this.state.selectedRelatedParties.some(p => p.id === person.id)) {
                 this.state.selectedRelatedParties.push(person);
-                this.state.selectedRelatedParty = person; // İlk seçilen
+                this.state.selectedRelatedParty = person; // İlk seçilen (Eski kodlarla uyumluluk için)
                 this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
             }
-        } else if (role === 'tpInvoiceParty') {
-            this.state.selectedTpInvoiceParty = person;
-            document.getElementById('selectedTpInvoicePartyDisplay').textContent = person.name;
-            document.getElementById('selectedTpInvoicePartyDisplay').style.display = 'block';
-        } else {
-            this.state.selectedServiceInvoiceParty = person;
-            document.getElementById('selectedServiceInvoicePartyDisplay').textContent = person.name;
-            document.getElementById('selectedServiceInvoicePartyDisplay').style.display = 'block';
+        } 
+        else if (role === 'owner') { // YENİ: Sahip Ekleme Mantığı
+            // State array yoksa oluştur
+            if (!this.state.selectedOwners) this.state.selectedOwners = [];
+            
+            // Duplicate kontrolü
+            if (!this.state.selectedOwners.some(p => p.id === person.id)) {
+                this.state.selectedOwners.push(person);
+                this.uiManager.renderSelectedOwners(this.state.selectedOwners);
+            }
         }
+        else if (role === 'tpInvoiceParty') {
+            this.state.selectedTpInvoiceParty = person;
+            const disp = document.getElementById('selectedTpInvoicePartyDisplay');
+            if(disp) {
+                disp.textContent = person.name;
+                disp.style.display = 'block';
+            }
+        } 
+        else if (role === 'serviceInvoiceParty') {
+            this.state.selectedServiceInvoiceParty = person;
+            const disp = document.getElementById('selectedServiceInvoicePartyDisplay');
+            if(disp) {
+                disp.textContent = person.name;
+                disp.style.display = 'block';
+            }
+        }
+        
+        // Form bütünlüğünü kontrol et
         this.validator.checkCompleteness(this.state);
     }
     
@@ -1449,6 +1459,7 @@ async selectIpRecord(record) {
         this.state.selectedIpRecord = null;
         this.state.selectedRelatedParties = [];
         this.state.selectedApplicants = [];
+        this.state.selectedOwners = [];
         this.state.uploadedFiles = [];
         this.state.priorities = [];
         this.state.selectedWipoAripoChildren = [];
