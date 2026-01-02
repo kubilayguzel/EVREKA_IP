@@ -426,6 +426,23 @@ setupEventListeners() {
         else { document.getElementById('originSelect').value = 'TÜRKPATENT'; this.handleOriginChange('TÜRKPATENT'); }
     }
 
+
+    toggleAssetSearchVisibility(originValue) {
+        const typeId = String(this.state.selectedTaskType?.id || '');
+        const container = document.getElementById('assetSearchContainer');
+        
+        // 79, 80 ve 82 nolu işlemlerde TÜRKPATENT seçilirse gizle
+        if (container && ['79', '80', '82'].includes(typeId)) {
+            if (originValue === 'TÜRKPATENT') {
+                container.style.display = 'none';
+            } else {
+                container.style.display = 'block';
+            }
+        } else if (container) {
+            container.style.display = 'block';
+        }
+    }
+
     async handleSpecificTypeChange(e) {
         const typeId = e.target.value;
         const selectedType = this.state.allTransactionTypes.find(t => t.id === typeId);
@@ -437,15 +454,51 @@ setupEventListeners() {
         this.state.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
         
         // ============================================================
-        // ---> ÖZEL İŞLEMLER (Unvan, Nevi, Araştırma - ID 79, 80, 81)
+        // ---> ÖZEL İŞLEMLER (Unvan, Nevi, Araştırma, Adres - ID 79, 80, 81, 82)
         // ============================================================
         if (['79', '80', '81', '82'].includes(tIdStr)) {
             console.log('⚡ Özel İşlem Seçildi:', selectedType.name);
             
             // 1. Formu Çiz
             this.uiManager.renderOtherTaskForm(selectedType);
+
+            // ---> YENİ: ID 82 İÇİN ŞEHİR VE ÜLKE MANTIĞI <---
+            if (tIdStr === '82') {
+                // A) Ülkeleri Doldur
+                this.uiManager.populateDropdown('newAddressCountry', this.state.allCountries, 'code', 'name');
+                
+                // B) Şehirleri Lazy Load ile Çek (Varsa tekrar çekme)
+                if (!this.state.allCities) {
+                    this.state.allCities = await this.dataManager.getCities();
+                }
+
+                // C) Ülke Değişimini Dinle
+                const countrySelect = document.getElementById('newAddressCountry');
+                const citySelect = document.getElementById('newAddressCity');
+
+                if (countrySelect && citySelect) {
+                    countrySelect.addEventListener('change', (ev) => {
+                        const val = ev.target.value; // Ülke Kodu (örn: TR)
+                        
+                        // "Türkiye" kontrolü (Kod: TR, TUR veya Adı: Türkiye olabilir veritabanınıza göre)
+                        const isTurkey = ['TR', 'TUR', 'Turkey', 'Türkiye'].includes(val);
+
+                        if (isTurkey) {
+                            // Türkiye ise: Aç ve Doldur
+                            citySelect.disabled = false;
+                            this.uiManager.populateDropdown('newAddressCity', this.state.allCities, 'name', 'name', 'Şehir Seçiniz...');
+                        } else {
+                            // Değilse: Kapat ve Sıfırla
+                            citySelect.disabled = true;
+                            citySelect.innerHTML = '<option value="">Önce Ülke Seçiniz...</option>';
+                            citySelect.value = '';
+                        }
+                        this.validator.checkCompleteness(this.state);
+                    });
+                }
+            }
             
-            // 2. Tahakkuk Yöneticisi Başlat
+            // 2. Tahakkuk (Accrual) Başlatma
             if (document.getElementById('createTaskAccrualContainer')) {
                 this.accrualFormManager = new AccrualFormManager(
                     'createTaskAccrualContainer', 
@@ -455,35 +508,39 @@ setupEventListeners() {
                 this.accrualFormManager.render();
             }
 
-            // 3. Arama ve Varlık Ayarları
+            // 3. Arama ve Validasyon Ayarları
             this.setupMultiAssetSearch(tIdStr);
             this.applyAssignmentRule(await this.dataManager.getAssignmentRule(typeId));
             this.dedupeActionButtons();
             
-            // 4. Görünürlük Ayarı (TÜRKPATENT ise Varlık Aramayı Gizle)
+            // 4. Görünürlük Ayarı (TÜRKPATENT ise Gizle)
             const currentOrigin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
             if (this.toggleAssetSearchVisibility) {
                 this.toggleAssetSearchVisibility(currentOrigin);
             }
 
-            // 5. !!! KRİTİK EKLEME: Kişi Arama Dinleyicilerini Başlat !!!
-            // Form yeni çizildiği için inputlar yeni oluştu, dinleyiciyi tekrar bağlıyoruz.
+            // 5. Kişi Arama Dinleyicileri (Sahip arama inputu için şart!)
             this.setupPersonSearchListeners();
 
             // 6. Tarihçiler ve Validasyon
             setTimeout(() => initTaskDatePickers(), 100);
             
-        // ---> VALIDATOR İÇİN YENİ INPUT EKLENDİ: 'newAddressInput' <---
-            const newInputs = ['newTitleInput', 'newTypeInput', 'taxNumberInput', 'searchKeywordInput', 'newAddressInput'];
+            // Validasyon listesine yeni adres inputlarını ekle
+            const newInputs = [
+                'newTitleInput', 'newTypeInput', 'taxNumberInput', 'searchKeywordInput', 
+                'newAddressText', 'newAddressCountry', 'newAddressCity'
+            ];
             newInputs.forEach(id => {
                 const el = document.getElementById(id);
-                if (el) el.addEventListener('input', () => this.validator.checkCompleteness(this.state));
+                if (el) {
+                    el.addEventListener('input', () => this.validator.checkCompleteness(this.state));
+                    el.addEventListener('change', () => this.validator.checkCompleteness(this.state));
+                }
             });
 
             this.validator.checkCompleteness(this.state);
-            return;
+            return; // Standart akışı burada kes
         }
-
 
         // ============================================================
         // ---> STANDART İŞLEMLER (Mevcut Kodunuz)
