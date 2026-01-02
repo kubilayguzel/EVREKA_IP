@@ -72,13 +72,32 @@ export class TaskUIManager {
         const typeId = String(taskType.id);
         let customFields = '';
 
+        // ORTAK: Sahip Arama HTML'i (Hem Unvan hem Nevi için)
+        const ownerSearchHtml = `
+            <div class="form-group mt-3 border-top pt-3">
+                <label class="form-label font-weight-bold">İşlem Yapılacak Sahip (Müvekkil)</label>
+                <div class="d-flex" style="gap:10px;">
+                    <input type="text" id="ownerSearchInput" class="form-input" placeholder="Kişi veya Firma ara...">
+                    <button type="button" id="addNewOwnerBtn" class="btn-small btn-add-person" title="Yeni Kişi Ekle">+</button>
+                </div>
+                <div id="ownerSearchResults" class="search-results-list" style="display:none;"></div>
+                
+                <div class="mt-2">
+                    <label class="form-label" style="font-size: 0.85rem; color: #666;">Seçilen Sahipler</label>
+                    <div id="selectedOwnerListContainer" class="selected-items-list">
+                        <div class="empty-state"><small class="text-muted">Henüz sahip seçilmedi.</small></div>
+                    </div>
+                </div>
+            </div>`;
+
         // ID 79: Unvan Değişikliği
         if (typeId === '79') {
             customFields = `
                 <div class="form-group">
                     <label class="form-label font-weight-bold">Yeni Unvan</label>
                     <input type="text" id="newTitleInput" class="form-input" placeholder="Yeni unvanı giriniz...">
-                </div>`;
+                </div>
+                ${ownerSearchHtml}`; // Sahip Arama Eklendi
         }
         // ID 80: Nevi Değişikliği
         else if (typeId === '80') {
@@ -90,9 +109,10 @@ export class TaskUIManager {
                 <div class="form-group mt-3">
                     <label class="form-label font-weight-bold">Vergi Numarası</label>
                     <input type="text" id="taxNumberInput" class="form-input" placeholder="Vergi numarasını giriniz..." maxlength="11">
-                </div>`;
+                </div>
+                ${ownerSearchHtml}`; // Sahip Arama Eklendi
         }
-        // ID 81: Marka Araştırma
+        // ID 81: Marka Araştırma (Değişiklik yok)
         else if (typeId === '81') {
             customFields = `
                 <div class="form-group">
@@ -105,12 +125,10 @@ export class TaskUIManager {
                 </div>`;
         }
 
-        // HTML Şablonu
         this.container.innerHTML = `
         <div class="section-card">
             <h3 class="section-title">${taskType.name || 'İşlem Detayları'}</h3>
             <div class="card-body">
-                
                 <div id="assetSearchContainer">
                     ${this._getAssetSearchHtml()}
                 </div>
@@ -120,16 +138,33 @@ export class TaskUIManager {
                     ${customFields}
                 </div>
 
-                <div class="mt-4">
-                    ${this._getAccrualCardHtml(false)}
-                </div>
-                <div class="mt-4">
-                    ${this._getJobDetailsHtml(false)}
-                </div>
-                
+                <div class="mt-4">${this._getAccrualCardHtml(false)}</div>
+                <div class="mt-4">${this._getJobDetailsHtml(false)}</div>
                 ${this._getFormActionsHtml()}
             </div>
         </div>`;
+    }
+
+    // 2. YENİ METOT EKLEYİN (Class içine)
+    renderSelectedOwners(owners) {
+        const container = document.getElementById('selectedOwnerListContainer');
+        if (!container) return;
+
+        if (!owners || owners.length === 0) {
+            container.innerHTML = `<div class="empty-state"><small class="text-muted">Henüz sahip seçilmedi.</small></div>`;
+            return;
+        }
+
+        container.innerHTML = owners.map(p => `
+            <div class="selected-item p-2 border rounded mb-2 d-flex justify-content-between align-items-center bg-white">
+                <div>
+                    <i class="fas fa-user-tag mr-2 text-info"></i>
+                    <span class="font-weight-bold">${p.name}</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger border-0 remove-owner-btn" data-id="${p.id}" title="Kaldır">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>`).join('');
     }
 
     // --- HTML TEMPLATE HELPERS ---
