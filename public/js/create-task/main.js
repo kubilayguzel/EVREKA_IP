@@ -435,14 +435,17 @@ setupEventListeners() {
 
         const tIdStr = String(typeId);
         this.state.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
-
+        
+        // ============================================================
+        // ---> ÖZEL İŞLEMLER (Unvan, Nevi, Araştırma - ID 79, 80, 81)
+        // ============================================================
         if (['79', '80', '81'].includes(tIdStr)) {
             console.log('⚡ Özel İşlem Seçildi:', selectedType.name);
             
-            // 1. Özel Formu Çiz
+            // 1. Formu Çiz
             this.uiManager.renderOtherTaskForm(selectedType);
             
-            // 2. Accrual Manager'ı Başlat (Tahakkuk için)
+            // 2. Tahakkuk Yöneticisi Başlat
             if (document.getElementById('createTaskAccrualContainer')) {
                 this.accrualFormManager = new AccrualFormManager(
                     'createTaskAccrualContainer', 
@@ -452,29 +455,45 @@ setupEventListeners() {
                 this.accrualFormManager.render();
             }
 
-            // 3. Arama ve Validasyon Ayarları
+            // 3. Arama ve Varlık Ayarları
             this.setupMultiAssetSearch(tIdStr);
             this.applyAssignmentRule(await this.dataManager.getAssignmentRule(typeId));
             this.dedupeActionButtons();
             
+            // 4. Görünürlük Ayarı (TÜRKPATENT ise Varlık Aramayı Gizle)
             const currentOrigin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
-            this.toggleAssetSearchVisibility(currentOrigin);
+            if (this.toggleAssetSearchVisibility) {
+                this.toggleAssetSearchVisibility(currentOrigin);
+            }
 
-            // Standart tarih seçicileri başlat (Datepicker)
+            // 5. !!! KRİTİK EKLEME: Kişi Arama Dinleyicilerini Başlat !!!
+            // Form yeni çizildiği için inputlar yeni oluştu, dinleyiciyi tekrar bağlıyoruz.
+            this.setupPersonSearchListeners();
+
+            // 6. Tarihçiler ve Validasyon
             setTimeout(() => initTaskDatePickers(), 100);
             
-            return; // Aşağıdaki standart kodların çalışmasını engelle
+            // Yeni inputlar için validator'ı tetikle
+            const newInputs = ['newTitleInput', 'newTypeInput', 'taxNumberInput', 'searchKeywordInput'];
+            newInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => this.validator.checkCompleteness(this.state));
+            });
+
+            this.validator.checkCompleteness(this.state);
+            return; // Standart akışı durdur
         }
 
+
+        // ============================================================
+        // ---> STANDART İŞLEMLER (Mevcut Kodunuz)
+        // ============================================================
         const isMarkaBasvuru = selectedType.alias === 'Başvuru' && selectedType.ipType === 'trademark';
         
-        // 1. UI'ı Çizdir (Bu işlem DOM'a HTML stringini basar)
         if (isMarkaBasvuru) {
-            // Eğer Marka Başvurusu ise özel sekmeli formu bas
             this.uiManager.renderTrademarkApplicationForm();
             setTimeout(() => this.setupNiceListObserver(), 100);
         } else {
-            // Değilse standart formu (Varlık Arama + Detaylar) bas
             this.uiManager.renderBaseForm(
                 selectedType.alias || selectedType.name,
                 selectedType.id,
@@ -483,26 +502,21 @@ setupEventListeners() {
             );
         }
         
-        // 3. İlgili Varlık Kaynağını Belirle (Yeni Kod)
         const assetSource = selectedType.relatedAssetSource || 'ipRecords';
-        this.state.searchSource = assetSource; // State'e kaydet (suits veya ipRecords)
-        this.state.targetSuitTypes = selectedType.targetSuitTypes || []; // Filtreleri kaydet
+        this.state.searchSource = assetSource; 
+        this.state.targetSuitTypes = selectedType.targetSuitTypes || []; 
         
-        // UI Başlığını Güncelle
         this.uiManager.updateAssetSearchLabel(assetSource);
 
-        // 2. DOM oluştuktan hemen sonra AccrualFormManager'ı başlat ve render et
-        // Container ID: 'createTaskAccrualContainer' (TaskUIManager'da verdiğimiz ID)
         if (document.getElementById('createTaskAccrualContainer')) {
             this.accrualFormManager = new AccrualFormManager(
                 'createTaskAccrualContainer', 
-                'createTaskAcc', // Prefix: ID çakışmasını önler
-                this.state.allPersons // Kişi listesini ver
+                'createTaskAcc', 
+                this.state.allPersons 
             );
             this.accrualFormManager.render();
         }
 
-        // ... (Diğer tarih seçici, olay dinleyicisi kodları aynen devam eder) ...
         setTimeout(() => { initTaskDatePickers(); this.setupBrandExample(); }, 100);
         this.setupIpRecordSearch();
         
