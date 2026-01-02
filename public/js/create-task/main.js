@@ -467,9 +467,17 @@ setupEventListeners() {
                 // A) Ülkeleri Doldur
                 this.uiManager.populateDropdown('newAddressCountry', this.state.allCountries, 'code', 'name');
                 
-                // B) Şehirleri Lazy Load ile Çek (Varsa tekrar çekme)
-                if (!this.state.allCities) {
-                    this.state.allCities = await this.dataManager.getCities();
+                // B) Şehirleri Çek (Eğer henüz çekilmediyse)
+                // Not: DataManager düz string listesi ["Adana", ...] dönse bile aşağıda düzelteceğiz.
+                if (!this.state.allCities || this.state.allCities.length === 0) {
+                    try {
+                        console.log("📥 Şehirler çekiliyor...");
+                        this.state.allCities = await this.dataManager.getCities();
+                        console.log(`✅ ${this.state.allCities.length} adet şehir çekildi.`);
+                    } catch (err) {
+                        console.error("Şehir çekme hatası:", err);
+                        this.state.allCities = [];
+                    }
                 }
 
                 // C) Ülke Değişimini Dinle
@@ -477,24 +485,36 @@ setupEventListeners() {
                 const citySelect = document.getElementById('newAddressCity');
 
                 if (countrySelect && citySelect) {
-                    countrySelect.addEventListener('change', (ev) => {
-                        const val = ev.target.value; // Ülke Kodu (örn: TR)
+                    // Önceki listener'ları temizlemek mümkün olmadığından, 
+                    // bu bloğun tekrar çalışması durumuna karşı 'onchange' özelliğini kullanıyoruz.
+                    countrySelect.onchange = (ev) => {
+                        const val = ev.target.value; 
                         
-                        // "Türkiye" kontrolü (Kod: TR, TUR veya Adı: Türkiye olabilir veritabanınıza göre)
+                        // "Türkiye" kontrolü
                         const isTurkey = ['TR', 'TUR', 'Turkey', 'Türkiye'].includes(val);
 
                         if (isTurkey) {
-                            // Türkiye ise: Aç ve Doldur
                             citySelect.disabled = false;
-                            this.uiManager.populateDropdown('newAddressCity', this.state.allCities, 'name', 'name', 'Şehir Seçiniz...');
+                            
+                            // --- KRİTİK DÜZELTME: VERİ FORMATI KONTROLÜ ---
+                            let citiesToRender = this.state.allCities || [];
+                            
+                            // Eğer liste boş değilse ve ilk eleman bir 'string' ise (Örn: "Adana")
+                            // Bunu dropdown'ın anlayacağı {name: "Adana"} formatına çeviriyoruz.
+                            if (citiesToRender.length > 0 && typeof citiesToRender[0] === 'string') {
+                                citiesToRender = citiesToRender.map(c => ({ name: c }));
+                            }
+                            
+                            // Dropdown'ı doldur
+                            this.uiManager.populateDropdown('newAddressCity', citiesToRender, 'name', 'name', 'Şehir Seçiniz...');
                         } else {
-                            // Değilse: Kapat ve Sıfırla
+                            // Türkiye değilse kapat
                             citySelect.disabled = true;
                             citySelect.innerHTML = '<option value="">Önce Ülke Seçiniz...</option>';
                             citySelect.value = '';
                         }
                         this.validator.checkCompleteness(this.state);
-                    });
+                    };
                 }
             }
             
