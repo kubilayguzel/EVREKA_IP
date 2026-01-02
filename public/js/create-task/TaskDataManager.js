@@ -56,6 +56,22 @@ export class TaskDataManager {
         }
     }
 
+    async getCities() {
+        try {
+            const docRef = doc(db, 'common', 'cities');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // Firestore'da { list: [{name:'Adana'}, {name:'Ankara'}...] } formatında olduğunu varsayıyoruz
+                return data.list || []; 
+            }
+            return [];
+        } catch (error) {
+            console.error("Şehir listesi hatası:", error);
+            return [];
+        }
+    }
+
     // --- ARAMA İŞLEMLERİ ---
     
     async searchBulletinRecords(term) {
