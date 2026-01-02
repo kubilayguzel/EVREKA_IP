@@ -86,6 +86,10 @@ export class TaskUIManager {
                 <div class="form-group">
                     <label class="form-label font-weight-bold">Yeni Nevi (Tür)</label>
                     <input type="text" id="newTypeInput" class="form-input" placeholder="Örn: A.Ş., Ltd. Şti...">
+                </div>
+                <div class="form-group mt-3">
+                    <label class="form-label font-weight-bold">Vergi Numarası</label>
+                    <input type="text" id="taxNumberInput" class="form-input" placeholder="Vergi numarasını giriniz..." maxlength="11">
                 </div>`;
         }
         // ID 81: Marka Araştırma
@@ -107,7 +111,9 @@ export class TaskUIManager {
             <h3 class="section-title">${taskType.name || 'İşlem Detayları'}</h3>
             <div class="card-body">
                 
-                ${this._getAssetSearchHtml()}
+                <div id="assetSearchContainer">
+                    ${this._getAssetSearchHtml()}
+                </div>
                 
                 <div class="mt-4 p-3 bg-light border rounded">
                     <h5 class="text-primary mb-3"><i class="fas fa-pen-nib mr-2"></i>Değişiklik / İşlem Bilgileri</h5>
