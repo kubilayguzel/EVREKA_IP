@@ -474,6 +474,9 @@ class CreateTaskController {
             this.applyAssignmentRule(await this.dataManager.getAssignmentRule(typeId));
             this.dedupeActionButtons();
             
+            const currentOrigin = document.getElementById('originSelect')?.value || 'TÜRKPATENT';
+            this.toggleAssetSearchVisibility(currentOrigin);
+            
             // Standart tarih seçicileri başlat (Datepicker)
             setTimeout(() => initTaskDatePickers(), 100);
             
@@ -540,6 +543,7 @@ class CreateTaskController {
         // 1. Önceki seçimleri temizle (Kaynak değiştiği için eski veriler geçersiz olabilir)
         this.resetSelections();
         this.uiManager.unlockAndClearLawsuitFields();
+        this.toggleAssetSearchVisibility(val);
         
         const ipRecordContainer = document.getElementById('selectedIpRecordContainer');
         if(ipRecordContainer) ipRecordContainer.style.display = 'none';
@@ -577,6 +581,29 @@ class CreateTaskController {
             multiWrapper.style.display = 'block';
             if(title) title.textContent = `Seçim Yapılacak Ülkeler (${val})`;
             this.setupMultiCountrySelect(); 
+        }
+    }
+
+    // Kaynak TÜRKPATENT ise ve işlem tipi 79 veya 80 ise Varlık Arama alanını gizler
+    toggleAssetSearchVisibility(originValue) {
+        const typeId = String(this.state.selectedTaskType?.id || '');
+        const container = document.getElementById('assetSearchContainer');
+        
+        // Sadece container varsa ve işlem Unvan (79) veya Nevi (80) ise çalışır
+        if (container && ['79', '80'].includes(typeId)) {
+            if (originValue === 'TÜRKPATENT') {
+                container.style.display = 'none';
+                console.log('🙈 TÜRKPATENT seçildiği için Varlık Arama gizlendi.');
+                // İsteğe bağlı: Gizlenince önceki seçimleri temizle
+                this.state.selectedIpRecord = null;
+                document.getElementById('selectedIpRecordContainer').style.display = 'none';
+            } else {
+                container.style.display = 'block';
+                console.log('👀 Varlık Arama gösteriliyor.');
+            }
+        } else if (container) {
+            // Diğer tüm işlemlerde her zaman göster
+            container.style.display = 'block';
         }
     }
 
