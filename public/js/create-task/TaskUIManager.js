@@ -71,7 +71,7 @@ export class TaskUIManager {
         const typeId = String(taskType.id);
         let customFields = '';
 
-        // ORTAK: Sahip Arama HTML'i
+        // ORTAK: Sahip Arama HTML
         const ownerSearchHtml = `
             <div class="form-group mt-3 border-top pt-3">
                 <label class="form-label font-weight-bold">İşlem Yapılacak Sahip (Müvekkil)</label>
@@ -88,7 +88,7 @@ export class TaskUIManager {
                 </div>
             </div>`;
 
-        // ID 79: Unvan
+        // ID 79: Unvan Değişikliği
         if (typeId === '79') {
             customFields = `
                 <div class="form-group">
@@ -97,7 +97,7 @@ export class TaskUIManager {
                 </div>
                 ${ownerSearchHtml}`;
         }
-        // ID 80: Nevi
+        // ID 80: Nevi Değişikliği
         else if (typeId === '80') {
             customFields = `
                 <div class="form-group">
@@ -110,16 +110,30 @@ export class TaskUIManager {
                 </div>
                 ${ownerSearchHtml}`;
         }
-        // ---> YENİ EKLENEN BLOK: ID 82 Adres Değişikliği <---
+        // ---> ID 82: Adres Değişikliği (Ülke ve Şehir Select Yapısı) <---
         else if (typeId === '82') {
             customFields = `
                 <div class="form-group">
-                    <label class="form-label font-weight-bold">Yeni Adres Bilgisi</label>
-                    <textarea id="newAddressInput" class="form-control" rows="3" placeholder="Yeni adresi tam olarak giriniz..."></textarea>
+                    <label class="form-label font-weight-bold">Açık Adres</label>
+                    <textarea id="newAddressText" class="form-control" rows="3" placeholder="Mahalle, Cadde, Sokak, Kapı No vb..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label class="form-label font-weight-bold">Ülke</label>
+                        <select id="newAddressCountry" class="form-control">
+                            <option value="">Seçiniz...</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label class="form-label font-weight-bold">İl / Şehir</label>
+                        <select id="newAddressCity" class="form-control" disabled>
+                            <option value="">Önce Ülke Seçiniz...</option>
+                        </select>
+                    </div>
                 </div>
                 ${ownerSearchHtml}`;
         }
-        // ID 81: Marka Araştırma
+        // ID 81: Araştırma
         else if (typeId === '81') {
             customFields = `
                 <div class="form-group">
@@ -132,7 +146,6 @@ export class TaskUIManager {
                 </div>`;
         }
 
-        // HTML Çizimi
         this.container.innerHTML = `
         <div class="section-card">
             <h3 class="section-title">${taskType.name || 'İşlem Detayları'}</h3>
