@@ -66,6 +66,66 @@ export class TaskUIManager {
         this.container.innerHTML = contentHtml;
     }
 
+    renderOtherTaskForm(taskType) {
+        if (!this.container) return;
+
+        const typeId = String(taskType.id);
+        let customFields = '';
+
+        // ID 79: Unvan Değişikliği
+        if (typeId === '79') {
+            customFields = `
+                <div class="form-group">
+                    <label class="form-label font-weight-bold">Yeni Unvan</label>
+                    <input type="text" id="newTitleInput" class="form-input" placeholder="Yeni unvanı giriniz...">
+                </div>`;
+        }
+        // ID 80: Nevi Değişikliği
+        else if (typeId === '80') {
+            customFields = `
+                <div class="form-group">
+                    <label class="form-label font-weight-bold">Yeni Nevi (Tür)</label>
+                    <input type="text" id="newTypeInput" class="form-input" placeholder="Örn: A.Ş., Ltd. Şti...">
+                </div>`;
+        }
+        // ID 81: Marka Araştırma
+        else if (typeId === '81') {
+            customFields = `
+                <div class="form-group">
+                    <label class="form-label font-weight-bold">Araştırılacak Marka/Kelime</label>
+                    <input type="text" id="searchKeywordInput" class="form-input" placeholder="Araştırma yapılacak ibare...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label font-weight-bold">Sınıflar (Opsiyonel)</label>
+                    <input type="text" id="searchClassesInput" class="form-input" placeholder="Örn: 05, 35 (Virgülle ayırın)">
+                </div>`;
+        }
+
+        // HTML Şablonu
+        this.container.innerHTML = `
+        <div class="section-card">
+            <h3 class="section-title">${taskType.name || 'İşlem Detayları'}</h3>
+            <div class="card-body">
+                
+                ${this._getAssetSearchHtml()}
+                
+                <div class="mt-4 p-3 bg-light border rounded">
+                    <h5 class="text-primary mb-3"><i class="fas fa-pen-nib mr-2"></i>Değişiklik / İşlem Bilgileri</h5>
+                    ${customFields}
+                </div>
+
+                <div class="mt-4">
+                    ${this._getAccrualCardHtml(false)}
+                </div>
+                <div class="mt-4">
+                    ${this._getJobDetailsHtml(false)}
+                </div>
+                
+                ${this._getFormActionsHtml()}
+            </div>
+        </div>`;
+    }
+
     // --- HTML TEMPLATE HELPERS ---
 
     _getBrandInfoTabHtml() {
