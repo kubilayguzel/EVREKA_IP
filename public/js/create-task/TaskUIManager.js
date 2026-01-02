@@ -68,11 +68,10 @@ export class TaskUIManager {
 
     renderOtherTaskForm(taskType) {
         if (!this.container) return;
-
         const typeId = String(taskType.id);
         let customFields = '';
 
-        // ORTAK: Sahip Arama HTML'i (Hem Unvan hem Nevi için)
+        // ORTAK: Sahip Arama HTML'i
         const ownerSearchHtml = `
             <div class="form-group mt-3 border-top pt-3">
                 <label class="form-label font-weight-bold">İşlem Yapılacak Sahip (Müvekkil)</label>
@@ -81,7 +80,6 @@ export class TaskUIManager {
                     <button type="button" id="addNewOwnerBtn" class="btn-small btn-add-person" title="Yeni Kişi Ekle">+</button>
                 </div>
                 <div id="ownerSearchResults" class="search-results-list" style="display:none;"></div>
-                
                 <div class="mt-2">
                     <label class="form-label" style="font-size: 0.85rem; color: #666;">Seçilen Sahipler</label>
                     <div id="selectedOwnerListContainer" class="selected-items-list">
@@ -90,16 +88,16 @@ export class TaskUIManager {
                 </div>
             </div>`;
 
-        // ID 79: Unvan Değişikliği
+        // ID 79: Unvan
         if (typeId === '79') {
             customFields = `
                 <div class="form-group">
                     <label class="form-label font-weight-bold">Yeni Unvan</label>
                     <input type="text" id="newTitleInput" class="form-input" placeholder="Yeni unvanı giriniz...">
                 </div>
-                ${ownerSearchHtml}`; // Sahip Arama Eklendi
+                ${ownerSearchHtml}`;
         }
-        // ID 80: Nevi Değişikliği
+        // ID 80: Nevi
         else if (typeId === '80') {
             customFields = `
                 <div class="form-group">
@@ -110,9 +108,18 @@ export class TaskUIManager {
                     <label class="form-label font-weight-bold">Vergi Numarası</label>
                     <input type="text" id="taxNumberInput" class="form-input" placeholder="Vergi numarasını giriniz..." maxlength="11">
                 </div>
-                ${ownerSearchHtml}`; // Sahip Arama Eklendi
+                ${ownerSearchHtml}`;
         }
-        // ID 81: Marka Araştırma (Değişiklik yok)
+        // ---> YENİ EKLENEN BLOK: ID 82 Adres Değişikliği <---
+        else if (typeId === '82') {
+            customFields = `
+                <div class="form-group">
+                    <label class="form-label font-weight-bold">Yeni Adres Bilgisi</label>
+                    <textarea id="newAddressInput" class="form-control" rows="3" placeholder="Yeni adresi tam olarak giriniz..."></textarea>
+                </div>
+                ${ownerSearchHtml}`;
+        }
+        // ID 81: Marka Araştırma
         else if (typeId === '81') {
             customFields = `
                 <div class="form-group">
@@ -125,6 +132,7 @@ export class TaskUIManager {
                 </div>`;
         }
 
+        // HTML Çizimi
         this.container.innerHTML = `
         <div class="section-card">
             <h3 class="section-title">${taskType.name || 'İşlem Detayları'}</h3>
