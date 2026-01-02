@@ -58,17 +58,17 @@ export class TaskDataManager {
 
     async getCities() {
         try {
-            // Firestore'daki 'common/cities' dokümanına erişim
+            // 'common' koleksiyonu altındaki 'cities' dokümanına bağlanıyoruz
             const docRef = doc(db, 'common', 'cities');
             const docSnap = await getDoc(docRef);
             
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const rawList = data.list || [];
+                const rawList = data.list || []; // Veritabanındaki 'list' array'i
                 
-                // DÜZELTME: ["Adana", "Ankara"] dizisini -> [{name: "Adana"}, {name: "Ankara"}] formatına çeviriyoruz.
-                // Böylece main.js'deki populateDropdown fonksiyonu 'name' alanını bulabilir.
-                return rawList.map(cityString => ({ name: cityString }));
+                // DÜZELTME: String listesini Obje listesine çeviriyoruz.
+                // ["Adana", "Ankara"]  --->  [{ name: "Adana" }, { name: "Ankara" }]
+                return rawList.map(cityName => ({ name: cityName }));
             }
             return [];
         } catch (error) {
