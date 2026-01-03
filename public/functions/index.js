@@ -883,7 +883,7 @@ export const createObjectionTask = onCall(
   }
 );
 
-// functions/index.js içinde sendEmailNotificationV2 fonksiyonunu komple bununla güncelleyin:
+// functions/index.js
 
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
@@ -946,49 +946,60 @@ export const sendEmailNotificationV2 = onCall(
     }
 
     // =================================================================
-    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - GÜÇLENDİRİLMİŞ
+    // 🕵️ VERİ KURTARMA (DATA RECOVERY)
+    // Eğer relatedIpRecordId eksikse, sourceDocumentId üzerinden bulmaya çalış
     // =================================================================
     
-    let threadIdToUse = null;
-    let finalSubject = subject; 
-    let activeParentContext = null; 
-
-    // 1) Record ID'yi Garantiye Al (Eksikse Kaynak Dokümandan Bul)
     let recordId = notificationData.relatedIpRecordId || null;
     const currentTaskId = notificationData.associatedTaskId || null;
     const sourceDocId = notificationData.sourceDocumentId || null;
 
-    if (!recordId && sourceDocId) {
-        console.log(`⚠️ Notification içinde recordId yok. Kaynak dokümandan aranıyor: ${sourceDocId}`);
+    if (!recordId && (sourceDocId || currentTaskId)) {
+        console.log(`⚠️ Notification'da recordId eksik. Kaynaklardan aranıyor... SourceDoc: ${sourceDocId}, Task: ${currentTaskId}`);
+        
         try {
-            // Önce indexed_documents
-            let docSnap = await db.collection('indexed_documents').doc(sourceDocId).get();
-            if (docSnap.exists) recordId = docSnap.data().relatedIpRecordId;
-
-            // Bulunamadıysa unindexed_pdfs
-            if (!recordId) {
-                docSnap = await db.collection('unindexed_pdfs').doc(sourceDocId).get();
-                if (docSnap.exists) {
-                    const d = docSnap.data();
-                    recordId = d.matchedRecordId || d.relatedIpRecordId || d.ipRecordId;
+            // 1. Durak: Indexed Documents (En olası yer)
+            if (sourceDocId) {
+                const indexedSnap = await db.collection('indexed_documents').doc(sourceDocId).get();
+                if (indexedSnap.exists) {
+                    recordId = indexedSnap.data().relatedIpRecordId;
+                    if (recordId) console.log(`✅ ID 'indexed_documents' üzerinden bulundu: ${recordId}`);
                 }
             }
 
-            // Bulunamadıysa tasks (Eğer kaynak bir task ise)
-            if (!recordId) {
-                 docSnap = await db.collection('tasks').doc(sourceDocId).get();
-                 if (docSnap.exists) recordId = docSnap.data().relatedIpRecordId;
+            // 2. Durak: Unindexed PDFs (Eğer oradan geldiyse)
+            if (!recordId && sourceDocId) {
+                const pdfSnap = await db.collection('unindexed_pdfs').doc(sourceDocId).get();
+                if (pdfSnap.exists) {
+                    const d = pdfSnap.data();
+                    recordId = d.matchedRecordId || d.relatedIpRecordId || d.ipRecordId;
+                    if (recordId) console.log(`✅ ID 'unindexed_pdfs' üzerinden bulundu: ${recordId}`);
+                }
             }
-            
-            if(recordId) console.log(`✅ Record ID kurtarıldı: ${recordId}`);
+
+            // 3. Durak: Tasks (Eğer bir görevden tetiklendiyse)
+            if (!recordId && currentTaskId) {
+                const taskSnap = await db.collection('tasks').doc(currentTaskId).get();
+                if (taskSnap.exists) {
+                    recordId = taskSnap.data().relatedIpRecordId;
+                    if (recordId) console.log(`✅ ID 'tasks' üzerinden bulundu: ${recordId}`);
+                }
+            }
         } catch (err) {
-            console.warn("Record ID kurtarma hatası:", err);
+            console.warn("❌ Veri kurtarma sırasında hata:", err);
+            // Hata olsa da akışı kesme, mailsiz kalmasın
         }
     }
 
+    // =================================================================
+    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI
+    // =================================================================
+    
+    let threadIdToUse = null;
+    let finalSubject = subject; 
+    let activeParentContext = null;
     const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
 
-    // 2) Thread ID Bulma İşlemi
     if (recordId) {
         try {
             const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
@@ -1004,7 +1015,7 @@ export const sendEmailNotificationV2 = onCall(
             } else if (typeof rawRule === 'string') {
                 parentContexts = [rawRule];
             } else {
-                parentContexts = ["1"]; // Varsayılan grup
+                parentContexts = ["1"]; 
             }
 
             console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
@@ -1017,8 +1028,8 @@ export const sendEmailNotificationV2 = onCall(
                     const tData = threadDoc.data();
                     if (tData.threadId) {
                         threadIdToUse = tData.threadId;
-                        finalSubject = tData.rootSubject;
-                        activeParentContext = ctx;
+                        finalSubject = tData.rootSubject; 
+                        activeParentContext = ctx;      
                         
                         const originalSubjectInfo = `
                             <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
@@ -1026,7 +1037,8 @@ export const sendEmailNotificationV2 = onCall(
                             </div>
                         `;
                         htmlBody = originalSubjectInfo + htmlBody;
-                        console.log(`🔗 Zincir Eşleşti: Grup ${ctx} -> ${threadIdToUse}`);
+                        
+                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> ${threadIdToUse}`);
                         break; 
                     }
                 }
@@ -1034,25 +1046,25 @@ export const sendEmailNotificationV2 = onCall(
 
             if (!threadIdToUse && parentContexts.length > 0) {
                 activeParentContext = parentContexts[0]; 
-                console.log(`🆕 Yeni Zincir Başlatılacak. Hedef Grup: ${activeParentContext}`);
+                console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
             }
 
         } catch (e) {
             console.error("Threading logic hatası:", e);
         }
     } else {
-        console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı. Mail bağımsız gidecek.");
+        console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı.");
     }
 
     // =================================================================
-    // 📤 GÖNDERİM
+    // 📤 GÖNDERİM İŞLEMİ
     // =================================================================
 
     const mailOptions = {
       fromName: "IPGATE",
       replyTo: userEmail,
       to, cc, 
-      subject: finalSubject,
+      subject: finalSubject, 
       html: htmlBody,
       attachments: attachmentsToSend
     };
@@ -1061,46 +1073,47 @@ export const sendEmailNotificationV2 = onCall(
       const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse);
 
       // =================================================================
-      // 🔥 VERİTABANI LOGLAMA (Processed & Threads)
+      // 💾 DB KAYITLARI (Thread + Processed)
       // =================================================================
       
-      // 1. Mail Thread Kaydı (Zincir sürekliliği için)
+      // 1. Thread Kaydı (Zincirleme devamı için)
       if (recordId && sent.threadId && activeParentContext) {
           const threadKey = `${recordId}_${activeParentContext}`;
+          
           await db.collection("mailThreads").doc(threadKey).set({
               ipRecordId: recordId,
               parentContext: activeParentContext,
-              threadId: sent.threadId,
-              lastMessageId: sent.id,
-              rootSubject: finalSubject,
-              lastTriggeringTaskId: currentTaskId || null,
+              threadId: sent.threadId,            
+              lastMessageId: sent.id,             
+              rootSubject: finalSubject,          
+              lastTriggeringTaskId: currentTaskId || null, 
               lastTriggeringChildType: currentChildTypeId,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
       }
 
-      // 2. Processed Mail Logu (Detaylı Analiz için)
+      // 2. Processed Mail Kaydı (Raporlama için)
       try {
         await db.collection('processedMailThreads').add({
-          messageId: sent.id || null,
-          threadId: sent.threadId || null,
-          from: userEmail,
-          to: toArr,
-          cc: ccArr,
-          subject: finalSubject,
-          originalSubject: subject, // Kullanıcının girdiği orijinal konu
-          
-          notificationId: notificationId || null,
-          relatedIpRecordId: recordId || null,     // Artık kurtarıldıysa dolu gelecek
-          parentContext: activeParentContext || null, // Hangi gruba dahil edildiği
-          associatedTaskId: currentTaskId || null,
-          
-          status: 'sent',
-          sentAt: admin.firestore.FieldValue.serverTimestamp()
+            messageId: sent.id || null,
+            threadId: sent.threadId || null,
+            from: userEmail,
+            to: toArr,
+            cc: ccArr,
+            subject: finalSubject,
+            originalSubject: subject,
+
+            notificationId: notificationId || null,
+            relatedIpRecordId: recordId || null, // Artık bulunduysa dolu gelir
+            parentContext: activeParentContext || null,
+            associatedTaskId: currentTaskId || null,
+
+            status: 'sent',
+            sentAt: admin.firestore.FieldValue.serverTimestamp()
         });
         console.log("✅ 'processedMailThreads' koleksiyonuna log atıldı.");
-      } catch (logError) {
-        console.error("processedMailThreads log hatası:", logError);
+      } catch (logErr) {
+        console.error("processedMailThreads log hatası:", logErr);
       }
 
       // Notification Güncelleme
@@ -1110,15 +1123,15 @@ export const sendEmailNotificationV2 = onCall(
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null,
         gmailThreadId: sent?.threadId || null,
-        status: isReminder ? notificationData.status : "sent",
+        status: isReminder ? notificationData.status : "sent", 
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
       };
-      
-      // Eğer ID'yi biz bulduysak ve notification'da eksikse, orayı da güncelleyelim
+
+      // Eğer ID'yi biz bulduysak ve notification'da yoksa, orayı da düzeltelim
       if (recordId && !notificationData.relatedIpRecordId) {
           baseUpdate.relatedIpRecordId = recordId;
       }
-
+      
       if (isReminder) {
           baseUpdate.lastReminderAt = admin.firestore.FieldValue.serverTimestamp();
           baseUpdate.lastReminderBy = userEmail;
