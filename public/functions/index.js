@@ -883,155 +883,214 @@ export const createObjectionTask = onCall(
   }
 );
 
-
 // Send Email Notification (v2 Callable Function)
+
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
   async (request) => {
+    // 1. GİRİŞ PARAMETRELERİ VE KONTROLLER
     const { notificationId, userEmail: userEmailFromClient, mode, overrideSubject, overrideBody } = request.data || {};
     const isReminder = String(mode || "").toLowerCase() === "reminder";
-    console.log("📧 [DEBUG] sendEmailNotificationV2", { notificationId, mode });
-
-    if (!notificationId) throw new HttpsError("invalid-argument", "notificationId parametresi zorunludur.");
-
+    
+    // Bildirim dokümanını çek
     const notificationRef = db.collection("mail_notifications").doc(notificationId);
     const notificationDoc = await notificationRef.get();
     if (!notificationDoc.exists) throw new HttpsError("not-found", "Bildirim bulunamadı.");
-
     const notificationData = notificationDoc.data();
 
-    // Gönderici doğrulama
+    // Gönderici Doğrulama (Yetkili Listesi Kontrolü)
     const callerEmail = (request.auth?.token?.email || "").toLowerCase();
     const userEmail = (userEmailFromClient || callerEmail || "").toLowerCase();
     if (!userEmail || !ALLOWED_SENDERS.has(userEmail)) {
-      throw new HttpsError("permission-denied", "Bu kullanıcı adına gönderim yetkisi yok.");
+        throw new HttpsError("permission-denied", "Bu kullanıcı adına gönderim yetkisi yok.");
     }
 
-    // --- ALICI BELİRLEME MANTIĞI (DÜZELTİLDİ) ---
-    // Helper: Değer null/undefined değilse diziye çevir, yoksa null dön.
-    // ÖNEMLİ: Boş dizi [] geçerli bir değerdir ve null dönmemelidir.
+    // Alıcıları Belirle (To/CC Mantığı - Mevcut kodunuzdan alındı)
     const getArrayOrNull = (v) => {
-        if (Array.isArray(v)) {
-            // İçindeki boş stringleri temizle ama diziyi koru
-            return v.map(x => typeof x === 'string' ? x.trim() : x).filter(Boolean);
-        }
-        if (typeof v === "string") {
-            // String ise parse et
-            return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
-        }
-        return null; // Tanımsız
+        if (Array.isArray(v)) return v.map(x => typeof x === 'string' ? x.trim() : x).filter(Boolean);
+        if (typeof v === "string") return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
+        return null;
     };
-
-    // ÖNCELİK SIRASI:
-    // 1. İstemciden gelen istek (request.data.to/cc)
-    // 2. Veritabanındaki güncel taslak hali (notificationData.toList/ccList)
-    // 3. Orijinal oluşturma verisi (notificationData.toRecipients/ccRecipients) - Fallback
-    
-    // Nullish Coalescing (??) kullanıyoruz. Sol taraf null/undefined değilse (boş dizi olsa bile) onu alır.
-    
-    let toArr = getArrayOrNull(request.data.to) ??
-                getArrayOrNull(request.data.toList) ??
-                getArrayOrNull(notificationData.toList) ??
-                getArrayOrNull(notificationData.toRecipients) ??
-                getArrayOrNull(notificationData.recipientTo) ??
-                [];
-
-    let ccArr = getArrayOrNull(request.data.cc) ??
-                getArrayOrNull(request.data.ccList) ??
-                getArrayOrNull(notificationData.ccList) ??
-                getArrayOrNull(notificationData.ccRecipients) ??
-                getArrayOrNull(notificationData.recipientCc) ??
-                [];
-
-    // Tekilleştir ve TO içinde olanı CC'den çıkar
+    let toArr = getArrayOrNull(request.data.to) ?? getArrayOrNull(notificationData.toList) ?? [];
+    let ccArr = getArrayOrNull(request.data.cc) ?? getArrayOrNull(notificationData.ccList) ?? [];
     const uniq = (a) => Array.from(new Set(a.map(s => String(s).toLowerCase().trim())));
     toArr = uniq(toArr);
     ccArr = uniq(ccArr).filter(x => !toArr.includes(x));
-
     const to = toArr.join(", ");
     const cc = ccArr.join(", ");
 
-    console.log("📧 [DEBUG] FINAL TO:", toArr, "FINAL CC:", ccArr);
+    if (!to && !cc) throw new HttpsError("failed-precondition", "Alıcı bulunamadı.");
 
-    if (!to && !cc) {
-      throw new HttpsError("failed-precondition", "Gönderilecek alıcı adresi bulunamadı.");
-    }
-
-    // Ekleri hazırla
+    // Ekleri (Attachments) Hazırla
     const built = await buildNotificationAttachments(db, notificationData);
-    const attachmentsBuilt = built?.attachments || [];
+    const attachmentsToSend = built?.attachments?.length ? built.attachments : undefined;
     const footerItems = built?.footerItems || [];
 
+    // İçerik ve Konu Hazırlığı
     const stripBody = (html) => {
       if (!html) return "";
       const m = String(html).match(/<body[^>]*>([\s\S]*?)<\/body>/i);
       return m ? m[1] : String(html);
     };
+    let subject = isReminder 
+        ? (overrideSubject || `Hatırlatma: ${notificationData.subject || ""}`) 
+        : (overrideSubject || notificationData.subject || "");
+    
+    let htmlBody = isReminder 
+        ? (overrideBody ? stripBody(overrideBody) : `<p>Hatırlatma...</p>`) 
+        : (overrideBody ? stripBody(overrideBody) : notificationData.body || "");
 
-    let subject, htmlBody, attachmentsToSend;
-
-    if (isReminder) {
-      const safeOverrideSubject = (overrideSubject || "").toString().trim();
-      const safeOverrideBody = stripBody((overrideBody || "").toString().trim());
-
-      subject = safeOverrideSubject || `Hatırlatma: ${notificationData.subject || ""}`.trim();
-      htmlBody = safeOverrideBody || `
-        <p>Sayın İlgili,</p>
-        <p>Konuyu hatırlatmak isteriz.</p>
-        <p>Saygılarımızla,</p>
-      `;
-      attachmentsToSend = undefined;
-    } else {
-      const safeOverrideBody = overrideBody ? stripBody(overrideBody) : notificationData.body || "";
-      
-      subject = overrideSubject || notificationData.subject || "";
-      htmlBody = safeOverrideBody;
-
-      if (footerItems.length > 0) {
+    if (footerItems.length > 0) {
         const eklerHtml = footerItems.map(item => `• ${item}`).join("<br>");
         htmlBody += `<hr><p><strong>EKLER:</strong><br>${eklerHtml}</p>`;
-      }
-      attachmentsToSend = attachmentsBuilt.length ? attachmentsBuilt : undefined;
     }
+
+    // =================================================================
+    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - MULTI PARENT & DB KAYIT
+    // =================================================================
+    
+    let threadIdToUse = null;
+    let finalSubject = subject; 
+    let activeParentContext = null; // Seçilen Parent ID (Örn: "2")
+
+    // Kritik Veriler:
+    const recordId = notificationData.relatedIpRecordId || null; // IpRecords ID
+    const currentTaskId = notificationData.associatedTaskId || null; // Varsa Task ID
+    // İşlem Tipi ID'si (Notification oluşturulurken 'taskType' veya 'transactionTypeId' kaydedilmeli)
+    // Eğer yoksa varsayılan 'UNKNOWN' olur ama indeksleme sırasında bu veriyi koyuyoruz.
+    const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
+
+    if (recordId) {
+        try {
+            // 1. ADIM: transactionTypeMatch tablosundan kuralları çek
+            // Örn: "20" -> ["2", "1"]
+            const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
+            const allRules = settingsDoc.exists ? settingsDoc.data() : {};
+            
+            // Bu child type için tanımlı parent listesini al (Yoksa ["1"] varsay)
+            let rawRule = allRules[currentChildTypeId];
+            
+            // Veri yapısı kontrolü (String gelirse Array'e çevir, Array gelirse olduğu gibi al)
+            let parentContexts = [];
+            if (rawRule && Array.isArray(rawRule.values)) {
+                parentContexts = rawRule.values.map(v => v.stringValue); // Firestore map yapısından
+            } else if (Array.isArray(rawRule)) {
+                parentContexts = rawRule;
+            } else if (typeof rawRule === 'string') {
+                parentContexts = [rawRule];
+            } else {
+                parentContexts = ["1"]; // Fallback: Genel Grup
+            }
+
+            console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
+
+            // 2. ADIM: Aday gruplarda açık zincir var mı diye sırayla bak
+            for (const ctx of parentContexts) {
+                const threadKey = `${recordId}_${ctx}`;
+                const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
+                
+                if (threadDoc.exists) {
+                    const tData = threadDoc.data();
+                    if (tData.threadId) {
+                        // ZİNCİR BULUNDU
+                        threadIdToUse = tData.threadId;
+                        finalSubject = tData.rootSubject; // Konuyu sabitle
+                        activeParentContext = ctx;       // Bu grubu kullanıyoruz
+                        
+                        // Orijinal konuyu mailin içine başlık olarak göm
+                        // (Gmail subject değişmesin diye, ama içerik anlaşılsın diye)
+                        const originalSubjectInfo = `
+                            <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
+                                <strong>KONU: ${subject}</strong>
+                            </div>
+                        `;
+                        htmlBody = originalSubjectInfo + htmlBody;
+                        
+                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> ${threadIdToUse}`);
+                        break; // İlk bulunan zinciri kullan ve döngüden çık
+                    }
+                }
+            }
+
+            // 3. ADIM: Hiçbir zincir bulunamadıysa, listenin İLK elemanını parent kabul et
+            if (!threadIdToUse && parentContexts.length > 0) {
+                activeParentContext = parentContexts[0]; 
+                console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
+                // Konu başlığı 'subject' olarak kalır (İlk mail olduğu için)
+            }
+
+        } catch (e) {
+            console.error("Threading logic hatası:", e);
+            // Hata olsa bile akışı kesme, mailsiz kalmasın (null threadId ile devam eder)
+        }
+    }
+
+    // =================================================================
+    // 📤 GÖNDERİM İŞLEMİ
+    // =================================================================
 
     const mailOptions = {
       fromName: "IPGATE",
       replyTo: userEmail,
-      to, cc, subject,
+      to, cc, 
+      subject: finalSubject, // Sabitlenmiş veya yeni konu
       html: htmlBody,
       attachments: attachmentsToSend
     };
 
     try {
-      const sent = await sendViaGmailAsUser(userEmail, mailOptions);
+      // Gmail API ile gönder (Thread ID varsa ekler)
+      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse);
 
+      // =================================================================
+      // 💾 VERİTABANI KAYDI (İstenilen Tüm Verilerle)
+      // =================================================================
+      
+      // Sadece bir IP kaydı varsa ve bir Parent Context seçildiyse kayıt at
+      if (recordId && sent.threadId && activeParentContext) {
+          const threadKey = `${recordId}_${activeParentContext}`;
+          
+          await db.collection("mailThreads").doc(threadKey).set({
+              // 1. ZİNCİR BİLGİLERİ (Teknik)
+              ipRecordId: recordId,
+              parentContext: activeParentContext, // "1", "2" vb.
+              threadId: sent.threadId,            // Gmail Thread ID
+              lastMessageId: sent.id,             // Gmail Message ID
+              rootSubject: finalSubject,          // Sabitlenen Konu
+              
+              // 2. İŞLEM DETAYLARI (İzlenebilirlik için istedikleriniz)
+              lastTriggeringTaskId: currentTaskId || null, // Task ID (Varsa)
+              lastTriggeringChildType: currentChildTypeId, // İşlem Tipi (20, 22 vb.)
+              
+              // 3. ZAMAN DAMGASI
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          
+          console.log(`💾 Zincir bilgisi kaydedildi: ${threadKey}`);
+      }
+
+      // Notification Durumunu Güncelle
       const baseUpdate = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         sentBy: userEmail,
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null,
-        lastAttachmentMode: (attachmentsToSend?.length ? "attachment" : (footerItems.length ? "inline_link" : "none")),
-        lastUsedTo: toArr,
-        lastUsedCc: ccArr
+        gmailThreadId: sent?.threadId || null,
+        status: isReminder ? notificationData.status : "sent", // Reminder ise statü değişmez
+        sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
       };
-
+      
       if (isReminder) {
-        await notificationRef.update({
-          ...baseUpdate,
-          lastReminderAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastReminderBy: userEmail
-        });
-      } else {
-        await notificationRef.update({
-          ...baseUpdate,
-          status: "sent",
-          sentAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+          baseUpdate.lastReminderAt = admin.firestore.FieldValue.serverTimestamp();
+          baseUpdate.lastReminderBy = userEmail;
       }
 
+      await notificationRef.update(baseUpdate);
+
       return { success: true, message: "E-posta gönderildi.", id: sent?.id || null };
+
     } catch (error) {
-      console.error("💥 Gmail API gönderim hatası:", error);
+      console.error("💥 Gönderim hatası:", error);
       await notificationRef.update({
         status: "failed",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
