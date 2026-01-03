@@ -1042,6 +1042,32 @@ export const sendEmailNotificationV2 = onCall(
       // Gmail API ile gönder (Thread ID varsa ekler)
       const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse);
 
+      try {
+        await db.collection('processedMailThreads').add({
+          // Gmail'den dönen ID'ler
+          messageId: sent.id || null,
+          threadId: sent.threadId || null,
+          
+          // Mail Detayları
+          from: userEmail,
+          to: toArr, // Kodunuzda yukarıda tanımlı dizi (array)
+          cc: ccArr, // Kodunuzda yukarıda tanımlı dizi (array)
+          subject: finalSubject,
+          
+          // İlişki Verileri (Notification'dan gelenler)
+          notificationId: notificationId || null,
+          relatedIpRecordId: recordId || null,      // Dosya ID
+          associatedTaskId: currentTaskId || null,  // Task ID
+          
+          // Durum ve Zaman
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("✅ 'processedMailThreads' koleksiyonuna log atıldı.");
+      } catch (logError) {
+        console.error("⚠️ processedMailThreads kayıt hatası (Mail yine de gitti):", logError);
+      }
+      
       // =================================================================
       // 💾 VERİTABANI KAYDI (İstenilen Tüm Verilerle)
       // =================================================================
