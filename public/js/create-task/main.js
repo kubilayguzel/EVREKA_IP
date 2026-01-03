@@ -485,36 +485,45 @@ setupEventListeners() {
                 const citySelect = document.getElementById('newAddressCity');
 
                 if (countrySelect && citySelect) {
-                    // Önceki listener'ları temizlemek mümkün olmadığından, 
-                    // bu bloğun tekrar çalışması durumuna karşı 'onchange' özelliğini kullanıyoruz.
-                    countrySelect.onchange = (ev) => {
-                        const val = ev.target.value; 
-                        
-                        // "Türkiye" kontrolü
-                        const isTurkey = ['TR', 'TUR', 'Turkey', 'Türkiye'].includes(val);
+                    // Tekrar listener eklenmemesi için kontrol
+                    if (!countrySelect.dataset.cityListenerAdded) {
+                        countrySelect.addEventListener('change', (ev) => {
+                            const val = ev.target.value;
+                            console.log('🌍 Ülke seçildi:', val);
+                            
+                            // "Türkiye" kontrolü
+                            const isTurkey = ['TR', 'TUR', 'Turkey', 'Türkiye'].includes(val);
 
-                        if (isTurkey) {
-                            citySelect.disabled = false;
-                            
-                            // --- KRİTİK DÜZELTME: VERİ FORMATI KONTROLÜ ---
-                            let citiesToRender = this.state.allCities || [];
-                            
-                            // Eğer liste boş değilse ve ilk eleman bir 'string' ise (Örn: "Adana")
-                            // Bunu dropdown'ın anlayacağı {name: "Adana"} formatına çeviriyoruz.
-                            if (citiesToRender.length > 0 && typeof citiesToRender[0] === 'string') {
-                                citiesToRender = citiesToRender.map(c => ({ name: c }));
+                            if (isTurkey) {
+                                console.log('🇹🇷 Türkiye seçildi, şehirler yükleniyor...');
+                                citySelect.disabled = false;
+                                
+                                // --- KRİTİK DÜZELTME: VERİ FORMATI KONTROLÜ ---
+                                let citiesToRender = this.state.allCities || [];
+                                console.log('📊 Şehir verisi:', citiesToRender);
+                                
+                                // Eğer liste boş değilse ve ilk eleman bir 'string' ise (Örn: "Adana")
+                                // Bunu dropdown'ın anlayacağı {name: "Adana"} formatına çeviriyoruz.
+                                if (citiesToRender.length > 0 && typeof citiesToRender[0] === 'string') {
+                                    citiesToRender = citiesToRender.map(c => ({ name: c }));
+                                    console.log('✅ Şehirler obje formatına çevrildi');
+                                }
+                                
+                                // Dropdown'ı doldur
+                                this.uiManager.populateDropdown('newAddressCity', citiesToRender, 'name', 'name', 'Şehir Seçiniz...');
+                                console.log('✅ Şehir dropdown dolduruldu');
+                            } else {
+                                console.log('🌎 Türkiye dışı ülke seçildi');
+                                // Türkiye değilse kapat
+                                citySelect.disabled = true;
+                                citySelect.innerHTML = '<option value="">Önce Ülke Seçiniz...</option>';
+                                citySelect.value = '';
                             }
-                            
-                            // Dropdown'ı doldur
-                            this.uiManager.populateDropdown('newAddressCity', citiesToRender, 'name', 'name', 'Şehir Seçiniz...');
-                        } else {
-                            // Türkiye değilse kapat
-                            citySelect.disabled = true;
-                            citySelect.innerHTML = '<option value="">Önce Ülke Seçiniz...</option>';
-                            citySelect.value = '';
-                        }
-                        this.validator.checkCompleteness(this.state);
-                    };
+                            this.validator.checkCompleteness(this.state);
+                        });
+                        countrySelect.dataset.cityListenerAdded = 'true';
+                        console.log('✅ Ülke değişim listener eklendi');
+                    }
                 }
             }
             
