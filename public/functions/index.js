@@ -906,12 +906,12 @@ export const createObjectionTask = onCall(
   }
 );
 
+// functions/index.js
+
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
   async (request) => {
-    console.log("🚀 sendEmailNotificationV2 BAŞLADI");
-
-    // 1. GİRİŞ PARAMETRELERİ VE KONTROLLER
+    // 1. GİRİŞ PARAMETRELERİ
     const { notificationId, userEmail: userEmailFromClient, mode, overrideSubject, overrideBody } = request.data || {};
     const isReminder = String(mode || "").toLowerCase() === "reminder";
     
@@ -977,7 +977,6 @@ export const sendEmailNotificationV2 = onCall(
     const sourceDocId = notificationData.sourceDocumentId || null;
 
     if (!recordId && (sourceDocId || currentTaskId)) {
-        console.log(`⚠️ Notification'da recordId eksik. Kaynaklardan aranıyor...`);
         try {
             if (sourceDocId) {
                 const indexedSnap = await db.collection('indexed_documents').doc(sourceDocId).get();
@@ -995,19 +994,17 @@ export const sendEmailNotificationV2 = onCall(
                 if (taskSnap.exists) recordId = taskSnap.data().relatedIpRecordId;
             }
             if(recordId) console.log(`✅ Record ID kurtarıldı: ${recordId}`);
-        } catch (err) {
-            console.warn("Veri kurtarma hatası:", err);
-        }
+        } catch (err) { console.warn("Veri kurtarma hatası:", err); }
     }
 
     // =================================================================
     // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - FIXED (CC & RFC Message-ID)
     // =================================================================
     
-    // 1. Yeni Mail İçin Benzersiz Message-ID Oluştur
+    // 1. 🔥 Yeni Mail İçin STANDART Message-ID Oluştur
     const domainPart = userEmail.split('@')[1] || "evrekapatent.com";
     const uniquePart = Date.now().toString(36) + Math.random().toString(36).substr(2);
-    const newMessageId = `<${uniquePart}@${domainPart}>`; 
+    const newMessageId = `<${uniquePart}@${domainPart}>`; // Örn: <la4s8d9f.x9z@evrekapatent.com>
 
     let threadIdToUse = null;
     let inReplyToToUse = null;  
@@ -1053,7 +1050,7 @@ export const sendEmailNotificationV2 = onCall(
                             }
                         }
                         
-                        // Konu Gösterimi
+                        // Konu içine bilgi ekle
                         const originalSubjectInfo = `
                             <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
                                 <strong>KONU: ${subject}</strong>
@@ -1061,6 +1058,7 @@ export const sendEmailNotificationV2 = onCall(
                         `;
                         htmlBody = originalSubjectInfo + htmlBody;
                         
+                        // Logda NewID görmemiz lazım
                         console.log(`🔗 Zincir: ${threadIdToUse}, Reply: ${inReplyToToUse}, NewID: ${newMessageId}`);
                         break; 
                     }
@@ -1091,14 +1089,14 @@ export const sendEmailNotificationV2 = onCall(
     };
 
     try {
-      // 6 parametre ile gönderiyoruz
+      // 6 parametre ile gönderiyoruz (newMessageId EKLENDİ)
       const sent = await sendViaGmailAsUser(
           userEmail, 
           mailOptions, 
           threadIdToUse, 
           inReplyToToUse, 
           referencesToUse,
-          newMessageId // 🔥 Kendi ürettiğimiz ID
+          newMessageId // 🔥 Bunu gönderdiğimizden emin olun
       );
 
       // =================================================================
@@ -1112,7 +1110,10 @@ export const sendEmailNotificationV2 = onCall(
               ipRecordId: recordId,
               parentContext: activeParentContext,
               threadId: sent.threadId,            
-              lastMessageId: newMessageId, // RFC ID'yi kaydediyoruz
+              
+              // 🔥 GMAIL ID DEĞİL, STANDART ID KAYDEDİYORUZ
+              lastMessageId: newMessageId, 
+              
               rootSubject: finalSubject,          
               lastTriggeringTaskId: currentTaskId || null, 
               lastTriggeringChildType: currentChildTypeId,
@@ -1126,11 +1127,11 @@ export const sendEmailNotificationV2 = onCall(
           await db.collection("mailThreads").doc(threadKey).set(updateData, { merge: true });
       }
 
-      // 2. Processed Mail Logu
+      // Processed Mail Logu
       try {
         await db.collection('processedMailThreads').add({
-            messageId: newMessageId, 
-            gmailId: sent.id,        
+            messageId: newMessageId, // Standart ID
+            gmailId: sent.id,        // Gmail ID
             threadId: sent.threadId,
             from: userEmail,
             to: toArr, cc: ccArr,
@@ -1146,13 +1147,13 @@ export const sendEmailNotificationV2 = onCall(
         console.log("✅ 'processedMailThreads' loglandı.");
       } catch (logErr) { console.error("Log hatası:", logErr); }
 
-      // 3. Notification Durum
+      // Notification Durum
       const baseUpdate = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         sentBy: userEmail,
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null, 
-        messageId: newMessageId,          
+        messageId: newMessageId, // Standart ID'yi buraya da ekleyelim
         gmailThreadId: sent?.threadId || null,
         status: isReminder ? notificationData.status : "sent", 
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
