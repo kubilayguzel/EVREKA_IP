@@ -1102,8 +1102,7 @@ export const sendEmailNotificationV2 = onCall(
 
     try {
       // GÜNCELLENDİ: lastMessageIdToUse parametresi eklendi
-      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse, lastMessageIdToUse);
-
+      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse, referencesToUse);
       // =================================================================
       // 💾 DB KAYITLARI (Thread + Processed)
       // =================================================================
