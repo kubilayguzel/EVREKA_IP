@@ -883,7 +883,7 @@ export const createObjectionTask = onCall(
   }
 );
 
-// Send Email Notification (v2 Callable Function)
+// functions/index.js içinde sendEmailNotificationV2 fonksiyonunu komple bununla güncelleyin:
 
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
@@ -898,14 +898,14 @@ export const sendEmailNotificationV2 = onCall(
     if (!notificationDoc.exists) throw new HttpsError("not-found", "Bildirim bulunamadı.");
     const notificationData = notificationDoc.data();
 
-    // Gönderici Doğrulama (Yetkili Listesi Kontrolü)
+    // Gönderici Doğrulama
     const callerEmail = (request.auth?.token?.email || "").toLowerCase();
     const userEmail = (userEmailFromClient || callerEmail || "").toLowerCase();
     if (!userEmail || !ALLOWED_SENDERS.has(userEmail)) {
         throw new HttpsError("permission-denied", "Bu kullanıcı adına gönderim yetkisi yok.");
     }
 
-    // Alıcıları Belirle (To/CC Mantığı - Mevcut kodunuzdan alındı)
+    // Alıcıları Belirle
     const getArrayOrNull = (v) => {
         if (Array.isArray(v)) return v.map(x => typeof x === 'string' ? x.trim() : x).filter(Boolean);
         if (typeof v === "string") return v.split(/[;,]\s*/).map(s => s.trim()).filter(Boolean);
@@ -921,12 +921,12 @@ export const sendEmailNotificationV2 = onCall(
 
     if (!to && !cc) throw new HttpsError("failed-precondition", "Alıcı bulunamadı.");
 
-    // Ekleri (Attachments) Hazırla
+    // Ekleri Hazırla
     const built = await buildNotificationAttachments(db, notificationData);
     const attachmentsToSend = built?.attachments?.length ? built.attachments : undefined;
     const footerItems = built?.footerItems || [];
 
-    // İçerik ve Konu Hazırlığı
+    // İçerik Hazırlığı
     const stripBody = (html) => {
       if (!html) return "";
       const m = String(html).match(/<body[^>]*>([\s\S]*?)<\/body>/i);
@@ -946,45 +946,69 @@ export const sendEmailNotificationV2 = onCall(
     }
 
     // =================================================================
-    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - MULTI PARENT & DB KAYIT
+    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - GÜÇLENDİRİLMİŞ
     // =================================================================
     
     let threadIdToUse = null;
     let finalSubject = subject; 
-    let activeParentContext = null; // Seçilen Parent ID (Örn: "2")
+    let activeParentContext = null; 
 
-    // Kritik Veriler:
-    const recordId = notificationData.relatedIpRecordId || null; // IpRecords ID
-    const currentTaskId = notificationData.associatedTaskId || null; // Varsa Task ID
-    // İşlem Tipi ID'si (Notification oluşturulurken 'taskType' veya 'transactionTypeId' kaydedilmeli)
-    // Eğer yoksa varsayılan 'UNKNOWN' olur ama indeksleme sırasında bu veriyi koyuyoruz.
+    // 1) Record ID'yi Garantiye Al (Eksikse Kaynak Dokümandan Bul)
+    let recordId = notificationData.relatedIpRecordId || null;
+    const currentTaskId = notificationData.associatedTaskId || null;
+    const sourceDocId = notificationData.sourceDocumentId || null;
+
+    if (!recordId && sourceDocId) {
+        console.log(`⚠️ Notification içinde recordId yok. Kaynak dokümandan aranıyor: ${sourceDocId}`);
+        try {
+            // Önce indexed_documents
+            let docSnap = await db.collection('indexed_documents').doc(sourceDocId).get();
+            if (docSnap.exists) recordId = docSnap.data().relatedIpRecordId;
+
+            // Bulunamadıysa unindexed_pdfs
+            if (!recordId) {
+                docSnap = await db.collection('unindexed_pdfs').doc(sourceDocId).get();
+                if (docSnap.exists) {
+                    const d = docSnap.data();
+                    recordId = d.matchedRecordId || d.relatedIpRecordId || d.ipRecordId;
+                }
+            }
+
+            // Bulunamadıysa tasks (Eğer kaynak bir task ise)
+            if (!recordId) {
+                 docSnap = await db.collection('tasks').doc(sourceDocId).get();
+                 if (docSnap.exists) recordId = docSnap.data().relatedIpRecordId;
+            }
+            
+            if(recordId) console.log(`✅ Record ID kurtarıldı: ${recordId}`);
+        } catch (err) {
+            console.warn("Record ID kurtarma hatası:", err);
+        }
+    }
+
     const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
 
+    // 2) Thread ID Bulma İşlemi
     if (recordId) {
         try {
-            // 1. ADIM: transactionTypeMatch tablosundan kuralları çek
-            // Örn: "20" -> ["2", "1"]
             const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
             const allRules = settingsDoc.exists ? settingsDoc.data() : {};
             
-            // Bu child type için tanımlı parent listesini al (Yoksa ["1"] varsay)
             let rawRule = allRules[currentChildTypeId];
-            
-            // Veri yapısı kontrolü (String gelirse Array'e çevir, Array gelirse olduğu gibi al)
             let parentContexts = [];
+            
             if (rawRule && Array.isArray(rawRule.values)) {
-                parentContexts = rawRule.values.map(v => v.stringValue); // Firestore map yapısından
+                parentContexts = rawRule.values.map(v => v.stringValue);
             } else if (Array.isArray(rawRule)) {
                 parentContexts = rawRule;
             } else if (typeof rawRule === 'string') {
                 parentContexts = [rawRule];
             } else {
-                parentContexts = ["1"]; // Fallback: Genel Grup
+                parentContexts = ["1"]; // Varsayılan grup
             }
 
             console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
 
-            // 2. ADIM: Aday gruplarda açık zincir var mı diye sırayla bak
             for (const ctx of parentContexts) {
                 const threadKey = `${recordId}_${ctx}`;
                 const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
@@ -992,120 +1016,109 @@ export const sendEmailNotificationV2 = onCall(
                 if (threadDoc.exists) {
                     const tData = threadDoc.data();
                     if (tData.threadId) {
-                        // ZİNCİR BULUNDU
                         threadIdToUse = tData.threadId;
-                        finalSubject = tData.rootSubject; // Konuyu sabitle
-                        activeParentContext = ctx;       // Bu grubu kullanıyoruz
+                        finalSubject = tData.rootSubject;
+                        activeParentContext = ctx;
                         
-                        // Orijinal konuyu mailin içine başlık olarak göm
-                        // (Gmail subject değişmesin diye, ama içerik anlaşılsın diye)
                         const originalSubjectInfo = `
                             <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
                                 <strong>KONU: ${subject}</strong>
                             </div>
                         `;
                         htmlBody = originalSubjectInfo + htmlBody;
-                        
-                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> ${threadIdToUse}`);
-                        break; // İlk bulunan zinciri kullan ve döngüden çık
+                        console.log(`🔗 Zincir Eşleşti: Grup ${ctx} -> ${threadIdToUse}`);
+                        break; 
                     }
                 }
             }
 
-            // 3. ADIM: Hiçbir zincir bulunamadıysa, listenin İLK elemanını parent kabul et
             if (!threadIdToUse && parentContexts.length > 0) {
                 activeParentContext = parentContexts[0]; 
-                console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
-                // Konu başlığı 'subject' olarak kalır (İlk mail olduğu için)
+                console.log(`🆕 Yeni Zincir Başlatılacak. Hedef Grup: ${activeParentContext}`);
             }
 
         } catch (e) {
             console.error("Threading logic hatası:", e);
-            // Hata olsa bile akışı kesme, mailsiz kalmasın (null threadId ile devam eder)
         }
+    } else {
+        console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı. Mail bağımsız gidecek.");
     }
 
     // =================================================================
-    // 📤 GÖNDERİM İŞLEMİ
+    // 📤 GÖNDERİM
     // =================================================================
 
     const mailOptions = {
       fromName: "IPGATE",
       replyTo: userEmail,
       to, cc, 
-      subject: finalSubject, // Sabitlenmiş veya yeni konu
+      subject: finalSubject,
       html: htmlBody,
       attachments: attachmentsToSend
     };
 
     try {
-      // Gmail API ile gönder (Thread ID varsa ekler)
       const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse);
 
+      // =================================================================
+      // 🔥 VERİTABANI LOGLAMA (Processed & Threads)
+      // =================================================================
+      
+      // 1. Mail Thread Kaydı (Zincir sürekliliği için)
+      if (recordId && sent.threadId && activeParentContext) {
+          const threadKey = `${recordId}_${activeParentContext}`;
+          await db.collection("mailThreads").doc(threadKey).set({
+              ipRecordId: recordId,
+              parentContext: activeParentContext,
+              threadId: sent.threadId,
+              lastMessageId: sent.id,
+              rootSubject: finalSubject,
+              lastTriggeringTaskId: currentTaskId || null,
+              lastTriggeringChildType: currentChildTypeId,
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+      }
+
+      // 2. Processed Mail Logu (Detaylı Analiz için)
       try {
         await db.collection('processedMailThreads').add({
-          // Gmail'den dönen ID'ler
           messageId: sent.id || null,
           threadId: sent.threadId || null,
-          
-          // Mail Detayları
           from: userEmail,
-          to: toArr, // Kodunuzda yukarıda tanımlı dizi (array)
-          cc: ccArr, // Kodunuzda yukarıda tanımlı dizi (array)
+          to: toArr,
+          cc: ccArr,
           subject: finalSubject,
+          originalSubject: subject, // Kullanıcının girdiği orijinal konu
           
-          // İlişki Verileri (Notification'dan gelenler)
           notificationId: notificationId || null,
-          relatedIpRecordId: recordId || null,      // Dosya ID
-          associatedTaskId: currentTaskId || null,  // Task ID
+          relatedIpRecordId: recordId || null,     // Artık kurtarıldıysa dolu gelecek
+          parentContext: activeParentContext || null, // Hangi gruba dahil edildiği
+          associatedTaskId: currentTaskId || null,
           
-          // Durum ve Zaman
           status: 'sent',
           sentAt: admin.firestore.FieldValue.serverTimestamp()
         });
         console.log("✅ 'processedMailThreads' koleksiyonuna log atıldı.");
       } catch (logError) {
-        console.error("⚠️ processedMailThreads kayıt hatası (Mail yine de gitti):", logError);
-      }
-      
-      // =================================================================
-      // 💾 VERİTABANI KAYDI (İstenilen Tüm Verilerle)
-      // =================================================================
-      
-      // Sadece bir IP kaydı varsa ve bir Parent Context seçildiyse kayıt at
-      if (recordId && sent.threadId && activeParentContext) {
-          const threadKey = `${recordId}_${activeParentContext}`;
-          
-          await db.collection("mailThreads").doc(threadKey).set({
-              // 1. ZİNCİR BİLGİLERİ (Teknik)
-              ipRecordId: recordId,
-              parentContext: activeParentContext, // "1", "2" vb.
-              threadId: sent.threadId,            // Gmail Thread ID
-              lastMessageId: sent.id,             // Gmail Message ID
-              rootSubject: finalSubject,          // Sabitlenen Konu
-              
-              // 2. İŞLEM DETAYLARI (İzlenebilirlik için istedikleriniz)
-              lastTriggeringTaskId: currentTaskId || null, // Task ID (Varsa)
-              lastTriggeringChildType: currentChildTypeId, // İşlem Tipi (20, 22 vb.)
-              
-              // 3. ZAMAN DAMGASI
-              lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-          
-          console.log(`💾 Zincir bilgisi kaydedildi: ${threadKey}`);
+        console.error("processedMailThreads log hatası:", logError);
       }
 
-      // Notification Durumunu Güncelle
+      // Notification Güncelleme
       const baseUpdate = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         sentBy: userEmail,
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null,
         gmailThreadId: sent?.threadId || null,
-        status: isReminder ? notificationData.status : "sent", // Reminder ise statü değişmez
+        status: isReminder ? notificationData.status : "sent",
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
       };
       
+      // Eğer ID'yi biz bulduysak ve notification'da eksikse, orayı da güncelleyelim
+      if (recordId && !notificationData.relatedIpRecordId) {
+          baseUpdate.relatedIpRecordId = recordId;
+      }
+
       if (isReminder) {
           baseUpdate.lastReminderAt = admin.firestore.FieldValue.serverTimestamp();
           baseUpdate.lastReminderBy = userEmail;
