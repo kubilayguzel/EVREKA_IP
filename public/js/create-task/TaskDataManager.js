@@ -58,21 +58,32 @@ export class TaskDataManager {
 
     async getCities() {
         try {
-            // 'common' koleksiyonu altındaki 'cities' dokümanına bağlanıyoruz
-            const docRef = doc(db, 'common', 'cities');
+            console.log('🔍 getCities() çağrıldı');
+            
+            // Veritabanında cities_TR dokümanını oku
+            const docRef = doc(db, 'common', 'cities_TR');
             const docSnap = await getDoc(docRef);
             
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const rawList = data.list || []; // Veritabanındaki 'list' array'i
+                const rawList = data.list || [];
                 
-                // DÜZELTME: String listesini Obje listesine çeviriyoruz.
-                // ["Adana", "Ankara"]  --->  [{ name: "Adana" }, { name: "Ankara" }]
-                return rawList.map(cityName => ({ name: cityName }));
+                console.log(`✅ cities_TR dokümanından ${rawList.length} şehir çekildi`);
+                
+                // String array'i obje array'ine çevir
+                if (rawList.length > 0 && typeof rawList[0] === 'string') {
+                    const cityObjects = rawList.map(cityName => ({ name: cityName }));
+                    console.log('✅ Şehirler obje formatına çevrildi:', cityObjects.slice(0, 3));
+                    return cityObjects;
+                }
+                
+                return rawList;
             }
+            
+            console.warn('⚠️ cities_TR dokümanı bulunamadı');
             return [];
         } catch (error) {
-            console.error("Şehir listesi hatası:", error);
+            console.error("❌ getCities hatası:", error);
             return [];
         }
     }
