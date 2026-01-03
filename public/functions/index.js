@@ -1010,68 +1010,82 @@ export const sendEmailNotificationV2 = onCall(
     // =================================================================
     
     let threadIdToUse = null;
-    let lastMessageIdToUse = null; // References header için gerekli
-    let finalSubject = subject; 
-    let activeParentContext = null;
-    const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
+        let referencesToUse = null; // lastMessageId yerine bunu kullanacağız
+        let firstMessageId = null;  // İlk mailin ID'si (Zincirin kökü)
+        let finalSubject = subject; 
+        let activeParentContext = null;
+        const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
 
-    if (recordId) {
-        try {
-            const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
-            const allRules = settingsDoc.exists ? settingsDoc.data() : {};
-            
-            let rawRule = allRules[currentChildTypeId];
-            let parentContexts = [];
-            
-            if (rawRule && Array.isArray(rawRule.values)) {
-                parentContexts = rawRule.values.map(v => v.stringValue);
-            } else if (Array.isArray(rawRule)) {
-                parentContexts = rawRule;
-            } else if (typeof rawRule === 'string') {
-                parentContexts = [rawRule];
-            } else {
-                parentContexts = ["1"]; 
-            }
-
-            console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
-
-            for (const ctx of parentContexts) {
-                const threadKey = `${recordId}_${ctx}`;
-                const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
+        if (recordId) {
+            try {
+                const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
+                const allRules = settingsDoc.exists ? settingsDoc.data() : {};
                 
-                if (threadDoc.exists) {
-                    const tData = threadDoc.data();
-                    if (tData.threadId) {
-                        threadIdToUse = tData.threadId;
-                        lastMessageIdToUse = tData.lastMessageId; // <--- Önceki mailin Message-ID'sini al
-                        finalSubject = tData.rootSubject; 
-                        activeParentContext = ctx;      
-                        
-                        // Konuyu mailin içine bilgi olarak ekle (Gmail'de konu değişmesin diye)
-                        const originalSubjectInfo = `
-                            <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
-                                <strong>KONU: ${subject}</strong>
-                            </div>
-                        `;
-                        htmlBody = originalSubjectInfo + htmlBody;
-                        
-                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> Thread: ${threadIdToUse}, Ref: ${lastMessageIdToUse}`);
-                        break; 
+                let rawRule = allRules[currentChildTypeId];
+                let parentContexts = [];
+                
+                if (rawRule && Array.isArray(rawRule.values)) {
+                    parentContexts = rawRule.values.map(v => v.stringValue);
+                } else if (Array.isArray(rawRule)) {
+                    parentContexts = rawRule;
+                } else if (typeof rawRule === 'string') {
+                    parentContexts = [rawRule];
+                } else {
+                    parentContexts = ["1"]; 
+                }
+
+                console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
+
+                for (const ctx of parentContexts) {
+                    const threadKey = `${recordId}_${ctx}`;
+                    const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
+                    
+                    if (threadDoc.exists) {
+                        const tData = threadDoc.data();
+                        if (tData.threadId) {
+                            threadIdToUse = tData.threadId;
+                            activeParentContext = ctx;
+                            finalSubject = tData.rootSubject; 
+                            
+                            // 🔥 KRİTİK GÜNCELLEME: References Zincirini Oluştur
+                            // 1. Veritabanından kayıtlı ilk ID'yi al
+                            firstMessageId = tData.firstMessageId; 
+                            const lastMsgId = tData.lastMessageId;
+
+                            // 2. References başlığını oluştur
+                            if (firstMessageId && lastMsgId && firstMessageId !== lastMsgId) {
+                                // Hem zincir başını hem de son maili ekle (En güçlü yöntem)
+                                referencesToUse = `${firstMessageId} ${lastMsgId}`;
+                            } else if (lastMsgId) {
+                                // Sadece son mail varsa (veya ilk mail ile aynıysa) onu kullan
+                                referencesToUse = lastMsgId;
+                            }
+
+                            // Konu başlığı görseli (Aynen kalsın)
+                            const originalSubjectInfo = `
+                                <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
+                                    <strong>KONU: ${subject}</strong>
+                                </div>
+                            `;
+                            htmlBody = originalSubjectInfo + htmlBody;
+                            
+                            console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> Thread: ${threadIdToUse}, Ref: ${referencesToUse}`);
+                            break; 
+                        }
                     }
                 }
-            }
 
-            if (!threadIdToUse && parentContexts.length > 0) {
-                activeParentContext = parentContexts[0]; 
-                console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
-            }
+                if (!threadIdToUse && parentContexts.length > 0) {
+                    activeParentContext = parentContexts[0]; 
+                    console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
+                }
 
-        } catch (e) {
-            console.error("Threading logic hatası:", e);
+            } catch (e) {
+                console.error("Threading logic hatası:", e);
+            }
+        } else {
+            console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı.");
         }
-    } else {
-        console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı.");
-    }
 
     // =================================================================
     // 📤 GÖNDERİM İŞLEMİ
