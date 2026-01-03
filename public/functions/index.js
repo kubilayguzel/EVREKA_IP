@@ -61,17 +61,23 @@ const ALLOWED_SENDERS = new Set([
 ]);
 
 // 📧 Gmail API ile "kullanıcının adına" gönderim
-async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, references = null) {
+async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, inReplyTo = null, references = null) {
   const sa = await loadMailerSA();
 
-  // Eğer bir zincire ekleniyorsa, Nodemailer'a header ekle (ALICI İÇİN ÖNEMLİ)
-  if (references) {
-    mailOptions.headers = {
-      ...(mailOptions.headers || {}),
-      'In-Reply-To': references,
-      'References': references
-    };
+  // Headerları Hassas Ayarla
+  const headers = mailOptions.headers || {};
+  
+  if (inReplyTo) {
+    // BU ÇOK ÖNEMLİ: Cevap verilen "son" mailin ID'si olmalı
+    headers['In-Reply-To'] = inReplyTo; 
   }
+  
+  if (references) {
+    // Bu, zincirin tarihçesi (İlk ID ..... Son ID)
+    headers['References'] = references;
+  }
+  
+  mailOptions.headers = headers;
 
   // 1) Nodemailer ile MIME üret
   const streamTransport = nodemailer.createTransport({
@@ -91,7 +97,7 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, refer
     .toString("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-  // 2) Domain-Wide Delegation ile o kullanıcı adına yetkilendirme
+  // 2) Domain-Wide Delegation
   const auth = new google.auth.JWT({
     email: sa.client_email,
     key: sa.private_key,
@@ -101,9 +107,7 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, refer
 
   const gmail = google.gmail({ version: "v1", auth });
   
-  // API İsteğini Hazırla
   const requestBody = { raw };
-  // Eğer threadId varsa ekle (GÖNDERİCİ İÇİN ÖNEMLİ)
   if (threadId) {
     requestBody.threadId = threadId;
   }
@@ -113,9 +117,8 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, refer
     requestBody
   });
 
-  return res.data; // { id, threadId, ... }
+  return res.data; 
 }
-
 
 // Firebase Admin SDK'sını başlatın
 if (!admin.apps.length) {
@@ -1005,89 +1008,92 @@ export const sendEmailNotificationV2 = onCall(
         }
     }
 
-    // =================================================================
-    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI
+// =================================================================
+    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - GÜNCEL (CC & Header Fix)
     // =================================================================
     
     let threadIdToUse = null;
-        let referencesToUse = null; // lastMessageId yerine bunu kullanacağız
-        let firstMessageId = null;  // İlk mailin ID'si (Zincirin kökü)
-        let finalSubject = subject; 
-        let activeParentContext = null;
-        const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
+    let inReplyToToUse = null;  // Cevaplanan son mail ID'si (In-Reply-To)
+    let referencesToUse = null; // Zincir tarihçesi (References)
+    let firstMessageId = null;  // Zincirin kök ID'si
+    let finalSubject = subject; 
+    let activeParentContext = null;
+    const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
 
-        if (recordId) {
-            try {
-                const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
-                const allRules = settingsDoc.exists ? settingsDoc.data() : {};
+    if (recordId) {
+        try {
+            const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
+            const allRules = settingsDoc.exists ? settingsDoc.data() : {};
+            
+            let rawRule = allRules[currentChildTypeId];
+            let parentContexts = [];
+            
+            if (rawRule && Array.isArray(rawRule.values)) {
+                parentContexts = rawRule.values.map(v => v.stringValue);
+            } else if (Array.isArray(rawRule)) {
+                parentContexts = rawRule;
+            } else if (typeof rawRule === 'string') {
+                parentContexts = [rawRule];
+            } else {
+                parentContexts = ["1"]; 
+            }
+
+            console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
+
+            for (const ctx of parentContexts) {
+                const threadKey = `${recordId}_${ctx}`;
+                const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
                 
-                let rawRule = allRules[currentChildTypeId];
-                let parentContexts = [];
-                
-                if (rawRule && Array.isArray(rawRule.values)) {
-                    parentContexts = rawRule.values.map(v => v.stringValue);
-                } else if (Array.isArray(rawRule)) {
-                    parentContexts = rawRule;
-                } else if (typeof rawRule === 'string') {
-                    parentContexts = [rawRule];
-                } else {
-                    parentContexts = ["1"]; 
-                }
+                if (threadDoc.exists) {
+                    const tData = threadDoc.data();
+                    if (tData.threadId) {
+                        threadIdToUse = tData.threadId;
+                        activeParentContext = ctx;
+                        finalSubject = tData.rootSubject; 
+                        
+                        // 🔥 HEADER HESAPLAMA (CC Birleştirme İçin Kritik)
+                        firstMessageId = tData.firstMessageId; 
+                        const lastMsgId = tData.lastMessageId;
 
-                console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday Gruplar: ${JSON.stringify(parentContexts)}`);
+                        if (lastMsgId) {
+                            // 1. In-Reply-To: Daima son mesaja işaret etmeli
+                            inReplyToToUse = lastMsgId;
 
-                for (const ctx of parentContexts) {
-                    const threadKey = `${recordId}_${ctx}`;
-                    const threadDoc = await db.collection("mailThreads").doc(threadKey).get();
-                    
-                    if (threadDoc.exists) {
-                        const tData = threadDoc.data();
-                        if (tData.threadId) {
-                            threadIdToUse = tData.threadId;
-                            activeParentContext = ctx;
-                            finalSubject = tData.rootSubject; 
-                            
-                            // 🔥 KRİTİK GÜNCELLEME: References Zincirini Oluştur
-                            // 1. Veritabanından kayıtlı ilk ID'yi al
-                            firstMessageId = tData.firstMessageId; 
-                            const lastMsgId = tData.lastMessageId;
-
-                            // 2. References başlığını oluştur
-                            if (firstMessageId && lastMsgId && firstMessageId !== lastMsgId) {
-                                // Hem zincir başını hem de son maili ekle (En güçlü yöntem)
+                            // 2. References: Kök + Son (Aradakiler olmasa bile zinciri tutar)
+                            if (firstMessageId && firstMessageId !== lastMsgId) {
                                 referencesToUse = `${firstMessageId} ${lastMsgId}`;
-                            } else if (lastMsgId) {
-                                // Sadece son mail varsa (veya ilk mail ile aynıysa) onu kullan
+                            } else {
                                 referencesToUse = lastMsgId;
                             }
-
-                            // Konu başlığı görseli (Aynen kalsın)
-                            const originalSubjectInfo = `
-                                <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
-                                    <strong>KONU: ${subject}</strong>
-                                </div>
-                            `;
-                            htmlBody = originalSubjectInfo + htmlBody;
-                            
-                            console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> Thread: ${threadIdToUse}, Ref: ${referencesToUse}`);
-                            break; 
                         }
+
+                        // Konu başlığı görseli (Aynen kalsın)
+                        const originalSubjectInfo = `
+                            <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
+                                <strong>KONU: ${subject}</strong>
+                            </div>
+                        `;
+                        htmlBody = originalSubjectInfo + htmlBody;
+                        
+                        console.log(`🔗 Zincir: ${threadIdToUse}, ReplyTo: ${inReplyToToUse}`);
+                        break; 
                     }
                 }
-
-                if (!threadIdToUse && parentContexts.length > 0) {
-                    activeParentContext = parentContexts[0]; 
-                    console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
-                }
-
-            } catch (e) {
-                console.error("Threading logic hatası:", e);
             }
-        } else {
-            console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı.");
-        }
 
-    // =================================================================
+            if (!threadIdToUse && parentContexts.length > 0) {
+                activeParentContext = parentContexts[0]; 
+                console.log(`🆕 Yeni zincir başlatılıyor. Hedef Grup: ${activeParentContext}`);
+            }
+
+        } catch (e) {
+            console.error("Threading logic hatası:", e);
+        }
+    } else {
+        console.warn("⚠️ Record ID bulunamadığı için Threading mantığı atlandı.");
+    }
+
+// =================================================================
     // 📤 GÖNDERİM İŞLEMİ
     // =================================================================
 
@@ -1101,8 +1107,15 @@ export const sendEmailNotificationV2 = onCall(
     };
 
     try {
-      // GÜNCELLENDİ: lastMessageIdToUse parametresi eklendi
-      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse, referencesToUse);
+      // GÜNCELLENDİ: 5 Parametre (user, options, threadId, inReplyTo, references)
+      const sent = await sendViaGmailAsUser(
+          userEmail, 
+          mailOptions, 
+          threadIdToUse, 
+          inReplyToToUse, 
+          referencesToUse
+      );
+
       // =================================================================
       // 💾 DB KAYITLARI (Thread + Processed)
       // =================================================================
@@ -1111,16 +1124,23 @@ export const sendEmailNotificationV2 = onCall(
       if (recordId && sent.threadId && activeParentContext) {
           const threadKey = `${recordId}_${activeParentContext}`;
           
-          await db.collection("mailThreads").doc(threadKey).set({
+          const updateData = {
               ipRecordId: recordId,
               parentContext: activeParentContext,
               threadId: sent.threadId,            
-              lastMessageId: sent.id,             
+              lastMessageId: sent.id, // Her gönderimde son mesaj ID'si güncellenir
               rootSubject: finalSubject,          
               lastTriggeringTaskId: currentTaskId || null, 
               lastTriggeringChildType: currentChildTypeId,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
+          };
+
+          // Eğer zincirin ilk halkası henüz yoksa, bu maili ilk halka yap
+          if (!firstMessageId) {
+              updateData.firstMessageId = sent.id;
+          }
+
+          await db.collection("mailThreads").doc(threadKey).set(updateData, { merge: true });
       }
 
       // 2. Processed Mail Kaydı (Raporlama için)
@@ -1135,7 +1155,7 @@ export const sendEmailNotificationV2 = onCall(
             originalSubject: subject,
 
             notificationId: notificationId || null,
-            relatedIpRecordId: recordId || null, // Artık bulunduysa dolu gelir
+            relatedIpRecordId: recordId || null, 
             parentContext: activeParentContext || null,
             associatedTaskId: currentTaskId || null,
 
@@ -1147,7 +1167,7 @@ export const sendEmailNotificationV2 = onCall(
         console.error("processedMailThreads log hatası:", logErr);
       }
 
-      // Notification Güncelleme
+      // 3. Notification Durum Güncelleme
       const baseUpdate = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         sentBy: userEmail,
@@ -1158,6 +1178,7 @@ export const sendEmailNotificationV2 = onCall(
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
       };
 
+      // Eğer ID'yi biz bulduysak ve notification'da eksikse orayı da doldur
       if (recordId && !notificationData.relatedIpRecordId) {
           baseUpdate.relatedIpRecordId = recordId;
       }
