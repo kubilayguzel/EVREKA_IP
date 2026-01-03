@@ -61,10 +61,19 @@ const ALLOWED_SENDERS = new Set([
 ]);
 
 // 📧 Gmail API ile "kullanıcının adına" gönderim
-async function sendViaGmailAsUser(userEmail, mailOptions) {
+async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, references = null) {
   const sa = await loadMailerSA();
 
-  // 1) Nodemailer ile MIME üret (ekleri de dahil)
+  // Eğer bir zincire ekleniyorsa, Nodemailer'a header ekle (ALICI İÇİN ÖNEMLİ)
+  if (references) {
+    mailOptions.headers = {
+      ...(mailOptions.headers || {}),
+      'In-Reply-To': references,
+      'References': references
+    };
+  }
+
+  // 1) Nodemailer ile MIME üret
   const streamTransport = nodemailer.createTransport({
     streamTransport: true,
     newline: "unix",
@@ -87,16 +96,24 @@ async function sendViaGmailAsUser(userEmail, mailOptions) {
     email: sa.client_email,
     key: sa.private_key,
     scopes: ["https://www.googleapis.com/auth/gmail.send"],
-    subject: userEmail      // << kullanıcı adına gönder
+    subject: userEmail
   });
 
   const gmail = google.gmail({ version: "v1", auth });
+  
+  // API İsteğini Hazırla
+  const requestBody = { raw };
+  // Eğer threadId varsa ekle (GÖNDERİCİ İÇİN ÖNEMLİ)
+  if (threadId) {
+    requestBody.threadId = threadId;
+  }
+
   const res = await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw }
+    requestBody
   });
 
-  return res.data; // { id, ... }
+  return res.data; // { id, threadId, ... }
 }
 
 
@@ -883,8 +900,6 @@ export const createObjectionTask = onCall(
   }
 );
 
-// functions/index.js
-
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
   async (request) => {
@@ -947,7 +962,7 @@ export const sendEmailNotificationV2 = onCall(
 
     // =================================================================
     // 🕵️ VERİ KURTARMA (DATA RECOVERY)
-    // Eğer relatedIpRecordId eksikse, sourceDocumentId üzerinden bulmaya çalış
+    // Eğer relatedIpRecordId eksikse, sourceDocumentId veya TaskID üzerinden bul
     // =================================================================
     
     let recordId = notificationData.relatedIpRecordId || null;
@@ -958,7 +973,7 @@ export const sendEmailNotificationV2 = onCall(
         console.log(`⚠️ Notification'da recordId eksik. Kaynaklardan aranıyor... SourceDoc: ${sourceDocId}, Task: ${currentTaskId}`);
         
         try {
-            // 1. Durak: Indexed Documents (En olası yer)
+            // 1. Durak: Indexed Documents
             if (sourceDocId) {
                 const indexedSnap = await db.collection('indexed_documents').doc(sourceDocId).get();
                 if (indexedSnap.exists) {
@@ -967,7 +982,7 @@ export const sendEmailNotificationV2 = onCall(
                 }
             }
 
-            // 2. Durak: Unindexed PDFs (Eğer oradan geldiyse)
+            // 2. Durak: Unindexed PDFs
             if (!recordId && sourceDocId) {
                 const pdfSnap = await db.collection('unindexed_pdfs').doc(sourceDocId).get();
                 if (pdfSnap.exists) {
@@ -977,7 +992,7 @@ export const sendEmailNotificationV2 = onCall(
                 }
             }
 
-            // 3. Durak: Tasks (Eğer bir görevden tetiklendiyse)
+            // 3. Durak: Tasks
             if (!recordId && currentTaskId) {
                 const taskSnap = await db.collection('tasks').doc(currentTaskId).get();
                 if (taskSnap.exists) {
@@ -987,7 +1002,6 @@ export const sendEmailNotificationV2 = onCall(
             }
         } catch (err) {
             console.warn("❌ Veri kurtarma sırasında hata:", err);
-            // Hata olsa da akışı kesme, mailsiz kalmasın
         }
     }
 
@@ -996,6 +1010,7 @@ export const sendEmailNotificationV2 = onCall(
     // =================================================================
     
     let threadIdToUse = null;
+    let lastMessageIdToUse = null; // References header için gerekli
     let finalSubject = subject; 
     let activeParentContext = null;
     const currentChildTypeId = String(notificationData.taskType || notificationData.notificationType || "1");
@@ -1028,9 +1043,11 @@ export const sendEmailNotificationV2 = onCall(
                     const tData = threadDoc.data();
                     if (tData.threadId) {
                         threadIdToUse = tData.threadId;
+                        lastMessageIdToUse = tData.lastMessageId; // <--- Önceki mailin Message-ID'sini al
                         finalSubject = tData.rootSubject; 
                         activeParentContext = ctx;      
                         
+                        // Konuyu mailin içine bilgi olarak ekle (Gmail'de konu değişmesin diye)
                         const originalSubjectInfo = `
                             <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
                                 <strong>KONU: ${subject}</strong>
@@ -1038,7 +1055,7 @@ export const sendEmailNotificationV2 = onCall(
                         `;
                         htmlBody = originalSubjectInfo + htmlBody;
                         
-                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> ${threadIdToUse}`);
+                        console.log(`🔗 Mevcut zincire eklendi: Grup ${ctx} -> Thread: ${threadIdToUse}, Ref: ${lastMessageIdToUse}`);
                         break; 
                     }
                 }
@@ -1070,7 +1087,8 @@ export const sendEmailNotificationV2 = onCall(
     };
 
     try {
-      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse);
+      // GÜNCELLENDİ: lastMessageIdToUse parametresi eklendi
+      const sent = await sendViaGmailAsUser(userEmail, mailOptions, threadIdToUse, lastMessageIdToUse);
 
       // =================================================================
       // 💾 DB KAYITLARI (Thread + Processed)
@@ -1127,7 +1145,6 @@ export const sendEmailNotificationV2 = onCall(
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
       };
 
-      // Eğer ID'yi biz bulduysak ve notification'da yoksa, orayı da düzeltelim
       if (recordId && !notificationData.relatedIpRecordId) {
           baseUpdate.relatedIpRecordId = recordId;
       }
