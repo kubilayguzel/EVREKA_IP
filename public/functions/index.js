@@ -6351,6 +6351,7 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
         assignedTo_email: task.assignedTo_email || null,
         relatedIpRecordId, associatedTaskId: taskId,
         templateId, notificationType, source: "task_renewal_auto",
+        taskType: task.taskType || null,
         missingFields,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
