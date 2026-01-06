@@ -3104,20 +3104,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnOpenManual.addEventListener('click', openManualEntryModal);
     }
 
-// Kaynak Türü Değişimi (Radio Button Listener)
-    document.querySelectorAll('input[name="manualSourceType"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
+    // Bu kod, radio butonlarına doğrudan bağlanmak yerine döküman üzerindeki değişiklikleri dinler.
+    document.addEventListener('change', function(e) {
+        // Değişen eleman bizim radio butonumuz mu?
+        if (e.target && e.target.name === 'manualSourceType') {
+            console.log('🔘 Kaynak Türü Değişti:', e.target.value); // Konsolda bu yazıyı görmelisiniz
+
+            const tpForm = document.getElementById('tpSourceForm');
+            const manForm = document.getElementById('manualSourceForm');
+            const saveBtn = document.getElementById('btnSaveManualResult');
+
             if (e.target.value === 'tp') {
-                document.getElementById('tpSourceForm').style.display = 'block';
-                document.getElementById('manualSourceForm').style.display = 'none';
-                document.getElementById('btnSaveManualResult').disabled = !tpSearchResultData; 
+                // TP Seçildi
+                if(tpForm) tpForm.style.display = 'block';
+                if(manForm) manForm.style.display = 'none';
+                
+                // TP modunda buton, ancak sorgu yapılmışsa aktif olur
+                // (tpSearchResultData değişkeni dosya genelinde tanımlı varsayılıyor)
+                if(saveBtn) saveBtn.disabled = !tpSearchResultData; 
             } else {
-                document.getElementById('tpSourceForm').style.display = 'none';
-                document.getElementById('manualSourceForm').style.display = 'block';
-                // Manuel girişte buton aktif olur
-                document.getElementById('btnSaveManualResult').disabled = false; 
+                // Yurtdışı/Manuel Seçildi
+                if(tpForm) tpForm.style.display = 'none';
+                if(manForm) manForm.style.display = 'block';
+                
+                // Manuel modda buton her zaman aktiftir (Validasyon kaydetme anında yapılır)
+                if(saveBtn) saveBtn.disabled = false; 
             }
-        });
+        }
     });
 
     // TP Sorgula Butonu
