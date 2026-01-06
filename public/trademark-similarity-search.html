@@ -226,55 +226,55 @@
         .note-input { width: 100%; box-sizing: border-box; }
         .note-placeholder { color: #888; font-style: italic; }
         
-/* --- Kolon Genişlik Override --- */
+    /* --- Arama Sonuçları Tablosu (Görsel 150px için Ayarlandı) --- */
 
         /* 1. Sıra No */
-        .results-container .results-table th:nth-child(1),
-        .results-container .results-table td:nth-child(1) { width: 3% !important; text-align: center; }
+        .results-table th:nth-child(1),
+        .results-table td:nth-child(1) { width: 3% !important; text-align: center; }
 
-        /* 2. Karar (Butonlar) */
-        .results-container .results-table th:nth-child(2),
-        .results-container .results-table td:nth-child(2) { width: 9% !important; text-align: center; }
+        /* 2. Karar */
+        .results-table th:nth-child(2),
+        .results-table td:nth-child(2) { width: 8% !important; text-align: center; }
 
-        /* 3. Görsel (Biraz genişletildi) */
-        .results-container .results-table th:nth-child(3),
-        .results-container .results-table td:nth-child(3) { width: 7% !important; text-align: center; }
+        /* 3. Görsel (GENİŞLETİLDİ - %12) 150px sığsın diye */
+        .results-table th:nth-child(3),
+        .results-table td:nth-child(3) { width: 12% !important; text-align: center; }
 
-        /* 4. Marka Adı (Genişletildi ve taşmayı engellemek için ayarlandı) */
-        .results-container .results-table th:nth-child(4),
-        .results-container .results-table td:nth-child(4) { 
-            width: 15% !important; 
-            word-break: break-word; /* Uzun kelimeleri alt satıra al */
-            white-space: normal;    /* Alt satıra geçmeye izin ver */
+        /* 4. Marka Adı (Biraz daraltıldı - %18) */
+        .results-table th:nth-child(4),
+        .results-table td:nth-child(4) { 
+            width: 18% !important; 
+            word-wrap: break-word;
+            white-space: normal;
         }
 
-        /* 5. Sahip */
-        .results-container .results-table th:nth-child(5),
-        .results-container .results-table td:nth-child(5) { 
-            width: 18% !important; 
-            word-break: break-word;
+        /* 5. Sahip (Biraz daraltıldı - %18) */
+        .results-table th:nth-child(5),
+        .results-table td:nth-child(5) { 
+            width: 18% !important;
+            word-wrap: break-word;
             white-space: normal;
         }
 
         /* 6. Nice Sınıfı */
-        .results-container .results-table th:nth-child(6),
-        .results-container .results-table td:nth-child(6) { width: 15% !important; }
+        .results-table th:nth-child(6),
+        .results-table td:nth-child(6) { width: 12% !important; }
 
         /* 7. Başvuru No */
-        .results-container .results-table th:nth-child(7),
-        .results-container .results-table td:nth-child(7) { width: 10% !important; }
+        .results-table th:nth-child(7),
+        .results-table td:nth-child(7) { width: 9% !important; }
 
         /* 8. Benzerlik */
-        .results-container .results-table th:nth-child(8),
-        .results-container .results-table td:nth-child(8) { width: 8% !important; text-align: center; }
+        .results-table th:nth-child(8),
+        .results-table td:nth-child(8) { width: 7% !important; text-align: center; }
 
         /* 9. B.Ş */
-        .results-container .results-table th:nth-child(9),
-        .results-container .results-table td:nth-child(9) { width: 7% !important; }
+        .results-table th:nth-child(9),
+        .results-table td:nth-child(9) { width: 6% !important; }
 
         /* 10. Not */
-        .results-container .results-table th:nth-child(10),
-        .results-container .results-table td:nth-child(10) { width: 8% !important; }
+        .results-table th:nth-child(10),
+        .results-table td:nth-child(10) { width: 7% !important; }
 
         /* Not hücresindeki placeholder ve ikon için stil */
         .note-cell-content {
@@ -699,15 +699,20 @@
         /* 1) Arama sonuç listesinde marka örneklerini büyüt (tablo satırındaki görsel hücresi) */
 #resultsTableBody .trademark-image-wrapper-large,
 #resultsTableBody .no-image-placeholder-large {
-  width: 50px !important;  /* Hücreye sığacak ideal boyut */
-  height: 50px !important;
-  margin: 0 auto;          /* Ortala */
+  width: 150px !important;
+  height: 150px !important;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/* Resmin çerçeveye tam oturması için */
 #resultsTableBody .trademark-image-thumbnail-large {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background-color: #fff;
 }
 
 /* Geniş görseller için hücreyi rahatlat */
@@ -736,18 +741,6 @@
     width: 200px;
     height: 200px;
   }
-}
-/* Arama sonuç listesi: görseli biraz küçült */
-#resultsTableBody .trademark-image-wrapper-large,
-#resultsTableBody .no-image-placeholder-large {
-  width: 180px;
-  height: 180px;
-}
-
-#resultsTableBody .trademark-image-thumbnail-large {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 
 /* Hücreyi rahatlat (opsiyonel) */
