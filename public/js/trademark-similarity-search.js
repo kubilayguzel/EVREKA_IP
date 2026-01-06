@@ -212,6 +212,81 @@ function normalizeNiceList(input) {
     return parts.map(p => String(parseInt(p, 10))).filter(p => !isNaN(p) && ((Number(p) >= 1 && Number(p) <= 45) || Number(p) === 99));
 }
 
+// --- Hover Efektleri (DOM) ---
+// Bu fonksiyonu renderMonitoringList fonksiyonundan önce bir yere yapıştırın
+function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody || tbody._imageHoverSetup) return; // Daha önce eklendiyse tekrar ekleme
+  tbody._imageHoverSetup = true;
+
+  let popup = null;
+
+  function removeLegacyPopups() {
+    document.querySelectorAll('.tm-hover-popup').forEach(el => el.remove());
+  }
+
+  function cleanup() {
+    if (popup) { popup.remove(); popup = null; }
+    removeLegacyPopups();
+  }
+
+  function showPopup(thumbnail) {
+    cleanup();
+    const rect = thumbnail.getBoundingClientRect();
+    
+    // Popup oluştur
+    const p = document.createElement('div');
+    p.className = 'tm-hover-popup';
+    
+    const img = document.createElement('img');
+    img.src = thumbnail.src;
+    img.alt = thumbnail.alt || '';
+    img.style.width = '300px'; // Görsel boyutu (isteğe göre artırılabilir)
+    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.borderRadius = '8px';
+    img.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+    img.style.border = '2px solid #1e3c72';
+    img.style.backgroundColor = '#fff';
+
+    p.appendChild(img);
+    document.body.appendChild(p); // Body'ye ekle (Tablo hücresinden kurtarır)
+    popup = p;
+
+    // Konumlandırma
+    const gap = 15;
+    let left = rect.right + gap;
+    let top = rect.top + (rect.height / 2) - (img.offsetHeight / 2); // Ortala
+
+    // Ekranın sağına taşıyorsa sola al
+    if (left + 300 > window.innerWidth) {
+        left = rect.left - gap - 300;
+    }
+    
+    // Ekranın altına/üstüne taşıyorsa düzelt
+    if (top < 10) top = 10;
+    
+    popup.style.position = 'fixed';
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+    popup.style.zIndex = '999999';
+    popup.style.pointerEvents = 'none';
+  }
+
+  function handleEnter(e) {
+    // Sadece thumbnail resimlerinde çalışsın
+    const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+    if (!thumbnail) return;
+    showPopup(thumbnail);
+  }
+
+  function handleLeave() { cleanup(); }
+
+  // Olay dinleyicileri
+  tbody.addEventListener('mouseenter', handleEnter, true);
+  tbody.addEventListener('mouseleave', handleLeave, true);
+}
+
 const refreshTriggeredStatus = async (bulletinNo) => {
     try {
         taskTriggeredStatus.clear();
@@ -370,7 +445,10 @@ const renderMonitoringList = async () => {
                             <tr>
                                 <th style="width: 5%;"></th>
                                 <th style="width: 10%; text-align: center;">Görsel</th>
-                                <th style="width: 20%; text-align: left;">Marka Adı</th> <th style="width: 15%; text-align: center;">Başvuru No</th> <th style="width: 40%; text-align: left;">Nice Sınıfı</th> <th style="width: 10%; text-align: center;">B. Tarihi</th>
+                                <th style="width: 20%; text-align: left;">Marka Adı</th> 
+                                <th style="width: 15%; text-align: center;">Başvuru No</th> 
+                                <th style="width: 40%; text-align: left;">Nice Sınıfı</th> 
+                                <th style="width: 10%; text-align: center;">B. Tarihi</th>
                             </tr>
                         </thead>
                         <tbody>
