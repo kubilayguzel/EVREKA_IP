@@ -67,19 +67,33 @@ class SimpleLoading {
     this.onCancel = null;
   }
 
-  show(options = {}) {
+  // Hem show({text: '...'}) hem de show('Başlık', 'Alt Başlık') formatını destekler
+  show(optionsOrText = {}, subtextIfText = '') {
     ensureStyles(); // ✅ CSS'i bir kez enjekte et
+
+    let options = {};
+    if (typeof optionsOrText === 'string') {
+        options = {
+            text: optionsOrText,
+            subtext: subtextIfText
+        };
+    } else {
+        options = optionsOrText || {};
+    }
 
     const {
       text = 'İşlem yapılıyor',
-      subtext = 'Lütfen bekleyiniz',
+      subtext = '', // Varsayılan boş olsun
       onCancel = null
     } = options;
 
     this.onCancel = onCancel;
 
-    // Statik üç nokta ekle
-    const displayText = text + '...';
+    // Eğer daha önce açılmışsa içeriği güncelle
+    if (this.overlay) {
+        this.update(text, subtext);
+        return;
+    }
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'simple-loading-overlay';
@@ -90,7 +104,7 @@ class SimpleLoading {
     this.overlay.innerHTML = `
       <div class="simple-loading-content">
         <div class="loading-spinner" aria-hidden="true"></div>
-        <div class="loading-text">${displayText}</div>
+        <div class="loading-text">${text}</div>
         <div class="loading-subtext">${subtext}</div>
         ${onCancel ? '<button class="loading-cancel" id="loadingCancel">İptal</button>' : ''}
       </div>
@@ -106,8 +120,9 @@ class SimpleLoading {
       });
     }
 
+    // Animasyon için küçük gecikme
     setTimeout(() => {
-      this.overlay.classList.add('show');
+      if (this.overlay) this.overlay.classList.add('show');
     }, 10);
   }
 
@@ -118,23 +133,30 @@ class SimpleLoading {
     const subtextEl = this.overlay.querySelector('.loading-subtext');
     
     if (textEl && text) {
-      textEl.textContent = text + '...'; // Statik nokta
+      textEl.textContent = text;
     }
-    if (subtextEl && subtext) {
-      subtextEl.textContent = subtext;
+    if (subtextEl) {
+      subtextEl.textContent = subtext || '';
     }
+  }
+
+  // Uyumluluk için alias
+  update(text, subtext) {
+      this.updateText(text, subtext);
   }
 
   showSuccess(message) {
     if (!this.overlay) return;
 
     const content = this.overlay.querySelector('.simple-loading-content');
-    content.style.background = 'linear-gradient(145deg, #dcfce7, #bbf7d0)';
-    content.innerHTML = `
-      <div style="color: #16a34a; font-size: 28px; margin-bottom: 12px;">✓</div>
-      <div class="loading-text" style="background: linear-gradient(135deg, #166534, #16a34a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Tamamlandı</div>
-      <div class="loading-subtext">${message}</div>
-    `;
+    if(content) {
+        content.style.background = 'linear-gradient(145deg, #dcfce7, #bbf7d0)';
+        content.innerHTML = `
+        <div style="color: #16a34a; font-size: 28px; margin-bottom: 12px;">✓</div>
+        <div class="loading-text" style="background: linear-gradient(135deg, #166534, #16a34a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Tamamlandı</div>
+        <div class="loading-subtext">${message}</div>
+        `;
+    }
 
     setTimeout(() => this.hide(), 2000);
   }
@@ -143,13 +165,15 @@ class SimpleLoading {
     if (!this.overlay) return;
 
     const content = this.overlay.querySelector('.simple-loading-content');
-    content.style.background = 'linear-gradient(145deg, #fecaca, #fca5a5)';
-    content.innerHTML = `
-      <div style="color: #dc2626; font-size: 28px; margin-bottom: 12px;">✗</div>
-      <div class="loading-text" style="background: linear-gradient(135deg, #991b1b, #dc2626); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Hata Oluştu</div>
-      <div class="loading-subtext">${message}</div>
-      <button class="loading-cancel" onclick="this.closest('.simple-loading-overlay').remove()">Kapat</button>
-    `;
+    if(content) {
+        content.style.background = 'linear-gradient(145deg, #fecaca, #fca5a5)';
+        content.innerHTML = `
+        <div style="color: #dc2626; font-size: 28px; margin-bottom: 12px;">✗</div>
+        <div class="loading-text" style="background: linear-gradient(135deg, #991b1b, #dc2626); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Hata Oluştu</div>
+        <div class="loading-subtext">${message}</div>
+        <button class="loading-cancel" style="background:#fff; color:#dc2626; margin-top:10px;" onclick="document.querySelector('.simple-loading-overlay').remove()">Kapat</button>
+        `;
+    }
   }
 
   hide() {
@@ -157,24 +181,28 @@ class SimpleLoading {
 
     this.overlay.classList.remove('show');
     
+    const overlayToRemove = this.overlay;
+    this.overlay = null; // Referansı hemen temizle
+
     setTimeout(() => {
-      if (this.overlay && this.overlay.parentNode) {
-        this.overlay.parentNode.removeChild(this.overlay);
+      if (overlayToRemove && overlayToRemove.parentNode) {
+        overlayToRemove.parentNode.removeChild(overlayToRemove);
       }
-      this.overlay = null;
     }, 300);
   }
 }
 
-// Global exportlar
+// Global exportlar (Script tag kullanımı için)
 if (typeof window !== 'undefined') {
   window.SimpleLoading = SimpleLoading;
-
   window.showSimpleLoading = (text, subtext, onCancel) => {
     const loading = new SimpleLoading();
     loading.show({ text, subtext, onCancel });
     return loading;
   };
-
-  window.showLoadingWithCancel = window.showSimpleLoading;
 }
+
+// ES Module Default Export (Import kullanımı için - Singleton Instance)
+// Bu sayede 'import SimpleLoading from ...' dediğinizde direkt kullanılabilir bir nesne gelir.
+const instance = new SimpleLoading();
+export default instance;
