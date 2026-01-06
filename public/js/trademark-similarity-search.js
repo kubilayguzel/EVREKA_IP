@@ -923,9 +923,9 @@ const renderMonitoringList = async () => {
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
-                                <th style="width: 5%;"></th>
-                                <th style="width: 15%; text-align: center;">Görsel</th>
+                                <th style="width: 5%;"></th>                                
                                 <th style="width: 20%; text-align: left;">Marka Adı</th>
+                                <th style="width: 15%; text-align: center;">Görsel</th>
                                 <th style="width: 15%; text-align: center;">Başvuru No</th>
                                 <th style="width: 25%; text-align: left;">Nice Sınıfı</th>
                                 <th style="width: 15%; text-align: center;">Başvuru Tarihi</th>
