@@ -2709,13 +2709,29 @@ const openManualEntryModal = () => {
     const modal = $('#addManualResultModal');
     const niceGrid = document.getElementById('manualNiceGrid');
     
-    // --- YENİ: Arama alanlarını sıfırla ---
+    // --- A. Arama Alanlarını Sıfırla ---
     document.getElementById('manualTargetSearchInput').value = '';
     document.getElementById('manualTargetId').value = '';
     document.getElementById('manualTargetSearchResults').style.display = 'none';
     document.getElementById('manualTargetSelectedInfo').style.display = 'none';
     
-    // Nice Sınıf Grid'ini Oluştur (1-45)
+    // --- B. Kaynak Türünü ve Form Görünümünü Sıfırla (TP Varsayılan) ---
+    const tpRadio = document.querySelector('input[name="manualSourceType"][value="tp"]');
+    const manualRadio = document.querySelector('input[name="manualSourceType"][value="manual"]');
+    
+    if (tpRadio) {
+        tpRadio.checked = true;
+        tpRadio.parentElement.classList.add('active'); // Bootstrap stil
+    }
+    if (manualRadio) {
+        manualRadio.parentElement.classList.remove('active');
+    }
+
+    // Görünümü ayarla (TP açık, Manuel kapalı)
+    document.getElementById('tpSourceForm').style.display = 'block';
+    document.getElementById('manualSourceForm').style.display = 'none';
+
+    // --- C. Nice Grid Oluştur ---
     niceGrid.innerHTML = '';
     for (let i = 1; i <= 45; i++) {
         const div = document.createElement('div');
@@ -2728,16 +2744,15 @@ const openManualEntryModal = () => {
         niceGrid.appendChild(div);
     }
 
-    // Formu sıfırla
+    // --- D. Form Verilerini Temizle ---
     document.getElementById('tpSearchBulletinNo').value = '';
     document.getElementById('tpSearchAppNo').value = '';
     const previewCard = document.getElementById('tpPreviewCard');
     if(previewCard) previewCard.style.display = 'none';
     
     tpSearchResultData = null;
-    document.getElementById('btnSaveManualResult').disabled = true;
+    document.getElementById('btnSaveManualResult').disabled = true; // Buton pasif başlar
     
-    // Manuel form alanlarını temizle
     ['manMarkName', 'manAppNo', 'manSourceInfo', 'manOwner', 'manAppDate', 'manImgUrl'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.value = '';
@@ -3089,18 +3104,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnOpenManual.addEventListener('click', openManualEntryModal);
     }
 
-    // Kaynak Türü Değişimi (Radio Button)
+// Kaynak Türü Değişimi (Radio Button Listener)
     document.querySelectorAll('input[name="manualSourceType"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             if (e.target.value === 'tp') {
                 document.getElementById('tpSourceForm').style.display = 'block';
                 document.getElementById('manualSourceForm').style.display = 'none';
-                // Önizleme yoksa kaydet butonu pasif olsun
                 document.getElementById('btnSaveManualResult').disabled = !tpSearchResultData; 
             } else {
                 document.getElementById('tpSourceForm').style.display = 'none';
                 document.getElementById('manualSourceForm').style.display = 'block';
-                // Manuel girişte buton aktif başlar (Validasyon save fonksiyonunda yapılır)
+                // Manuel girişte buton aktif olur
                 document.getElementById('btnSaveManualResult').disabled = false; 
             }
         });
