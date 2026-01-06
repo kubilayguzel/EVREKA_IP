@@ -539,61 +539,102 @@ const renderCurrentPageOfResults = () => {
     });
     attachEventListeners();
 };
+
 const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
     const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === (hit.monitoredTrademarkId || hit.monitoredMarkId)) || {};
+    
+    // Nice Sınıfı Renklendirme Mantığı
     const resultClasses = normalizeNiceList(hit.niceClasses);
     let goodsAndServicesClasses = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
-    if (goodsAndServicesClasses.length === 0) goodsAndServicesClasses = normalizeNiceList(Array.isArray(monitoredTrademark?.niceClasses) && monitoredTrademark.niceClasses.length ? monitoredTrademark.niceClasses : _uniqNice(monitoredTrademark));
+    if (goodsAndServicesClasses.length === 0) {
+        goodsAndServicesClasses = normalizeNiceList(
+            Array.isArray(monitoredTrademark?.niceClasses) && monitoredTrademark.niceClasses.length
+            ? monitoredTrademark.niceClasses
+            : _uniqNice(monitoredTrademark)
+        );
+    }
     const goodsAndServicesSet = new Set(goodsAndServicesClasses);
-    const monitoredClasses = normalizeNiceList(monitoredTrademark?.niceClassSearch || []);
-    const monitoredSet = new Set(monitoredClasses);
+    const monitoredSet = new Set(normalizeNiceList(monitoredTrademark?.niceClassSearch || []));
+
     const niceClassHtml = [...new Set(resultClasses)].map(cls => {
         let cssClass = '';
         if (goodsAndServicesSet.has(cls)) cssClass = 'match';
         else if (monitoredSet.has(cls)) cssClass = 'partial-match';
         return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
     }).join('');
+
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const resultId = hit.objectID || hit.applicationNo;
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
-    const row = document.createElement('tr');
     
-    // REFACTORED CSS CLASSES
-    row.innerHTML = `
-        <td class="col-res-index">${rowIndex}</td>
-        <td class="col-res-decision"><button class="action-btn ${similarityBtnClass}" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">${similarityBtnText}</button></td>
-        <td class="col-res-img trademark-image-cell" data-appno="${hit.applicationNo}"><div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">Görsel<br>Yok</div></div></td>
-        <td class="col-res-name"><strong>${hit.markName || '-'}</strong></td>
-        <td class="col-res-owner">${holders}</td>
-        <td class="col-res-nice">${niceClassHtml}</td>
-        <td class="col-res-appno">${hit.applicationNo ? `<a href="#" class="tp-appno-link" data-tp-appno="${hit.applicationNo}" onclick="event.preventDefault(); window.queryApplicationNumberWithExtension('${hit.applicationNo}');">${hit.applicationNo}</a>` : '-'}</td>
-        <td class="col-res-sim">${similarityScore}</td>
-        <td class="col-res-bs"><select class="bs-select" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}"><option value="">B.Ş</option>${['%0', '%20', '%30', '%40', '%45', '%50', '%55', '%60', '%70', '%80'].map(val => `<option value="${val}" ${hit.bs === val ? 'selected' : ''}>${val}</option>`).join('')}</select></td>
-        <td class="col-res-note note-cell" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}"><div class="note-cell-content"><span class="note-icon">📝</span>${noteContent}</div></td>
+    // 1. Placeholder (Inline Style YOK - Class var)
+    const imagePlaceholderHtml = `
+      <div class="trademark-image-wrapper-large">
+        <div class="no-image-placeholder-large">-</div>
+      </div>
     `;
 
+    const row = document.createElement('tr');
+    // Not: trademark-image-cell class'ı eklendi
+    row.innerHTML = `
+        <td>${rowIndex}</td>
+        <td><button class="action-btn ${similarityBtnClass}" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">${similarityBtnText}</button></td>
+        
+        <td data-appno="${hit.applicationNo}" class="trademark-image-cell">
+            ${imagePlaceholderHtml}
+        </td>
+        
+        <td><strong>${hit.markName || '-'}</strong></td>
+        <td>${holders}</td>
+        <td>${niceClassHtml}</td>
+        <td>${hit.applicationNo ? `<a href="#" class="tp-appno-link" data-tp-appno="${hit.applicationNo}" onclick="event.preventDefault(); window.queryApplicationNumberWithExtension('${hit.applicationNo}');">${hit.applicationNo}</a>` : '-'}</td>
+        <td>${similarityScore}</td>
+        <td>
+            <select class="bs-select" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">
+                <option value="">B.Ş</option>
+                ${['%0', '%20', '%30', '%40', '%45', '%50', '%55', '%60', '%70', '%80'].map(val => `<option value="${val}" ${hit.bs === val ? 'selected' : ''}>${val}</option>`).join('')}
+            </select>
+        </td>
+        <td class="note-cell" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">
+            <div class="note-cell-content">
+                <span class="note-icon">📝</span>
+                ${noteContent}
+            </div>
+        </td>
+    `;
+
+    // 2. Asenkron Görsel Yükleme (Inline Style YOK - Class var)
     setTimeout(async () => {
         const imageCell = row.querySelector('.trademark-image-cell');
         if (!imageCell || !imageCell.isConnected) return;
+
         try {
             let imgUrl = '';
-            if (hit.imagePath) { try { imgUrl = await getDownloadURL(ref(getStorage(), hit.imagePath)); } catch(e) { } }
-            else if (hit.brandImageUrl) imgUrl = hit.brandImageUrl;
-            else if (hit.applicationNo) imgUrl = await _getBrandImageByAppNo(hit.applicationNo);
-            if (imgUrl) imageCell.innerHTML = `<div class="tm-img-box tm-img-box-lg"><img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"></div>`;
-        } catch (err) { }
+            if (hit.imagePath) {
+                const storage = getStorage();
+                imgUrl = await getDownloadURL(ref(storage, hit.imagePath));
+            } else if (hit.brandImageUrl) {
+                imgUrl = hit.brandImageUrl;
+            } else if (hit.applicationNo) {
+                imgUrl = await _getBrandImageByAppNo(hit.applicationNo);
+            }
+
+            if (imgUrl) {
+                // SADECE HTML YAPISI (Stiller CSS dosyasından gelecek)
+                imageCell.innerHTML = `
+                  <div class="trademark-image-wrapper-large">
+                    <img src="${imgUrl}" alt="Marka" class="trademark-image-thumbnail-large">
+                  </div>
+                `;
+            }
+        } catch (err) {
+            console.warn(`Görsel yüklenemedi: ${hit.applicationNo}`);
+        }
     }, 50);
 
-    setTimeout(() => {
-        const img = row.querySelector('.trademark-image-thumbnail-large');
-        if (img) {
-            img.addEventListener('mouseenter', function() { this.style.transform = 'scale(2.5) translateZ(0)'; this.style.zIndex = '99999'; this.style.position = 'relative'; this.style.boxShadow = '0 15px 40px rgba(0, 0, 0, 0.5)'; this.style.borderColor = '#1e3c72'; this.style.borderWidth = '2px'; });
-            img.addEventListener('mouseleave', function() { this.style.transform = 'scale(1) translateZ(0)'; this.style.zIndex = '1'; this.style.position = 'static'; this.style.boxShadow = 'none'; this.style.borderColor = '#ddd'; this.style.borderWidth = '1px'; });
-        }
-    }, 200);
     return row;
 };
 
