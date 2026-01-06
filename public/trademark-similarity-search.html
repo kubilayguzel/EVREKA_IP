@@ -906,50 +906,68 @@
     border: 1px solid #f5c6cb;
 }
 
+/* İzlenen Markalar Tablosu - table-layout eklendi */
+.monitoring-container + div .results-table,
+div[style*="padding: 0 30px 30px"] .results-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
 /* Checkbox / Expand */
-.monitoring-container .results-table th:nth-child(1),
-.monitoring-container .results-table td:nth-child(1) {
-  width: 5%;
+.monitoring-container + div .results-table th:nth-child(1),
+.monitoring-container + div .results-table td:nth-child(1),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(1),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(1) {
+  width: 5% !important;
 }
 
 /* Sahip */
-.monitoring-container .results-table th:nth-child(2),
-.monitoring-container .results-table td:nth-child(2) {
-  width: 45%;
-  text-align: left;
-  word-break: break-word;
-  line-height: 1.4;
+.monitoring-container + div .results-table th:nth-child(2),
+.monitoring-container + div .results-table td:nth-child(2),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(2),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(2) {
+  width: 45% !important;
+  text-align: left !important;
+  word-break: break-word !important;
+  line-height: 1.4 !important;
 }
 
 /* Marka Sayısı */
-.monitoring-container .results-table th:nth-child(3),
-.monitoring-container .results-table td:nth-child(3) {
-  width: 10%;
-  text-align: center;
+.monitoring-container + div .results-table th:nth-child(3),
+.monitoring-container + div .results-table td:nth-child(3),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(3),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(3) {
+  width: 10% !important;
+  text-align: center !important;
 }
 
 /* İş Tetiklendi */
-.monitoring-container .results-table th:nth-child(4),
-.monitoring-container .results-table td:nth-child(4) {
-  width: 15%;
-  text-align: center;
+.monitoring-container + div .results-table th:nth-child(4),
+.monitoring-container + div .results-table td:nth-child(4),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(4),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(4) {
+  width: 15% !important;
+  text-align: center !important;
 }
 
 /* Bildirim Durumu */
-.monitoring-container .results-table th:nth-child(5),
-.monitoring-container .results-table td:nth-child(5) {
-  width: 15%;
-  text-align: center;
+.monitoring-container + div .results-table th:nth-child(5),
+.monitoring-container + div .results-table td:nth-child(5),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(5),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(5) {
+  width: 15% !important;
+  text-align: center !important;
 }
 
 /* Eylemler */
-.monitoring-container .results-table th:nth-child(6),
-.monitoring-container .results-table td:nth-child(6) {
-  width: 10%;
-  text-align: center;
-  white-space: nowrap;
+.monitoring-container + div .results-table th:nth-child(6),
+.monitoring-container + div .results-table td:nth-child(6),
+div[style*="padding: 0 30px 30px"] .results-table th:nth-child(6),
+div[style*="padding: 0 30px 30px"] .results-table td:nth-child(6) {
+  width: 10% !important;
+  text-align: center !important;
+  white-space: nowrap !important;
 }
-
 
 /* Nice Sınıf Kutucukları için Stil */
 .nice-class-box-item {
