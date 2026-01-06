@@ -227,53 +227,54 @@
         .note-placeholder { color: #888; font-style: italic; }
         
 /* --- Kolon Genişlik Override --- */
-        /* Yeni tablo yapısına göre güncellendi - Başına .results-container eklendi */
-        
-        /* Sıra No */
+
+        /* 1. Sıra No */
         .results-container .results-table th:nth-child(1),
-        .results-container .results-table td:nth-child(1) { width: 2% !important; max-width: 2% !important; text-align: center; }
+        .results-container .results-table td:nth-child(1) { width: 3% !important; text-align: center; }
 
-        /* Karar */
+        /* 2. Karar (Butonlar) */
         .results-container .results-table th:nth-child(2),
-        .results-container .results-table td:nth-child(2) { width: 6% !important; max-width: 6% !important; text-align: center; }
-        
-        /* Görsel */
+        .results-container .results-table td:nth-child(2) { width: 9% !important; text-align: center; }
+
+        /* 3. Görsel (Biraz genişletildi) */
         .results-container .results-table th:nth-child(3),
-        .results-container .results-table td:nth-child(3) { width: 6% !important; max-width: 6% !important; text-align: center; }
+        .results-container .results-table td:nth-child(3) { width: 7% !important; text-align: center; }
 
-        /* Marka Adı */
+        /* 4. Marka Adı (Genişletildi ve taşmayı engellemek için ayarlandı) */
         .results-container .results-table th:nth-child(4),
-        .results-container .results-table td:nth-child(4) { width: 14% !important; max-width: 14% !important; }
-
-        /* Sahip */
-        .results-container .results-table th:nth-child(5),
-        .results-container .results-table td:nth-child(5) {
-            width: 18% !important;
-            max-width: 18% !important;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .results-container .results-table td:nth-child(4) { 
+            width: 15% !important; 
+            word-break: break-word; /* Uzun kelimeleri alt satıra al */
+            white-space: normal;    /* Alt satıra geçmeye izin ver */
         }
 
-        /* Nice Sınıfı */
+        /* 5. Sahip */
+        .results-container .results-table th:nth-child(5),
+        .results-container .results-table td:nth-child(5) { 
+            width: 18% !important; 
+            word-break: break-word;
+            white-space: normal;
+        }
+
+        /* 6. Nice Sınıfı */
         .results-container .results-table th:nth-child(6),
-        .results-container .results-table td:nth-child(6) { width: 20% !important; max-width: 20% !important; }
+        .results-container .results-table td:nth-child(6) { width: 15% !important; }
 
-        /* Başvuru No */
+        /* 7. Başvuru No */
         .results-container .results-table th:nth-child(7),
-        .results-container .results-table td:nth-child(7) { width: 10% !important; max-width: 10% !important; }
+        .results-container .results-table td:nth-child(7) { width: 10% !important; }
 
-        /* Benzerlik */
+        /* 8. Benzerlik */
         .results-container .results-table th:nth-child(8),
-        .results-container .results-table td:nth-child(8) { width: 8% !important; max-width: 8% !important; text-align: center; }
+        .results-container .results-table td:nth-child(8) { width: 8% !important; text-align: center; }
 
-        /* B.Ş */
+        /* 9. B.Ş */
         .results-container .results-table th:nth-child(9),
-        .results-container .results-table td:nth-child(9) { width: 8% !important; max-width: 8% !important; }
+        .results-container .results-table td:nth-child(9) { width: 7% !important; }
 
-        /* Not */
+        /* 10. Not */
         .results-container .results-table th:nth-child(10),
-        .results-container .results-table td:nth-child(10) { width: 8% !important; max-width: 8% !important; }
+        .results-container .results-table td:nth-child(10) { width: 8% !important; }
 
         /* Not hücresindeki placeholder ve ikon için stil */
         .note-cell-content {
@@ -698,8 +699,9 @@
         /* 1) Arama sonuç listesinde marka örneklerini büyüt (tablo satırındaki görsel hücresi) */
 #resultsTableBody .trademark-image-wrapper-large,
 #resultsTableBody .no-image-placeholder-large {
-  width: 260px;
-  height: 260px;
+  width: 50px !important;  /* Hücreye sığacak ideal boyut */
+  height: 50px !important;
+  margin: 0 auto;          /* Ortala */
 }
 
 #resultsTableBody .trademark-image-thumbnail-large {
