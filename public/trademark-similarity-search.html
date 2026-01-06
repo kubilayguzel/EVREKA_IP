@@ -1104,12 +1104,23 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label><strong>1. Hangi Markanız İçin Ekliyorsunuz?</strong></label>
-                        <select id="manualTargetSelect" class="form-control">
-                            <option value="">İzlenen marka seçiniz...</option>
-                        </select>
+                    <div class="form-group position-relative">
+                    <label><strong>1. Hangi Markanız İçin Ekliyorsunuz?</strong></label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        </div>
+                        <input type="text" id="manualTargetSearchInput" class="form-control" placeholder="Marka adı veya başvuru numarası yazın..." autocomplete="off">
+                        <input type="hidden" id="manualTargetId">
                     </div>
+                    
+                    <div id="manualTargetSearchResults" class="list-group position-absolute w-100 shadow" style="z-index: 1050; max-height: 250px; overflow-y: auto; display: none; top: 100%;">
+                        </div>
+                    
+                    <small id="manualTargetSelectedInfo" class="form-text text-success font-weight-bold mt-2" style="display:none;">
+                        <i class="fas fa-check-circle"></i> Seçildi: <span id="manualTargetSelectedText"></span>
+                    </small>
+                </div>
 
                     <hr>
 
