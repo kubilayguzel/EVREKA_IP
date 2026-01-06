@@ -235,6 +235,31 @@
             width: 10% !important; /* Notların rahat okunması için artırıldı */
         }
 
+        /* =======================================================
+        MODAL GENİŞLETME (KESİN ÇÖZÜM)
+        ======================================================= */
+
+        /* Bootstrap'in varsayılan max-width değerini eziyoruz */
+        .modal-full-width {
+            max-width: 95vw !important;  /* Ekranın %95'i */
+            width: 95vw !important;
+            margin: 10px auto !important; /* Ortala */
+        }
+
+        /* Modal içeriğinin de bu genişliğe uymasını sağla */
+        .modal-full-width .modal-content {
+            width: 100% !important;
+            border-radius: 15px; /* Köşeleri biraz daha yuvarla */
+        }
+
+        /* Küçük ekranlarda taşmayı önlemek için */
+        @media (max-width: 768px) {
+            .modal-full-width {
+                max-width: 98vw !important;
+                margin: 5px auto !important;
+            }
+        }
+
     </style>
 </head>
 <body>
