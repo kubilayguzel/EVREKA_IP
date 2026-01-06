@@ -924,6 +924,25 @@
 .monitoring-container .results-table th:nth-child(6),
 .monitoring-container .results-table td:nth-child(6) { width: 20%; text-align: center; }
 
+/* Nice Sınıf Kutucukları için Stil */
+.nice-class-box-item {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+    padding: 5px 0;
+    cursor: pointer;
+    font-size: 13px;
+    background: #fff;
+    transition: all 0.2s;
+}
+.nice-class-box-item:hover { background: #f0f0f0; }
+.nice-class-box-item.selected {
+    background: #1e3c72;
+    color: #fff;
+    border-color: #1e3c72;
+    font-weight: bold;
+}
+
 </style>
 </head>
 <body>
@@ -966,6 +985,7 @@
                                 <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
                             </button>
                             <button id="clearFiltersBtn" class="btn btn-warning">🗑️ Filtreleri Temizle</button>
+                            <button id="openManualEntryBtn" class="btn btn-secondary ml-2"><i class="fas fa-plus-circle"></i> Manuel Sonuç Ekle</button>
                         </div>
                     </div>
                 </div>
@@ -1070,6 +1090,137 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-cancel" id="cancelNoteBtn">Vazgeç</button>
                 <button type="button" class="btn btn-save" id="saveNoteBtn">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addManualResultModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus-circle"></i> Manuel / Harici Sonuç Ekle</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Kapat">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label><strong>1. Hangi Markanız İçin Ekliyorsunuz?</strong></label>
+                        <select id="manualTargetSelect" class="form-control">
+                            <option value="">İzlenen marka seçiniz...</option>
+                        </select>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label><strong>2. Kaynak Türü</strong></label>
+                        <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
+                            <label class="btn btn-outline-primary active">
+                                <input type="radio" name="manualSourceType" value="tp" checked> 
+                                🇹🇷 TÜRKPATENT (Veritabanından)
+                            </label>
+                            <label class="btn btn-outline-dark">
+                                <input type="radio" name="manualSourceType" value="manual"> 
+                                🌍 YURTDIŞI / SERBEST GİRİŞ
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="tpSourceForm" class="source-form-section">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Aranacak Kaynak Bülten No</label>
+                                    <input type="text" id="tpSearchBulletinNo" class="form-control" placeholder="Örn: 469">
+                                    <small class="text-muted">Hangi bültende yayınlandığını giriniz.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Başvuru Numarası</label>
+                                    <div class="input-group">
+                                        <input type="text" id="tpSearchAppNo" class="form-control" placeholder="Örn: 2024/12345">
+                                        <div class="input-group-append">
+                                            <button class="btn btn-primary" type="button" id="btnQueryTpRecord">Sorgula</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="tpPreviewCard" class="card mt-3" style="display:none; border: 1px solid #28a745;">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <img id="tpPreviewImg" src="" style="width: 60px; height: 60px; object-fit: contain; margin-right: 15px; border:1px solid #eee;">
+                                    <div>
+                                        <h6 id="tpPreviewName" class="mb-1 font-weight-bold">-</h6>
+                                        <div class="small text-muted">
+                                            App No: <span id="tpPreviewAppNo">-</span> | 
+                                            Sınıflar: <span id="tpPreviewClasses">-</span>
+                                        </div>
+                                        <div class="small text-muted">Sahip: <span id="tpPreviewOwner">-</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="manualSourceForm" class="source-form-section" style="display:none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Marka Adı <span class="text-danger">*</span></label>
+                                    <input type="text" id="manMarkName" class="form-control">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Başvuru Numarası <span class="text-danger">*</span></label>
+                                    <input type="text" id="manAppNo" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Kaynak / Bülten Bilgisi</label>
+                                    <input type="text" id="manSourceInfo" class="form-control" placeholder="Örn: WIPO 2024/15, EUIPO Daily...">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Başvuru Tarihi</label>
+                                    <input type="date" id="manAppDate" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Marka Sahibi</label>
+                            <input type="text" id="manOwner" class="form-control">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Nice Sınıfları (Seçiniz)</label>
+                            <div class="nice-class-selector-grid" id="manualNiceGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(35px, 1fr)); gap: 5px;">
+                                </div>
+                            <small class="text-muted">Seçmek/Kaldırmak için kutucuklara tıklayın.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Görsel URL (Opsiyonel)</label>
+                            <input type="text" id="manImgUrl" class="form-control" placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Vazgeç</button>
+                    <button type="button" class="btn btn-success" id="btnSaveManualResult" disabled>
+                        <i class="fas fa-save"></i> Listeye Ekle
+                    </button>
+                </div>
             </div>
         </div>
     </div>
