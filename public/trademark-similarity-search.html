@@ -228,53 +228,68 @@
         
     /* --- Arama Sonuçları Tablosu (Görsel 150px için Ayarlandı) --- */
 
-        /* 1. Sıra No */
-        .results-table th:nth-child(1),
-        .results-table td:nth-child(1) { width: 3% !important; text-align: center; }
+ /* --- Arama Sonuçları Tablosu: Sabit Genişlik (Pixel) Stratejisi --- */
 
-        /* 2. Karar */
-        .results-table th:nth-child(2),
-        .results-table td:nth-child(2) { width: 8% !important; text-align: center; }
+/* ÖNEMLİ: Tabloyu sabit düzene zorluyoruz ki px değerleri tam otursun */
+.results-container .results-table {
+    table-layout: fixed; 
+    width: 100%;
+}
 
-        /* 3. Görsel (GENİŞLETİLDİ - %12) 150px sığsın diye */
-        .results-table th:nth-child(3),
-        .results-table td:nth-child(3) { width: 12% !important; text-align: center; }
+.results-container .results-table th, 
+.results-container .results-table td {
+    padding: 10px 5px !important;
+    vertical-align: middle; /* İçeriği dikeyde ortalar */
+}
 
-        /* 4. Marka Adı (Biraz daraltıldı - %18) */
-        .results-table th:nth-child(4),
-        .results-table td:nth-child(4) { 
-            width: 18% !important; 
-            word-wrap: break-word;
-            white-space: normal;
-        }
+/* 1. Sıra No (Sabit - Çok dar) */
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) { width: 50px !important; text-align: center; }
 
-        /* 5. Sahip (Biraz daraltıldı - %18) */
-        .results-table th:nth-child(5),
-        .results-table td:nth-child(5) { 
-            width: 18% !important;
-            word-wrap: break-word;
-            white-space: normal;
-        }
+/* 2. Karar (Sabit - Buton genişliği kadar) */
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) { width: 100px !important; text-align: center; }
 
-        /* 6. Nice Sınıfı */
-        .results-table th:nth-child(6),
-        .results-table td:nth-child(6) { width: 12% !important; }
+/* 3. Görsel (Sabit - 150px görsel + 10px pay = 160px) */
+.results-table th:nth-child(3),
+.results-table td:nth-child(3) { width: 160px !important; text-align: center; }
 
-        /* 7. Başvuru No */
-        .results-table th:nth-child(7),
-        .results-table td:nth-child(7) { width: 9% !important; }
+/* 4. Marka Adı (ESNEK - Kalan boşluğu doldursun) */
+/* width: auto çalışmazsa yüksek bir yüzde verip diğerlerini ezeriz */
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) { 
+    width: auto !important; 
+    word-wrap: break-word;
+    white-space: normal;
+}
 
-        /* 8. Benzerlik */
-        .results-table th:nth-child(8),
-        .results-table td:nth-child(8) { width: 7% !important; text-align: center; }
+/* 5. Sahip (ESNEK - Geniş alan) */
+.results-table th:nth-child(5),
+.results-table td:nth-child(5) { 
+    width: 20% !important; 
+    word-wrap: break-word;
+    white-space: normal;
+}
 
-        /* 9. B.Ş */
-        .results-table th:nth-child(9),
-        .results-table td:nth-child(9) { width: 6% !important; }
+/* 6. Nice Sınıfı (Sabit) */
+.results-table th:nth-child(6),
+.results-table td:nth-child(6) { width: 120px !important; }
 
-        /* 10. Not */
-        .results-table th:nth-child(10),
-        .results-table td:nth-child(10) { width: 7% !important; }
+/* 7. Başvuru No (Sabit) */
+.results-table th:nth-child(7),
+.results-table td:nth-child(7) { width: 110px !important; }
+
+/* 8. Benzerlik (Sabit) */
+.results-table th:nth-child(8),
+.results-table td:nth-child(8) { width: 80px !important; text-align: center; }
+
+/* 9. B.Ş (Sabit) */
+.results-table th:nth-child(9),
+.results-table td:nth-child(9) { width: 70px !important; }
+
+/* 10. Not (Sabit) */
+.results-table th:nth-child(10),
+.results-table td:nth-child(10) { width: 70px !important; }
 
         /* Not hücresindeki placeholder ve ikon için stil */
         .note-cell-content {
