@@ -228,27 +228,37 @@
         
     /* --- Arama Sonuçları Tablosu (Görsel 150px için Ayarlandı) --- */
 
+        /* Tablo hücrelerinin iç boşluğunu azaltarak içerikleri birbirine yaklaştır */
+        .results-container .results-table th, 
+        .results-container .results-table td {
+            padding: 10px 5px !important; /* Yan boşluklar 5px'e düşürüldü */
+        }
+
         /* 1. Sıra No */
         .results-table th:nth-child(1),
         .results-table td:nth-child(1) { width: 3% !important; text-align: center; }
 
-        /* 2. Karar */
+        /* 2. Karar (DARALTILDI - %6) */
         .results-table th:nth-child(2),
-        .results-table td:nth-child(2) { width: 8% !important; text-align: center; }
+        .results-table td:nth-child(2) { width: 6% !important; text-align: center; }
 
-        /* 3. Görsel (GENİŞLETİLDİ - %12) 150px sığsın diye */
+        /* 3. Görsel (DARALTILDI ve GÜVENLİ HALE GETİRİLDİ) */
         .results-table th:nth-child(3),
-        .results-table td:nth-child(3) { width: 12% !important; text-align: center; }
+        .results-table td:nth-child(3) { 
+            width: 10% !important;      /* Geniş ekranda çok yer kaplamasın */
+            min-width: 160px !important; /* 150px görselin sığması için alt sınır */
+            text-align: center; 
+        }
 
-        /* 4. Marka Adı (Biraz daraltıldı - %18) */
+        /* 4. Marka Adı (GENİŞLETİLDİ - %22) */
         .results-table th:nth-child(4),
         .results-table td:nth-child(4) { 
-            width: 18% !important; 
+            width: 22% !important;  /* Boşluğu buraya ekledik */
             word-wrap: break-word;
             white-space: normal;
         }
 
-        /* 5. Sahip (Biraz daraltıldı - %18) */
+        /* 5. Sahip (%18) */
         .results-table th:nth-child(5),
         .results-table td:nth-child(5) { 
             width: 18% !important;
