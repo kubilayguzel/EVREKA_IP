@@ -2704,22 +2704,17 @@ const addGlobalOptionToBulletinSelect = () => {
     }
 };
 
-// 2. Modalı Açma ve Hazırlama
+// 2. Modalı Açma ve Hazırlama (GÜNCELLENMİŞ HALİ)
 const openManualEntryModal = () => {
     const modal = $('#addManualResultModal');
-    const targetSelect = document.getElementById('manualTargetSelect');
     const niceGrid = document.getElementById('manualNiceGrid');
     
-    // İzlenen markaları doldur
-    targetSelect.innerHTML = '<option value="">İzlenen marka seçiniz...</option>';
-    monitoringTrademarks.forEach(tm => {
-        const name = tm.title || tm.markName || 'İsimsiz Marka';
-        const opt = document.createElement('option');
-        opt.value = tm.id;
-        opt.textContent = `${name} (App: ${tm.applicationNumber || '-'})`;
-        targetSelect.appendChild(opt);
-    });
-
+    // --- YENİ: Arama alanlarını sıfırla ---
+    document.getElementById('manualTargetSearchInput').value = '';
+    document.getElementById('manualTargetId').value = '';
+    document.getElementById('manualTargetSearchResults').style.display = 'none';
+    document.getElementById('manualTargetSelectedInfo').style.display = 'none';
+    
     // Nice Sınıf Grid'ini Oluştur (1-45)
     niceGrid.innerHTML = '';
     for (let i = 1; i <= 45; i++) {
@@ -2817,7 +2812,7 @@ const queryTpRecordForManualAdd = async () => {
 
 // 4. Kaydetme Fonksiyonu
 const saveManualResultEntry = async () => {
-    const monitoredId = document.getElementById('manualTargetSelect').value;
+const monitoredId = document.getElementById('manualTargetId').value;
     if (!monitoredId) {
         showNotification('Lütfen izlenen marka seçiniz.', 'warning');
         return;
@@ -2932,6 +2927,84 @@ const saveManualResultEntry = async () => {
     }
 };
 
+// 5. İzlenen Marka Arama Fonksiyonu (YENİ)
+const setupManualTargetSearch = () => {
+    const input = document.getElementById('manualTargetSearchInput');
+    const resultsContainer = document.getElementById('manualTargetSearchResults');
+    const hiddenId = document.getElementById('manualTargetId');
+    const infoBox = document.getElementById('manualTargetSelectedInfo');
+    const infoText = document.getElementById('manualTargetSelectedText');
+
+    if (!input || !resultsContainer) return;
+
+    // Input dinleyicisi
+    input.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        
+        // Arama kutusu boşalırsa seçimi de temizle
+        if (term.length === 0) {
+            resultsContainer.style.display = 'none';
+            hiddenId.value = ''; // ID'yi temizle
+            infoBox.style.display = 'none';
+            return;
+        }
+
+        // İzlenen markalar içinde ara (Global monitoringTrademarks dizisini kullanır)
+        const matches = monitoringTrademarks.filter(tm => {
+            const name = (tm.title || tm.markName || '').toLowerCase();
+            const appNo = (tm.applicationNumber || tm.applicationNo || '').toLowerCase();
+            return name.includes(term) || appNo.includes(term);
+        });
+
+        // Sonuçları göster
+        resultsContainer.innerHTML = '';
+        if (matches.length > 0) {
+            matches.slice(0, 10).forEach(tm => { // Max 10 sonuç
+                const name = tm.title || tm.markName || 'İsimsiz';
+                const appNo = tm.applicationNumber || tm.applicationNo || '-';
+                
+                const item = document.createElement('a');
+                item.href = "#";
+                item.className = "list-group-item list-group-item-action";
+                item.style.cursor = "pointer";
+                item.innerHTML = `
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1 font-weight-bold" style="font-size:0.95rem;">${name}</h6>
+                        <small>${appNo}</small>
+                    </div>
+                `;
+                
+                // Seçim yapıldığında
+                item.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    
+                    // Değerleri ata
+                    input.value = name;
+                    hiddenId.value = tm.id;
+                    
+                    // Görsel geri bildirim
+                    infoText.textContent = `${name} (${appNo})`;
+                    infoBox.style.display = 'block';
+                    resultsContainer.style.display = 'none';
+                });
+                
+                resultsContainer.appendChild(item);
+            });
+            resultsContainer.style.display = 'block';
+        } else {
+            resultsContainer.innerHTML = '<div class="list-group-item text-muted">Sonuç bulunamadı.</div>';
+            resultsContainer.style.display = 'block';
+        }
+    });
+
+    // Dışarı tıklanınca listeyi kapat
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.style.display = 'none';
+        }
+    });
+};
+
 // --- Main Entry Point (Ana Giriş Noktası) ---
 document.addEventListener('DOMContentLoaded', async () => {
     initializePagination();
@@ -3008,6 +3081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     setupEditCriteriaModal(); // Modal'ı başlat
+    setupManualTargetSearch(); // ✅ YENİ: Arama fonksiyonunu başlat
     // --- MANUEL GİRİŞ İÇİN EVENT LISTENERS ---
     
     const btnOpenManual = document.getElementById('openManualEntryBtn');
