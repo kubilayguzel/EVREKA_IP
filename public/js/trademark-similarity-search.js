@@ -8,6 +8,7 @@ import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
 import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import SimpleLoading from './simple-loading.js';
 
 console.log("### trademark-similarity-search.js yüklendi ###");
 
@@ -2397,27 +2398,23 @@ const checkCacheAndToggleButtonStates = async () => {
     }
 };
 
+// public/js/trademark-similarity-search.js içindeki performSearch fonksiyonunu bu şekilde güncelleyin:
+
 const performSearch = async () => {
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) return;
     
-    // 🔍 LOG: Arama başlangıç bilgileri
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🔍 [ARAMA BAŞLAT] İŞLEM BAŞLADI');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📊 [ARAMA BAŞLAT] Genel Durum:', {
-        seçiliBülten: bulletinKey,
-        toplamİzlenenMarka: monitoringTrademarks.length,
-        filtrelenmişMarkaSayısı: filteredMonitoringTrademarks.length
-    });
     
-    console.log('📋 [ARAMA BAŞLAT] Arama yapılacak markalar:');
-    filteredMonitoringTrademarks.forEach((tm, index) => {
-        console.log(`  ${index + 1}. ${tm.title || tm.markName} (ID: ${tm.id}, Başvuru No: ${tm.applicationNumber})`);
-    });
+    // ✅ DEĞİŞİKLİK 1: Eski loadingIndicator yerine SimpleLoading kullanıyoruz
+    // loadingIndicator.textContent = 'Arama başlatılıyor...'; 
+    // loadingIndicator.style.display = 'block';
     
-    loadingIndicator.textContent = 'Arama başlatılıyor...';
-    loadingIndicator.style.display = 'block';
+    SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyiniz, bu işlem markaların yoğunluğuna göre zaman alabilir.');
+
+    // ✅ DEĞİŞİKLİK 2: "Kayıt bulunamadı" mesajını arama başlarken kesinlikle gizle
+    if (noRecordsMessage) noRecordsMessage.style.display = 'none';
+    
     infoMessageContainer.innerHTML = '';
     resultsTableBody.innerHTML = '';
     allSimilarResults = [];
@@ -2429,29 +2426,25 @@ const performSearch = async () => {
         goodsAndServicesByClass: tm.goodsAndServicesByClass || [],
     }));
     
-    console.log('🎯 [ARAMA BAŞLAT] Arama payload hazırlandı:', {
-        markaSayısı: monitoredMarksPayload.length,
-        örnek: monitoredMarksPayload.slice(0, 2)
-    });
-    
     try {
-        // ✅ Progress callback - Loading indicator'ı güncelle
+        // ✅ Progress callback - SimpleLoading'i güncelle
         const onProgress = (progressData) => {
             const percentage = progressData.progress || 0;
             const processed = progressData.processed || 0;
             const total = progressData.total || monitoredMarksPayload.length;
             const currentResults = progressData.currentResults || 0;
             
-            loadingIndicator.textContent = 
-                `Arama devam ediyor... ${percentage}% ` +
-                `(${processed}/${total} marka işlendi, ` +
-                `${currentResults} sonuç bulundu)`;
+            // ✅ SimpleLoading güncelleme
+            SimpleLoading.update(
+                `Arama devam ediyor... %${percentage}`, 
+                `İşlenen: ${processed}/${total} marka<br>Bulunan Benzerlik: ${currentResults} adet`
+            );
         };
         
         const resultsFromCF = await runTrademarkSearch(
             monitoredMarksPayload, 
             bulletinKey,
-            onProgress  // ✅ Progress callback eklendi
+            onProgress
         );
         
         if (resultsFromCF?.length > 0) {
@@ -2461,6 +2454,7 @@ const performSearch = async () => {
                 monitoredTrademark: filteredMonitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId)?.title || hit.markName
             }));
             
+            // Sonuçları kaydet (mevcut kod)
             const groupedResults = allSimilarResults.reduce((acc, r) => {
                 const key = r.monitoredTrademarkId;
                 (acc[key] = acc[key] || []).push(r);
@@ -2475,29 +2469,33 @@ const performSearch = async () => {
         console.error("❌ Search operation error:", error);
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu.</div>`;
     } finally {
-            loadingIndicator.style.display = 'none';
-            console.log('✅ [ARAMA BAŞLAT] Sonuçlar alındı:', {
-                toplamSonuç: allSimilarResults.length,
-                benzerSayısı: allSimilarResults.filter(r => r.isSimilar === true).length,
-                benzemezSayısı: allSimilarResults.filter(r => r.isSimilar === false).length
-            });
-            
-            console.log('💾 [ARAMA BAŞLAT] Sonuçlar cache\'e kaydediliyor...');
-            groupAndSortResults();
-            if (allSimilarResults.length > 0) {
-                infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
-                startSearchBtn.disabled = true;
-                researchBtn.disabled = false;
-                btnGenerateReportAndNotifyGlobal.disabled = false; // YENİ: Butonu etkinleştir
-            } else {
+        // ✅ DEĞİŞİKLİK 3: Yükleme ekranını kapat
+        // loadingIndicator.style.display = 'none';
+        SimpleLoading.hide();
+
+        console.log('✅ [ARAMA BAŞLAT] Sonuçlar alındı:', allSimilarResults.length);
+        
+        groupAndSortResults();
+        
+        if (allSimilarResults.length > 0) {
+            infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
+            startSearchBtn.disabled = true;
+            researchBtn.disabled = false;
+            btnGenerateReportAndNotifyGlobal.disabled = false;
+            if (noRecordsMessage) noRecordsMessage.style.display = 'none'; // Emin olmak için tekrar gizle
+        } else {
+            // Sadece sonuç GERÇEKTEN yoksa göster
+            if (noRecordsMessage) {
                 noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
                 noRecordsMessage.style.display = 'block';
-                startSearchBtn.disabled = false;
-                researchBtn.disabled = true;
-                btnGenerateReportAndNotifyGlobal.disabled = true; // YENİ: Butonu devre dışı bırak
             }
-            if (pagination) pagination.update(allSimilarResults.length);
-            renderCurrentPageOfResults();
+            startSearchBtn.disabled = false;
+            researchBtn.disabled = true;
+            btnGenerateReportAndNotifyGlobal.disabled = true;
+        }
+        
+        if (pagination) pagination.update(allSimilarResults.length);
+        renderCurrentPageOfResults();
     }
 };
 
@@ -2512,16 +2510,14 @@ const performResearch = async () => {
     console.log('📊 [YENİDEN ARA] Genel Durum:', {
         seçiliBülten: bulletinKey,
         toplamİzlenenMarka: monitoringTrademarks.length,
-        filtrelenişMarkaSayısı: filteredMonitoringTrademarks.length
+        filtrelenmişMarkaSayısı: filteredMonitoringTrademarks.length
     });
     
-    console.log('📋 [YENİDEN ARA] Yeniden arama yapılacak markalar:');
-    filteredMonitoringTrademarks.forEach((tm, index) => {
-        console.log(`  ${index + 1}. ${tm.title || tm.markName} (ID: ${tm.id}, Başvuru No: ${tm.applicationNumber})`);
-    });
+    // ✅ SimpleLoading Başlat (YENİ)
+    SimpleLoading.show('Hazırlanıyor...', 'Önbellek temizleniyor ve yeniden arama başlatılıyor...');
     
-    loadingIndicator.textContent = 'Cache temizleniyor ve yeniden arama başlatılıyor...';
-    loadingIndicator.style.display = 'block';
+    // ✅ "Kayıt bulunamadı" mesajını işlem başında gizle (YENİ)
+    if (noRecordsMessage) noRecordsMessage.style.display = 'none';
     
     try {
         // Cache silme işlemi
@@ -2552,7 +2548,8 @@ const performResearch = async () => {
             });
         }
         
-        // Yeniden arama başlat
+        // Yeniden arama başlat 
+        // (performSearch fonksiyonu zaten SimpleLoading.update ve hide işlemlerini kendi içinde yönetiyor)
         console.log('🔍 [YENİDEN ARA] ADIM 2: Yeniden arama başlatılıyor...');
         await performSearch();
         
@@ -2564,15 +2561,12 @@ const performResearch = async () => {
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.error("❌ [YENİDEN ARA] HATA OLUŞTU:", error);
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
+        // Hata durumunda loading kapat (performSearch çalışamadıysa burası kapatmalı)
+        SimpleLoading.hide();
+        
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Yeniden arama sırasında bir hata oluştu.</div>`;
     } 
-    
-    finally {
-        loadingIndicator.style.display = 'none';
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('✅ [ARAMA BAŞLAT] İŞLEM TAMAMLANDI');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    }
 };
 
 const groupAndSortResults = () => {
