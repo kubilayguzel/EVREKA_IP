@@ -1013,6 +1013,19 @@ div[style*="padding: 0 30px 30px"] .results-table td:nth-child(6) {
     transform: scale(1.02);
 }
 
+/* Eylemler Kolonundaki (6. Sütun) Butonları Ortala */
+.owner-row td:nth-child(6) {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* Flex yapısındaki buton grubunu yatayda ortala */
+.owner-row td:nth-child(6) .btn-group {
+    justify-content: center !important;
+    display: flex; /* Garantiye almak için */
+    width: 100%;   /* Alanı kaplaması için */
+}
+
 </style>
 </head>
 <body>
