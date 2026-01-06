@@ -237,57 +237,185 @@ const refreshTriggeredStatus = async (bulletinNo) => {
 
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
-    if (!filteredMonitoringTrademarks.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; return; }
     
+    if (!filteredMonitoringTrademarks.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
+        return;
+    }
+
+    console.log('📋 [RENDER] Başlatılıyor...', {
+        filtrelenmişMarkaSayısı: filteredMonitoringTrademarks.length
+    });
+
+    // 1. Gruplama
     const groupedByOwner = {};
     for (const tm of filteredMonitoringTrademarks) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
         const ownerInfo = _getOwnerKey(ip, tm, allPersons);
         const ownerKey = ownerInfo.key;
-        if (!groupedByOwner[ownerKey]) groupedByOwner[ownerKey] = { ownerName: ownerInfo.name, ownerId: ownerInfo.id, trademarks: [] };
+
+        if (!groupedByOwner[ownerKey]) {
+            groupedByOwner[ownerKey] = {
+                ownerName: ownerInfo.name,
+                ownerId: ownerInfo.id,
+                trademarks: [],
+                allNiceClasses: new Set()
+            };
+        }
+        
+        const nices = _uniqNice(ip || tm).split(', ').map(s => s.trim()).filter(Boolean);
+        nices.forEach(n => groupedByOwner[ownerKey].allNiceClasses.add(n));
         groupedByOwner[ownerKey].trademarks.push({ tm, ip, ownerInfo });
     }
-    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName));
+
+    // 2. Sıralama ve Sayfalama
+    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
+        groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
+    );
+    
     const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
     const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
-    const paginatedOwnerKeys = sortedOwnerKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedOwnerKeys = sortedOwnerKeys.slice(startIndex, endIndex);
+
     let allRowsHtml = [];
+
+    // 3. Render Döngüsü
     for (const ownerKey of paginatedOwnerKeys) {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
-        const headerRow = `
-        <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
-            <td class="col-mon-toggle"><i class="fas fa-chevron-down toggle-icon"></i></td>
-            <td class="col-mon-owner">${group.ownerName}</td>
-            <td class="col-mon-count">${group.trademarks.length}</td>
-            <td class="col-mon-trigger"><span class="trigger-status-badge ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'trigger-yes' : 'trigger-no'}" data-owner-id="${group.ownerId}">${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'Evet' : 'Hayır'}</span></td>
-            <td class="col-mon-notif"><span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" data-owner-id="${group.ownerId}">${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}</span></td>
-            <td class="col-mon-actions"><div class="btn-group">
-                <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor Oluştur ve Müşteriye Bildir"><i class="fas fa-paper-plane"></i> Rapor + Bildir</button>
-                <button class="action-btn btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Sadece Rapor İndir"><i class="fas fa-file-pdf"></i> Rapor</button>
-            </div></td>
-        </tr>`;
-        allRowsHtml.push(headerRow);
         
+        // --- DURUM MANTIĞI: İş Tetiklendi mi? ---
+        const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
+        // Eğer tetiklendiyse "Evet", değilse "Hazır" yazsın
+        const statusText = isTriggered ? 'Evet' : 'Hazır';
+        const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
+
+        const headerRow = `
+        <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
+            <td style="text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
+            
+            <td style="text-align:left;">${group.ownerName}</td>
+            
+            <td style="text-align:center;">${group.trademarks.length}</td>
+
+            <td style="text-align:center;">
+                <span class="task-triggered-status trigger-status-badge ${statusClass}"
+                    data-owner-id="${group.ownerId}">
+                ${statusText}
+                </span>
+            </td>
+
+            <td style="text-align:center;">
+                <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" 
+                      data-owner-id="${group.ownerId}">
+                ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
+                </span>
+            </td>
+
+            <td style="text-align:center;">
+                <div class="btn-group">
+                <button class="action-btn btn-success generate-report-and-notify-btn"
+                        data-owner-id="${group.ownerId}"
+                        data-owner-name="${group.ownerName}"
+                        title="Rapor Oluştur ve Müşteriye Bildir">
+                    <i class="fas fa-paper-plane"></i> Rapor + Bildir
+                </button>
+                <button class="action-btn btn-primary generate-report-btn"
+                        data-owner-id="${group.ownerId}"
+                        data-owner-name="${group.ownerName}"
+                        title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
+                    <i class="fas fa-file-pdf"></i> Rapor
+                </button>
+                </div>
+            </td>
+        </tr>
+        `;
+
+        allRowsHtml.push(headerRow);
+
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
-            const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
+            const [markName, imgSrc, appNo, nices, appDate] = [
+                _pickName(ip, tm), 
+                _pickImg(ip, tm), 
+                _pickAppNo(ip, tm), 
+                _uniqNice(ip || tm), 
+                _pickAppDate(ip, tm)
+            ];
+            
+            const imgStyle = 'width: 100px; height: 100px;';
+            
             return `
-                <tr class="trademark-detail-row">
-                    <td class="col-nest-img">${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img src="${imgSrc}" alt="Görsel"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}</td>
-                    <td class="col-nest-name">${markName}</td>
-                    <td class="col-nest-appno">${appNo}</td>
-                    <td class="col-nest-nice">${nices || '-'}</td> 
-                    <td class="col-nest-date">${appDate}</td>
-                </tr>`;
+                <tr class="trademark-detail-row" style="background-color: #ffffff;">
+                    <td></td>
+                    <td style="text-align: center;">
+                        ${imgSrc ? `<div class="trademark-image-wrapper-large" style="${imgStyle}"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli" style="${imgStyle}"></div>` : `<div class="no-image-placeholder-large" style="${imgStyle}">-</div>`}
+                    </td>
+                    <td style="text-align: left;">${markName}</td>
+                    <td style="text-align: center;">${appNo}</td>
+                    <td style="text-align: left;">${nices || '-'}</td> 
+                    <td style="text-align: center;">${appDate}</td>
+                </tr>
+            `;
         }).join('');
-        const contentRow = `<tr id="${groupUid}" class="accordion-content-row" style="display: none;"><td colspan="6" style="padding: 0;"><table class="nested-table"><thead><tr><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead><tbody>${detailRowsHtml}</tbody></table></td></tr>`;
+
+        // --- İÇ TABLO (ACCORDION) AYARLARI ---
+        // Marka adı ile Başvuru no arasındaki boşluğu kapatmak için width değerleri güncellendi.
+        const contentRow = `
+            <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
+                <td colspan="6" style="padding: 0;">
+                    <table class="table table-sm" style="margin: 0; background-color: transparent; table-layout: fixed;">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;"></th>
+                                <th style="width: 10%; text-align: center;">Görsel</th>
+                                <th style="width: 20%; text-align: left;">Marka Adı</th> <th style="width: 15%; text-align: center;">Başvuru No</th> <th style="width: 40%; text-align: left;">Nice Sınıfı</th> <th style="width: 10%; text-align: center;">B. Tarihi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${detailRowsHtml}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+        `;
         allRowsHtml.push(contentRow);
     }
+    
     tbody.innerHTML = allRowsHtml.join('');
+    
     attachMonitoringAccordionListeners();
     attachGenerateReportListener();
+    setupImageHoverEffect('monitoringListBody');
     attachTrademarkClickListener();
+
+    // --- BADGE GÜNCELLEME (HAZIR / EVET KONTROLÜ) ---
+    setTimeout(() => {
+        document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
+            const btn = row.querySelector('.generate-report-and-notify-btn');
+            if (!btn || !btn.dataset.ownerId) return;
+            
+            const ownerId = btn.dataset.ownerId;
+            const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
+            if (!badge) return;
+            
+            const hasTriggered = taskTriggeredStatus.get(ownerId) === 'Evet';
+            
+            // Eğer tetiklendiyse "Evet", değilse "Hazır"
+            badge.textContent = hasTriggered ? 'Evet' : 'Hazır';
+            
+            // Stil temizliği
+            badge.classList.remove('trigger-yes', 'trigger-no', 'trigger-ready', 'text-success', 'text-danger', 'font-weight-bold');
+            
+            // Yeni stil atama
+            if (hasTriggered) {
+                badge.classList.add('trigger-yes');
+            } else {
+                badge.classList.add('trigger-ready');
+            }
+        });
+    }, 300); // 300ms gecikme ile DOM'un oturduğundan emin oluyoruz
 };
 
 const renderCurrentPageOfResults = () => {
