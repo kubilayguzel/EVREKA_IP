@@ -3104,34 +3104,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnOpenManual.addEventListener('click', openManualEntryModal);
     }
 
-    // Bu kod, radio butonlarına doğrudan bağlanmak yerine döküman üzerindeki değişiklikleri dinler.
-    document.addEventListener('change', function(e) {
-        // Değişen eleman bizim radio butonumuz mu?
-        if (e.target && e.target.name === 'manualSourceType') {
-            console.log('🔘 Kaynak Türü Değişti:', e.target.value); // Konsolda bu yazıyı görmelisiniz
+ // --- MANUEL KAYNAK TÜRÜ DEĞİŞİMİ (DEBUG VERSİYON) ---
+    const manualRadios = document.querySelectorAll('input[name="manualSourceType"]');
+    console.log('🔍 Radyo butonları aranıyor... Bulunan:', manualRadios.length);
 
-            const tpForm = document.getElementById('tpSourceForm');
-            const manForm = document.getElementById('manualSourceForm');
-            const saveBtn = document.getElementById('btnSaveManualResult');
-
-            if (e.target.value === 'tp') {
-                // TP Seçildi
-                if(tpForm) tpForm.style.display = 'block';
-                if(manForm) manForm.style.display = 'none';
-                
-                // TP modunda buton, ancak sorgu yapılmışsa aktif olur
-                // (tpSearchResultData değişkeni dosya genelinde tanımlı varsayılıyor)
-                if(saveBtn) saveBtn.disabled = !tpSearchResultData; 
-            } else {
-                // Yurtdışı/Manuel Seçildi
-                if(tpForm) tpForm.style.display = 'none';
-                if(manForm) manForm.style.display = 'block';
-                
-                // Manuel modda buton her zaman aktiftir (Validasyon kaydetme anında yapılır)
-                if(saveBtn) saveBtn.disabled = false; 
+    // Radyo butonlarının kapsayıcısı olan etiketlere (label) de tıklama olayı ekleyelim (Bootstrap uyumu için)
+    document.querySelectorAll('.btn-group-toggle label.btn').forEach(label => {
+        label.addEventListener('click', function() {
+            // Tıklanan label'ın içindeki input'u bul
+            const input = this.querySelector('input');
+            if (input) {
+                console.log('🖱️ Etikete tıklandı, değer:', input.value);
+                // Kısa bir gecikmeyle UI güncellemesini tetikle (Bootstrap class'ları güncelledikten sonra)
+                setTimeout(() => updateManualFormUI(input.value), 50);
             }
-        }
+        });
     });
+
+    // Doğrudan input değişimi (Yedek olarak kalsın)
+    manualRadios.forEach(radio => {
+        radio.addEventListener('change', function(e) {
+            console.log('🔘 Input değişti (Change Event):', this.value);
+            updateManualFormUI(this.value);
+        });
+    });
+
+    // Form arayüzünü güncelleyen yardımcı fonksiyon
+    function updateManualFormUI(selectedValue) {
+        const tpForm = document.getElementById('tpSourceForm');
+        const manForm = document.getElementById('manualSourceForm');
+        const saveBtn = document.getElementById('btnSaveManualResult');
+
+        console.log('🔄 UI Güncelleniyor. Seçilen:', selectedValue);
+
+        if (selectedValue === 'tp') {
+            if(tpForm) tpForm.style.display = 'block';
+            if(manForm) manForm.style.display = 'none';
+            // TP modunda buton, ancak sorgu yapılmışsa aktif olur
+            if(saveBtn) saveBtn.disabled = !tpSearchResultData; 
+        } else {
+            if(tpForm) tpForm.style.display = 'none';
+            if(manForm) manForm.style.display = 'block';
+            // Manuel modda buton her zaman aktiftir
+            if(saveBtn) saveBtn.disabled = false; 
+        }
+    }
 
     // TP Sorgula Butonu
     const btnQueryTp = document.getElementById('btnQueryTpRecord');
