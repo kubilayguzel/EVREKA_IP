@@ -2674,6 +2674,263 @@ window.queryApplicationNumberWithExtension = (applicationNo) => {
     }
 };
 
+// ==========================================
+// MANUEL / YURTDIŞI KAYIT YÖNETİMİ
+// ==========================================
+
+const MANUAL_COLLECTION_ID = 'GLOBAL_MANUAL_RECORDS';
+let tpSearchResultData = null; // Geçici TP sorgu sonucu
+
+// 1. Bülten Listesine "Yurtdışı" Seçeneğini Ekleme
+const addGlobalOptionToBulletinSelect = () => {
+    const select = document.getElementById('bulletinSelect');
+    if (!select) return;
+    
+    // Eğer zaten ekli değilse
+    if (!select.querySelector('option[value="' + MANUAL_COLLECTION_ID + '"]')) {
+        const opt = document.createElement('option');
+        opt.value = MANUAL_COLLECTION_ID;
+        opt.textContent = "🌍 YURTDIŞI / SERBEST KAYITLAR (Tümü)";
+        opt.style.fontWeight = "bold";
+        opt.style.color = "#d63384"; // Belirgin olması için pembe/mor tonu
+        
+        // En başa ekle (Placeholder'dan sonra)
+        const firstOption = select.options[0];
+        if (firstOption) {
+            firstOption.insertAdjacentElement('afterend', opt);
+        } else {
+            select.appendChild(opt);
+        }
+    }
+};
+
+// 2. Modalı Açma ve Hazırlama
+const openManualEntryModal = () => {
+    const modal = $('#addManualResultModal');
+    const targetSelect = document.getElementById('manualTargetSelect');
+    const niceGrid = document.getElementById('manualNiceGrid');
+    
+    // İzlenen markaları doldur
+    targetSelect.innerHTML = '<option value="">İzlenen marka seçiniz...</option>';
+    monitoringTrademarks.forEach(tm => {
+        const name = tm.title || tm.markName || 'İsimsiz Marka';
+        const opt = document.createElement('option');
+        opt.value = tm.id;
+        opt.textContent = `${name} (App: ${tm.applicationNumber || '-'})`;
+        targetSelect.appendChild(opt);
+    });
+
+    // Nice Sınıf Grid'ini Oluştur (1-45)
+    niceGrid.innerHTML = '';
+    for (let i = 1; i <= 45; i++) {
+        const div = document.createElement('div');
+        div.className = 'nice-class-box-item';
+        div.textContent = i;
+        div.dataset.classNo = i;
+        div.onclick = function() {
+            this.classList.toggle('selected');
+        };
+        niceGrid.appendChild(div);
+    }
+
+    // Formu sıfırla
+    document.getElementById('tpSearchBulletinNo').value = '';
+    document.getElementById('tpSearchAppNo').value = '';
+    const previewCard = document.getElementById('tpPreviewCard');
+    if(previewCard) previewCard.style.display = 'none';
+    
+    tpSearchResultData = null;
+    document.getElementById('btnSaveManualResult').disabled = true;
+    
+    // Manuel form alanlarını temizle
+    ['manMarkName', 'manAppNo', 'manSourceInfo', 'manOwner', 'manAppDate', 'manImgUrl'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+
+    modal.modal('show');
+};
+
+// 3. TP Sorgulama Fonksiyonu
+const queryTpRecordForManualAdd = async () => {
+    const bNo = document.getElementById('tpSearchBulletinNo').value.trim();
+    const appNo = document.getElementById('tpSearchAppNo').value.trim();
+
+    if (!bNo || !appNo) {
+        showNotification('Lütfen Kaynak Bülten No ve Başvuru No giriniz.', 'warning');
+        return;
+    }
+
+    SimpleLoading.show('Sorgulanıyor...', 'Veritabanında kayıt aranıyor...');
+
+    try {
+        const q = query(
+            collection(db, 'trademarkBulletinRecords'),
+            where('bulletinNo', '==', bNo),
+            where('applicationNo', '==', appNo),
+            limit(1)
+        );
+        
+        const snap = await getDocs(q);
+        
+        if (snap.empty) {
+            SimpleLoading.hide();
+            showNotification('Kayıt bulunamadı. Bülten numarasını kontrol ediniz.', 'error');
+            document.getElementById('tpPreviewCard').style.display = 'none';
+            document.getElementById('btnSaveManualResult').disabled = true;
+            tpSearchResultData = null;
+            return;
+        }
+
+        const data = snap.docs[0].data();
+        tpSearchResultData = { ...data, id: snap.docs[0].id }; // ID'yi sakla
+
+        // Önizlemeyi doldur
+        document.getElementById('tpPreviewName').textContent = data.markName || '-';
+        document.getElementById('tpPreviewAppNo').textContent = data.applicationNo || '-';
+        document.getElementById('tpPreviewClasses').textContent = data.niceClasses || '-';
+        
+        const ownerName = Array.isArray(data.holders) ? data.holders.map(h=>h.name).join(', ') : (data.holders || '-');
+        document.getElementById('tpPreviewOwner').textContent = ownerName;
+        
+        // Görsel
+        let imgUrl = '/img/placeholder.png'; // Varsayılan
+        if (data.imagePath) {
+            try {
+                const storageRef = ref(getStorage(), data.imagePath);
+                imgUrl = await getDownloadURL(storageRef);
+            } catch(e) { console.warn('Img err', e); }
+        }
+        document.getElementById('tpPreviewImg').src = imgUrl;
+
+        document.getElementById('tpPreviewCard').style.display = 'block';
+        document.getElementById('btnSaveManualResult').disabled = false;
+        
+        SimpleLoading.hide();
+
+    } catch (error) {
+        SimpleLoading.hide();
+        console.error("Sorgu hatası:", error);
+        showNotification('Sorgulama sırasında hata oluştu.', 'error');
+    }
+};
+
+// 4. Kaydetme Fonksiyonu
+const saveManualResultEntry = async () => {
+    const monitoredId = document.getElementById('manualTargetSelect').value;
+    if (!monitoredId) {
+        showNotification('Lütfen izlenen marka seçiniz.', 'warning');
+        return;
+    }
+
+    const sourceType = document.querySelector('input[name="manualSourceType"]:checked').value;
+    const currentBulletinVal = document.getElementById('bulletinSelect').value;
+
+    let targetDocRef;
+    let newResultItem = {};
+
+    // --- SENARYO A: TP Kaydı Ekleme ---
+    if (sourceType === 'tp') {
+        if (!tpSearchResultData) return;
+        
+        // TP kayıtları her zaman MEVCUT SEÇİLİ BÜLTENİN altına eklenir
+        if (!currentBulletinVal || currentBulletinVal === MANUAL_COLLECTION_ID) {
+            showNotification('TP kaydı eklemek için lütfen arka planda ilgili TürkPatent bültenini seçiniz.', 'warning');
+            return;
+        }
+
+        targetDocRef = doc(db, 'monitoringTrademarkRecords', currentBulletinVal, 'trademarks', monitoredId);
+
+        newResultItem = {
+            ...tpSearchResultData,
+            source: 'manual_tp_lookup',
+            isSimilar: true,
+            similarityScore: 1.0,
+            monitoredTrademarkId: monitoredId,
+            addedAt: new Date().toISOString()
+        };
+    } 
+    // --- SENARYO B: Yurtdışı / Manuel ---
+    else {
+        const markName = document.getElementById('manMarkName').value.trim();
+        const appNo = document.getElementById('manAppNo').value.trim();
+        
+        if (!markName || !appNo) {
+            showNotification('Marka Adı ve Başvuru Numarası zorunludur.', 'warning');
+            return;
+        }
+
+        const selectedClasses = Array.from(document.querySelectorAll('.nice-class-box-item.selected'))
+                                     .map(el => el.dataset.classNo)
+                                     .join(', ');
+
+        // Hedef: GLOBAL_MANUAL_RECORDS
+        targetDocRef = doc(db, 'monitoringTrademarkRecords', MANUAL_COLLECTION_ID, 'trademarks', monitoredId);
+
+        newResultItem = {
+            markName: markName,
+            applicationNo: appNo,
+            bulletinNo: document.getElementById('manSourceInfo').value.trim() || 'Manual',
+            applicationDate: document.getElementById('manAppDate').value || null,
+            niceClasses: selectedClasses,
+            holders: [{ name: document.getElementById('manOwner').value.trim() }],
+            brandImageUrl: document.getElementById('manImgUrl').value.trim() || null,
+            
+            source: 'manual_entry',
+            isSimilar: true,
+            similarityScore: 1.0,
+            monitoredTrademarkId: monitoredId,
+            addedAt: new Date().toISOString()
+        };
+    }
+
+    SimpleLoading.show('Kaydediliyor...', 'Sonuç listeye ekleniyor...');
+
+    try {
+        const docSnap = await getDoc(targetDocRef);
+        
+        if (!docSnap.exists()) {
+            await setDoc(targetDocRef, {
+                results: [newResultItem],
+                updatedAt: new Date().toISOString()
+            });
+        } else {
+            await updateDoc(targetDocRef, {
+                results: arrayUnion(newResultItem),
+                updatedAt: new Date().toISOString()
+            });
+        }
+
+        // Arayüzü güncelle (Sayfa yenilemeden)
+        if (
+            (sourceType === 'tp' && currentBulletinVal !== MANUAL_COLLECTION_ID) ||
+            (sourceType === 'manual' && currentBulletinVal === MANUAL_COLLECTION_ID)
+        ) {
+            const monitoredTm = monitoringTrademarks.find(t => t.id === monitoredId);
+            const enrichedItem = {
+                ...newResultItem,
+                monitoredTrademark: monitoredTm?.title || monitoredTm?.markName || 'Bilinmeyen'
+            };
+            
+            allSimilarResults.push(enrichedItem);
+            groupAndSortResults();
+            if (pagination) pagination.update(allSimilarResults.length);
+            renderCurrentPageOfResults();
+            
+            infoMessageContainer.innerHTML = `<div class="info-message success">Yeni kayıt başarıyla eklendi ve listelendi.</div>`;
+        } else {
+            showNotification('Kayıt eklendi. Görüntülemek için ilgili bülten/listeye geçiniz.', 'success');
+        }
+
+        $('#addManualResultModal').modal('hide');
+        SimpleLoading.hide();
+
+    } catch (error) {
+        console.error("Kaydetme hatası:", error);
+        SimpleLoading.hide();
+        showNotification('Kaydetme sırasında hata oluştu: ' + error.message, 'error');
+    }
+};
 
 // --- Main Entry Point (Ana Giriş Noktası) ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2751,6 +3008,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     setupEditCriteriaModal(); // Modal'ı başlat
+    // --- MANUEL GİRİŞ İÇİN EVENT LISTENERS ---
+    
+    const btnOpenManual = document.getElementById('openManualEntryBtn');
+    if (btnOpenManual) {
+        btnOpenManual.addEventListener('click', openManualEntryModal);
+    }
+
+    // Kaynak Türü Değişimi (Radio Button)
+    document.querySelectorAll('input[name="manualSourceType"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'tp') {
+                document.getElementById('tpSourceForm').style.display = 'block';
+                document.getElementById('manualSourceForm').style.display = 'none';
+                // Önizleme yoksa kaydet butonu pasif olsun
+                document.getElementById('btnSaveManualResult').disabled = !tpSearchResultData; 
+            } else {
+                document.getElementById('tpSourceForm').style.display = 'none';
+                document.getElementById('manualSourceForm').style.display = 'block';
+                // Manuel girişte buton aktif başlar (Validasyon save fonksiyonunda yapılır)
+                document.getElementById('btnSaveManualResult').disabled = false; 
+            }
+        });
+    });
+
+    // TP Sorgula Butonu
+    const btnQueryTp = document.getElementById('btnQueryTpRecord');
+    if (btnQueryTp) {
+        btnQueryTp.addEventListener('click', queryTpRecordForManualAdd);
+    }
+
+    // Kaydet Butonu
+    const btnSaveManual = document.getElementById('btnSaveManualResult');
+    if (btnSaveManual) {
+        btnSaveManual.addEventListener('click', saveManualResultEntry);
+    }
+    
+    // Bülten listesine Global seçeneğini ekle
+    // (Bunu loadBulletinOptions tamamlandığında çağırmak daha garantidir, ancak burada da dursun)
+    setTimeout(addGlobalOptionToBulletinSelect, 1000);
 });
 
 /**
