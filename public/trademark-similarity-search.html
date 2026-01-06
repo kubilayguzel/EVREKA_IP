@@ -100,62 +100,78 @@
         .nice-class-legend { display: flex; flex-wrap: wrap; gap: 20px; padding: 10px 0; border-top: 1px solid #e1e8ed; margin-top: 10px; }
         .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
 
-        /* 1. Görsel Hover Efektini Geri Getirme */
-        .trademark-image-thumbnail-large {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            background-color: #fff;
-            cursor: pointer;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
-            transform-origin: center center;
+        /* ==========================================================================
+        DÜZELTME PAKETİ (EN ALTA EKLEYİNİZ)
+        ========================================================================== */
+
+        /* 1. GÖRSEL HOVER DÜZELTMESİ (Kutudan taşma sorunu çözüldü) */
+        .trademark-image-wrapper-large, 
+        .trademark-image-cell {
+            overflow: visible !important; /* GİZLİ KALMASIN, DIŞARI TAŞSIN */
+            position: relative !important;
             z-index: 1;
         }
 
-        .trademark-image-thumbnail-large:hover {
-            transform: scale(3.5); /* Resmi 3.5 kat büyüt */
-            z-index: 99999 !important;
+        .trademark-image-thumbnail-large {
+            transition: transform 0.2s ease;
+            transform-origin: center center;
             position: relative;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
-            border-color: #1e3c72;
+            z-index: 10;
+            background: white; /* Arka plan şeffaf olmasın */
         }
 
-        /* Hover sırasında çerçevenin taşmasına izin ver */
-        .trademark-image-wrapper-large:hover,
-        .trademark-image-cell:hover {
-            z-index: 9999 !important;
-            overflow: visible !important; 
+        .trademark-image-thumbnail-large:hover {
+            transform: scale(4) !important; /* 4 kat büyüt */
+            z-index: 99999 !important;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); /* Gölge ekle ki öne çıktığı belli olsun */
+            border: 2px solid #1e3c72;
         }
 
-        /* 2. Arama Sonuçları Tablosu Sütun Ayarları */
-        /* Marka Adı Daraltıldı */
-        .results-table th:nth-child(4), .results-table td:nth-child(4) { 
+        /* 2. MODAL GENİŞLİK DÜZELTMESİ (Genişlik artırıldı) */
+        @media (min-width: 992px) {
+            /* Manuel Ekleme ve Kriter Düzenleme Modalları */
+            #addManualResultModal .modal-dialog,
+            #editCriteriaModal .modal-dialog,
+            #noteModal .modal-dialog {
+                max-width: 90vw !important; /* Ekranın %90'ı kadar geniş olsun */
+                width: 90vw !important;
+            }
+        }
+
+        /* 3. TABLO SÜTUN DÜZELTMESİ (Marka Adı Daraltıldı) */
+        /* Tabloyu kurallara uymaya zorla */
+        .results-table {
+            table-layout: fixed !important;
+            width: 100% !important;
+        }
+
+        /* Kolon 4: Marka Adı -> İYİCE DARALTILDI */
+        .results-table th:nth-child(4), 
+        .results-table td:nth-child(4) { 
+            width: 10% !important; /* %12'den %10'a çekildi */
+            max-width: 150px !important;
+            word-wrap: break-word;
+            white-space: normal;
+            overflow: hidden;
+            font-size: 0.9em; /* Yazı biraz küçülsün ki sığsın */
+        }
+
+        /* Kolon 5: Sahip -> GENİŞLETİLDİ (Kalan yeri burası ve Nice alsın) */
+        .results-table th:nth-child(5), 
+        .results-table td:nth-child(5) { 
+            width: 25% !important; 
+        }
+
+        /* Kolon 6: Nice Sınıfı -> GENİŞLETİLDİ */
+        .results-table th:nth-child(6), 
+        .results-table td:nth-child(6) { 
+            width: 15% !important; 
+        }
+
+        /* Kolon 10: Not -> GENİŞLETİLDİ */
+        .results-table th:nth-child(10), 
+        .results-table td:nth-child(10) { 
             width: 12% !important; 
-            word-wrap: break-word; white-space: normal; font-weight: 600;
-        }
-        /* Sahip Alanı Genişletildi */
-        .results-table th:nth-child(5), .results-table td:nth-child(5) { 
-            width: auto !important; min-width: 20%;
-            word-wrap: break-word; white-space: normal; color: #555;
-        }
-        /* Nice Sınıfı ve Not Alanı Genişletildi */
-        .results-table th:nth-child(6), .results-table td:nth-child(6) { width: 12% !important; }
-        .results-table th:nth-child(10), .results-table td:nth-child(10) { width: 10% !important; }
-
-        /* 3. Modal Genişlikleri (İki katına çıkarma) */
-        .modal-lg, .modal-xl { max-width: 90vw !important; }
-        #noteModal .modal-content { max-width: 800px !important; width: 90%; }
-
-        /* 4. Durum Rozetleri (Hazır / Evet Renkleri) */
-        .trigger-ready {
-            background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;
-            font-weight: 600; padding: 4px 12px; border-radius: 12px;
-        }
-        .trigger-yes {
-            background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;
-            font-weight: 600; padding: 4px 12px; border-radius: 12px;
         }
     </style>
 </head>
