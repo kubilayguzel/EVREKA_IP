@@ -894,7 +894,7 @@ const renderMonitoringList = async () => {
         allRowsHtml.push(headerRow);
 
         // Akordeon İçeriği (İç Tablo Satırları) - DETAY yapısı (6 kolonlu) KORUNDU
-        const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
+const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
             const [markName, imgSrc, appNo, nices, appDate] = [
                 _pickName(ip, tm), 
                 _pickImg(ip, tm), 
@@ -903,32 +903,36 @@ const renderMonitoringList = async () => {
                 _pickAppDate(ip, tm)
             ];
             
-            // Görsel boyutu 100px
             const imgStyle = 'width: 100px; height: 100px;';
             
+            // DÜZENLEME BURADA YAPILDI: Görsel 2. sıraya, Marka Adı 3. sıraya alındı
             return `
                 <tr class="trademark-detail-row" style="background-color: #ffffff;">
-                    <td></td> <td style="text-align: left;">${markName}</td>
-                    <td style="text-align: center;">${imgSrc ? `<div class="trademark-image-wrapper-large" style="${imgStyle}"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli" style="${imgStyle}"></div>` : `<div class="no-image-placeholder-large" style="${imgStyle}">-</div>`}</td>
+                    <td></td>
+                    <td style="text-align: center;">
+                        ${imgSrc ? `<div class="trademark-image-wrapper-large" style="${imgStyle}"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli" style="${imgStyle}"></div>` : `<div class="no-image-placeholder-large" style="${imgStyle}">-</div>`}
+                    </td>
+                    <td style="text-align: left;">${markName}</td>
                     <td style="text-align: center;">${appNo}</td>
-                    <td style="text-align: left;">${nices || '-'}</td> <td style="text-align: center;">${appDate}</td>
+                    <td style="text-align: left;">${nices || '-'}</td> 
+                    <td style="text-align: center;">${appDate}</td>
                 </tr>
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın, ana tabloya uyması için)
+        // Gizli İçerik Satırı - BAŞLIKLAR YER DEĞİŞTİRDİ
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
-                                <th style="width: 5%;"></th>                                
-                                <th style="width: 20%; text-align: left;">Marka Adı</th>
+                                <th style="width: 5%;"></th>
                                 <th style="width: 15%; text-align: center;">Görsel</th>
+                                <th style="width: 25%; text-align: left;">Marka Adı</th>
                                 <th style="width: 15%; text-align: center;">Başvuru No</th>
-                                <th style="width: 25%; text-align: left;">Nice Sınıfı</th>
-                                <th style="width: 15%; text-align: center;">Başvuru Tarihi</th>
+                                <th style="width: 30%; text-align: left;">Nice Sınıfı</th>
+                                <th style="width: 10%; text-align: center;">Başvuru Tarihi</th>
                             </tr>
                         </thead>
                         <tbody>
