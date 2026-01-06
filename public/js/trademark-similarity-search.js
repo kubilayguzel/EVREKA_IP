@@ -878,13 +878,13 @@ const renderMonitoringList = async () => {
                     data-owner-id="${group.ownerId}"
                     data-owner-name="${group.ownerName}"
                     title="Rapor Oluştur ve Müşteriye Bildir">
-                <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
+                <i class="fas fa-paper-plane"></i> Rapor + Bildir
             </button>
             <button class="action-btn btn-primary generate-report-btn"
                     data-owner-id="${group.ownerId}"
                     data-owner-name="${group.ownerName}"
                     title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
-                <i class="fas fa-file-pdf"></i> Rapor Oluştur
+                <i class="fas fa-file-pdf"></i> Rapor
             </button>
             </div>
         </td>
@@ -1395,7 +1395,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
     });
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor + Bildir';
     console.log('🔵 [Son] Fonksiyon sonlandı');
   }
 };
@@ -1546,7 +1546,7 @@ const handleOwnerReportGeneration = async (event) => {
         showNotification("Rapor oluşturulurken hata oluştu!", 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Rapor Oluştur';
+        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Rapor';
     }
 };
 
@@ -1780,7 +1780,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
     showNotification('İşlem sırasında kritik hata oluştu!', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor + Bildir';
   }
 };
 
