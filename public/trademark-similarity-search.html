@@ -943,6 +943,31 @@
     font-weight: bold;
 }
 
+/* Sürükle Bırak Alanı Stilleri */
+.upload-drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    background-color: #f9f9f9;
+    transition: all 0.3s ease;
+    position: relative;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.upload-drop-zone:hover {
+    background-color: #f1f1f1;
+    border-color: #999;
+}
+.upload-drop-zone.drag-over {
+    background-color: #e3f2fd;
+    border-color: #1e3c72;
+    transform: scale(1.02);
+}
+
 </style>
 </head>
 <body>
@@ -1197,17 +1222,22 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label>Kaynak / Bülten Bilgisi</label>
+                        <input type="text" id="manSourceInfo" class="form-control" placeholder="Örn: WIPO 2024/15, EUIPO Daily...">
+                    </div>
+
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>Kaynak / Bülten Bilgisi</label>
-                                <input type="text" id="manSourceInfo" class="form-control" placeholder="Örn: WIPO 2024/15">
-                            </div>
-                        </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Başvuru Tarihi</label>
                                 <input type="date" id="manAppDate" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Son İtiraz Tarihi</label>
+                                <input type="date" id="manObjectionDeadline" class="form-control">
                             </div>
                         </div>
                     </div>
@@ -1222,10 +1252,21 @@
                         <div class="nice-class-selector-grid" id="manualNiceGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(35px, 1fr)); gap: 5px;">
                             </div>
                     </div>
-
                     <div class="form-group">
-                        <label>Görsel URL (Opsiyonel)</label>
-                        <input type="text" id="manImgUrl" class="form-control" placeholder="https://...">
+                        <label>Marka Görseli</label>
+                        <div id="manualImgDropZone" class="upload-drop-zone">
+                            <div class="default-content">
+                                <i class="fas fa-cloud-upload-alt fa-2x mb-2 text-muted"></i>
+                                <span class="d-block">Görseli buraya sürükleyin veya seçmek için tıklayın</span>
+                            </div>
+                            <input type="file" id="manualImgInput" class="drop-zone-input" accept="image/*" hidden>
+                            <div id="manualImgPreviewContainer" style="display:none; position: relative;">
+                                <img id="manualImgPreview" class="img-fluid rounded" style="max-height: 150px; object-fit: contain;">
+                                <button type="button" id="removeManualImgBtn" class="btn btn-sm btn-danger position-absolute" style="top: -10px; right: -10px; border-radius: 50%; padding: 4px 8px;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
