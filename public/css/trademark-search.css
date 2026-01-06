@@ -1,0 +1,148 @@
+/* public/css/trademark-search-refactor.css */
+
+/* ============================================================
+   1. GENEL TABLO AYARLARI (Tüm Tablolar İçin)
+   ============================================================ */
+.monitoring-table,
+.search-results-table,
+.nested-table {
+    width: 100%;
+    table-layout: fixed !important; /* KRİTİK: Piksel kontrolü için şart */
+    border-collapse: collapse;
+}
+
+.monitoring-table th, .monitoring-table td,
+.search-results-table th, .search-results-table td,
+.nested-table th, .nested-table td {
+    padding: 8px 6px !important;    /* Hücre içi boşluklar optimize edildi */
+    vertical-align: middle !important;
+    border-bottom: 1px solid #dee2e6;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Sığmayan metinlere ... koy */
+}
+
+/* Başlık Renkleri */
+.monitoring-table thead th { background-color: #f8f9fa; color: #1e3c72; font-weight: 600; }
+.search-results-table thead th { background-color: #e9ecef; color: #333; font-weight: 600; }
+.nested-table thead th { background-color: #fff3cd; color: #856404; font-size: 0.9em; }
+
+/* ============================================================
+   2. TABLO 1: İZLENEN MARKALAR (Monitoring Table)
+   ============================================================ */
+/* Kolon Genişlikleri */
+.col-mon-toggle   { width: 45px; text-align: center; }
+.col-mon-owner    { width: auto; font-weight: 500; } /* Esnek - Kalanı alır */
+.col-mon-count    { width: 90px; text-align: center; }
+.col-mon-trigger  { width: 110px; text-align: center; }
+.col-mon-notif    { width: 120px; text-align: center; }
+.col-mon-actions  { width: 240px; text-align: center; } /* Butonlar için geniş alan */
+
+/* Satır Etkileşimi */
+.owner-row { cursor: pointer; transition: background-color 0.2s; }
+.owner-row:hover { background-color: #f1f3f5; }
+
+/* Badge (Etiket) Stilleri */
+.trigger-status-badge, .notification-status-badge {
+    padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; display: inline-block;
+}
+.trigger-yes { color: #28a745; background-color: #e6f9ec; border: 1px solid #28a745; }
+.trigger-no  { color: #dc3545; background-color: #fce8e6; border: 1px solid #dc3545; }
+
+/* ============================================================
+   3. TABLO 1.1: AKORDEON İÇ TABLO (Nested Table)
+   ============================================================ */
+.nested-table { margin: 0 !important; background-color: #fff; }
+
+/* Kolon Genişlikleri */
+.col-nest-img     { width: 100px; text-align: center; } /* 80px Görsel + Pay */
+.col-nest-name    { width: auto; font-weight: 500; } /* Esnek */
+.col-nest-appno   { width: 130px; text-align: center; }
+.col-nest-nice    { width: 150px; }
+.col-nest-date    { width: 110px; text-align: center; }
+
+/* ============================================================
+   4. TABLO 2: ARAMA SONUÇLARI (Results Table)
+   ============================================================ */
+/* Kolon Genişlikleri */
+.col-res-index    { width: 50px; text-align: center; }
+.col-res-decision { width: 100px; text-align: center; }
+.col-res-img      { width: 170px; text-align: center; } /* 150px Görsel + 20px Pay */
+.col-res-name     { width: auto; font-weight: 600; color: #1e3c72; white-space: normal; } /* Esnek */
+.col-res-owner    { width: 20%; white-space: normal; font-size: 0.9em; color: #555; }     /* Yarı Esnek */
+.col-res-nice     { width: 110px; }
+.col-res-appno    { width: 110px; }
+.col-res-sim      { width: 80px; text-align: center; }
+.col-res-bs       { width: 80px; }
+.col-res-note     { width: 80px; text-align: center; }
+
+/* Grup Başlığı (Sarı Satır) */
+.group-header td {
+    background-color: #fff3cd !important;
+    padding: 15px !important;
+    border-top: 2px solid #dee2e6;
+}
+.group-title { display: flex; align-items: center; gap: 15px; font-weight: bold; color: #212529; font-size: 1.1em; }
+
+/* ============================================================
+   5. BİLEŞENLER (Görseller, Butonlar)
+   ============================================================ */
+
+/* Görsel Kutusu (Image Container) */
+.tm-img-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin: 0 auto;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Büyük Görsel (Sonuç Tablosu - 150px) */
+.tm-img-box-lg {
+    width: 150px;
+    height: 150px;
+}
+
+/* Küçük Görsel (İç Tablo & Header - 80px) */
+.tm-img-box-sm {
+    width: 80px;
+    height: 80px;
+}
+
+/* Görselin Kendisi */
+.tm-img-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background-color: #fff;
+}
+
+/* Placeholder (Görsel Yoksa) */
+.tm-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    font-size: 0.8em;
+    text-align: center;
+    background-color: #f8f9fa;
+    line-height: 1.2;
+}
+
+/* Buton Grupları */
+.btn-group { display: flex; justify-content: center; gap: 5px; width: 100%; }
+.action-btn { margin: 0; white-space: nowrap; }
+
+/* Nice Sınıfı Badge */
+.nice-class-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 4px; 
+    font-size: 0.85em; margin: 1px; border: 1px solid #dee2e6;
+}
+.nice-class-badge.match { background-color: #28a745; color: white; border-color: #28a745; }
+.nice-class-badge.partial-match { background-color: #ffc107; color: #212529; border-color: #ffc107; }
