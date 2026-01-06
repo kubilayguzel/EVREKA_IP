@@ -7,7 +7,7 @@ import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
 import { showNotification } from '../utils.js';
-import { getStorage, ref, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
 console.log("### trademark-similarity-search.js yüklendi ###");
@@ -2753,10 +2753,21 @@ const openManualEntryModal = () => {
     tpSearchResultData = null;
     document.getElementById('btnSaveManualResult').disabled = true; // Buton pasif başlar
     
-    ['manMarkName', 'manAppNo', 'manSourceInfo', 'manOwner', 'manAppDate', 'manImgUrl'].forEach(id => {
+// ✅ GÜNCELLENDİ: Yeni alan eklendi
+    ['manMarkName', 'manAppNo', 'manSourceInfo', 'manOwner', 'manAppDate', 'manObjectionDeadline'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.value = '';
     });
+    
+    // Görsel input resetleme
+    if (document.getElementById('manualImgInput')) document.getElementById('manualImgInput').value = '';
+
+    manualSelectedFile = null;
+    const previewContainer = document.getElementById('manualImgPreviewContainer');
+    const defaultContent = document.querySelector('#manualImgDropZone .default-content');
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (defaultContent) defaultContent.style.display = 'block';
+    if (document.getElementById('manualImgInput')) document.getElementById('manualImgInput').value = '';
 
     modal.modal('show');
 };
@@ -2860,31 +2871,58 @@ const monitoredId = document.getElementById('manualTargetId').value;
             addedAt: new Date().toISOString()
         };
     } 
-    // --- SENARYO B: Yurtdışı / Manuel ---
+// --- SENARYO B: Yurtdışı / Manuel ---
     else {
         const markName = document.getElementById('manMarkName').value.trim();
         const appNo = document.getElementById('manAppNo').value.trim();
         
         if (!markName || !appNo) {
             showNotification('Marka Adı ve Başvuru Numarası zorunludur.', 'warning');
+            SimpleLoading.hide();
             return;
+        }
+
+        // 1. Görsel Yükleme İşlemi (Varsa)
+        let uploadedImageUrl = null;
+        if (manualSelectedFile) {
+            SimpleLoading.updateText('Görsel Yükleniyor...', 'Lütfen bekleyiniz, görsel sunucuya aktarılıyor.');
+            try {
+                const storage = getStorage();
+                // Benzersiz dosya adı: manual_uploads/ZAMAN_DOSYAADI
+                const fileName = `manual_uploads/${Date.now()}_${manualSelectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                const storageRef = ref(storage, fileName);
+                
+                // Yükle
+                const snapshot = await uploadBytes(storageRef, manualSelectedFile);
+                // URL al
+                uploadedImageUrl = await getDownloadURL(snapshot.ref);
+                console.log('✅ Görsel başarıyla yüklendi:', uploadedImageUrl);
+            } catch (uploadError) {
+                console.error('Görsel yükleme hatası:', uploadError);
+                showNotification('Görsel yüklenirken hata oluştu, kayıt görselsiz devam ediyor.', 'warning');
+            }
         }
 
         const selectedClasses = Array.from(document.querySelectorAll('.nice-class-box-item.selected'))
                                      .map(el => el.dataset.classNo)
                                      .join(', ');
 
-        // Hedef: GLOBAL_MANUAL_RECORDS
         targetDocRef = doc(db, 'monitoringTrademarkRecords', MANUAL_COLLECTION_ID, 'trademarks', monitoredId);
 
+        // Kaydedilecek Obje
         newResultItem = {
             markName: markName,
             applicationNo: appNo,
             bulletinNo: document.getElementById('manSourceInfo').value.trim() || 'Manual',
             applicationDate: document.getElementById('manAppDate').value || null,
+            // ✅ YENİ: Son İtiraz Tarihi
+            objectionDeadline: document.getElementById('manObjectionDeadline').value || null,
             niceClasses: selectedClasses,
             holders: [{ name: document.getElementById('manOwner').value.trim() }],
-            brandImageUrl: document.getElementById('manImgUrl').value.trim() || null,
+            
+            // ✅ YENİ: Storage'dan alınan URL (yoksa null)
+            brandImageUrl: uploadedImageUrl,
+            imagePath: uploadedImageUrl, // Raporlama uyumluluğu için her iki alanı da doldurabiliriz
             
             source: 'manual_entry',
             isSimilar: true,
@@ -3020,6 +3058,83 @@ const setupManualTargetSearch = () => {
     });
 };
 
+// --- Global Değişken Tanımı (Dosyanın en üstüne, diğer let'lerin yanına ekleyin) ---
+let manualSelectedFile = null;
+
+// --- Sürükle Bırak Yöneticisi (Yeni Fonksiyon) ---
+const setupDragAndDrop = () => {
+    const dropZone = document.getElementById('manualImgDropZone');
+    const fileInput = document.getElementById('manualImgInput');
+    const previewContainer = document.getElementById('manualImgPreviewContainer');
+    const previewImg = document.getElementById('manualImgPreview');
+    const removeBtn = document.getElementById('removeManualImgBtn');
+    const defaultContent = dropZone.querySelector('.default-content');
+
+    if (!dropZone) return;
+
+    // Dosya Seçme Fonksiyonu
+    const handleFileSelect = (file) => {
+        if (!file || !file.type.startsWith('image/')) {
+            showNotification('Lütfen geçerli bir resim dosyası seçin.', 'warning');
+            return;
+        }
+
+        manualSelectedFile = file; // Global değişkene ata
+
+        // Önizleme Göster
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImg.src = e.target.result;
+            previewContainer.style.display = 'block';
+            defaultContent.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Tıklama ile Seçim
+    dropZone.addEventListener('click', (e) => {
+        if (e.target !== removeBtn && !removeBtn.contains(e.target)) {
+            fileInput.click();
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+    });
+
+    // Sürükle Bırak Efektleri
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'));
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'));
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) handleFileSelect(files[0]);
+    });
+
+    // Silme Butonu
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Dropzone click'ini engelle
+        manualSelectedFile = null;
+        fileInput.value = ''; // Input'u sıfırla
+        previewImg.src = '';
+        previewContainer.style.display = 'none';
+        defaultContent.style.display = 'block';
+    });
+};
+
 // --- Main Entry Point (Ana Giriş Noktası) ---
 document.addEventListener('DOMContentLoaded', async () => {
     initializePagination();
@@ -3097,6 +3212,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     setupEditCriteriaModal(); // Modal'ı başlat
     setupManualTargetSearch(); // ✅ YENİ: Arama fonksiyonunu başlat
+    setupDragAndDrop();
+    
     // --- MANUEL GİRİŞ İÇİN EVENT LISTENERS ---
     
     const btnOpenManual = document.getElementById('openManualEntryBtn');
