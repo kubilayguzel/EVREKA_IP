@@ -850,11 +850,10 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-// ✅ 6 kolona çıktı: İş Tetiklendi eklendi
     const headerRow = `
     <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
     <td style="width:5%;text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-    <td style="width:35%;text-align:left;">${group.ownerName}</td>
+    <td style="width:45%;text-align:left;">${group.ownerName}</td>
     <td style="width:10%;text-align:center;">${group.trademarks.length}</td>
 
     <!-- İŞ TETİKLENDİ -->
@@ -867,14 +866,14 @@ const renderMonitoringList = async () => {
 
     <!-- BİLDİRİM DURUMU -->
     <td style="width:15%;text-align:center;">
-        <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" 
-              data-owner-id="${group.ownerId}">
+        <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}"
+            data-owner-id="${group.ownerId}">
         ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
         </span>
     </td>
 
     <!-- EYLEMLER -->
-    <td style="width:20%;text-align:center;">
+    <td style="width:10%;text-align:center;">
         <div class="btn-group">
         <button class="action-btn btn-success generate-report-and-notify-btn"
                 data-owner-id="${group.ownerId}"
@@ -892,6 +891,7 @@ const renderMonitoringList = async () => {
     </td>
     </tr>
     `;
+
         allRowsHtml.push(headerRow);
 
         // Akordeon İçeriği (İç Tablo Satırları) - DETAY yapısı (6 kolonlu) KORUNDU
@@ -3213,7 +3213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEditCriteriaModal(); // Modal'ı başlat
     setupManualTargetSearch(); // ✅ YENİ: Arama fonksiyonunu başlat
     setupDragAndDrop();
-    
+
     // --- MANUEL GİRİŞ İÇİN EVENT LISTENERS ---
     
     const btnOpenManual = document.getElementById('openManualEntryBtn');
