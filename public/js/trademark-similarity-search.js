@@ -852,43 +852,42 @@ const renderMonitoringList = async () => {
         
     const headerRow = `
     <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
-    <td style="width:5%;text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-    <td style="width:45%;text-align:left;">${group.ownerName}</td>
-    <td style="width:10%;text-align:center;">${group.trademarks.length}</td>
+        <td style="text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
+        
+        <td style="text-align:left;">${group.ownerName}</td>
+        
+        <td style="text-align:center;">${group.trademarks.length}</td>
 
-    <!-- İŞ TETİKLENDİ -->
-    <td style="width:15%;text-align:center;">
-        <span class="task-triggered-status trigger-status-badge ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'trigger-yes' : 'trigger-no'}"
-            data-owner-id="${group.ownerId}">
-        ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'Evet' : 'Hayır'}
-        </span>
-    </td>
+        <td style="text-align:center;">
+            <span class="task-triggered-status trigger-status-badge ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'trigger-yes' : 'trigger-no'}"
+                data-owner-id="${group.ownerId}">
+            ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'Evet' : 'Hayır'}
+            </span>
+        </td>
 
-    <!-- BİLDİRİM DURUMU -->
-    <td style="width:15%;text-align:center;">
-        <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}"
-            data-owner-id="${group.ownerId}">
-        ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
-        </span>
-    </td>
+        <td style="text-align:center;">
+            <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" 
+                  data-owner-id="${group.ownerId}">
+            ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
+            </span>
+        </td>
 
-    <!-- EYLEMLER -->
-    <td style="width:10%;text-align:center;">
-        <div class="btn-group">
-        <button class="action-btn btn-success generate-report-and-notify-btn"
-                data-owner-id="${group.ownerId}"
-                data-owner-name="${group.ownerName}"
-                title="Rapor Oluştur ve Müşteriye Bildir">
-            <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
-        </button>
-        <button class="action-btn btn-primary generate-report-btn"
-                data-owner-id="${group.ownerId}"
-                data-owner-name="${group.ownerName}"
-                title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
-            <i class="fas fa-file-pdf"></i> Rapor Oluştur
-        </button>
-        </div>
-    </td>
+        <td style="text-align:center;">
+            <div class="btn-group">
+            <button class="action-btn btn-success generate-report-and-notify-btn"
+                    data-owner-id="${group.ownerId}"
+                    data-owner-name="${group.ownerName}"
+                    title="Rapor Oluştur ve Müşteriye Bildir">
+                <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
+            </button>
+            <button class="action-btn btn-primary generate-report-btn"
+                    data-owner-id="${group.ownerId}"
+                    data-owner-name="${group.ownerName}"
+                    title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
+                <i class="fas fa-file-pdf"></i> Rapor Oluştur
+            </button>
+            </div>
+        </td>
     </tr>
     `;
 
