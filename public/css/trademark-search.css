@@ -1,4 +1,4 @@
-/* public/css/trademark-search.css (Final Visual Upgrade) */
+/* public/css/trademark-search.css (Final Visual Upgrade - Revised) */
 
 /* ============================================================
    1. GENEL AYARLAR
@@ -63,45 +63,60 @@ body, .page-wrapper {
 
 
 /* ============================================================
-   3. İÇ TABLO (ACCORDION)
+   3. İÇ TABLO (ACCORDION) - GÜNCELLENDİ
    ============================================================ */
 .nested-table { margin: 0 !important; background-color: #fff; }
 .nested-table thead th { background-color: #f1f3f5 !important; color: #495057 !important; font-size: 13px !important; }
 
-.td-nested-toggle { width: 50px !important; }
-.col-nest-img, .td-nested-img { width: 85px !important; text-align: center !important; padding: 5px !important; }
-.col-nest-name, .td-nested-name { width: 25% !important; text-align: center !important; font-weight: 600; color: #1e3c72; }
+/* Toggle Ok Alanı: Daraltıldı */
+.td-nested-toggle { width: 40px !important; }
+
+/* Görsel Sütunu: Daraltıldı (85px -> 50px) */
+.col-nest-img, .td-nested-img { 
+    width: 50px !important; 
+    text-align: center !important; 
+    padding: 2px !important; 
+}
+
+/* Marka Adı: Genişletildi ve Sola Yaslandı */
+.col-nest-name, .td-nested-name { 
+    width: 30% !important; /* Artırıldı */
+    text-align: left !important; /* Okunabilirlik için sola yaslandı */
+    padding-left: 10px !important;
+    font-weight: 600; 
+    color: #1e3c72; 
+}
+
 .col-nest-appno, .td-nested-appno { width: 15% !important; text-align: center !important; }
-.col-nest-nice, .td-nested-nice { width: auto !important; text-align: left !important; }
+.col-nest-nice, .td-nested-nice { width: auto !important; text-align: left !important; } /* Esnek bırakıldı */
 .col-nest-date, .td-nested-date { width: 12% !important; text-align: center !important; }
 
 
 /* ============================================================
    4. ARAMA SONUÇLARI TABLOSU (ID: searchResultsTable)
-   Görsel kolonu ve kutusu büyütüldü.
    ============================================================ */
-#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; } /* Sıra */
-#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; } /* Karar */
+#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; }
+#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; }
 
-/* GÖRSEL KOLONU (GENİŞLETİLDİ: 170px) */
+/* Arama sonuçları görsel kolonu (Daha büyük kalabilir veya isteğe göre küçültülebilir, şu an standart bırakıldı) */
 #searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { 
-    width: 170px !important; /* 150px resim + boşluklar */
+    width: 170px !important; 
     text-align: center; 
     padding: 10px !important; 
-    overflow: visible !important; /* Popup taşması için */
+    overflow: visible !important; 
 }
 
-#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; color: #1e3c72; } /* Marka */
-#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 20% !important; font-size: 0.9em; color: #555; } /* Sahip (Biraz daraltıldı) */
-#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; } /* Nice */
-#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; } /* Başvuru No */
-#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; } /* Benzerlik */
-#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; } /* B.Ş */
-#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; } /* Not */
+#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; color: #1e3c72; }
+#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 20% !important; font-size: 0.9em; color: #555; }
+#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; }
+#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; }
+#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; }
+#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; }
+#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; }
 
 
 /* ============================================================
-   5. GÖRSELLER VE GELİŞMİŞ HOVER EFEKTİ (DÜZELTİLDİ)
+   5. GÖRSELLER VE GELİŞMİŞ HOVER EFEKTİ (YENİDEN TASARLANDI)
    ============================================================ */
 
 /* Kutu Temel Ayarları */
@@ -113,18 +128,18 @@ body, .page-wrapper {
     border: 1px solid #dee2e6;
     border-radius: 6px;
     margin: 0 auto;
-    overflow: visible !important; /* Taşma izni */
-    position: relative !important;
+    position: relative !important; /* Referans noktası */
     z-index: 1;
+    transition: all 0.2s ease;
 }
 
-/* Küçük Kutu (İzlenenler) */
+/* Küçük Kutu (İzlenenler) - KÜÇÜLTÜLDÜ */
 .tm-img-box-sm { 
-    width: 75px !important; 
-    height: 75px !important; 
+    width: 40px !important; 
+    height: 40px !important; 
 }
 
-/* BÜYÜK KUTU (Arama Sonuçları - 2 Katına Çıkarıldı) */
+/* Büyük Kutu (Arama Sonuçları) */
 .tm-img-box-lg { 
     width: 150px !important; 
     height: 150px !important; 
@@ -138,50 +153,51 @@ body, .page-wrapper {
     display: block;
     background-color: #fff;
     border-radius: 4px;
-    cursor: pointer;
-    transition: none !important; /* Titremeyi önlemek için geçişi kapattık */
 }
 
-/* --- HOVER MANTIĞI (Kutu Üzerinden Tetikleme) --- */
+/* --- HOVER MANTIĞI: TABLODAN TAŞAN GÖRÜNÜM --- */
 
-/* Kutunun üzerine gelince z-index'i en üste taşı */
+/* Hover durumunda kutunun z-index'i en üste */
 .tm-img-box:hover {
-    z-index: 10000 !important; /* En üstte */
+    z-index: 99999 !important;
+    border-color: #1e3c72;
 }
 
-/* Kutunun üzerine gelince İÇİNDEKİ resmi değiştir */
+/* Hover durumunda İÇERDEKİ resim dışarı fırlar */
 .tm-img-box:hover .trademark-image-thumbnail-large {
     position: absolute !important;
     
-    /* Konumlandırma: Sağ Tarafta */
-    top: -50%;          /* Hafif yukarı */
-    left: 105%;         /* Kutunun sağ bitiminden %5 boşluk bırak */
+    /* Konumlandırma: Kutunun sağına */
+    top: -105px;  /* 250px yüksekliği dikeyde ortalamak için (Yaklaşık) */
+    left: 45px;   /* Kutunun (40px) hemen sağından başlar */
     
-    /* Hover Boyutu (Daha Büyük) */
-    width: 350px !important; 
-    height: 350px !important;
+    /* BÜYÜME BOYUTLARI */
+    width: 250px !important;
+    height: 250px !important;
     max-width: none !important;
     max-height: none !important;
     
-    /* Stil */
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6) !important;
-    border: 4px solid #1e3c72 !important;
-    border-radius: 12px !important;
-    background-color: #fff !important;
-    z-index: 10001 !important;
+    /* Stil Süslemeleri */
+    background-color: #ffffff !important;
+    border: 2px solid #1e3c72 !important;
+    box-shadow: 5px 5px 25px rgba(0,0,0,0.4) !important;
+    border-radius: 8px !important;
+    padding: 5px !important;
+    z-index: 100000 !important;
 }
 
-/* Ok İşareti (Triangle) */
+/* Bağlantı Oku (Opsiyonel Estetik) */
 .tm-img-box:hover::after {
     content: '';
     position: absolute;
     top: 50%;
-    left: 100%; /* Kutunun sağı */
-    margin-top: -10px;
-    border-width: 10px;
+    right: -10px; 
+    margin-top: -6px;
+    border-width: 6px;
     border-style: solid;
     border-color: transparent #1e3c72 transparent transparent;
-    z-index: 10001;
+    transform: rotate(180deg);
+    z-index: 100000;
 }
 
 
