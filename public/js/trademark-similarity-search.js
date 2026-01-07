@@ -1077,6 +1077,7 @@ const handleOwnerReportGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
+                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     owner: r.holders?.[0]?.name || "-",
@@ -1250,6 +1251,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
+                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     ownerName: r.holders?.[0]?.name || "-"
@@ -1434,6 +1436,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
+                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     ownerName: r.holders?.[0]?.name || "-",
