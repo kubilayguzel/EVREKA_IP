@@ -247,3 +247,67 @@ body, .page-wrapper {
 @media (min-width: 992px) {
     .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; }
 }
+
+/* ============================================================
+   7. YENİ KART (CARD) TASARIMI
+   ============================================================ */
+
+/* Genel Kart Yapısı */
+.tm-section-card {
+    background: #ffffff;
+    border: 1px solid #e1e8ed;
+    border-radius: 16px; /* Modern, yumuşak köşeler */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); /* Çok hafif gölge */
+    margin-bottom: 30px; /* Kartlar arası boşluk */
+    overflow: hidden; /* İçerik taşmasını engelle */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tm-section-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06); /* Hover'da hafif öne çıkma */
+}
+
+/* Kart Başlığı (Opsiyonel) */
+.tm-card-header {
+    padding: 20px 25px;
+    border-bottom: 1px solid #f1f3f5;
+    background-color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tm-card-header h5 {
+    margin: 0;
+    color: #1e3c72;
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Kart Gövdesi */
+.tm-card-body {
+    padding: 25px; /* İçerik boşluğu */
+}
+
+/* Tabloların Kart İçinde Kenarlara Yapışması İçin */
+.tm-card-body.p-0 {
+    padding: 0 !important;
+}
+
+/* Eski stilleri sıfırla (Mevcut kodlardaki çakışmayı önlemek için) */
+.portfolio-table-container {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.results-header, 
+.portfolio-table-container > div:first-child {
+    border-radius: 0 !important; /* Eski border-radius'ları kaldır */
+    border-bottom: 1px solid #f1f3f5 !important;
+}
