@@ -118,47 +118,97 @@ tr.group-header td {
 /* ============================================================
    5. GÖRSELLER VE KUTULAR
    ============================================================ */
-/* Genel Kutu */
+/* Genel Kutu - Varsayılan Güvenlik Önlemi */
 .tm-img-box {
-    display: flex; align-items: center; justify-content: center;
-    background: #fff; border: 1px solid #dee2e6; border-radius: 6px;
-    position: relative !important; z-index: 1; overflow: visible !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #fff !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 6px !important;
+    position: relative !important;
+    z-index: 1;
+    overflow: visible !important;
+    
+    /* GÜVENLİK: Eğer özel boyut sınıfı yoksa bile taşmayı engelle */
+    width: 80px; 
+    height: 80px;
+    max-width: 100% !important;
 }
 
-/* Accordion İçi Kutu (Sola Yaslı) */
-.td-nested-img .tm-img-box {
-    width: 80px !important; height: 80px !important; margin: 0 !important;
+/* 1. Küçük Kutu (İzlenenler & Grup Başlıkları) */
+.tm-img-box-sm, 
+.td-nested-img .tm-img-box,
+.group-trademark-image .tm-img-box {
+    width: 60px !important;
+    height: 60px !important;
+    min-width: 60px !important; /* Daralmayı önle */
+    margin: 0 !important; /* Sola yaslı */
 }
 
-/* Arama Sonuçları Kutusu (Ortalı) */
+/* 2. Büyük Kutu (Arama Sonuçları Listesi) */
 .tm-img-box-lg {
-    width: 150px !important; height: 150px !important; margin: 0 auto !important;
+    width: 100px !important; /* 150px'den 100px'e düşürüldü */
+    height: 100px !important;
+    min-width: 100px !important;
+    margin: 0 auto !important; /* Ortala */
 }
 
-/* Resimler */
-.td-nested-img img, .tm-img-box-lg img {
-    width: 100% !important; height: 100% !important; object-fit: contain !important;
-    display: block; background: #fff; border-radius: 4px;
+/* Resimlerin Kendisi (Asla Kutudan Taşamaz) */
+.tm-img-box img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    display: block !important;
+    background: #fff !important;
+    border-radius: 4px !important;
+    max-width: 100% !important; /* Ekstra güvenlik */
 }
 
-/* --- HOVER EFEKTLERİ --- */
-.tm-img-box:hover { z-index: 9999 !important; border-color: #1e3c72; }
+/* --- HOVER EFEKTLERİ (BÜYÜME) --- */
 
-/* 1. Accordion Hover (Sağa Açılır) */
-.td-nested-img:hover .tm-img-box img {
-    position: absolute; left: 100px; top: 50%; transform: translateY(-50%) scale(2);
-    width: 80px; height: 80px;
-    background: #fff; border: 2px solid #1e3c72; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-    border-radius: 10px; z-index: 9999;
+.tm-img-box:hover {
+    z-index: 99999 !important;
+    border-color: #1e3c72 !important;
 }
-.td-nested-img:hover { z-index: 10; }
 
-/* 2. Arama Sonuçları Hover (Sağa Doğru Büyür) */
+/* 1. Accordion & Grup Başlığı Hover (Sağa Açılır) */
+.tm-img-box-sm:hover img,
+.td-nested-img .tm-img-box:hover img,
+.group-trademark-image .tm-img-box:hover img {
+    position: absolute !important;
+    top: 50% !important;
+    left: 70px !important; /* Kutunun sağından başla */
+    transform: translateY(-50%) !important;
+    
+    /* Büyüme Boyutu */
+    width: 200px !important;
+    height: 200px !important;
+    max-width: none !important; /* Kutudan taşmasına izin ver */
+    
+    background: #fff !important;
+    border: 3px solid #1e3c72 !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3) !important;
+    border-radius: 8px !important;
+    z-index: 100000 !important;
+}
+
+/* 2. Arama Sonuçları Hover (Ortadan Sağa/Üste Açılır) */
 .tm-img-box-lg:hover img {
-    position: absolute !important; top: -50px; left: 80%;
-    width: 300px !important; height: 300px !important;
-    background: #fff; border: 3px solid #1e3c72; box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-    border-radius: 8px; z-index: 10000 !important;
+    position: absolute !important;
+    top: -50px !important;
+    left: 80% !important; /* Sağ tarafa doğru açıl */
+    
+    /* Büyüme Boyutu */
+    width: 300px !important;
+    height: 300px !important;
+    max-width: none !important;
+    
+    background: #fff !important;
+    border: 3px solid #1e3c72 !important;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.5) !important;
+    border-radius: 8px !important;
+    z-index: 100000 !important;
 }
 
 /* ============================================================
