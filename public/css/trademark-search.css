@@ -1,5 +1,3 @@
-/* public/css/trademark-search.css (Sola Yaslı & Sıkı Görünüm - Final Revize) */
-
 /* ============================================================
    1. GENEL AYARLAR
    ============================================================ */
@@ -11,234 +9,219 @@ body, .page-wrapper {
 .search-results-table,
 .nested-table {
     width: 100%;
-    table-layout: fixed !important; /* Genişlikleri zorlar */
+    table-layout: fixed !important;
     border-collapse: collapse;
 }
 
-/* Hücre Genel Ayarları */
+/* Hücre Genel */
 .monitoring-table th, .monitoring-table td,
 .search-results-table th, .search-results-table td,
 .nested-table th, .nested-table td {
-    padding: 8px 5px !important; /* Padding küçültüldü */
+    padding: 8px 5px !important;
     vertical-align: middle !important;
     border-bottom: 1px solid #dee2e6;
-    overflow: visible !important;
     position: relative !important;
 }
 
+/* Ana başlıklar */
 .monitoring-table thead th,
 .search-results-table thead th {
     background-color: #f8f9fa !important;
     color: #1e3c72 !important;
     font-weight: 700 !important;
     font-size: 14px !important;
-    border-bottom: 2px solid #dee2e6 !important;
     text-align: center !important;
 }
 
 /* ============================================================
-   2. İZLENEN MARKALAR TABLOSU (ANA TABLO)
+   2. İZLENEN MARKALAR (ANA TABLO)
    ============================================================ */
-/* Ana tablo kolon genişlikleri */
-#monitoringTable > thead > tr > th:nth-child(1),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(1) { width: 40px !important; text-align: center !important; }
-
-#monitoringTable > thead > tr > th:nth-child(2),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(2) { 
-    width: auto !important; /* Esnek */
-    text-align: left !important; 
-    padding-left: 15px !important; 
-}
-
-#monitoringTable > thead > tr > th:nth-child(3),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(3) { width: 100px !important; text-align: center !important; }
-#monitoringTable > thead > tr > th:nth-child(4),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(4) { width: 110px !important; text-align: center !important; }
-#monitoringTable > thead > tr > th:nth-child(5),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(5) { width: 120px !important; text-align: center !important; }
-#monitoringTable > thead > tr > th:nth-child(6),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(6) { width: 220px !important; text-align: center !important; }
-
-
-/* ============================================================
-   3. İÇ TABLO (ACCORDION) - SOLA YASLI & SIKI DÜZEN
-   ============================================================ */
-.nested-table { margin: 0 !important; background-color: #fff; }
-.nested-table thead th { 
-    background-color: #f1f3f5 !important; 
-    color: #495057 !important; 
-    font-size: 13px !important; 
-    text-align: left !important; /* Başlıkları sola aldık */
-    padding-left: 5px !important;
-}
-
-/* 1. Toggle (Ok) Kolonu: Çok dar */
-.td-nested-toggle { 
-    width: 30px !important; 
-    padding: 0 !important;
+#monitoringTable th:nth-child(1),
+#monitoringTable td:nth-child(1) {
+    width: 40px !important;
     text-align: center !important;
 }
 
-/* 2. Görsel Kolonu: Sabit ve Dar (45px) */
-.col-nest-img, .td-nested-img { 
-    width: 45px !important; /* Sabit genişlik */
-    padding: 2px !important; /* Boşluk yok */
-    text-align: left !important; /* İçerik sola yaslı */
+#monitoringTable th:nth-child(2),
+#monitoringTable td:nth-child(2) {
+    text-align: left !important;
+    padding-left: 15px !important;
+}
+
+#monitoringTable th:nth-child(3),
+#monitoringTable td:nth-child(3) { width: 100px !important; text-align: center; }
+#monitoringTable th:nth-child(4),
+#monitoringTable td:nth-child(4) { width: 110px !important; text-align: center; }
+#monitoringTable th:nth-child(5),
+#monitoringTable td:nth-child(5) { width: 120px !important; text-align: center; }
+#monitoringTable th:nth-child(6),
+#monitoringTable td:nth-child(6) { width: 220px !important; text-align: center; }
+
+/* ============================================================
+   3. ACCORDION İÇ TABLO – SOLA YASLI & SIKI DÜZEN (FINAL)
+   ============================================================ */
+.nested-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    margin: 0 !important;
+    background: #fff;
+}
+
+/* İç tablo başlıkları */
+.nested-table thead th {
+    background-color: #f1f3f5 !important;
+    color: #495057 !important;
+    font-size: 13px !important;
+    font-weight: 600;
+    text-align: left !important;
+    padding: 6px 6px !important;
+}
+
+/* İç tablo hücreleri */
+.nested-table td {
+    padding: 6px 6px !important;
+    text-align: left !important;
     vertical-align: middle !important;
 }
 
-/* 3. Marka Adı: Görselin hemen dibinden başlar */
-.col-nest-name, .td-nested-name { 
-    width: 30% !important; 
-    text-align: left !important; 
-    padding-left: 5px !important; /* Görselle mesafe az */
-    font-weight: 600; 
-    color: #1e3c72; 
+/* Toggle (boş kolon) */
+.td-nested-toggle {
+    width: 26px !important;
+    padding: 0 !important;
 }
 
-/* 4. Diğer Kolonlar: Sola yaslı ve hizalı */
-.col-nest-appno, .td-nested-appno { 
-    width: 15% !important; 
-    text-align: left !important; 
+/* Görsel kolonu */
+.col-nest-img,
+.td-nested-img {
+    width: 46px !important;
+    padding: 2px !important;
 }
 
-.col-nest-nice, .td-nested-nice { 
-    width: auto !important; /* Kalan alanı doldurur */
-    text-align: left !important; 
+.td-nested-img .tm-img-box {
+    margin: 0 !important;
 }
 
-.col-nest-date, .td-nested-date { 
-    width: 12% !important; 
-    text-align: left !important; 
+/* Marka adı */
+.col-nest-name,
+.td-nested-name {
+    width: 30% !important;
+    font-weight: 600;
+    color: #1e3c72;
+    padding-left: 6px !important;
 }
 
+/* Başvuru No */
+.col-nest-appno,
+.td-nested-appno {
+    width: 16% !important;
+    white-space: nowrap;
+}
+
+/* Nice sınıfı */
+.col-nest-nice,
+.td-nested-nice {
+    width: auto !important;
+    font-size: 13px;
+}
+
+/* Tarih */
+.col-nest-date,
+.td-nested-date {
+    width: 12% !important;
+    white-space: nowrap;
+}
 
 /* ============================================================
-   4. ARAMA SONUÇLARI TABLOSU (ID: searchResultsTable)
+   4. ARAMA SONUÇLARI TABLOSU
    ============================================================ */
-#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; }
-#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; }
-#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 170px !important; text-align: center; overflow: visible !important; }
-#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; color: #1e3c72; }
-#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 20% !important; font-size: 0.9em; color: #555; }
-#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; }
-#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; }
-#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; }
-#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; }
-#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; }
-
+#searchResultsTable th:nth-child(1),
+#searchResultsTable td:nth-child(1) { width: 50px; text-align: center; }
+#searchResultsTable th:nth-child(2),
+#searchResultsTable td:nth-child(2) { width: 90px; text-align: center; }
+#searchResultsTable th:nth-child(3),
+#searchResultsTable td:nth-child(3) { width: 170px; text-align: center; }
+#searchResultsTable th:nth-child(4),
+#searchResultsTable td:nth-child(4) { width: 15%; font-weight: 700; color: #1e3c72; }
+#searchResultsTable th:nth-child(5),
+#searchResultsTable td:nth-child(5) { width: 20%; }
+#searchResultsTable th:nth-child(6),
+#searchResultsTable td:nth-child(6) { width: 10%; }
+#searchResultsTable th:nth-child(7),
+#searchResultsTable td:nth-child(7) { width: 100px; }
+#searchResultsTable th:nth-child(8),
+#searchResultsTable td:nth-child(8) { width: 80px; text-align: center; }
+#searchResultsTable th:nth-child(9),
+#searchResultsTable td:nth-child(9) { width: 70px; }
+#searchResultsTable th:nth-child(10),
+#searchResultsTable td:nth-child(10) { width: 80px; }
 
 /* ============================================================
-   5. GÖRSELLER VE GELİŞMİŞ HOVER EFEKTİ (SOLA YASLI)
+   5. GÖRSELLER & HOVER BÜYÜTME
    ============================================================ */
-
-/* Kutu Temel Ayarları */
 .tm-img-box {
     display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    align-items: center;
+    justify-content: center;
     background: #fff;
     border: 1px solid #dee2e6;
     border-radius: 4px;
-    
-    /* ÖNEMLİ: Ortalamayı iptal et, sola yasla */
-    margin: 0 !important; 
-    
-    position: relative !important;
-    z-index: 1;
-    transition: all 0.2s ease;
+    position: relative;
 }
 
-/* Küçük Kutu (İzlenenler) - 40px */
-.tm-img-box-sm { 
-    width: 40px !important; 
-    height: 40px !important; 
+.tm-img-box-sm {
+    width: 40px;
+    height: 40px;
 }
 
-/* Büyük Kutu (Arama Sonuçları) */
-.tm-img-box-lg { 
-    width: 150px !important; 
-    height: 150px !important;
-    margin: 0 auto !important; /* Arama sonuçlarında ortalı kalsın */
+.tm-img-box-lg {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto;
 }
 
-/* Resim Temel Hali */
 .trademark-image-thumbnail-large {
-    width: 100% !important; 
-    height: 100% !important; 
-    object-fit: contain !important; 
-    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
-/* --- HOVER MANTIĞI: DEV BOYUT (500px) --- */
-
+/* Hover büyütme */
 .tm-img-box:hover {
-    z-index: 99999 !important;
-    border-color: #1e3c72;
+    z-index: 99999;
 }
 
 .tm-img-box:hover .trademark-image-thumbnail-large {
-    position: absolute !important;
-    
-    /* Konumlandırma: Kutunun SAĞINA */
-    /* 40px kutunun hemen yanından (45px) başlat */
-    left: 45px !important; 
-    
-    /* Dikeyde ortalamak/konumlandırmak için */
-    top: -230px !important; 
-    
-    /* BÜYÜME BOYUTLARI (500PX) */
-    width: 500px !important;
-    height: 500px !important;
-    max-width: none !important;
-    max-height: none !important;
-    
-    background-color: #ffffff !important;
-    border: 4px solid #1e3c72 !important;
-    box-shadow: 10px 10px 50px rgba(0,0,0,0.5) !important;
-    border-radius: 8px !important;
-    padding: 10px !important;
-    z-index: 100000 !important;
-}
-
-/* Bağlantı Oku */
-.tm-img-box:hover::after {
-    content: '';
     position: absolute;
-    top: 50%;
-    /* Oku kutunun sağına yerleştir */
-    right: -10px; 
-    margin-top: -6px;
-    border-width: 6px;
-    border-style: solid;
-    border-color: transparent #1e3c72 transparent transparent;
-    transform: rotate(180deg);
-    z-index: 100000;
+    left: 45px;
+    top: -230px;
+    width: 500px;
+    height: 500px;
+    background: #fff;
+    border: 4px solid #1e3c72;
+    box-shadow: 10px 10px 50px rgba(0,0,0,0.5);
+    border-radius: 8px;
+    padding: 10px;
 }
-
 
 /* ============================================================
-   6. DİĞER BİLEŞENLER
+   6. DİĞER
    ============================================================ */
-.nice-class-badge {
-    display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin: 1px;
-    border: 1px solid #dee2e6; background-color: #f8f9fa; color: #333;
-}
-.nice-class-badge.match { background-color: #28a745 !important; color: white !important; border-color: #28a745 !important; }
-.nice-class-badge.partial-match { background-color: #ffc107 !important; color: #212529 !important; border-color: #ffc107 !important; font-weight: 600; }
-
-.action-btn.similar { background-color: #28a745 !important; color: white !important; border: 1px solid #28a745 !important; }
-.action-btn.similar:hover { background-color: #218838 !important; }
-.action-btn.not-similar { background-color: #dc3545 !important; color: white !important; border: 1px solid #dc3545 !important; }
-.action-btn.not-similar:hover { background-color: #c82333 !important; }
-
-.owner-row { cursor: pointer; transition: background-color 0.2s; }
+.owner-row { cursor: pointer; }
 .owner-row:hover { background-color: #e9ecef !important; }
-.action-btn-group { display: flex; justify-content: center; gap: 5px; }
-.trigger-ready { background-color: #fff3cd; color: #856404; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
-.trigger-yes { background-color: #d4edda; color: #155724; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
-.tm-placeholder { font-size: 10px; color: #999; width: 100%; text-align: center; }
 
-@media (min-width: 992px) {
-    .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; }
+.trigger-ready {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.trigger-yes {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: 600;
 }
