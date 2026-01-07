@@ -1,4 +1,4 @@
-/* public/css/trademark-search.css (Sola Yaslı & Sıkı Görünüm) */
+/* public/css/trademark-search.css (Sola Yaslı & Sıkı Görünüm - Final Revize) */
 
 /* ============================================================
    1. GENEL AYARLAR
@@ -39,7 +39,7 @@ body, .page-wrapper {
 /* ============================================================
    2. İZLENEN MARKALAR TABLOSU (ANA TABLO)
    ============================================================ */
-/* Ana tablo kolon genişlikleri (Değişmedi) */
+/* Ana tablo kolon genişlikleri */
 #monitoringTable > thead > tr > th:nth-child(1),
 #monitoringTable > tbody > tr.owner-row > td:nth-child(1) { width: 40px !important; text-align: center !important; }
 
@@ -68,8 +68,8 @@ body, .page-wrapper {
     background-color: #f1f3f5 !important; 
     color: #495057 !important; 
     font-size: 13px !important; 
-    text-align: left !important; /* Başlıkları da sola aldık */
-    padding-left: 10px !important;
+    text-align: left !important; /* Başlıkları sola aldık */
+    padding-left: 5px !important;
 }
 
 /* 1. Toggle (Ok) Kolonu: Çok dar */
@@ -79,9 +79,9 @@ body, .page-wrapper {
     text-align: center !important;
 }
 
-/* 2. Görsel Kolonu: Sabit ve Dar (40px) */
+/* 2. Görsel Kolonu: Sabit ve Dar (45px) */
 .col-nest-img, .td-nested-img { 
-    width: 40px !important; /* Sabit genişlik */
+    width: 45px !important; /* Sabit genişlik */
     padding: 2px !important; /* Boşluk yok */
     text-align: left !important; /* İçerik sola yaslı */
     vertical-align: middle !important;
@@ -91,7 +91,7 @@ body, .page-wrapper {
 .col-nest-name, .td-nested-name { 
     width: 30% !important; 
     text-align: left !important; 
-    padding-left: 5px !important; /* Görselle arasındaki mesafe */
+    padding-left: 5px !important; /* Görselle mesafe az */
     font-weight: 600; 
     color: #1e3c72; 
 }
@@ -149,10 +149,10 @@ body, .page-wrapper {
     transition: all 0.2s ease;
 }
 
-/* Küçük Kutu (İzlenenler) - 35px */
+/* Küçük Kutu (İzlenenler) - 40px */
 .tm-img-box-sm { 
-    width: 35px !important; 
-    height: 35px !important; 
+    width: 40px !important; 
+    height: 40px !important; 
 }
 
 /* Büyük Kutu (Arama Sonuçları) */
@@ -181,8 +181,8 @@ body, .page-wrapper {
     position: absolute !important;
     
     /* Konumlandırma: Kutunun SAĞINA */
-    /* 35px kutunun hemen yanından (40px) başlat */
-    left: 40px !important; 
+    /* 40px kutunun hemen yanından (45px) başlat */
+    left: 45px !important; 
     
     /* Dikeyde ortalamak/konumlandırmak için */
     top: -230px !important; 
