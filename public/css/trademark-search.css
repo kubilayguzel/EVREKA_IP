@@ -1,10 +1,10 @@
-/* public/css/trademark-search.css (Tam ve Düzeltilmiş Versiyon) */
+/* public/css/trademark-search.css (Final: Belirgin Kartlar & Grup Başlığı) */
 
 /* ============================================================
    1. GENEL AYARLAR
    ============================================================ */
 body, .page-wrapper {
-    background: #ffffff !important;
+    background: #f4f6f9 !important; /* Arka planı hafif gri yaptık ki kartlar patlasın */
 }
 
 .monitoring-table,
@@ -15,7 +15,7 @@ body, .page-wrapper {
     border-collapse: collapse;
 }
 
-/* Hücre Genel Ayarları */
+/* Hücre Genel */
 .monitoring-table th, .monitoring-table td,
 .search-results-table th, .search-results-table td,
 .nested-table th, .nested-table td {
@@ -25,7 +25,7 @@ body, .page-wrapper {
     position: relative !important;
 }
 
-/* Tablo Başlıkları */
+/* Ana başlıklar */
 .monitoring-table thead th,
 .search-results-table thead th {
     background-color: #f8f9fa !important;
@@ -48,27 +48,14 @@ body, .page-wrapper {
 /* ============================================================
    3. ACCORDION İÇ TABLO (İZLENENLER DETAY)
    ============================================================ */
-.nested-table {
-    width: 100% !important;
-    margin: 0 !important;
-    background: #fff;
-}
-
+.nested-table { width: 100% !important; margin: 0 !important; background: #fff; }
 .nested-table thead th {
-    background-color: #f1f3f5 !important;
-    color: #495057 !important;
-    font-size: 13px !important;
-    font-weight: 600;
-    text-align: left !important;
-    padding: 8px 8px !important;
+    background-color: #f1f3f5 !important; color: #495057 !important; font-size: 13px !important;
+    text-align: left !important; padding-left: 8px !important;
 }
+.nested-table td { text-align: left !important; }
 
-.nested-table td {
-    padding: 8px 8px !important;
-    text-align: left !important;
-}
-
-/* Accordion Kolonları */
+/* Kolonlar */
 .td-nested-toggle { width: 26px !important; padding: 0 !important; }
 .col-nest-img, .td-nested-img { width: 90px !important; padding: 4px !important; }
 .col-nest-name, .td-nested-name { width: 35% !important; font-weight: 600; color: #1e3c72; padding-left: 8px !important; }
@@ -76,21 +63,12 @@ body, .page-wrapper {
 .col-nest-nice, .td-nested-nice { width: auto !important; font-size: 13px; line-height: 1.4; }
 .col-nest-date, .td-nested-date { width: 12% !important; white-space: nowrap; }
 
-
 /* ============================================================
-   4. ARAMA SONUÇLARI TABLOSU (Search Results)
+   4. ARAMA SONUÇLARI TABLOSU
    ============================================================ */
 #searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px; text-align: center; }
 #searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px; text-align: center; }
-
-/* Görsel Kolonu - Genişlik Sabitleme */
-#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { 
-    width: 170px !important; 
-    text-align: center; 
-    padding: 5px !important;
-    overflow: visible !important; /* Hover taşması için */
-}
-
+#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 170px !important; text-align: center; padding: 5px !important; overflow: visible !important; }
 #searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15%; font-weight: 700; color: #1e3c72; }
 #searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 20%; }
 #searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10%; }
@@ -99,215 +77,150 @@ body, .page-wrapper {
 #searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px; }
 #searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px; }
 
+/* --- GRUP BAŞLIĞI (MONITORED TRADEMARK ROW) --- */
+/* Bu kısım arama sonuçlarında "Hangi marka için sonuçlar?" satırını düzenler */
+
+tr.group-header td {
+    background-color: #e3f2fd !important; /* Arka plan: Açık Mavi */
+    border-top: 2px solid #1976d2 !important; /* Üst Çizgi: Koyu Mavi */
+    border-bottom: 1px solid #bbdefb !important;
+    padding: 10px 15px !important;
+    text-align: left !important; /* Sola Yasla */
+}
+
+.group-title {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* İçeriği Sola Yasla */
+    gap: 15px; /* Görsel ile yazı arası boşluk */
+    font-size: 1.1rem;
+    color: #0d47a1;
+}
+
+/* Grup Başlığındaki Görsel */
+.group-trademark-image .tm-img-box-sm {
+    width: 50px !important;
+    height: 50px !important;
+    margin: 0 !important;
+    border: 1px solid #1976d2;
+    background: #fff;
+}
+
+/* Başlık Metni */
+.group-title span {
+    font-weight: 500;
+}
+.group-title strong {
+    font-weight: 700;
+    text-decoration: underline;
+}
 
 /* ============================================================
-   5. GÖRSELLER VE KUTULAR (BOYUTLANDIRMA DÜZELTMESİ)
+   5. GÖRSELLER VE KUTULAR
    ============================================================ */
+/* Genel Kutu */
+.tm-img-box {
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 6px;
+    position: relative !important; z-index: 1; overflow: visible !important;
+}
 
-/* A) İZLENEN MARKALAR (Accordion) İçin Görsel */
+/* Accordion İçi Kutu (Sola Yaslı) */
 .td-nested-img .tm-img-box {
-    width: 80px !important;
-    height: 80px !important;
-    margin: 0 !important; /* Sola yaslı */
-    position: relative !important;
-    z-index: 1;
+    width: 80px !important; height: 80px !important; margin: 0 !important;
 }
 
-/* B) ARAMA SONUÇLARI İçin Görsel (Kocaman olmayacak) */
+/* Arama Sonuçları Kutusu (Ortalı) */
 .tm-img-box-lg {
-    width: 150px !important;  /* 150px ile sınırla */
-    height: 150px !important;
-    margin: 0 auto !important; /* Ortala */
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    position: relative !important;
-    z-index: 1;
+    width: 150px !important; height: 150px !important; margin: 0 auto !important;
 }
 
-/* Resimlerin Kendisi (Kutuya sığdır) */
-.td-nested-img img,
-.tm-img-box-lg img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: contain !important;
-    display: block;
-    background: #fff;
-    border-radius: 4px;
+/* Resimler */
+.td-nested-img img, .tm-img-box-lg img {
+    width: 100% !important; height: 100% !important; object-fit: contain !important;
+    display: block; background: #fff; border-radius: 4px;
 }
 
-/* --- HOVER EFEKTLERİ (BÜYÜME) --- */
+/* --- HOVER EFEKTLERİ --- */
+.tm-img-box:hover { z-index: 9999 !important; border-color: #1e3c72; }
 
-/* 1. İzlenen Markalar Hover (Sağa açılır) */
+/* 1. Accordion Hover (Sağa Açılır) */
 .td-nested-img:hover .tm-img-box img {
-    position: absolute;
-    left: 100px; /* Kutunun sağına */
-    top: 50%;
-    transform: translateY(-50%) scale(2); /* 2 katına çıkar */
-    width: 80px;
-    height: 80px;
-    background: #fff;
-    border: 2px solid #1e3c72;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-    border-radius: 10px;
-    z-index: 9999;
+    position: absolute; left: 100px; top: 50%; transform: translateY(-50%) scale(2);
+    width: 80px; height: 80px;
+    background: #fff; border: 2px solid #1e3c72; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    border-radius: 10px; z-index: 9999;
 }
 .td-nested-img:hover { z-index: 10; }
 
-/* 2. Arama Sonuçları Hover (Öne çıkar) */
-.tm-img-box-lg:hover {
-    z-index: 9999 !important;
-    border-color: #1e3c72;
-    overflow: visible !important;
-}
-
+/* 2. Arama Sonuçları Hover (Sağa Doğru Büyür) */
 .tm-img-box-lg:hover img {
-    position: absolute !important;
-    top: -50px; /* Biraz yukarı */
-    left: 80%;  /* Sağa doğru */
-    
-    /* Büyütülmüş Boyut */
-    width: 300px !important;
-    height: 300px !important;
-    
-    background-color: #ffffff !important;
-    border: 3px solid #1e3c72 !important;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.5) !important;
-    border-radius: 8px !important;
-    z-index: 10000 !important;
+    position: absolute !important; top: -50px; left: 80%;
+    width: 300px !important; height: 300px !important;
+    background: #fff; border: 3px solid #1e3c72; box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+    border-radius: 8px; z-index: 10000 !important;
 }
-
 
 /* ============================================================
-   6. RENKLER VE ROZETLER (GERİ GETİRİLDİ)
+   6. DİĞER BİLEŞENLER
    ============================================================ */
-
-/* A) Benzerlik Butonları (Yeşil/Kırmızı) */
-.action-btn {
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.9em;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: 1px solid transparent;
+.nice-class-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin: 1px;
+    border: 1px solid #dee2e6; background-color: #f8f9fa; color: #333;
 }
+.nice-class-badge.match { background-color: #28a745 !important; color: white !important; border-color: #28a745 !important; }
+.nice-class-badge.partial-match { background-color: #ffc107 !important; color: #212529 !important; border-color: #ffc107 !important; font-weight: 600; }
 
-.action-btn.similar { 
-    background-color: #28a745 !important; 
-    color: white !important; 
-    border-color: #28a745 !important; 
-}
+.action-btn { padding: 4px 10px; border-radius: 4px; font-size: 0.9em; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+.action-btn.similar { background-color: #28a745 !important; color: white !important; border-color: #28a745 !important; }
 .action-btn.similar:hover { background-color: #218838 !important; }
-
-.action-btn.not-similar { 
-    background-color: #dc3545 !important; 
-    color: white !important; 
-    border-color: #dc3545 !important; 
-}
+.action-btn.not-similar { background-color: #dc3545 !important; color: white !important; border-color: #dc3545 !important; }
 .action-btn.not-similar:hover { background-color: #c82333 !important; }
 
-/* B) Nice Sınıfı Rozetleri (Yeşil/Sarı) */
-.nice-class-badge {
-    display: inline-block; 
-    padding: 2px 6px; 
-    border-radius: 4px; 
-    font-size: 0.85em; 
-    margin: 1px;
-    border: 1px solid #dee2e6; 
-    background-color: #f8f9fa; 
-    color: #333;
-}
-
-/* Tam Eşleşme (Tescili Sınıf) */
-.nice-class-badge.match { 
-    background-color: #28a745 !important; 
-    color: white !important; 
-    border-color: #28a745 !important; 
-}
-
-/* Kısmi Eşleşme (İzlenen Sınıf) */
-.nice-class-badge.partial-match { 
-    background-color: #ffc107 !important; 
-    color: #212529 !important; 
-    border-color: #ffc107 !important; 
-    font-weight: 600; 
-}
-
-/* C) Diğer Stiller */
 .owner-row { cursor: pointer; }
 .owner-row:hover { background-color: #e9ecef !important; }
-
 .trigger-ready { background-color: #fff3cd; color: #856404; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
 .trigger-yes { background-color: #d4edda; color: #155724; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
 .tm-placeholder { font-size: 12px; color: #999; text-align: center; }
 
-@media (min-width: 992px) {
-    .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; }
-}
+@media (min-width: 992px) { .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; } }
 
 /* ============================================================
-   7. YENİ KART (CARD) TASARIMI
+   7. KART TASARIMI (DAHA BELİRGİN)
    ============================================================ */
-
-/* Genel Kart Yapısı */
 .tm-section-card {
     background: #ffffff;
-    border: 1px solid #e1e8ed;
-    border-radius: 16px; /* Modern, yumuşak köşeler */
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); /* Çok hafif gölge */
-    margin-bottom: 30px; /* Kartlar arası boşluk */
-    overflow: hidden; /* İçerik taşmasını engelle */
+    border: 1px solid #d1d9e6; /* Kenarlık biraz daha koyu */
+    border-radius: 12px;
+    /* Daha derin ve belirgin gölge */
+    box-shadow: 0 10px 30px rgba(30, 60, 114, 0.1); 
+    margin-bottom: 35px;
+    overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tm-section-card:hover {
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06); /* Hover'da hafif öne çıkma */
+    /* Hover durumunda hafif yukarı kalkma efekti */
+    transform: translateY(-2px);
+    box-shadow: 0 15px 35px rgba(30, 60, 114, 0.15);
 }
 
-/* Kart Başlığı (Opsiyonel) */
 .tm-card-header {
-    padding: 20px 25px;
-    border-bottom: 1px solid #f1f3f5;
-    background-color: #fff;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    padding: 15px 25px;
+    border-bottom: 1px solid #eaedf2;
+    background: linear-gradient(to right, #ffffff, #f8f9fa); /* Hafif gradyan */
+    display: flex; justify-content: space-between; align-items: center;
 }
 
 .tm-card-header h5 {
-    margin: 0;
-    color: #1e3c72;
-    font-weight: 700;
-    font-size: 1.1rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    margin: 0; color: #1e3c72; font-weight: 700; font-size: 1.15rem;
+    display: flex; align-items: center; gap: 10px;
 }
 
-/* Kart Gövdesi */
-.tm-card-body {
-    padding: 25px; /* İçerik boşluğu */
-}
+.tm-card-body { padding: 25px; }
+.tm-card-body.p-0 { padding: 0 !important; }
 
-/* Tabloların Kart İçinde Kenarlara Yapışması İçin */
-.tm-card-body.p-0 {
-    padding: 0 !important;
-}
-
-/* Eski stilleri sıfırla (Mevcut kodlardaki çakışmayı önlemek için) */
-.portfolio-table-container {
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-    border-radius: 0 !important;
-    margin-bottom: 0 !important;
-}
-
-.results-header, 
-.portfolio-table-container > div:first-child {
-    border-radius: 0 !important; /* Eski border-radius'ları kaldır */
-    border-bottom: 1px solid #f1f3f5 !important;
+/* Eski stilleri temizle */
+.portfolio-table-container, .results-container {
+    box-shadow: none !important; border: none !important; background: transparent !important;
 }
