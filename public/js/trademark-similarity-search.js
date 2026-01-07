@@ -1003,9 +1003,28 @@ const handleOwnerReportGeneration = async (event) => {
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
 
-            // 2. Sahip Bilgisini Çözümle (ipData.applicants öncelikli)
-            // _pickOwners fonksiyonu zaten applicants dizisini tarayacak şekilde ayarlı
-            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+            // 2. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            let ownerNameStr = "-";
+            if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
+                const ownerNames = [];
+                for (const applicant of ipData.applicants) {
+                    if (applicant.id) {
+                        // persons tablosundan ismi çek
+                        const person = allPersons.find(p => p.id === applicant.id);
+                        if (person) {
+                            ownerNames.push(person.name || person.companyName || applicant.id);
+                        } else {
+                            ownerNames.push(applicant.id);
+                        }
+                    } else if (applicant.name) {
+                        ownerNames.push(applicant.name);
+                    }
+                }
+                ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
+            } else {
+                // Fallback: _pickOwners kullan
+                ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
+            }
 
             // 3. Marka Adı (ipData.title veya brandText öncelikli)
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
@@ -1171,7 +1190,26 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
 
-            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+            // Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            let ownerNameStr = "-";
+            if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
+                const ownerNames = [];
+                for (const applicant of ipData.applicants) {
+                    if (applicant.id) {
+                        const person = allPersons.find(p => p.id === applicant.id);
+                        if (person) {
+                            ownerNames.push(person.name || person.companyName || applicant.id);
+                        } else {
+                            ownerNames.push(applicant.id);
+                        }
+                    } else if (applicant.name) {
+                        ownerNames.push(applicant.name);
+                    }
+                }
+                ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
+            } else {
+                ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
+            }
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
             const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
             const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
@@ -1336,7 +1374,26 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
 
-            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+            // Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            let ownerNameStr = "-";
+            if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
+                const ownerNames = [];
+                for (const applicant of ipData.applicants) {
+                    if (applicant.id) {
+                        const person = allPersons.find(p => p.id === applicant.id);
+                        if (person) {
+                            ownerNames.push(person.name || person.companyName || applicant.id);
+                        } else {
+                            ownerNames.push(applicant.id);
+                        }
+                    } else if (applicant.name) {
+                        ownerNames.push(applicant.name);
+                    }
+                }
+                ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
+            } else {
+                ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
+            }
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
             const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
             const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
