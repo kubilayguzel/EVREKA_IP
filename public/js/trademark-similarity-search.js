@@ -1,4 +1,6 @@
 // public/js/trademark-similarity-search.js
+// ÖNEMLİ: Bu dosya "clean code" prensibiyle düzenlenmiştir. 
+// Stil (style=...) tanımları kaldırılmış, her şey CSS sınıflarına devredilmiştir.
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices, monitoringService } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
@@ -10,7 +12,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Clean & Functional) ###");
+console.log("### trademark-similarity-search.js yüklendi (Unified UI Version) ###");
 
 // --- Global State ---
 let allSimilarResults = [];
@@ -31,6 +33,7 @@ const MANUAL_COLLECTION_ID = 'GLOBAL_MANUAL_RECORDS';
 let tpSearchResultData = null;
 
 // --- Helper Functions ---
+// (Bu blok aynen korunmuştur)
 const tssLoadState = () => { try { return JSON.parse(localStorage.getItem(TSS_RESUME_KEY) || '{}'); } catch { return {}; } };
 const tssSaveState = (partial) => { try { const prev = tssLoadState(); localStorage.setItem(TSS_RESUME_KEY, JSON.stringify({ ...prev, ...partial, updatedAt: new Date().toISOString() })); } catch (e) { } };
 const tssClearState = () => { try { localStorage.removeItem(TSS_RESUME_KEY); } catch (e) { } };
@@ -94,7 +97,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     } catch (e) { console.error(e); }
 };
 
-// --- RENDER FUNCTIONS (REFACTORED) ---
+// --- RENDER FUNCTIONS (UI & CSS UYUMLU) ---
 
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
@@ -126,7 +129,6 @@ const renderMonitoringList = async () => {
         const statusText = isTriggered ? 'Evet' : 'Hazır';
         const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
 
-        // MAIN ROW
         const headerRow = `
         <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
             <td><i class="fas fa-chevron-down toggle-icon"></i></td>
@@ -136,14 +138,13 @@ const renderMonitoringList = async () => {
             <td><span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" data-owner-id="${group.ownerId}">${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}</span></td>
             <td>
                 <div class="action-btn-group">
-                    <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor + Bildir"><i class="fas fa-paper-plane"></i> Rapor + Bildir</button>
-                    <button class="action-btn btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor İndir"><i class="fas fa-file-pdf"></i> Rapor</button>
+                    <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor + Bildir"><i class="fas fa-paper-plane"></i></button>
+                    <button class="action-btn btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor İndir"><i class="fas fa-file-pdf"></i></button>
                 </div>
             </td>
         </tr>`;
         allRowsHtml.push(headerRow);
 
-        // DETAIL ROWS
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
             const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
             return `
@@ -157,21 +158,11 @@ const renderMonitoringList = async () => {
                 </tr>`;
         }).join('');
 
-        // CONTENT ROW
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
                     <table class="table table-sm nested-table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th class="col-nest-img">Görsel</th>
-                                <th class="col-nest-name">Marka Adı</th>
-                                <th class="col-nest-appno">Başvuru No</th>
-                                <th class="col-nest-nice">Nice Sınıfı</th>
-                                <th class="col-nest-date">B. Tarihi</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
                         <tbody>${detailRowsHtml}</tbody>
                     </table>
                 </td>
@@ -237,6 +228,7 @@ const createResultRow = (hit, rowIndex) => {
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
+    // Yeni class yapısı: tm-img-box-lg
     const imagePlaceholderHtml = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">-</div></div>`;
 
     const row = document.createElement('tr');
