@@ -1,6 +1,4 @@
-// public/js/trademark-similarity-search.js
-
-// public/js/trademark-similarity-search.js
+// public/js/trademark-similarity-search.js (Görsel Yükleme Düzeltmesi Eklendi)
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices, monitoringService } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
@@ -12,7 +10,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Stable Hover) ###");
+console.log("### trademark-similarity-search.js yüklendi (Görsel Fix) ###");
 
 // --- 1. GLOBAL DEĞİŞKENLER ---
 let allSimilarResults = [];
@@ -308,10 +306,35 @@ const renderCurrentPageOfResults = () => {
         groupHeaderRow.classList.add('group-header');
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
-        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title"><div class="group-trademark-image">${headerImg ? `<div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">?</div>`}</div><span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
+        
+        // --- GÖRSEL ALANI GÜNCELLENDİ: data-appno eklendi ---
+        const imageHtml = headerImg 
+            ? `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>`
+            : `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
+
+        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
         resultsTableBody.appendChild(groupHeaderRow);
         groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
     });
+    
+    // --- GÖRSELLERİ SONRADAN YÜKLEME (LAZY LOAD FIX) ---
+    setTimeout(() => {
+        document.querySelectorAll('.group-trademark-image[data-header-appno]').forEach(async (container) => {
+            const appNo = container.dataset.headerAppno;
+            if (appNo && appNo !== '-') {
+                try {
+                    const imgUrl = await _getBrandImageByAppNo(appNo);
+                    if (imgUrl) {
+                        container.innerHTML = `<div class="tm-img-box tm-img-box-sm"><img src="${imgUrl}" class="group-header-img" alt="Marka"></div>`;
+                        container.removeAttribute('data-header-appno'); // Tekrar yüklemeyi önle
+                    }
+                } catch (e) {
+                    console.log('Header görseli yüklenemedi:', appNo);
+                }
+            }
+        });
+    }, 100);
+
     attachEventListeners();
 };
 
