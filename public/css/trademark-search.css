@@ -1,27 +1,7 @@
-/* public/css/trademark-search.css */
+/* public/css/trademark-search.css (Updated Layout) */
 
 /* ============================================================
-   1. GENEL YAPISAL UYUMLULUK
-   ============================================================ */
-/* Portfolio Controls (Arama Kutusu) Stili */
-.portfolio-controls {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 20px 30px;
-    border-radius: 20px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    margin-bottom: 30px;
-}
-
-/* Tablo Kapsayıcı */
-.portfolio-table-container {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    overflow: hidden; /* Köşeler için */
-}
-
-/* ============================================================
-   2. TABLO GÖRÜNÜMÜ (Shared Style Uyumu)
+   1. GENEL TABLO AYARLARI
    ============================================================ */
 .monitoring-table,
 .search-results-table,
@@ -31,65 +11,89 @@
     border-collapse: collapse;
 }
 
-/* Ortak Hücre Stili */
 .monitoring-table th, .monitoring-table td,
 .search-results-table th, .search-results-table td,
 .nested-table th, .nested-table td {
-    padding: 12px 15px !important; /* Portfolio standardı */
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 12px 10px !important; /* Padding biraz artırıldı */
     vertical-align: middle !important;
-    overflow: visible !important; /* Hover için gerekli */
+    border-bottom: 1px solid #dee2e6;
+    overflow: visible !important;
     position: relative !important;
-    font-size: 0.95rem;
 }
 
-/* Ortak Başlık Stili */
-.monitoring-table th,
-.search-results-table th {
-    background: #f8f9fa !important;
-    font-weight: 600 !important;
-    color: #1e3c72 !important; /* Uygulama ana rengi */
+/* Başlık Stilleri */
+.monitoring-table thead th,
+.search-results-table thead th {
+    background-color: #f8f9fa !important;
+    color: #1e3c72 !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
     border-bottom: 2px solid #dee2e6 !important;
-    text-transform: none; /* Büyük harf zorlaması yok */
-}
-
-/* Satır Hover */
-.monitoring-table tbody tr:hover,
-.search-results-table tbody tr:hover {
-    background-color: #f6f8fa;
+    text-align: center !important;
 }
 
 /* ============================================================
-   3. ÖZEL KOLON AYARLARI (Kritik: İşlevsellik)
+   2. İZLENEN MARKALAR TABLOSU (ID: monitoringTable)
    ============================================================ */
+#monitoringTable th:nth-child(1), 
+#monitoringTable td:nth-child(1) { width: 50px !important; text-align: center !important; }
 
-/* --- İzlenen Markalar Tablosu --- */
-#monitoringTable th:nth-child(1), #monitoringTable td:nth-child(1) { width: 50px !important; text-align: center !important; }
-#monitoringTable th:nth-child(2), #monitoringTable td:nth-child(2) { 
-    width: 55% !important; /* İstenilen genişlik */
-    white-space: normal !important;
-    word-break: break-word !important;
+/* Sahip Sütunu (%55) */
+#monitoringTable th:nth-child(2), 
+#monitoringTable td:nth-child(2) { 
+    width: 55% !important; 
+    text-align: left !important; 
+    padding-left: 15px !important; 
+    white-space: normal !important; 
+    word-break: break-word !important; 
 }
+
 #monitoringTable th:nth-child(3), #monitoringTable td:nth-child(3) { width: 100px !important; text-align: center !important; }
 #monitoringTable th:nth-child(4), #monitoringTable td:nth-child(4) { width: 110px !important; text-align: center !important; }
 #monitoringTable th:nth-child(5), #monitoringTable td:nth-child(5) { width: 120px !important; text-align: center !important; }
 #monitoringTable th:nth-child(6), #monitoringTable td:nth-child(6) { width: 220px !important; text-align: center !important; }
 
-/* --- Arama Sonuçları Tablosu --- */
-#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; } 
-#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; } 
-#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 80px !important; text-align: center; padding: 5px !important; } /* Görsel kolonu daraltıldı */
-#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 12% !important; font-weight: 600; white-space: normal !important; color: #1e3c72; } 
-#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 25% !important; white-space: normal !important; font-size: 0.9em; color: #555; }
-#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 13% !important; }
-#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; }
-#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 70px !important; text-align: center; }
-#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; }
-#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 10% !important; }
+/* ============================================================
+   3. İÇ TABLO (ACCORDION - Class: nested-table) - GÜNCELLENDİ
+   ============================================================ */
+.nested-table { margin: 0 !important; background-color: #fff; }
+.nested-table thead th { background-color: #f1f3f5 !important; color: #495057 !important; font-size: 13px !important; }
+
+/* Kolon 1: Boşluk/Numara */
+.nested-table th:nth-child(1), 
+.nested-table td:nth-child(1) { width: 40px !important; }
+
+/* Kolon 2: GÖRSEL (Daraltıldı: 100px -> 85px) */
+.col-nest-img { 
+    width: 85px !important; 
+    text-align: center !important; 
+    padding: 5px !important; 
+}
+
+/* Kolon 3: Marka Adı (Genişletildi) */
+.col-nest-name { width: 20% !important; text-align: center !important; font-weight: 600; color: #333; }
+
+/* Diğer Kolonlar */
+.col-nest-appno { width: 15% !important; text-align: center !important; }
+.col-nest-nice { width: auto !important; text-align: left !important; } /* Kalan alanı kullan */
+.col-nest-date { width: 12% !important; text-align: center !important; }
 
 /* ============================================================
-   4. GÖRSEL VE HOVER EFEKTLERİ
+   4. ARAMA SONUÇLARI TABLOSU (ID: searchResultsTable)
+   ============================================================ */
+#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; } 
+#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; } 
+#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 90px !important; text-align: center; padding: 5px !important; } 
+#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; white-space: normal !important; color: #1e3c72; } 
+#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 25% !important; white-space: normal !important; font-size: 0.9em; color: #555; }
+#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; }
+#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; }
+#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; }
+#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; }
+#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; }
+
+/* ============================================================
+   5. GÖRSELLER VE HOVER (GÜNCELLENDİ)
    ============================================================ */
 .tm-img-box {
     display: flex !important;
@@ -99,27 +103,36 @@
     border: 1px solid #dee2e6;
     border-radius: 6px;
     margin: 0 auto;
-    overflow: visible !important; /* Taşma için */
+    overflow: visible !important;
     position: relative !important;
 }
 
-.tm-img-box-sm { width: 50px !important; height: 50px !important; }
-.tm-img-box-lg { width: 60px !important; height: 60px !important; }
+/* Küçük Kutu (İzlenen Markalar) - BÜYÜTÜLDÜ (50px -> 75px) */
+.tm-img-box-sm { 
+    width: 75px !important; 
+    height: 75px !important; 
+}
+
+/* Büyük Kutu (Arama Sonuçları) - (60px -> 75px) */
+.tm-img-box-lg { 
+    width: 75px !important; 
+    height: 75px !important; 
+}
 
 .trademark-image-thumbnail-large {
-    width: 100% !important; height: 100% !important; object-fit: contain !important;
+    width: 100% !important; height: 100% !important; object-fit: contain !important; display: block;
     transition: transform 0.2s ease; background-color: #fff; z-index: 10; cursor: pointer; border-radius: 4px;
 }
 
-/* SAĞA AÇILAN HOVER (Önceki başarılı kod) */
+/* HOVER: Sağa Açılma Efekti */
 .trademark-image-thumbnail-large:hover {
     transform: none !important;
     position: absolute !important;
     top: -20px;
     left: 100%; 
     margin-left: 15px;
-    width: 240px !important;
-    height: 240px !important;
+    width: 250px !important; /* Hover boyutu */
+    height: 250px !important;
     max-width: none !important; max-height: none !important;
     z-index: 999999 !important;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important;
@@ -128,19 +141,17 @@
     background-color: #fff;
 }
 
-/* ============================================================
-   5. DİĞER BİLEŞENLER (Accordion & Modals)
-   ============================================================ */
-.nested-table { margin: 0 !important; background-color: #fff; }
-.nested-table thead th { background-color: #f1f3f5 !important; color: #666 !important; font-size: 0.85em !important; text-transform: uppercase; letter-spacing: 0.5px; }
-
-/* Modalları zorla genişlet */
-@media (min-width: 992px) {
-    .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; }
+/* Ok işareti */
+.trademark-image-thumbnail-large:hover::after {
+    content: ''; position: absolute; top: 30px; right: 100%; margin-top: -10px;
+    border-width: 10px; border-style: solid; border-color: transparent #1e3c72 transparent transparent;
 }
 
-.action-btn-group { display: flex; gap: 5px; justify-content: center; }
-.trigger-status-badge { padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
-.nice-class-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin: 1px; border: 1px solid #dee2e6; }
-.nice-class-badge.match { background-color: #28a745; color: white; border-color: #28a745; }
-.nice-class-badge.partial-match { background-color: #ffc107; color: #212529; border-color: #ffc107; }
+/* Diğer Bileşenler */
+.owner-row { cursor: pointer; transition: background-color 0.2s; }
+.owner-row:hover { background-color: #e9ecef !important; }
+.accordion-content-row td { padding: 0 !important; }
+.action-btn-group { display: flex; justify-content: center; gap: 5px; }
+.trigger-ready { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; font-weight: 600; padding: 4px 12px; border-radius: 12px; }
+.trigger-yes { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; font-weight: 600; padding: 4px 12px; border-radius: 12px; }
+.tm-placeholder { font-size: 12px; color: #999; width: 100%; text-align: center; }
