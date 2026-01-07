@@ -49,7 +49,7 @@
                     <button id="researchBtn" class="btn btn-secondary" disabled>
                         <i class="fas fa-sync-alt"></i> Yeniden Ara
                     </button>
-                    <button id="btnGenerateReportAndNotifyGlobal" class="btn btn-add-person" style="background: linear-gradient(45deg, #28a745, #218838);" disabled>
+                    <button id="btnGenerateReportAndNotifyGlobal" class="btn btn-success" disabled>
                         <i class="fas fa-paper-plane"></i> Raporla & Bildir
                     </button>
                     <button id="openManualEntryBtn" class="btn btn-secondary">
@@ -62,9 +62,9 @@
             </div>
             
             <div class="portfolio-table-container mb-5">
-                <div style="padding: 15px 20px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 15px 20px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 20px 20px 0 0;">
                     <h5 style="margin: 0; color: #1e3c72; font-weight: 600;">İzlenen Markalar</h5>
-                    <span id="monitoringCount" class="badge badge-info" style="padding: 8px 12px; font-size: 0.9em;">Yükleniyor...</span>
+                    <span id="monitoringCount" class="badge badge-info" style="padding: 8px 12px; font-size: 0.9em; background-color: #e3f2fd; color: #1e3c72;">Yükleniyor...</span>
                 </div>
                 
                 <div style="overflow-x: auto;">
@@ -82,11 +82,11 @@
                         <tbody id="monitoringListBody"></tbody>
                     </table>
                 </div>
-                <div id="monitoringPaginationContainer" style="padding: 15px;"></div>
+                <div id="monitoringPaginationContainer" style="padding: 15px; background: #fff; border-radius: 0 0 20px 20px;"></div>
             </div>
     
             <div class="results-container portfolio-table-container">
-                <div class="results-header" style="background: #fff; padding: 20px; border-bottom: 1px solid #eee;">
+                <div class="results-header" style="background: #fff; padding: 20px; border-bottom: 1px solid #eee; border-radius: 20px 20px 0 0;">
                     <div class="d-flex justify-content-between align-items-center flex-wrap">
                         <h5 style="color: #1e3c72; font-weight: 600; margin: 0;">Arama Sonuçları</h5>
                         
@@ -107,7 +107,7 @@
                     <div class="mt-3 p-3 bg-light rounded d-flex align-items-center flex-wrap gap-3 border">
                         <div class="d-flex align-items-center gap-2">
                             <label class="mb-0 fw-bold text-muted"><i class="fas fa-filter"></i> Benzerlik:</label>
-                            <select id="similarityFilterSelect" class="form-select form-select-sm" style="width: auto;">
+                            <select id="similarityFilterSelect" class="form-select form-select-sm" style="width: auto; padding: 5px 30px 5px 10px;">
                                 <option value="all">Tümü</option>
                                 <option value="similar">✓ Benzer</option>
                                 <option value="not-similar">✗ Benzemez</option>
@@ -148,10 +148,10 @@
                         <div class="spinner-border text-primary" role="status"><span class="sr-only">Yükleniyor...</span></div>
                     </div>
                     <div id="noRecordsMessage" class="no-records" style="display: none; text-align: center; padding: 40px; color: #666;">
-                        Sonuç bulunamadı.
+                        Kayıt bulunamadı.
                     </div>
                 </div>
-                <div id="paginationContainer" style="padding: 15px;"></div>
+                <div id="paginationContainer" style="padding: 15px; background: #fff; border-radius: 0 0 20px 20px;"></div>
             </div>
         </main>
     </div>
@@ -161,7 +161,7 @@
             <div class="modal-content">
                 <span class="close-modal-btn" id="closeNoteModal">&times;</span>
                 <h3 class="modal-title">Not Ekle/Düzenle</h3>
-                <textarea id="noteInputModal" class="form-control" style="min-height: 150px;" placeholder="Notunuzu buraya girin..."></textarea>
+                <textarea id="noteInputModal" class="form-control" style="min-height: 150px; margin-top: 15px;" placeholder="Notunuzu buraya girin..."></textarea>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" id="cancelNoteBtn">Vazgeç</button>
                     <button type="button" class="btn btn-primary" id="saveNoteBtn">Kaydet</button>
@@ -204,13 +204,13 @@
                     </div>
                     <div id="tpSourceForm" class="source-form-section">
                         <div class="row">
-                            <div class="col-md-6"><div class="form-group"><label>Bülten No</label><input type="text" id="tpSearchBulletinNo" class="form-control"></div></div>
-                            <div class="col-md-6"><div class="form-group"><label>Başvuru No</label><div class="input-group"><input type="text" id="tpSearchAppNo" class="form-control"><div class="input-group-append"><button class="btn btn-primary" type="button" id="btnQueryTpRecord">Sorgula</button></div></div></div></div>
+                            <div class="col-md-6"><div class="form-group"><label>Bülten No</label><input type="text" id="tpSearchBulletinNo" class="form-control" placeholder="Örn: 469"></div></div>
+                            <div class="col-md-6"><div class="form-group"><label>Başvuru No</label><div class="input-group"><input type="text" id="tpSearchAppNo" class="form-control" placeholder="Örn: 2024/12345"><div class="input-group-append"><button class="btn btn-primary" type="button" id="btnQueryTpRecord">Sorgula</button></div></div></div></div>
                         </div>
                         <div id="tpPreviewCard" class="card mt-3" style="display:none; border: 1px solid #28a745;">
                             <div class="card-body d-flex align-items-center">
-                                <img id="tpPreviewImg" src="" style="width:60px; height:60px; object-fit:contain; margin-right:15px;">
-                                <div><h6 id="tpPreviewName" class="mb-0"></h6><small id="tpPreviewAppNo"></small><br><small id="tpPreviewOwner"></small> <small id="tpPreviewClasses"></small></div>
+                                <img id="tpPreviewImg" src="" style="width:60px; height:60px; object-fit:contain; margin-right:15px; border:1px solid #eee;">
+                                <div><h6 id="tpPreviewName" class="mb-0 font-weight-bold"></h6><small id="tpPreviewAppNo"></small><br><small id="tpPreviewOwner"></small> <small id="tpPreviewClasses"></small></div>
                             </div>
                         </div>
                     </div>
@@ -219,14 +219,14 @@
                             <div class="col-md-6"><div class="form-group"><label>Marka Adı</label><input type="text" id="manMarkName" class="form-control"></div></div>
                             <div class="col-md-6"><div class="form-group"><label>Başvuru No</label><input type="text" id="manAppNo" class="form-control"></div></div>
                         </div>
-                        <div class="form-group"><label>Kaynak</label><input type="text" id="manSourceInfo" class="form-control"></div>
+                        <div class="form-group"><label>Kaynak</label><input type="text" id="manSourceInfo" class="form-control" placeholder="Örn: WIPO 2024/15"></div>
                         <div class="row">
                             <div class="col-md-6"><div class="form-group"><label>B. Tarihi</label><input type="date" id="manAppDate" class="form-control"></div></div>
                             <div class="col-md-6"><div class="form-group"><label>İtiraz Son T.</label><input type="date" id="manObjectionDeadline" class="form-control"></div></div>
                         </div>
                         <div class="form-group"><label>Sahip</label><input type="text" id="manOwner" class="form-control"></div>
                         <div class="form-group"><label>Sınıflar</label><div class="nice-class-selector-grid" id="manualNiceGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(35px, 1fr)); gap:5px;"></div></div>
-                        <div class="form-group"><label>Görsel</label><div id="manualImgDropZone" class="upload-drop-zone"><div class="default-content">Sürükle veya Seç</div><input type="file" id="manualImgInput" hidden><div id="manualImgPreviewContainer" style="display:none;"><img id="manualImgPreview" style="max-height:150px;"><button id="removeManualImgBtn" class="btn btn-sm btn-danger" style="position:absolute;">&times;</button></div></div></div>
+                        <div class="form-group"><label>Görsel</label><div id="manualImgDropZone" class="upload-drop-zone"><div class="default-content">Sürükle veya Seç</div><input type="file" id="manualImgInput" hidden><div id="manualImgPreviewContainer" style="display:none; position: relative;"><img id="manualImgPreview" style="max-height:150px;"><button id="removeManualImgBtn" class="btn btn-sm btn-danger" style="position:absolute; top:-10px; right:-10px;">&times;</button></div></div></div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -242,7 +242,7 @@
             <div class="modal-content">
                 <div class="modal-header"><h5 class="modal-title" id="editCriteriaModalLabel">İzleme Kriterleri</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
                 <div class="modal-body">
-                    <div class="card mb-3"><div class="card-body d-flex"><img id="modalTrademarkImage" style="width:80px;height:80px;object-fit:contain;margin-right:15px;"><div><h5 id="modalTrademarkName"></h5><p class="mb-0"><span id="modalApplicationNo"></span> - <span id="modalOwner"></span><br>Sınıflar: <span id="modalNiceClass"></span></p></div></div></div>
+                    <div class="card mb-3"><div class="card-body d-flex"><img id="modalTrademarkImage" style="width:80px;height:80px;object-fit:contain;margin-right:15px;border:1px solid #eee;"><div><h5 id="modalTrademarkName" class="font-weight-bold"></h5><p class="mb-0"><span id="modalApplicationNo"></span> - <span id="modalOwner"></span><br>Sınıflar: <span id="modalNiceClass"></span></p></div></div></div>
                     <div class="form-group"><div class="input-group"><input type="text" class="form-control" id="brandTextSearchInput" placeholder="Marka adı ekle..."><div class="input-group-append"><button class="btn btn-outline-secondary" type="button" id="addBrandTextBtn">Ekle</button></div></div></div>
                     <ul class="list-group mb-3" id="brandTextSearchList"></ul>
                     <div class="form-group"><label>Sınıflar:</label><div id="niceClassSelectionContainer" class="nice-class-boxes" style="display:flex;flex-wrap:wrap;gap:5px;"></div></div>
@@ -253,10 +253,10 @@
         </div>
     </div>
 
-<script type="module" src="js/trademark-similarity-search.js"></script>
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-<script type="module" src="js/create-portfolio-by-opposition.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script type="module" src="js/create-portfolio-by-opposition.js"></script>
+    <script type="module" src="js/trademark-similarity-search.js"></script>
 </body>
 </html>
