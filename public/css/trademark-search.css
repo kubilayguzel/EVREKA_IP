@@ -1,4 +1,4 @@
-/* public/css/trademark-search.css (Updated Layout) */
+/* public/css/trademark-search-refactor.css (Visual Update) */
 
 /* ============================================================
    1. GENEL TABLO AYARLARI
@@ -7,59 +7,72 @@
 .search-results-table,
 .nested-table {
     width: 100%;
-    table-layout: fixed !important;
+    table-layout: fixed !important; /* Genişlik kontrolü için şart */
     border-collapse: collapse;
 }
 
 .monitoring-table th, .monitoring-table td,
 .search-results-table th, .search-results-table td,
 .nested-table th, .nested-table td {
-    padding: 12px 10px !important; /* Padding biraz artırıldı */
+    padding: 12px 8px !important;
     vertical-align: middle !important;
     border-bottom: 1px solid #dee2e6;
-    overflow: visible !important;
+    overflow: visible !important; /* Hover efektlerinin taşması için */
     position: relative !important;
 }
 
-/* Başlık Stilleri */
+/* 2. BAŞLIKLAR (STANDARDIZASYON) */
 .monitoring-table thead th,
 .search-results-table thead th {
     background-color: #f8f9fa !important;
     color: #1e3c72 !important;
     font-weight: 700 !important;
     font-size: 14px !important;
+    text-transform: none !important;
     border-bottom: 2px solid #dee2e6 !important;
     text-align: center !important;
 }
 
 /* ============================================================
-   2. İZLENEN MARKALAR TABLOSU (ID: monitoringTable)
+   3. İZLENEN MARKALAR TABLOSU (ID: monitoringTable)
    ============================================================ */
+/* Kolon 1: Ok İkonu */
 #monitoringTable th:nth-child(1), 
 #monitoringTable td:nth-child(1) { width: 50px !important; text-align: center !important; }
 
-/* Sahip Sütunu (%55) */
+/* Kolon 2: SAHİP (GENİŞ ALAN - %55) */
 #monitoringTable th:nth-child(2), 
 #monitoringTable td:nth-child(2) { 
-    width: 55% !important; 
+    width: 55% !important; /* Ana genişlik buraya verildi */
     text-align: left !important; 
     padding-left: 15px !important; 
     white-space: normal !important; 
     word-break: break-word !important; 
 }
 
-#monitoringTable th:nth-child(3), #monitoringTable td:nth-child(3) { width: 100px !important; text-align: center !important; }
-#monitoringTable th:nth-child(4), #monitoringTable td:nth-child(4) { width: 110px !important; text-align: center !important; }
-#monitoringTable th:nth-child(5), #monitoringTable td:nth-child(5) { width: 120px !important; text-align: center !important; }
-#monitoringTable th:nth-child(6), #monitoringTable td:nth-child(6) { width: 220px !important; text-align: center !important; }
+/* Kolon 3: Marka Sayısı */
+#monitoringTable th:nth-child(3), 
+#monitoringTable td:nth-child(3) { width: 9% !important; text-align: center !important; }
+
+/* Kolon 4: İş Tetiklendi */
+#monitoringTable th:nth-child(4), 
+#monitoringTable td:nth-child(4) { width: 10% !important; text-align: center !important; }
+
+/* Kolon 5: Bildirim Durumu */
+#monitoringTable th:nth-child(5), 
+#monitoringTable td:nth-child(5) { width: 10% !important; text-align: center !important; }
+
+/* Kolon 6: Eylemler */
+#monitoringTable th:nth-child(6), 
+#monitoringTable td:nth-child(6) { width: auto !important; min-width: 170px !important; text-align: center !important; }
 
 /* ============================================================
-   3. İÇ TABLO (ACCORDION - Class: nested-table) - GÜNCELLENDİ
+   4. İÇ TABLO (ACCORDION - Class: nested-table) [GÜNCELLENDİ]
    ============================================================ */
 .nested-table { margin: 0 !important; background-color: #fff; }
 .nested-table thead th { background-color: #f1f3f5 !important; color: #495057 !important; font-size: 13px !important; }
 
-/* Kolon 1: Boşluk/Numara */
+/* Kolon 1: Boşluk */
 .nested-table th:nth-child(1), 
 .nested-table td:nth-child(1) { width: 40px !important; }
 
@@ -67,33 +80,42 @@
 .col-nest-img { 
     width: 85px !important; 
     text-align: center !important; 
-    padding: 5px !important; 
+    padding: 5px !important; /* Görsel kutusu için padding */
 }
 
-/* Kolon 3: Marka Adı (Genişletildi) */
-.col-nest-name { width: 20% !important; text-align: center !important; font-weight: 600; color: #333; }
+/* Kolon 3: Marka Adı (Genişletildi: %15 -> %20) */
+.col-nest-name { 
+    width: 20% !important; 
+    text-align: center !important; 
+    font-weight: 600 !important;
+    color: #1e3c72 !important;
+}
 
-/* Diğer Kolonlar */
+/* Kolon 4: Başvuru No */
 .col-nest-appno { width: 15% !important; text-align: center !important; }
-.col-nest-nice { width: auto !important; text-align: left !important; } /* Kalan alanı kullan */
+
+/* Kolon 5: Nice Sınıfı (Otomatik genişleme) */
+.col-nest-nice { width: auto !important; text-align: left !important; }
+
+/* Kolon 6: Tarih */
 .col-nest-date { width: 12% !important; text-align: center !important; }
 
 /* ============================================================
-   4. ARAMA SONUÇLARI TABLOSU (ID: searchResultsTable)
+   5. ARAMA SONUÇLARI TABLOSU (ID: searchResultsTable)
    ============================================================ */
-#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; } 
-#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; } 
-#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 90px !important; text-align: center; padding: 5px !important; } 
-#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; white-space: normal !important; color: #1e3c72; } 
-#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 25% !important; white-space: normal !important; font-size: 0.9em; color: #555; }
-#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; }
-#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; }
-#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; }
-#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; }
-#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; }
+#searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; } /* Sıra */
+#searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; } /* Karar */
+#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 90px !important; text-align: center; padding: 5px !important; } /* Görsel (Hafif daraltıldı) */
+#searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; white-space: normal !important; color: #1e3c72; } /* Marka Adı */
+#searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 25% !important; white-space: normal !important; font-size: 0.9em; color: #555; } /* Sahip */
+#searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; } /* Nice */
+#searchResultsTable th:nth-child(7), #searchResultsTable td:nth-child(7) { width: 100px !important; } /* Başvuru No */
+#searchResultsTable th:nth-child(8), #searchResultsTable td:nth-child(8) { width: 80px !important; text-align: center; } /* Benzerlik */
+#searchResultsTable th:nth-child(9), #searchResultsTable td:nth-child(9) { width: 70px !important; } /* B.Ş */
+#searchResultsTable th:nth-child(10), #searchResultsTable td:nth-child(10) { width: 80px !important; } /* Not */
 
 /* ============================================================
-   5. GÖRSELLER VE HOVER (GÜNCELLENDİ)
+   6. GÖRSELLER VE HOVER (SAĞA AÇILMA) [GÜNCELLENDİ]
    ============================================================ */
 .tm-img-box {
     display: flex !important;
@@ -103,7 +125,7 @@
     border: 1px solid #dee2e6;
     border-radius: 6px;
     margin: 0 auto;
-    overflow: visible !important;
+    overflow: visible !important; /* Taşma için */
     position: relative !important;
 }
 
@@ -126,12 +148,12 @@
 
 /* HOVER: Sağa Açılma Efekti */
 .trademark-image-thumbnail-large:hover {
-    transform: none !important;
+    transform: none !important; /* Ortadan büyümeyi engelle */
     position: absolute !important;
     top: -20px;
-    left: 100%; 
+    left: 100%; /* Kutunun sağından başla */
     margin-left: 15px;
-    width: 250px !important; /* Hover boyutu */
+    width: 250px !important; /* Hover boyutu büyütüldü */
     height: 250px !important;
     max-width: none !important; max-height: none !important;
     z-index: 999999 !important;
@@ -141,17 +163,27 @@
     background-color: #fff;
 }
 
-/* Ok işareti */
+/* Ok işareti (Opsiyonel - Popup hissi verir) */
 .trademark-image-thumbnail-large:hover::after {
     content: ''; position: absolute; top: 30px; right: 100%; margin-top: -10px;
     border-width: 10px; border-style: solid; border-color: transparent #1e3c72 transparent transparent;
 }
 
-/* Diğer Bileşenler */
+/* 7. MODAL GENİŞLİKLERİ (ID Zorlama) */
+@media (min-width: 992px) {
+    #addManualResultModal .modal-dialog,
+    #editCriteriaModal .modal-dialog,
+    #noteModal .modal-dialog {
+        max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important;
+    }
+    .modal-content { width: 100% !important; }
+}
+
+/* 8. DİĞER BİLEŞENLER */
 .owner-row { cursor: pointer; transition: background-color 0.2s; }
 .owner-row:hover { background-color: #e9ecef !important; }
 .accordion-content-row td { padding: 0 !important; }
 .action-btn-group { display: flex; justify-content: center; gap: 5px; }
 .trigger-ready { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; font-weight: 600; padding: 4px 12px; border-radius: 12px; }
 .trigger-yes { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; font-weight: 600; padding: 4px 12px; border-radius: 12px; }
-.tm-placeholder { font-size: 12px; color: #999; width: 100%; text-align: center; }
+.tm-placeholder { font-size: 11px; color: #666; width: 100%; text-align: center; }
