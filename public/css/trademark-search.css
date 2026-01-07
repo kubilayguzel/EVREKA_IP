@@ -1,4 +1,4 @@
-/* public/css/trademark-search.css (Final Visual Upgrade - Revised) */
+/* public/css/trademark-search.css (Sola Yaslı & Sıkı Görünüm) */
 
 /* ============================================================
    1. GENEL AYARLAR
@@ -11,19 +11,19 @@ body, .page-wrapper {
 .search-results-table,
 .nested-table {
     width: 100%;
-    table-layout: fixed !important;
+    table-layout: fixed !important; /* Genişlikleri zorlar */
     border-collapse: collapse;
 }
 
-/* Hücreler için "visible" ayarı (Popup'ların taşabilmesi için şart) */
+/* Hücre Genel Ayarları */
 .monitoring-table th, .monitoring-table td,
 .search-results-table th, .search-results-table td,
 .nested-table th, .nested-table td {
-    padding: 12px 8px !important;
+    padding: 8px 5px !important; /* Padding küçültüldü */
     vertical-align: middle !important;
     border-bottom: 1px solid #dee2e6;
-    overflow: visible !important; /* KRİTİK: Popup kesilmesin */
-    position: relative !important; /* z-index yönetimi için */
+    overflow: visible !important;
+    position: relative !important;
 }
 
 .monitoring-table thead th,
@@ -39,17 +39,15 @@ body, .page-wrapper {
 /* ============================================================
    2. İZLENEN MARKALAR TABLOSU (ANA TABLO)
    ============================================================ */
+/* Ana tablo kolon genişlikleri (Değişmedi) */
 #monitoringTable > thead > tr > th:nth-child(1),
-#monitoringTable > tbody > tr.owner-row > td:nth-child(1) { width: 50px !important; text-align: center !important; }
+#monitoringTable > tbody > tr.owner-row > td:nth-child(1) { width: 40px !important; text-align: center !important; }
 
-/* Sahip Kolonu */
 #monitoringTable > thead > tr > th:nth-child(2),
 #monitoringTable > tbody > tr.owner-row > td:nth-child(2) { 
-    width: 55% !important; 
+    width: auto !important; /* Esnek */
     text-align: left !important; 
     padding-left: 15px !important; 
-    white-space: normal !important; 
-    word-break: break-word !important; 
 }
 
 #monitoringTable > thead > tr > th:nth-child(3),
@@ -63,33 +61,56 @@ body, .page-wrapper {
 
 
 /* ============================================================
-   3. İÇ TABLO (ACCORDION) - GÜNCELLENDİ
+   3. İÇ TABLO (ACCORDION) - SOLA YASLI & SIKI DÜZEN
    ============================================================ */
 .nested-table { margin: 0 !important; background-color: #fff; }
-.nested-table thead th { background-color: #f1f3f5 !important; color: #495057 !important; font-size: 13px !important; }
-
-/* Toggle Ok Alanı: Daraltıldı */
-.td-nested-toggle { width: 40px !important; }
-
-/* Görsel Sütunu: Daraltıldı (85px -> 50px) */
-.col-nest-img, .td-nested-img { 
-    width: 50px !important; 
-    text-align: center !important; 
-    padding: 2px !important; 
+.nested-table thead th { 
+    background-color: #f1f3f5 !important; 
+    color: #495057 !important; 
+    font-size: 13px !important; 
+    text-align: left !important; /* Başlıkları da sola aldık */
+    padding-left: 10px !important;
 }
 
-/* Marka Adı: Genişletildi ve Sola Yaslandı */
+/* 1. Toggle (Ok) Kolonu: Çok dar */
+.td-nested-toggle { 
+    width: 30px !important; 
+    padding: 0 !important;
+    text-align: center !important;
+}
+
+/* 2. Görsel Kolonu: Sabit ve Dar (40px) */
+.col-nest-img, .td-nested-img { 
+    width: 40px !important; /* Sabit genişlik */
+    padding: 2px !important; /* Boşluk yok */
+    text-align: left !important; /* İçerik sola yaslı */
+    vertical-align: middle !important;
+}
+
+/* 3. Marka Adı: Görselin hemen dibinden başlar */
 .col-nest-name, .td-nested-name { 
-    width: 30% !important; /* Artırıldı */
-    text-align: left !important; /* Okunabilirlik için sola yaslandı */
-    padding-left: 10px !important;
+    width: 30% !important; 
+    text-align: left !important; 
+    padding-left: 5px !important; /* Görselle arasındaki mesafe */
     font-weight: 600; 
     color: #1e3c72; 
 }
 
-.col-nest-appno, .td-nested-appno { width: 15% !important; text-align: center !important; }
-.col-nest-nice, .td-nested-nice { width: auto !important; text-align: left !important; } /* Esnek bırakıldı */
-.col-nest-date, .td-nested-date { width: 12% !important; text-align: center !important; }
+/* 4. Diğer Kolonlar: Sola yaslı ve hizalı */
+.col-nest-appno, .td-nested-appno { 
+    width: 15% !important; 
+    text-align: left !important; 
+}
+
+.col-nest-nice, .td-nested-nice { 
+    width: auto !important; /* Kalan alanı doldurur */
+    text-align: left !important; 
+}
+
+.col-nest-date, .td-nested-date { 
+    width: 12% !important; 
+    text-align: left !important; 
+}
 
 
 /* ============================================================
@@ -97,15 +118,7 @@ body, .page-wrapper {
    ============================================================ */
 #searchResultsTable th:nth-child(1), #searchResultsTable td:nth-child(1) { width: 50px !important; text-align: center; }
 #searchResultsTable th:nth-child(2), #searchResultsTable td:nth-child(2) { width: 90px !important; text-align: center; }
-
-/* Arama sonuçları görsel kolonu (Daha büyük kalabilir veya isteğe göre küçültülebilir, şu an standart bırakıldı) */
-#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { 
-    width: 170px !important; 
-    text-align: center; 
-    padding: 10px !important; 
-    overflow: visible !important; 
-}
-
+#searchResultsTable th:nth-child(3), #searchResultsTable td:nth-child(3) { width: 170px !important; text-align: center; overflow: visible !important; }
 #searchResultsTable th:nth-child(4), #searchResultsTable td:nth-child(4) { width: 15% !important; font-weight: 700; color: #1e3c72; }
 #searchResultsTable th:nth-child(5), #searchResultsTable td:nth-child(5) { width: 20% !important; font-size: 0.9em; color: #555; }
 #searchResultsTable th:nth-child(6), #searchResultsTable td:nth-child(6) { width: 10% !important; }
@@ -116,7 +129,7 @@ body, .page-wrapper {
 
 
 /* ============================================================
-   5. GÖRSELLER VE GELİŞMİŞ HOVER EFEKTİ (YENİDEN TASARLANDI)
+   5. GÖRSELLER VE GELİŞMİŞ HOVER EFEKTİ (SOLA YASLI)
    ============================================================ */
 
 /* Kutu Temel Ayarları */
@@ -126,23 +139,27 @@ body, .page-wrapper {
     justify-content: center !important;
     background: #fff;
     border: 1px solid #dee2e6;
-    border-radius: 6px;
-    margin: 0 auto;
-    position: relative !important; /* Referans noktası */
+    border-radius: 4px;
+    
+    /* ÖNEMLİ: Ortalamayı iptal et, sola yasla */
+    margin: 0 !important; 
+    
+    position: relative !important;
     z-index: 1;
     transition: all 0.2s ease;
 }
 
-/* Küçük Kutu (İzlenenler) - KÜÇÜLTÜLDÜ */
+/* Küçük Kutu (İzlenenler) - 35px */
 .tm-img-box-sm { 
-    width: 40px !important; 
-    height: 40px !important; 
+    width: 35px !important; 
+    height: 35px !important; 
 }
 
 /* Büyük Kutu (Arama Sonuçları) */
 .tm-img-box-lg { 
     width: 150px !important; 
-    height: 150px !important; 
+    height: 150px !important;
+    margin: 0 auto !important; /* Arama sonuçlarında ortalı kalsın */
 }
 
 /* Resim Temel Hali */
@@ -151,46 +168,45 @@ body, .page-wrapper {
     height: 100% !important; 
     object-fit: contain !important; 
     display: block;
-    background-color: #fff;
-    border-radius: 4px;
 }
 
-/* --- HOVER MANTIĞI: TABLODAN TAŞAN GÖRÜNÜM --- */
+/* --- HOVER MANTIĞI: DEV BOYUT (500px) --- */
 
-/* Hover durumunda kutunun z-index'i en üste */
 .tm-img-box:hover {
     z-index: 99999 !important;
     border-color: #1e3c72;
 }
 
-/* Hover durumunda İÇERDEKİ resim dışarı fırlar */
 .tm-img-box:hover .trademark-image-thumbnail-large {
     position: absolute !important;
     
-    /* Konumlandırma: Kutunun sağına */
-    top: -105px;  /* 250px yüksekliği dikeyde ortalamak için (Yaklaşık) */
-    left: 45px;   /* Kutunun (40px) hemen sağından başlar */
+    /* Konumlandırma: Kutunun SAĞINA */
+    /* 35px kutunun hemen yanından (40px) başlat */
+    left: 40px !important; 
     
-    /* BÜYÜME BOYUTLARI */
-    width: 250px !important;
-    height: 250px !important;
+    /* Dikeyde ortalamak/konumlandırmak için */
+    top: -230px !important; 
+    
+    /* BÜYÜME BOYUTLARI (500PX) */
+    width: 500px !important;
+    height: 500px !important;
     max-width: none !important;
     max-height: none !important;
     
-    /* Stil Süslemeleri */
     background-color: #ffffff !important;
-    border: 2px solid #1e3c72 !important;
-    box-shadow: 5px 5px 25px rgba(0,0,0,0.4) !important;
+    border: 4px solid #1e3c72 !important;
+    box-shadow: 10px 10px 50px rgba(0,0,0,0.5) !important;
     border-radius: 8px !important;
-    padding: 5px !important;
+    padding: 10px !important;
     z-index: 100000 !important;
 }
 
-/* Bağlantı Oku (Opsiyonel Estetik) */
+/* Bağlantı Oku */
 .tm-img-box:hover::after {
     content: '';
     position: absolute;
     top: 50%;
+    /* Oku kutunun sağına yerleştir */
     right: -10px; 
     margin-top: -6px;
     border-width: 6px;
@@ -202,10 +218,10 @@ body, .page-wrapper {
 
 
 /* ============================================================
-   6. DİĞER BİLEŞENLER VE RENKLER
+   6. DİĞER BİLEŞENLER
    ============================================================ */
 .nice-class-badge {
-    display: inline-block; padding: 3px 7px; border-radius: 4px; font-size: 0.85em; margin: 1px;
+    display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin: 1px;
     border: 1px solid #dee2e6; background-color: #f8f9fa; color: #333;
 }
 .nice-class-badge.match { background-color: #28a745 !important; color: white !important; border-color: #28a745 !important; }
@@ -221,9 +237,8 @@ body, .page-wrapper {
 .action-btn-group { display: flex; justify-content: center; gap: 5px; }
 .trigger-ready { background-color: #fff3cd; color: #856404; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
 .trigger-yes { background-color: #d4edda; color: #155724; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
-.tm-placeholder { font-size: 12px; color: #999; width: 100%; text-align: center; }
+.tm-placeholder { font-size: 10px; color: #999; width: 100%; text-align: center; }
 
-/* Modallar */
 @media (min-width: 992px) {
     .modal-full-width { max-width: 95vw !important; width: 95vw !important; margin: 10px auto !important; }
 }
