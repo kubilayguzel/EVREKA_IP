@@ -10,7 +10,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Fixed Buttons & UI) ###");
+console.log("### trademark-similarity-search.js yüklendi (Fixed Order) ###");
 
 // --- Global State ---
 let allSimilarResults = [];
@@ -35,6 +35,7 @@ const tssLoadState = () => { try { return JSON.parse(localStorage.getItem(TSS_RE
 const tssSaveState = (partial) => { try { const prev = tssLoadState(); localStorage.setItem(TSS_RESUME_KEY, JSON.stringify({ ...prev, ...partial, updatedAt: new Date().toISOString() })); } catch (e) { } };
 const tssClearState = () => { try { localStorage.removeItem(TSS_RESUME_KEY); } catch (e) { } };
 const tssBuildStateFromUI = (extra = {}) => { const bulletinSelect = document.getElementById('bulletinSelect'); return { bulletinValue: bulletinSelect?.value || '', bulletinText: bulletinSelect?.options?.[bulletinSelect.selectedIndex]?.text || '', ...extra }; };
+
 const tssShowResumeBannerIfAny = () => {
     const state = tssLoadState(); if (!state?.bulletinValue) return;
     let bar = document.getElementById('tssResumeBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'tssResumeBar'; bar.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:9999;background:#1e3c72;color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.2);display:flex;gap:8px;align-items:center;font-size:14px;'; document.body.appendChild(bar); }
@@ -159,16 +160,7 @@ const renderMonitoringList = async () => {
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
                     <table class="table table-sm nested-table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th class="col-nest-img">Görsel</th>
-                                <th class="col-nest-name">Marka Adı</th>
-                                <th class="col-nest-appno">Başvuru No</th>
-                                <th class="col-nest-nice">Nice Sınıfı</th>
-                                <th class="col-nest-date">B. Tarihi</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
                         <tbody>${detailRowsHtml}</tbody>
                     </table>
                 </td>
@@ -176,7 +168,6 @@ const renderMonitoringList = async () => {
         allRowsHtml.push(contentRow);
     }
     tbody.innerHTML = allRowsHtml.join('');
-    
     attachMonitoringAccordionListeners(); attachGenerateReportListener(); attachTrademarkClickListener();
 
     setTimeout(() => {
@@ -191,55 +182,6 @@ const renderMonitoringList = async () => {
             }
         });
     }, 300);
-};
-
-const renderCurrentPageOfResults = () => {
-    const resultsTableBody = document.getElementById('resultsTableBody');
-    const noRecordsMessage = document.getElementById('noRecordsMessage');
-    const bulletinSelect = document.getElementById('bulletinSelect');
-
-    if (!pagination || !resultsTableBody) return;
-    resultsTableBody.innerHTML = '';
-    let filteredResults = allSimilarResults;
-    if (selectedMonitoredTrademarkId) filteredResults = filteredResults.filter(r => r.monitoredTrademarkId === selectedMonitoredTrademarkId);
-    if (similarityFilter === 'similar') filteredResults = filteredResults.filter(r => r.isSimilar === true);
-    else if (similarityFilter === 'not-similar') filteredResults = filteredResults.filter(r => r.isSimilar !== true);
-    
-    updateFilterInfo(filteredResults.length);
-    pagination.update(filteredResults.length);
-    const currentPageData = pagination.getCurrentPageData(filteredResults);
-    if (currentPageData.length === 0) { noRecordsMessage.textContent = 'Arama sonucu bulunamadı.'; noRecordsMessage.style.display = 'block'; return; }
-    noRecordsMessage.style.display = 'none';
-
-    const groupedByTrademark = currentPageData.reduce((acc, hit) => {
-        const key = hit.monitoredTrademarkId || 'unknown';
-        (acc[key] = acc[key] || []).push(hit);
-        return acc;
-    }, {});
-
-    Object.keys(groupedByTrademark).sort((a, b) => (groupedByTrademark[a][0]?.monitoredTrademark || '').localeCompare(groupedByTrademark[b][0]?.monitoredTrademark || '')).forEach(trademarkKey => {
-        const groupResults = groupedByTrademark[trademarkKey];
-        const tmMeta = monitoringTrademarks.find(t => String(t.id) === String(trademarkKey)) || null;
-        if (!tmMeta) {
-            const groupHeaderRow = document.createElement('tr'); groupHeaderRow.classList.add('group-header');
-            groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title"><span><strong>Bilinmeyen Marka</strong> sonuçları (${groupResults.length})</span></div></td>`;
-            resultsTableBody.appendChild(groupHeaderRow);
-            groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
-            return;
-        }
-        const headerName = _pickName(null, tmMeta);
-        const headerImg = _pickImg(null, tmMeta);
-        const appNo = _pickAppNo(null, tmMeta);
-        const modalData = { id: tmMeta.id, ipRecordId: tmMeta.ipRecordId || tmMeta.sourceRecordId || tmMeta.id, markName: headerName, applicationNumber: appNo, owner: _pickOwners(null, tmMeta, allPersons), niceClasses: getNiceClassNumbers(tmMeta), brandImageUrl: headerImg, brandTextSearch: tmMeta.brandTextSearch || [], niceClassSearch: tmMeta.niceClassSearch || [] };
-        
-        const groupHeaderRow = document.createElement('tr');
-        groupHeaderRow.classList.add('group-header');
-        groupHeaderRow.dataset.markData = JSON.stringify(modalData);
-        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title"><div class="tm-img-box tm-img-box-sm">${headerImg ? `<img src="${headerImg}" class="group-header-img" alt="${headerName}">` : `<div class="tm-placeholder">?</div>`}</div><span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> sonuçları (${getTotalCountForMonitoredId(trademarkKey)} adet)</span></div></td>`;
-        resultsTableBody.appendChild(groupHeaderRow);
-        groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
-    });
-    attachEventListeners();
 };
 
 const createResultRow = (hit, rowIndex) => {
@@ -284,7 +226,78 @@ const createResultRow = (hit, rowIndex) => {
     return row;
 };
 
-// --- Main Entry Point (DOM Dependent Logic) ---
+// --- INITIALIZATION FUNCTIONS (Bu fonksiyonların ÖNCE tanımlanması şart) ---
+
+const initializePagination = () => { if (!pagination) pagination = new Pagination({ containerId: 'paginationContainer', itemsPerPage: 10, onPageChange: (page, itemsPerPage) => { renderCurrentPageOfResults(); tssSaveState(tssBuildStateFromUI({ page, itemsPerPage, totalResults: allSimilarResults.length })); } }); };
+const initializeMonitoringPagination = () => { if (!monitoringPagination) monitoringPagination = new Pagination({ containerId: 'monitoringPaginationContainer', itemsPerPage: 5, onPageChange: () => renderMonitoringList() }); };
+const updateMonitoringCount = async () => {
+    const ownerGroups = {}; for (const tm of filteredMonitoringTrademarks) { const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id); const ownerInfo = _getOwnerKey(ip, tm, allPersons); if (!ownerGroups[ownerInfo.key]) ownerGroups[ownerInfo.key] = true; }
+    document.getElementById('monitoringCount').textContent = `${Object.keys(ownerGroups).length} Sahip (${filteredMonitoringTrademarks.length} Marka)`;
+};
+const updateOwnerBasedPagination = async () => {
+    const ownerGroups = {}; for (const tm of filteredMonitoringTrademarks) { const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id); const ownerInfo = _getOwnerKey(ip, tm, allPersons); if (!ownerGroups[ownerInfo.key]) ownerGroups[ownerInfo.key] = true; }
+    monitoringPagination.update(Object.keys(ownerGroups).length); monitoringPagination.reset();
+};
+const applyMonitoringListFilters = async () => {
+    const ownerSearchInput = document.getElementById('ownerSearch');
+    const niceClassSearchInput = document.getElementById('niceClassSearch');
+    const brandNameSearchInput = document.getElementById('brandNameSearch');
+    
+    const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput?.value || '', niceClassSearchInput?.value || '', brandNameSearchInput?.value || ''].map(s => s.toLowerCase());
+    const filteredResults = []; for (const data of monitoringTrademarks) { const ip = await _getIp(data.ipRecordId || data.sourceRecordId || data.id); const ownerInfo = _getOwnerKey(ip, data, allPersons); const ownerName = ownerInfo.name.toLowerCase(); const niceClasses = _uniqNice(ip || data); const markName = (data.title || data.markName || data.brandText || '').toLowerCase(); const ownerMatch = !ownerFilter || ownerName.includes(ownerFilter); const niceMatch = !niceFilter || niceClasses.toLowerCase().includes(niceFilter); const brandMatch = !brandFilter || markName.includes(brandFilter); if (ownerMatch && niceMatch && brandMatch) filteredResults.push(data); }
+    filteredMonitoringTrademarks = filteredResults; await updateOwnerBasedPagination(); renderMonitoringList(); updateMonitoringCount(); checkCacheAndToggleButtonStates();
+};
+
+const loadInitialData = async () => {
+    await loadSharedLayout({ activeMenuLink: 'trademark-similarity-search.html' }); const personsResult = await personService.getPersons(); if (personsResult.success) allPersons = personsResult.data; await loadBulletinOptions();
+    const snapshot = await getDocs(collection(db, 'monitoringTrademarks')); monitoringTrademarks = await Promise.all(snapshot.docs.map(async (docSnap) => { const tmData = { id: docSnap.id, ...docSnap.data() }; if (tmData.ipRecordId || tmData.sourceRecordId) { try { const ipDoc = await getDoc(doc(db, 'ipRecords', tmData.ipRecordId || tmData.sourceRecordId)); if (ipDoc.exists()) { tmData.ipRecord = ipDoc.data(); tmData.goodsAndServicesByClass = ipDoc.data().goodsAndServicesByClass || []; } } catch (e) {} } return tmData; }));
+    filteredMonitoringTrademarks = [...monitoringTrademarks]; initializeMonitoringPagination(); renderMonitoringList(); updateMonitoringCount(); monitoringPagination.update(filteredMonitoringTrademarks.length);
+    const bs = document.getElementById('bulletinSelect'); if (bs?.value) { const bNo = String(bs.value).split('_')[0]; if (bNo) { await refreshTriggeredStatus(bNo); renderMonitoringList(); } }
+};
+
+const loadBulletinOptions = async () => {
+    try {
+        const bulletinSelect = document.getElementById('bulletinSelect'); bulletinSelect.innerHTML = '<option value="">Bülten seçin...</option>';
+        const [registeredSnapshot, monitoringSnapshot] = await Promise.all([getDocs(collection(db, 'trademarkBulletins')), getDocs(collection(db, 'monitoringTrademarkRecords'))]);
+        const allBulletins = new Map(); registeredSnapshot.forEach(doc => { const data = doc.data(); const bulletinKey = `${data.bulletinNo}_${(data.bulletinDate || '').replace(/\D/g, '')}`; allBulletins.set(bulletinKey, { ...data, bulletinKey, source: 'registered', hasOriginalBulletin: true, displayName: `${data.bulletinNo} - ${data.bulletinDate || ''} (Kayıtlı)` }); });
+        for (const bulletinDoc of monitoringSnapshot.docs) {
+            const bulletinKeyRaw = bulletinDoc.id; try { const trademarksRef = collection(db, 'monitoringTrademarkRecords', bulletinKeyRaw, 'trademarks'); const trademarksSnapshot = await getDocs(trademarksRef); if (!trademarksSnapshot.empty) { const parts = bulletinKeyRaw.split('_'); const normalizedKey = `${parts[0]}_${(parts[1] || '').replace(/\D/g, '')}`; if (!allBulletins.has(normalizedKey)) { const bulletinDate = (parts[1] || '').length === 8 ? parts[1].replace(/(\d{2})(\d{2})(\d{4})/, '$1.$2.$3') : (parts[1] || 'Tarih Yok'); allBulletins.set(normalizedKey, { bulletinNo: parts[0], bulletinDate, bulletinKey: normalizedKey, source: 'searchOnly', hasOriginalBulletin: false, displayName: `${parts[0]} - ${bulletinDate} (Sadece Arama)` }); } } } catch (e) { }
+        }
+        const sortedBulletins = Array.from(allBulletins.values()).sort((a, b) => parseInt(b.bulletinNo) - parseInt(a.bulletinNo)); sortedBulletins.forEach(bulletin => { const option = document.createElement('option'); Object.keys(bulletin).forEach(key => option.dataset[key] = bulletin[key]); option.value = bulletin.bulletinKey; option.textContent = bulletin.displayName; bulletinSelect.appendChild(option); });
+    } catch (error) { console.error('Error loading bulletin options:', error); }
+};
+
+const checkCacheAndToggleButtonStates = async () => {
+    const bulletinSelect = document.getElementById('bulletinSelect');
+    const startSearchBtn = document.getElementById('startSearchBtn');
+    const researchBtn = document.getElementById('researchBtn');
+    const btnGenerateReportAndNotifyGlobal = document.getElementById('btnGenerateReportAndNotifyGlobal');
+    const infoMessageContainer = document.getElementById('infoMessageContainer');
+
+    const bulletinKey = bulletinSelect.value; if (!bulletinKey || filteredMonitoringTrademarks.length === 0) { startSearchBtn.disabled = true; researchBtn.disabled = true; infoMessageContainer.innerHTML = ''; btnGenerateReportAndNotifyGlobal.disabled = true; return; }
+    try {
+        const selectedOption = bulletinSelect.options[bulletinSelect.selectedIndex]; const hasOriginalBulletin = selectedOption?.dataset?.hasOriginalBulletin === 'true'; const snapshot = await getDocs(collection(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks')); const hasCache = snapshot.docs.some(doc => doc.data().results?.length > 0);
+        if (hasCache) { await loadDataFromCache(bulletinKey); startSearchBtn.disabled = true; researchBtn.disabled = !hasOriginalBulletin; btnGenerateReportAndNotifyGlobal.disabled = allSimilarResults.length === 0; const messageType = hasOriginalBulletin ? 'success' : 'warning'; const messageText = hasOriginalBulletin ? 'Bu bülten sistemde kayıtlı. Önbellekten sonuçlar yüklendi.' : 'Bu bülten sistemde kayıtlı değil. Sadece eski arama sonuçları gösterilmektedir.'; infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`; } 
+        else { startSearchBtn.disabled = !hasOriginalBulletin; researchBtn.disabled = true; btnGenerateReportAndNotifyGlobal.disabled = true; const messageType = hasOriginalBulletin ? 'info' : 'error'; const messageText = hasOriginalBulletin ? 'Önbellekte veri bulunamadı. "Arama Başlat" butonuna tıklayarak arama yapabilirsiniz.' : 'Bu bülten sistemde kayıtlı değil ve arama sonucu da bulunamadı.'; infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`; allSimilarResults = []; if (pagination) pagination.update(0); renderCurrentPageOfResults(); }
+    } catch (error) { console.error('Cache check error:', error); startSearchBtn.disabled = true; researchBtn.disabled = true; btnGenerateReportAndNotifyGlobal.disabled = true; infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Bülten bilgileri kontrol edilirken bir hata oluştu.</div>`; }
+};
+
+const loadDataFromCache = async (bulletinKey) => {
+    const noRecordsMessage = document.getElementById('noRecordsMessage');
+    const infoMessageContainer = document.getElementById('infoMessageContainer');
+    try { const snapshot = await getDocs(collection(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks')); const cachedResults = snapshot.docs.flatMap(docSnap => { const data = docSnap.data(); return (data.results || []).map(r => ({ ...r, source: 'cache', monitoredTrademarkId: docSnap.id })); }); allSimilarResults = cachedResults; infoMessageContainer.innerHTML = cachedResults.length > 0 ? `<div class="info-message success">Önbellekten ${cachedResults.length} benzer sonuç yüklendi.</div>` : ''; noRecordsMessage.style.display = cachedResults.length > 0 ? 'none' : 'block'; if (pagination) pagination.update(allSimilarResults.length); renderCurrentPageOfResults(); } catch (error) { console.error("Error loading data from cache:", error); }
+};
+
+// --- Modal Helpers ---
+async function openEditCriteriaModal(markData) { const modal = document.getElementById('editCriteriaModal'); const modalTitle = document.getElementById('editCriteriaModalLabel'); const trademarkNameEl = document.getElementById('modalTrademarkName'); const applicationNoEl = document.getElementById('modalApplicationNo'); const ownerEl = document.getElementById('modalOwner'); const niceClassEl = document.getElementById('modalNiceClass'); const brandTextList = document.getElementById('brandTextSearchList'); const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer'); const modalImage = document.getElementById('modalTrademarkImage'); modalTitle.textContent = `Kriterleri Düzenle: ${markData.markName}`; trademarkNameEl.textContent = markData.markName || '-'; applicationNoEl.textContent = markData.applicationNumber || '-'; ownerEl.textContent = markData.owner || '-'; niceClassEl.textContent = Array.isArray(markData.niceClasses) ? markData.niceClasses.join(', ') : '-'; modalImage.alt = markData.markName || 'Marka Görseli'; modalImage.src = ''; try { let imgUrl = ''; if (markData.brandImageUrl && /^(https?:|data:)/i.test(markData.brandImageUrl)) imgUrl = markData.brandImageUrl; if (!imgUrl && markData.ipRecordId) { const ip = await _getIp(markData.ipRecordId); imgUrl = _pickImg(ip, markData) || ''; } if (!imgUrl && markData.applicationNumber) imgUrl = await _getBrandImageByAppNo(markData.applicationNumber); if (imgUrl) { if (!/^(https?:|data:|blob:)/i.test(imgUrl) && !/^data:image\//i.test(imgUrl)) { imgUrl = await getDownloadURL(ref(getStorage(), imgUrl)); } modalImage.src = imgUrl; } } catch (e) { } modal.dataset.markId = markData.id; const permanentBrandText = [markData.markName].filter(Boolean); const permanentNiceClasses = markData.niceClasses.map(String); const existingBrandTextSearch = markData.brandTextSearch || []; const existingNiceClassSearch = markData.niceClassSearch || []; populateList(brandTextList, existingBrandTextSearch, permanentBrandText); niceClassSelectionContainer.innerHTML = ''; for (let i = 1; i <= 45; i++) { const box = document.createElement('div'); box.className = 'nice-class-box'; box.textContent = i; box.dataset.classNo = i; niceClassSelectionContainer.appendChild(box); } populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses); $('#editCriteriaModal').modal('show'); }
+function setupEditCriteriaModal() { const brandTextSearchInput = document.getElementById('brandTextSearchInput'); const addBrandTextBtn = document.getElementById('addBrandTextBtn'); const brandTextSearchList = document.getElementById('brandTextSearchList'); const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer'); const niceClassSearchList = document.getElementById('niceClassSearchList'); const saveCriteriaBtn = document.getElementById('saveCriteriaBtn'); for (let i = 1; i <= 45; i++) { const box = document.createElement('div'); box.className = 'nice-class-box'; box.textContent = i; box.dataset.classNo = i; niceClassSelectionContainer.appendChild(box); } niceClassSelectionContainer.addEventListener('click', (e) => { if (e.target.classList.contains('nice-class-box')) { const classNo = e.target.dataset.classNo; const isPermanent = e.target.classList.contains('permanent-item'); if (isPermanent) { showNotification('Bu sınıf orijinal marka sınıfı olduğu için kaldırılamaz.', 'warning'); return; } e.target.classList.toggle('selected'); if (e.target.classList.contains('selected')) addListItem(niceClassSearchList, classNo); else removeListItem(niceClassSearchList, classNo); } }); const addBrandText = () => { const value = brandTextSearchInput.value.trim(); if (value) { addListItem(brandTextSearchList, value); brandTextSearchInput.value = ''; } }; addBrandTextBtn.addEventListener('click', addBrandText); brandTextSearchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); addBrandText(); } }); document.querySelectorAll('.list-group').forEach(list => { list.addEventListener('click', (e) => { const listItem = e.target.closest('li'); if (listItem && e.target.classList.contains('remove-item')) { if (listItem.classList.contains('permanent-item')) { showNotification('Bu öğe kaldırılamaz.', 'warning'); return; } const textContent = listItem.querySelector('.list-item-text').textContent; listItem.remove(); if (list.id === 'niceClassSearchList') { const box = document.querySelector(`.nice-class-box[data-class-no="${textContent}"]`); if (box) box.classList.remove('selected'); } if (list.children.length === 0) { const emptyItem = document.createElement('li'); emptyItem.className = "list-group-item text-muted"; emptyItem.textContent = list.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.'; list.appendChild(emptyItem); } } }); }); saveCriteriaBtn.addEventListener('click', async () => { const modal = document.getElementById('editCriteriaModal'); const brandTextArray = Array.from(modal.querySelector('#brandTextSearchList').querySelectorAll('.list-item-text')).map(el => el.textContent); const niceClassArray = Array.from(modal.querySelector('#niceClassSearchList').querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent)).filter(n => !isNaN(n)); const originalMarkId = modal.dataset.markId; if (!originalMarkId) { showNotification('Orijinal marka kimliği bulunamadı.', 'error'); return; } try { const res = await monitoringService.updateMonitoringItem(originalMarkId, { brandTextSearch: brandTextArray, niceClassSearch: niceClassArray }); if (res.success) { showNotification('İzleme kriterleri güncellendi.', 'success'); $('#editCriteriaModal').modal('hide'); } else showNotification('Hata: ' + res.error, 'error'); } catch (error) { console.error(error); showNotification('Beklenmeyen hata.', 'error'); } }); }
+function populateNiceClassBoxes(selectedClasses, permanentClasses = []) { document.querySelectorAll('.nice-class-box').forEach(box => { box.classList.remove('selected'); box.classList.remove('permanent-item'); }); const selectedClassesString = (selectedClasses || []).map(cls => String(cls)).filter(cls => cls && cls !== 'null'); const permanentClassesString = (permanentClasses || []).map(cls => String(cls)).filter(cls => cls && cls !== 'null'); const allNiceClasses = new Set([...selectedClassesString, ...permanentClassesString]); const niceClassSearchList = document.getElementById('niceClassSearchList'); if (niceClassSearchList) populateList(niceClassSearchList, [], permanentClassesString); allNiceClasses.forEach(cls => { const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`); if (box) { box.classList.add('selected'); if (permanentClassesString.includes(cls)) box.classList.add('permanent-item'); if (niceClassSearchList) { const listItem = addListItem(niceClassSearchList, cls); if (listItem && permanentClassesString.includes(cls)) listItem.classList.add('permanent-item'); } } }); }
+function addListItem(listElement, text, isPermanent = false) { const emptyItem = listElement.querySelector('.list-group-item.text-muted'); if (emptyItem) emptyItem.remove(); const existingItems = Array.from(listElement.querySelectorAll('.list-item-text')).map(el => el.textContent); if (existingItems.includes(text)) return; const li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center'; if (isPermanent) li.classList.add('permanent-item'); li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`; listElement.appendChild(li); return li; }
+function removeListItem(listElement, text) { }
+function populateList(listElement, items, permanentItems = []) { listElement.innerHTML = ''; const allItems = new Set([...items.map(String), ...permanentItems.map(String)]); if (allItems.size > 0) { allItems.forEach(item => { const isPermanent = permanentItems.includes(item); addListItem(listElement, item, isPermanent); }); } else { const emptyItem = document.createElement('li'); emptyItem.className = "list-group-item text-muted"; emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.'; listElement.appendChild(emptyItem); } }
+window.queryApplicationNumberWithExtension = (applicationNo) => { const appNo = (applicationNo || '').toString().trim(); if (!appNo) { alert('Başvuru numarası bulunamadı.'); return; } const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk'; const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`; try { if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) { chrome.runtime.sendMessage(EXT_ID, { type: 'SORGULA', data: appNo }, (response) => { const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT'); if (!ok) window.open(fallbackUrl, '_blank'); }); } else { window.open(fallbackUrl, '_blank'); } } catch (e) { window.open(fallbackUrl, '_blank'); } };
+
+// --- Main Entry ---
 document.addEventListener('DOMContentLoaded', async () => {
     // DOM Elementlerini BURADA alıyoruz (En önemli düzeltme)
     const startSearchBtn = document.getElementById('startSearchBtn');
@@ -313,8 +326,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if(clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', () => { 
-            ownerSearchInput.value = ''; niceClassSearchInput.value = ''; brandNameSearchInput.value = ''; 
-            bulletinSelect.selectedIndex = 0; 
+            if(ownerSearchInput) ownerSearchInput.value = ''; 
+            if(niceClassSearchInput) niceClassSearchInput.value = ''; 
+            if(brandNameSearchInput) brandNameSearchInput.value = ''; 
+            if(bulletinSelect) bulletinSelect.selectedIndex = 0; 
             applyMonitoringListFilters(); 
             showNotification('İzleme listesi filtreleri temizlendi.', 'info'); 
         });
