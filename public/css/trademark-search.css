@@ -7,7 +7,7 @@
 .search-results-table,
 .nested-table {
     width: 100%;
-    table-layout: fixed !important; /* Genişlik kontrolü için şart */
+    table-layout: fixed !important; /* KRİTİK: Piksel ve Yüzde kontrolü için şart */
     border-collapse: collapse;
 }
 
