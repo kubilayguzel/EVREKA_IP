@@ -10,7 +10,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Refactored Clean & ID Based) ###");
+console.log("### trademark-similarity-search.js yüklendi (Clean & Functional) ###");
 
 // --- Global State ---
 let allSimilarResults = [];
@@ -30,7 +30,7 @@ const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 const MANUAL_COLLECTION_ID = 'GLOBAL_MANUAL_RECORDS';
 let tpSearchResultData = null;
 
-// --- Helper Functions (Aynen Korundu) ---
+// --- Helper Functions ---
 const tssLoadState = () => { try { return JSON.parse(localStorage.getItem(TSS_RESUME_KEY) || '{}'); } catch { return {}; } };
 const tssSaveState = (partial) => { try { const prev = tssLoadState(); localStorage.setItem(TSS_RESUME_KEY, JSON.stringify({ ...prev, ...partial, updatedAt: new Date().toISOString() })); } catch (e) { } };
 const tssClearState = () => { try { localStorage.removeItem(TSS_RESUME_KEY); } catch (e) { } };
@@ -94,7 +94,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     } catch (e) { console.error(e); }
 };
 
-// --- RENDER FUNCTIONS (CLEAN & ID BASED) ---
+// --- RENDER FUNCTIONS (REFACTORED) ---
 
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
@@ -126,7 +126,7 @@ const renderMonitoringList = async () => {
         const statusText = isTriggered ? 'Evet' : 'Hazır';
         const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
 
-        // MAIN ROW (Cleaner HTML, no styles)
+        // MAIN ROW
         const headerRow = `
         <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
             <td><i class="fas fa-chevron-down toggle-icon"></i></td>
@@ -157,7 +157,7 @@ const renderMonitoringList = async () => {
                 </tr>`;
         }).join('');
 
-        // NESTED TABLE ROW
+        // CONTENT ROW
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
@@ -266,8 +266,7 @@ const createResultRow = (hit, rowIndex) => {
     return row;
 };
 
-// --- Initialization (Bu kısımlarda değişiklik yok, dosyanın sonuna kadar koruyun) ---
-// (önceki kodun init kısmı ile aynı, sadece tekrar etmemek için buraya yazmadım ama siz dosyanızda tutun)
+// --- Initialization ---
 const initializePagination = () => { if (!pagination) pagination = new Pagination({ containerId: 'paginationContainer', itemsPerPage: 10, onPageChange: (page, itemsPerPage) => { renderCurrentPageOfResults(); tssSaveState(tssBuildStateFromUI({ page, itemsPerPage, totalResults: allSimilarResults.length })); } }); };
 const initializeMonitoringPagination = () => { if (!monitoringPagination) monitoringPagination = new Pagination({ containerId: 'monitoringPaginationContainer', itemsPerPage: 5, onPageChange: () => renderMonitoringList() }); };
 const updateMonitoringCount = async () => {
