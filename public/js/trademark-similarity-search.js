@@ -286,17 +286,27 @@ const renderCurrentPageOfResults = () => {
         return acc;
     }, {});
 
+// Sayaç: Sayfanın başlangıç numarasını al (Örn: 50)
+    let globalRowIndex = pagination.getStartIndex();
+
     Object.keys(groupedByTrademark).sort((a, b) => (groupedByTrademark[a][0]?.monitoredTrademark || '').localeCompare(groupedByTrademark[b][0]?.monitoredTrademark || '')).forEach(trademarkKey => {
         const groupResults = groupedByTrademark[trademarkKey];
         const tmMeta = monitoringTrademarks.find(t => String(t.id) === String(trademarkKey)) || null;
+        
         if (!tmMeta) {
             const fallbackName = groupResults[0]?.monitoredTrademark || 'Bilinmeyen Marka';
             const groupHeaderRow = document.createElement('tr'); groupHeaderRow.classList.add('group-header');
             groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title"><span><strong>${fallbackName}</strong> sonuçları (${groupResults.length})</span></div></td>`;
             resultsTableBody.appendChild(groupHeaderRow);
-            groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
+            
+            // Grup içi döngü (Global sayaç ile)
+            groupResults.forEach((hit) => {
+                globalRowIndex++;
+                resultsTableBody.appendChild(createResultRow(hit, globalRowIndex));
+            });
             return;
         }
+
         const headerName = _pickName(null, tmMeta);
         const headerImg = _pickImg(null, tmMeta);
         const appNo = _pickAppNo(null, tmMeta);
@@ -307,14 +317,18 @@ const renderCurrentPageOfResults = () => {
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
         
-        // --- GÖRSEL ALANI GÜNCELLENDİ: data-appno eklendi ---
         const imageHtml = headerImg 
             ? `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>`
             : `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
 
         groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
         resultsTableBody.appendChild(groupHeaderRow);
-        groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
+        
+        // Grup içi döngü (Global sayaç ile)
+        groupResults.forEach((hit) => {
+            globalRowIndex++;
+            resultsTableBody.appendChild(createResultRow(hit, globalRowIndex));
+        });
     });
     
     // --- GÖRSELLERİ SONRADAN YÜKLEME (LAZY LOAD FIX) ---
