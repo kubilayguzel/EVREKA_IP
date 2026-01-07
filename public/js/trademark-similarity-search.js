@@ -993,27 +993,63 @@ const handleOwnerReportGeneration = async (event) => {
         for (const r of filteredResults) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
             let ipData = null;
-            if (monitoredTm?.ipRecordId) {
+
+            // 1. İlişkili IP Kaydını (ipRecords) Çek
+            if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
                 try {
-                    const ipDoc = await getDoc(doc(db, 'ipRecords', monitoredTm.ipRecordId));
+                    const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
+                    const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
                     if (ipDoc.exists()) ipData = ipDoc.data();
-                } catch (e) {}
+                } catch (e) { console.error("IP Record fetch error:", e); }
             }
-            const ownerNameStr = _pickOwners(monitoredTm, monitoredTm, allPersons);
+
+            // 2. Sahip Bilgisini Çözümle (ipData.applicants öncelikli)
+            // _pickOwners fonksiyonu zaten applicants dizisini tarayacak şekilde ayarlı
+            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+
+            // 3. Marka Adı (ipData.title veya brandText öncelikli)
+            const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
+
+            // 4. Görsel (ipData.brandImageUrl öncelikli)
+            const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+
+            // 5. Başvuru Numarası
+            const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
+
+            // 6. Başvuru Tarihi (Formatlama)
+            let monitoredAppDate = "-";
+            const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
+            if (rawDate) {
+                // String "2022-03-17" gelirse veya Timestamp gelirse işle
+                if (typeof rawDate === 'string') {
+                    monitoredAppDate = rawDate.split('-').reverse().join('.'); // 2022-03-17 -> 17.03.2022
+                } else {
+                    monitoredAppDate = _pickAppDate(ipData, monitoredTm);
+                }
+            }
+
+            // 7. Nice Sınıfları (ipData.niceClasses veya goodsAndServicesByClass)
+            let monitoredClasses = [];
+            if (ipData?.niceClasses) {
+                monitoredClasses = ipData.niceClasses;
+            } else if (ipData?.goodsAndServicesByClass) {
+                monitoredClasses = ipData.goodsAndServicesByClass.map(g => g.classNo);
+            } else {
+                monitoredClasses = _uniqNice(monitoredTm);
+            }
+
+            // VERİ PAKETİNİ OLUŞTUR
             reportData.push({
                 monitoredMark: {
-                    name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
-                    markName: monitoredTm?.markName || monitoredTm?.title,
-                    imagePath: ipData?.brandImageUrl || monitoredTm?.imagePath || null,
-                    ownerName: ownerNameStr || 'Tüm Sahipler',
-                    niceClassSearch: monitoredTm?.niceClassSearch || ipData?.niceClasses || [],
-                    niceClass: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
-                    niceClasses: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
-                    applicationNumber: monitoredTm?.applicationNumber || monitoredTm?.applicationNo || ipData?.applicationNo || "-",
-                    applicationNo: monitoredTm?.applicationNumber || monitoredTm?.applicationNo || ipData?.applicationNo || "-",
-                    applicationDate: monitoredTm?.applicationDate || ipData?.applicationDate,
-                    registrationDate: monitoredTm?.registrationDate || ipData?.registrationDate,
-                    registrationNo: monitoredTm?.registrationNo || ipData?.registrationNo || "-"
+                    name: monitoredName,                // DÜZELTİLDİ: Artık doğru isim
+                    markName: monitoredName,
+                    imagePath: monitoredImg,            // DÜZELTİLDİ: ipRecord görseli
+                    ownerName: ownerNameStr,            // DÜZELTİLDİ: ipRecord sahipleri
+                    applicationNo: monitoredAppNo,      // DÜZELTİLDİ
+                    applicationDate: monitoredAppDate,  // DÜZELTİLDİ
+                    niceClasses: monitoredClasses,
+                    registrationNo: ipData?.registrationNumber || "-",
+                    registrationDate: ipData?.registrationDate || "-"
                 },
                 similarMark: {
                     name: r.markName,
@@ -1027,6 +1063,8 @@ const handleOwnerReportGeneration = async (event) => {
                     owner: r.holders?.[0]?.name || "-",
                     ownerName: r.holders?.[0]?.name || "-",
                     objectionDeadline: r.objectionDeadline || "-",
+                    
+                    // Eklenen Manuel Veriler
                     bs: r.bs || null,
                     note: r.note || null
                 }
