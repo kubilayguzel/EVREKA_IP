@@ -310,6 +310,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     } catch (e) { console.error(e); }
 };
 
+// --- renderMonitoringList Fonksiyonunun DÜZELTİLMİŞ HALİ ---
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
     
@@ -361,34 +362,27 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-        // --- DURUM MANTIĞI: İş Tetiklendi mi? ---
         const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
-        // Eğer tetiklendiyse "Evet", değilse "Hazır" yazsın
         const statusText = isTriggered ? 'Evet' : 'Hazır';
         const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
 
+        // Ana Satır (Sahip Satırı)
         const headerRow = `
         <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
             <td style="text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-            
             <td style="text-align:left;">${group.ownerName}</td>
-            
             <td style="text-align:center;">${group.trademarks.length}</td>
-
             <td style="text-align:center;">
-                <span class="task-triggered-status trigger-status-badge ${statusClass}"
-                    data-owner-id="${group.ownerId}">
+                <span class="task-triggered-status trigger-status-badge ${statusClass}" data-owner-id="${group.ownerId}">
                 ${statusText}
                 </span>
             </td>
-
             <td style="text-align:center;">
                 <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" 
                       data-owner-id="${group.ownerId}">
                 ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
                 </span>
             </td>
-
             <td style="text-align:center;">
                 <div class="btn-group">
                 <button class="action-btn btn-success generate-report-and-notify-btn"
@@ -400,16 +394,16 @@ const renderMonitoringList = async () => {
                 <button class="action-btn btn-primary generate-report-btn"
                         data-owner-id="${group.ownerId}"
                         data-owner-name="${group.ownerName}"
-                        title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
+                        title="Rapor İndir">
                     <i class="fas fa-file-pdf"></i> Rapor
                 </button>
                 </div>
             </td>
         </tr>
         `;
-
         allRowsHtml.push(headerRow);
 
+        // İç Tablo Satırları (Detaylar)
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
             const [markName, imgSrc, appNo, nices, appDate] = [
                 _pickName(ip, tm), 
@@ -419,15 +413,20 @@ const renderMonitoringList = async () => {
                 _pickAppDate(ip, tm)
             ];
             
-            const imgStyle = 'width: 100px; height: 100px;';
+            // Görsel Stili
+            const imgStyle = 'width: 60px; height: 60px;'; // CSS ile uyumlu küçük boyut
             
             return `
                 <tr class="trademark-detail-row" style="background-color: #ffffff;">
                     <td></td>
                     <td style="text-align: center;">
-                        ${imgSrc ? `<div class="trademark-image-wrapper-large" style="${imgStyle}"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli" style="${imgStyle}"></div>` : `<div class="no-image-placeholder-large" style="${imgStyle}">-</div>`}
+                        ${imgSrc ? 
+                            `<div class="trademark-image-wrapper-large" style="${imgStyle} margin: 0 auto;">
+                                <img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli">
+                             </div>` : 
+                            `<div class="no-image-placeholder-large" style="${imgStyle} margin: 0 auto;">-</div>`}
                     </td>
-                    <td style="text-align: left;">${markName}</td>
+                    <td style="text-align: center;"><strong>${markName}</strong></td>
                     <td style="text-align: center;">${appNo}</td>
                     <td style="text-align: left;">${nices || '-'}</td> 
                     <td style="text-align: center;">${appDate}</td>
@@ -435,8 +434,7 @@ const renderMonitoringList = async () => {
             `;
         }).join('');
 
-        // --- İÇ TABLO (ACCORDION) AYARLARI ---
-        // Marka adı ile Başvuru no arasındaki boşluğu kapatmak için width değerleri güncellendi.
+        // İç Tablo Yapısı (Accordion Content)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6" style="padding: 0;">
@@ -445,9 +443,9 @@ const renderMonitoringList = async () => {
                             <tr>
                                 <th style="width: 5%;"></th>
                                 <th style="width: 10%; text-align: center;">Görsel</th>
-                                <th style="width: 20%; text-align: left;">Marka Adı</th> 
-                                <th style="width: 15%; text-align: center;">Başvuru No</th> 
-                                <th style="width: 40%; text-align: left;">Nice Sınıfı</th> 
+                                <th style="width: 15%; text-align: center;">Marka Adı</th>
+                                <th style="width: 15%; text-align: center;">Başvuru No</th>
+                                <th style="width: 45%; text-align: left;">Nice Sınıfı</th>
                                 <th style="width: 10%; text-align: center;">B. Tarihi</th>
                             </tr>
                         </thead>
@@ -465,35 +463,29 @@ const renderMonitoringList = async () => {
     
     attachMonitoringAccordionListeners();
     attachGenerateReportListener();
-    setupImageHoverEffect('monitoringListBody');
+    // DÜZELTME 3: Çift Hover olmaması için JS tabanlı hover efekti silindi
+    // setupImageHoverEffect('monitoringListBody'); <--- BU SATIR ARTIK YOK
     attachTrademarkClickListener();
 
-    // --- BADGE GÜNCELLEME (HAZIR / EVET KONTROLÜ) ---
+    // Badge Güncelleme
     setTimeout(() => {
         document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
             const btn = row.querySelector('.generate-report-and-notify-btn');
             if (!btn || !btn.dataset.ownerId) return;
-            
             const ownerId = btn.dataset.ownerId;
             const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
             if (!badge) return;
             
             const hasTriggered = taskTriggeredStatus.get(ownerId) === 'Evet';
-            
-            // Eğer tetiklendiyse "Evet", değilse "Hazır"
             badge.textContent = hasTriggered ? 'Evet' : 'Hazır';
-            
-            // Stil temizliği
             badge.classList.remove('trigger-yes', 'trigger-no', 'trigger-ready', 'text-success', 'text-danger', 'font-weight-bold');
-            
-            // Yeni stil atama
             if (hasTriggered) {
                 badge.classList.add('trigger-yes');
             } else {
                 badge.classList.add('trigger-ready');
             }
         });
-    }, 300); // 300ms gecikme ile DOM'un oturduğundan emin oluyoruz
+    }, 300);
 };
 
 const renderCurrentPageOfResults = () => {
