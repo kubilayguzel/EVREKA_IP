@@ -20,139 +20,153 @@
                 <p class="page-subtitle">Marka bültenlerini takip edin, benzerlikleri analiz edin ve raporlayın.</p>
             </section>
     
-            <div class="portfolio-controls">
-                <div class="row align-items-end">
-                    <div class="col-md-3 form-group mb-3">
-                        <label class="form-label">Sahip</label>
-                        <input type="text" id="ownerSearch" class="form-input" placeholder="Sahip ara...">
-                    </div>
-                    <div class="col-md-2 form-group mb-3">
-                        <label class="form-label">Nice Sınıfı</label>
-                        <input type="text" id="niceClassSearch" class="form-input" placeholder="Örn: 35, 42">
-                    </div>
-                    <div class="col-md-3 form-group mb-3">
-                        <label class="form-label">Marka Adı</label>
-                        <input type="text" id="brandNameSearch" class="form-input" placeholder="Marka adı ara...">
-                    </div>
-                    <div class="col-md-4 form-group mb-3">
-                        <label class="form-label">Bülten Seçimi</label>
-                        <select id="bulletinSelect" class="form-select">
-                            <option value="">Bülten seçin...</option>
-                        </select>
-                    </div>
+            <div class="tm-section-card">
+                <div class="tm-card-header">
+                    <h5><i class="fas fa-filter text-primary"></i> Arama ve Filtreleme Kriterleri</h5>
                 </div>
+                <div class="tm-card-body">
+                    <div class="portfolio-controls"> 
+                        <div class="row align-items-end">
+                            <div class="col-md-3 form-group mb-3">
+                                <label class="form-label font-weight-bold text-muted small text-uppercase">Sahip</label>
+                                <input type="text" id="ownerSearch" class="form-control" placeholder="Sahip ara...">
+                            </div>
+                            <div class="col-md-2 form-group mb-3">
+                                <label class="form-label font-weight-bold text-muted small text-uppercase">Nice Sınıfı</label>
+                                <input type="text" id="niceClassSearch" class="form-control" placeholder="Örn: 35, 42">
+                            </div>
+                            <div class="col-md-3 form-group mb-3">
+                                <label class="form-label font-weight-bold text-muted small text-uppercase">Marka Adı</label>
+                                <input type="text" id="brandNameSearch" class="form-control" placeholder="Marka adı ara...">
+                            </div>
+                            <div class="col-md-4 form-group mb-3">
+                                <label class="form-label font-weight-bold text-muted small text-uppercase">Bülten Seçimi</label>
+                                <select id="bulletinSelect" class="form-control form-select">
+                                    <option value="">Bülten seçin...</option>
+                                </select>
+                            </div>
+                        </div>
 
-                <div class="filter-row" style="justify-content: flex-end; margin-top: 10px;">
-                    <button id="startSearchBtn" class="btn btn-primary" disabled>
-                        <i class="fas fa-search"></i> Arama Başlat
-                    </button>
-                    <button id="researchBtn" class="btn btn-secondary" disabled>
-                        <i class="fas fa-sync-alt"></i> Yeniden Ara
-                    </button>
-                    <button id="btnGenerateReportAndNotifyGlobal" class="btn btn-success" disabled>
-                        <i class="fas fa-paper-plane"></i> Raporla & Bildir
-                    </button>
-                    <button id="openManualEntryBtn" class="btn btn-secondary">
-                        <i class="fas fa-plus"></i> Manuel Ekle
-                    </button>
-                    <button id="clearFiltersBtn" class="btn btn-warning" style="color: #212529;">
-                        <i class="fas fa-eraser"></i> Temizle
-                    </button>
+                        <div class="filter-row d-flex flex-wrap justify-content-end gap-2 mt-3 pt-3 border-top">
+                            <button id="startSearchBtn" class="btn btn-primary" disabled>
+                                <i class="fas fa-search"></i> Arama Başlat
+                            </button>
+                            <button id="researchBtn" class="btn btn-secondary ml-2" disabled>
+                                <i class="fas fa-sync-alt"></i> Yeniden Ara
+                            </button>
+                            <button id="btnGenerateReportAndNotifyGlobal" class="btn btn-success ml-2" disabled>
+                                <i class="fas fa-paper-plane"></i> Raporla & Bildir
+                            </button>
+                            <button id="openManualEntryBtn" class="btn btn-outline-secondary ml-2">
+                                <i class="fas fa-plus"></i> Manuel Ekle
+                            </button>
+                            <button id="clearFiltersBtn" class="btn btn-light ml-2 text-danger">
+                                <i class="fas fa-eraser"></i> Temizle
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <div class="portfolio-table-container mb-5">
-                <div style="padding: 15px 20px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 20px 20px 0 0;">
-                    <h5 style="margin: 0; color: #1e3c72; font-weight: 600;">İzlenen Markalar</h5>
-                    <span id="monitoringCount" class="badge badge-info" style="padding: 8px 12px; font-size: 0.9em; background-color: #e3f2fd; color: #1e3c72;">Yükleniyor...</span>
+            <div class="tm-section-card">
+                <div class="tm-card-header">
+                    <h5><i class="fas fa-list-alt text-info"></i> İzlenen Markalar</h5>
+                    <span id="monitoringCount" class="badge badge-pill badge-info px-3 py-2">Yükleniyor...</span>
                 </div>
                 
-                <div style="overflow-x: auto;">
-                    <table id="monitoringTable" class="portfolio-table monitoring-table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Sahip</th>
-                                <th>Marka Sayısı</th>
-                                <th>İş Tetiklendi</th>
-                                <th>Bildirim Durumu</th>
-                                <th>Eylemler</th>
-                            </tr>
-                        </thead>
-                        <tbody id="monitoringListBody"></tbody>
-                    </table>
+                <div class="tm-card-body p-0">
+                    <div style="overflow-x: auto;">
+                        <table id="monitoringTable" class="portfolio-table monitoring-table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Sahip</th>
+                                    <th>Marka Sayısı</th>
+                                    <th>İş Tetiklendi</th>
+                                    <th>Bildirim Durumu</th>
+                                    <th>Eylemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monitoringListBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="monitoringPaginationContainer" class="p-3 bg-light border-top"></div>
                 </div>
-                <div id="monitoringPaginationContainer" style="padding: 15px; background: #fff; border-radius: 0 0 20px 20px;"></div>
             </div>
     
-            <div class="results-container portfolio-table-container">
-                <div class="results-header" style="background: #fff; padding: 20px; border-bottom: 1px solid #eee; border-radius: 20px 20px 0 0;">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap">
-                        <h5 style="color: #1e3c72; font-weight: 600; margin: 0;">Arama Sonuçları</h5>
+            <div class="tm-section-card results-container">
+                <div class="tm-card-header">
+                    <div class="d-flex align-items-center justify-content-between w-100">
+                        <h5><i class="fas fa-search-plus text-success"></i> Arama Sonuçları</h5>
                         
-                        <div class="nice-class-legend d-flex gap-3">
+                        <div class="nice-class-legend d-flex gap-3 align-items-center">
                             <div class="legend-item">
                                 <span class="nice-class-badge match demo">Nice</span>
-                                <span class="legend-text">: Tescili Sınıf</span>
+                                <span class="legend-text small text-muted">: Tescili Sınıf</span>
                             </div>
-                            <div class="legend-item">
+                            <div class="legend-item ml-2">
                                 <span class="nice-class-badge partial-match demo">Nice</span>
-                                <span class="legend-text">: İzlenen Sınıf</span>
+                                <span class="legend-text small text-muted">: İzlenen Sınıf</span>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div id="infoMessageContainer" class="mt-3"></div>
+                <div class="tm-card-body">
+                    <div id="infoMessageContainer" class="mb-3"></div>
 
-                    <div class="mt-3 p-3 bg-light rounded d-flex align-items-center flex-wrap gap-3 border">
-                        <div class="d-flex align-items-center gap-2">
-                            <label class="mb-0 fw-bold text-muted"><i class="fas fa-filter"></i> Benzerlik:</label>
-                            <select id="similarityFilterSelect" class="form-select form-select-sm" style="width: auto; padding: 5px 30px 5px 10px;">
+                    <div class="bg-light p-3 rounded border mb-3 d-flex align-items-center flex-wrap gap-3">
+                        <div class="d-flex align-items-center">
+                            <label class="mb-0 fw-bold text-muted mr-2"><i class="fas fa-filter"></i> Benzerlik:</label>
+                            <select id="similarityFilterSelect" class="form-control form-control-sm" style="width: auto;">
                                 <option value="all">Tümü</option>
                                 <option value="similar">✓ Benzer</option>
                                 <option value="not-similar">✗ Benzemez</option>
                             </select>
                         </div>
                         
-                        <div id="selectedTrademarkInfo" style="display: none; flex: 1; padding: 5px 10px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #1e3c72; align-items: center;">
+                        <div id="selectedTrademarkInfo" class="ml-3" style="display: none; flex: 1; padding: 5px 10px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #1e3c72; align-items: center;">
                             <span class="mr-2 font-weight-bold text-primary">Filtre:</span>
                             <span id="selectedTrademarkName" class="mr-2 text-dark"></span>
                             <button id="clearTrademarkFilterBtn" class="btn btn-sm btn-danger py-0 px-2" style="font-size: 0.8em;">Kaldır</button>
                         </div>
                         
-                        <div class="ml-auto text-muted small">
+                        <div class="ml-auto text-muted small font-weight-bold">
                             <i class="fas fa-list"></i> <span id="filteredResultCount">0</span> sonuç
                         </div>
                     </div>
-                </div>
 
-                <div style="overflow-x: auto;">
-                    <table id="searchResultsTable" class="portfolio-table search-results-table">
-                        <thead>
-                            <tr>
-                                <th>No</th>
-                                <th>Karar</th>
-                                <th>Görsel</th>
-                                <th>Marka Adı</th>
-                                <th>Sahip</th>
-                                <th>Nice</th>
-                                <th>Başvuru No</th>
-                                <th>Benzerlik</th>
-                                <th>B.Ş</th>
-                                <th>Not</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsTableBody"></tbody>
-                    </table>
+                    <div style="overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px;">
+                        <table id="searchResultsTable" class="portfolio-table search-results-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Karar</th>
+                                    <th>Görsel</th>
+                                    <th>Marka Adı</th>
+                                    <th>Sahip</th>
+                                    <th>Nice</th>
+                                    <th>Başvuru No</th>
+                                    <th>Benzerlik</th>
+                                    <th>B.Ş</th>
+                                    <th>Not</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody"></tbody>
+                        </table>
+                    </div>
+                    
                     <div id="loadingIndicator" class="loading" style="display: none; text-align: center; padding: 40px;">
                         <div class="spinner-border text-primary" role="status"><span class="sr-only">Yükleniyor...</span></div>
                     </div>
                     <div id="noRecordsMessage" class="no-records" style="display: none; text-align: center; padding: 40px; color: #666;">
                         Kayıt bulunamadı.
                     </div>
+
+                    <div id="paginationContainer" class="mt-3"></div>
                 </div>
-                <div id="paginationContainer" style="padding: 15px; background: #fff; border-radius: 0 0 20px 20px;"></div>
             </div>
+
         </main>
     </div>
 
