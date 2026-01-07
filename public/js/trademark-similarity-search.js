@@ -1002,6 +1002,22 @@ const handleOwnerReportGeneration = async (event) => {
                     if (ipDoc.exists()) ipData = ipDoc.data();
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
+            // Bülten Tarihini Çek (trademarkBulletins tablosundan)
+            if (r.bulletinId) {
+                try {
+                    const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
+                    if (bulletinDoc.exists()) {
+                        const bulletinData = bulletinDoc.data();
+                        bulletinDateValue = bulletinData.bulletinDate || "-";
+                    }
+                } catch (e) { 
+                    console.error("Bulletin fetch error:", e);
+                    // Fallback: r.bulletinDate veya applicationDate kullan
+                    bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                }
+            } else {
+                bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+            }
 
             // 2. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
             let ownerNameStr = "-";
@@ -1077,7 +1093,7 @@ const handleOwnerReportGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
-                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
+                    bulletinDate: bulletinDateValue,
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     owner: r.holders?.[0]?.name || "-",
@@ -1178,18 +1194,36 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
             } catch (e) {}
         }
         const reportData = [];
-        for (const r of filteredResults) {
-            const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-            let ipData = null;
+            for (const r of filteredResults) {
+                const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+                let ipData = null;
+                let bulletinDateValue = "-";
 
-            // IP Kaydını Çek
-            if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
-                try {
-                    const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
-                    const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
-                    if (ipDoc.exists()) ipData = ipDoc.data();
-                } catch (e) { console.error("IP Record fetch error:", e); }
-            }
+                // IP Kaydını Çek
+                if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
+                    try {
+                        const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
+                        const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
+                        if (ipDoc.exists()) ipData = ipDoc.data();
+                    } catch (e) { console.error("IP Record fetch error:", e); }
+                }
+
+                // Bülten Tarihini Çek (trademarkBulletins tablosundan)
+                if (r.bulletinId) {
+                    try {
+                        const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
+                        if (bulletinDoc.exists()) {
+                            const bulletinData = bulletinDoc.data();
+                            bulletinDateValue = bulletinData.bulletinDate || "-";
+                        }
+                    } catch (e) { 
+                        console.error("Bulletin fetch error:", e);
+                        // Fallback: r.bulletinDate veya applicationDate kullan
+                        bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                    }
+                } else {
+                    bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                }
 
             // Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
             let ownerNameStr = "-";
@@ -1251,7 +1285,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
-                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
+                    bulletinDate: bulletinDateValue,
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     ownerName: r.holders?.[0]?.name || "-"
