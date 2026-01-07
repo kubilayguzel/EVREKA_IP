@@ -1026,7 +1026,9 @@ const handleOwnerReportGeneration = async (event) => {
                     holders: r.holders || [],
                     owner: r.holders?.[0]?.name || "-",
                     ownerName: r.holders?.[0]?.name || "-",
-                    objectionDeadline: r.objectionDeadline || "-"
+                    objectionDeadline: r.objectionDeadline || "-",
+                    bs: r.bs || null,
+                    note: r.note || null
                 }
             });
         }
@@ -1251,7 +1253,9 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                     name: r.markName,
                     niceClasses: r.niceClasses,
                     applicationNo: r.applicationNo,
-                    similarity: r.similarityScore
+                    similarity: r.similarityScore,
+                    bs: r.bs || null,
+                    note: r.note || null
                 }
             };
         });
