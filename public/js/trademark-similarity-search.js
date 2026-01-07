@@ -10,7 +10,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Visual Updates) ###");
+console.log("### trademark-similarity-search.js yüklendi (Nested Class Fix) ###");
 
 // --- 1. GLOBAL DEĞİŞKENLER ---
 let allSimilarResults = [];
@@ -47,7 +47,6 @@ const tssShowResumeBannerIfAny = () => {
         const startBtn = document.getElementById('startSearchBtn') || document.getElementById('researchBtn'); if (startBtn) { startBtn.click(); let tries = 0; const iv = setInterval(() => { tries++; const loadingIndicator = document.getElementById('loadingIndicator'); if (loadingIndicator && loadingIndicator.style.display === 'none' && allSimilarResults.length > 0 && pagination) { clearInterval(iv); if (pagination.goToPage(targetPage)) { bar.style.background = '#28a745'; bar.firstElementChild.textContent = `Devam edildi: Sayfa ${targetPage}`; setTimeout(() => bar.remove(), 2000); window.__tssPendingResumeForBulletin = null; } } else if (tries > 300) { clearInterval(iv); window.__tssPendingResumeForBulletin = null; } }, 100); }
     };
 };
-
 window.addEventListener('beforeunload', () => tssSaveState(tssBuildStateFromUI({ page: pagination?.getCurrentPage ? pagination.getCurrentPage() : undefined, itemsPerPage: pagination?.getItemsPerPage ? pagination.getItemsPerPage() : undefined, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : 0 })));
 
 const debounce = (func, delay) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), delay); }; };
@@ -105,7 +104,7 @@ const attachEventListeners = () => {
     resultsTableBody.querySelectorAll('.note-cell').forEach(cell => cell.addEventListener('click', () => handleNoteCellClick(cell)));
 };
 
-// --- 4. LOGIC FUNCTIONS ---
+// --- 4. DATA LOADER ---
 const refreshTriggeredStatus = async (bulletinNo) => {
     try {
         taskTriggeredStatus.clear();
@@ -129,7 +128,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     } catch (e) { console.error(e); }
 };
 
-// --- 5. RENDER FUNCTIONS (Updated Classes) ---
+// --- 5. RENDER FUNCTIONS ---
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
     if (!filteredMonitoringTrademarks.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; return; }
@@ -180,12 +179,12 @@ const renderMonitoringList = async () => {
             const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
             return `
                 <tr class="trademark-detail-row">
-                    <td></td>
-                    <td>${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}</td>
-                    <td><strong>${markName}</strong></td>
-                    <td>${appNo}</td>
-                    <td>${nices || '-'}</td> 
-                    <td>${appDate}</td>
+                    <td class="td-nested-toggle"></td>
+                    <td class="td-nested-img">${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}</td>
+                    <td class="td-nested-name"><strong>${markName}</strong></td>
+                    <td class="td-nested-appno">${appNo}</td>
+                    <td class="td-nested-nice">${nices || '-'}</td> 
+                    <td class="td-nested-date">${appDate}</td>
                 </tr>`;
         }).join('');
 
@@ -232,6 +231,7 @@ const createResultRow = (hit, rowIndex) => {
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
+    // Yeni class yapısı: tm-img-box-lg
     const imagePlaceholderHtml = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">-</div></div>`;
     const bulletinSelect = document.getElementById('bulletinSelect');
 
