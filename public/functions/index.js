@@ -4351,11 +4351,17 @@ async function createComparisonPage(group) {
         let bulletinDate;
         
         // Tarih formatını parse et (DD.MM.YYYY veya YYYY-MM-DD)
-        if (bulletinDateStr.includes('.')) {
-          const [day, month, year] = bulletinDateStr.split('.');
-          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (bulletinDateStr.includes('/')) {
+            // DD/MM/YYYY formatı
+            const [day, month, year] = bulletinDateStr.split('/');
+            bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else if (bulletinDateStr.includes('.')) {
+            // DD.MM.YYYY formatı
+            const [day, month, year] = bulletinDateStr.split('.');
+            bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
         } else if (bulletinDateStr.includes('-')) {
-          bulletinDate = new Date(bulletinDateStr);
+            // YYYY-MM-DD formatı
+            bulletinDate = new Date(bulletinDateStr);
         }
         
         if (bulletinDate && !isNaN(bulletinDate.getTime())) {
