@@ -4616,92 +4616,57 @@ async function createComparisonPage(group) {
 
   // ============ 4. BAŞARI ŞANSI (MODERN TASARIM) ============
   const successChance = similarMark.bs || "Belirtilmedi"; 
-
   tableRows.push(
-    new TableRow({
-      height: { value: 800, rule: "atLeast" },
-      children: [
-        new TableCell({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: "DEĞERLENDİRME", 
-                  bold: true, 
-                  size: 24, 
-                  color: "1F4E79",
-                  font: FONT_FAMILY
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 150, after: 100 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: "Bu rapor, marka benzerlikleri hakkında ön değerlendirme sağlamak amacıyla hazırlanmıştır.", 
-                  size: 18, 
-                  color: "666666",
-                  font: FONT_FAMILY
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 150 }
-            })
-          ],
-          shading: { fill: "F8F9FA" },
-          verticalAlign: "center",
-          borders: { 
-            right: { style: "single", size: 2, color: "E0E0E0" },
-            top: { style: "single", size: 6, color: "1F4E79" }
-          }
-        }),
-        new TableCell({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: "İTİRAZ BAŞARI ŞANSI", 
-                  bold: true, 
-                  size: 24, 
-                  color: "C0392B",
-                  font: FONT_FAMILY
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 150, after: 100 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: successChance, 
-                  bold: true, 
-                  size: 48, 
-                  color: successChance === "Belirtilmedi" ? "999999" : (
-                    parseInt(successChance) >= 60 ? "27AE60" : 
-                    parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
-                  ),
-                  font: FONT_FAMILY
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 50, after: 150 }
-            })
-          ],
-          shading: { 
-            fill: successChance === "Belirtilmedi" ? "F8F9FA" : (
-              parseInt(successChance) >= 60 ? "E8F8F5" : 
-              parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
-            )
-          },
-          verticalAlign: "center",
-          borders: { 
-            top: { style: "single", size: 6, color: "C0392B" }
-          }
-        })
-      ]
-    })
-  );
+      new TableRow({
+        height: { value: 700, rule: "atLeast" },
+        children: [
+          new TableCell({
+            columnSpan: 2,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ 
+                    text: "İTİRAZ BAŞARI ŞANSI", 
+                    bold: true, 
+                    size: 28, 
+                    color: "C0392B",
+                    font: FONT_FAMILY
+                  })
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200, after: 120 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ 
+                    text: successChance, 
+                    bold: true, 
+                    size: 56, 
+                    color: successChance === "Belirtilmedi" ? "999999" : (
+                      parseInt(successChance) >= 60 ? "27AE60" : 
+                      parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
+                    ),
+                    font: FONT_FAMILY
+                  })
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 80, after: 200 }
+              })
+            ],
+            shading: { 
+              fill: successChance === "Belirtilmedi" ? "F8F9FA" : (
+                parseInt(successChance) >= 60 ? "E8F8F5" : 
+                parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
+              )
+            },
+            verticalAlign: "center",
+            borders: { 
+              top: { style: "single", size: 8, color: "C0392B" }
+            }
+          })
+        ]
+      })
+    );
 
   // Tabloyu Oluştur
   const comparisonTable = new Table({
