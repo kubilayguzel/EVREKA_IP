@@ -4342,6 +4342,39 @@ async function createComparisonPage(group) {
   // Font tanımlaması - Montserrat
   const FONT_FAMILY = "Montserrat";
 
+    // ============ İTİRAZ SON TARİHİ HESAPLA ============
+    let objectionDeadline = "-";
+    try {
+      // Benzer markadan bülten tarihi al
+      const bulletinDateStr = similarMark.bulletinDate || similarMark.applicationDate;
+      if (bulletinDateStr) {
+        let bulletinDate;
+        
+        // Tarih formatını parse et (DD.MM.YYYY veya YYYY-MM-DD)
+        if (bulletinDateStr.includes('.')) {
+          const [day, month, year] = bulletinDateStr.split('.');
+          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else if (bulletinDateStr.includes('-')) {
+          bulletinDate = new Date(bulletinDateStr);
+        }
+        
+        if (bulletinDate && !isNaN(bulletinDate.getTime())) {
+          // +2 ay ekle
+          const rawDue = addMonthsToDate(bulletinDate, 2);
+          // İlk iş günü (hafta sonu + TR tatilleri)
+          const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+          
+          // DD.MM.YYYY formatına çevir
+          const day = String(adjustedDue.getDate()).padStart(2, '0');
+          const month = String(adjustedDue.getMonth() + 1).padStart(2, '0');
+          const year = adjustedDue.getFullYear();
+          objectionDeadline = `${day}.${month}.${year}`;
+        }
+      }
+    } catch (e) {
+      console.error("Objection deadline calculation error:", e);
+    }
+
   // ============ GÖRSELLERİ İNDİR ============
   let monitoredImageBuffer = null;
   let similarImageBuffer = null;
@@ -4617,56 +4650,91 @@ async function createComparisonPage(group) {
   // ============ 4. BAŞARI ŞANSI (MODERN TASARIM) ============
   const successChance = similarMark.bs || "Belirtilmedi"; 
   tableRows.push(
-      new TableRow({
-        height: { value: 700, rule: "atLeast" },
-        children: [
-          new TableCell({
-            columnSpan: 2,
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({ 
-                    text: "İTİRAZ BAŞARI ŞANSI", 
-                    bold: true, 
-                    size: 28, 
-                    color: "C0392B",
-                    font: FONT_FAMILY
-                  })
-                ],
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 200, after: 120 }
-              }),
-              new Paragraph({
-                children: [
-                  new TextRun({ 
-                    text: successChance, 
-                    bold: true, 
-                    size: 56, 
-                    color: successChance === "Belirtilmedi" ? "999999" : (
-                      parseInt(successChance) >= 60 ? "27AE60" : 
-                      parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
-                    ),
-                    font: FONT_FAMILY
-                  })
-                ],
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 80, after: 200 }
-              })
-            ],
-            shading: { 
-              fill: successChance === "Belirtilmedi" ? "F8F9FA" : (
-                parseInt(successChance) >= 60 ? "E8F8F5" : 
-                parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
-              )
-            },
-            verticalAlign: "center",
-            borders: { 
-              top: { style: "single", size: 8, color: "C0392B" }
-            }
-          })
-        ]
-      })
-    );
+    new TableRow({
+      height: { value: 700, rule: "atLeast" },
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({ 
+                  text: "İTİRAZ İÇİN SON TARİH", 
+                  bold: true, 
+                  size: 24, 
+                  color: "C0392B",
+                  font: FONT_FAMILY
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 120 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ 
+                  text: objectionDeadline, 
+                  bold: true, 
+                  size: 48, 
+                  color: "C0392B",
+                  font: FONT_FAMILY
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 80, after: 200 }
+            })
+          ],
+          shading: { fill: "FADBD8" },
+          verticalAlign: "center",
+          borders: { 
+            top: { style: "single", size: 8, color: "C0392B" },
+            right: { style: "single", size: 2, color: "E0E0E0" }
+          }
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({ 
+                  text: "İTİRAZ BAŞARI ŞANSI", 
+                  bold: true, 
+                  size: 24, 
+                  color: "C0392B",
+                  font: FONT_FAMILY
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 120 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ 
+                  text: successChance, 
+                  bold: true, 
+                  size: 48, 
+                  color: successChance === "Belirtilmedi" ? "999999" : (
+                    parseInt(successChance) >= 60 ? "27AE60" : 
+                    parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
+                  ),
+                  font: FONT_FAMILY
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 80, after: 200 }
+            })
+          ],
+          shading: { 
+            fill: successChance === "Belirtilmedi" ? "F8F9FA" : (
+              parseInt(successChance) >= 60 ? "E8F8F5" : 
+              parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
+            )
+          },
+          verticalAlign: "center",
+          borders: { 
+            top: { style: "single", size: 8, color: "C0392B" }
+          }
+        })
+      ]
+    })
+  );
 
   // Tabloyu Oluştur
   const comparisonTable = new Table({
