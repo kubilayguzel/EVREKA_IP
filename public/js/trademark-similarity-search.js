@@ -1,5 +1,7 @@
 // public/js/trademark-similarity-search.js
 
+// public/js/trademark-similarity-search.js
+
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices, monitoringService } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { collection, doc, getDoc, getDocs, limit, query, setDoc, where, getFirestore, updateDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -10,7 +12,7 @@ import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import SimpleLoading from './simple-loading.js';
 
-console.log("### trademark-similarity-search.js yüklendi (Nested Class Fix) ###");
+console.log("### trademark-similarity-search.js yüklendi (Stable Hover) ###");
 
 // --- 1. GLOBAL DEĞİŞKENLER ---
 let allSimilarResults = [];
@@ -47,6 +49,7 @@ const tssShowResumeBannerIfAny = () => {
         const startBtn = document.getElementById('startSearchBtn') || document.getElementById('researchBtn'); if (startBtn) { startBtn.click(); let tries = 0; const iv = setInterval(() => { tries++; const loadingIndicator = document.getElementById('loadingIndicator'); if (loadingIndicator && loadingIndicator.style.display === 'none' && allSimilarResults.length > 0 && pagination) { clearInterval(iv); if (pagination.goToPage(targetPage)) { bar.style.background = '#28a745'; bar.firstElementChild.textContent = `Devam edildi: Sayfa ${targetPage}`; setTimeout(() => bar.remove(), 2000); window.__tssPendingResumeForBulletin = null; } } else if (tries > 300) { clearInterval(iv); window.__tssPendingResumeForBulletin = null; } }, 100); }
     };
 };
+
 window.addEventListener('beforeunload', () => tssSaveState(tssBuildStateFromUI({ page: pagination?.getCurrentPage ? pagination.getCurrentPage() : undefined, itemsPerPage: pagination?.getItemsPerPage ? pagination.getItemsPerPage() : undefined, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : 0 })));
 
 const debounce = (func, delay) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), delay); }; };
@@ -231,7 +234,6 @@ const createResultRow = (hit, rowIndex) => {
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
-    // Yeni class yapısı: tm-img-box-lg
     const imagePlaceholderHtml = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">-</div></div>`;
     const bulletinSelect = document.getElementById('bulletinSelect');
 
