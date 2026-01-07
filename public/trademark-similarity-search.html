@@ -317,6 +317,96 @@
             width: 100%;
         }
 
+        /* ==========================================================================
+        FİNAL GÜNCELLEME: SÜTUNLAR VE SAĞA AÇILAN GÖRSEL
+        ========================================================================== */
+
+        /* 1. İZLENEN MARKALAR TABLOSU - Sütun Genişlik Ayarları */
+        /* Sahip alanını genişletmek için diğerlerinden biraz kıstık */
+
+        /* Kolon 1: Checkbox */
+        .monitoring-container + div .results-table th:nth-child(1), 
+        .monitoring-container + div .results-table td:nth-child(1) { 
+            width: 5% !important; 
+        }
+
+        /* Kolon 2: SAHİP (Genişletildi: %35 -> %55) */
+        .monitoring-container + div .results-table th:nth-child(2), 
+        .monitoring-container + div .results-table td:nth-child(2) { 
+            width: 55% !important; /* Ana genişlik buraya verildi */
+            text-align: left !important; 
+            word-break: break-word !important; 
+            line-height: 1.4 !important; 
+        }
+
+        /* Kolon 3: Marka Sayısı (Daraltıldı) */
+        .monitoring-container + div .results-table th:nth-child(3), 
+        .monitoring-container + div .results-table td:nth-child(3) { 
+            width: 8% !important; 
+            text-align: center !important; 
+        }
+
+        /* Kolon 4: İş Tetiklendi (Daraltıldı) */
+        .monitoring-container + div .results-table th:nth-child(4), 
+        .monitoring-container + div .results-table td:nth-child(4) { 
+            width: 10% !important; 
+            text-align: center !important; 
+        }
+
+        /* Kolon 5: Bildirim Durumu (Daraltıldı) */
+        .monitoring-container + div .results-table th:nth-child(5), 
+        .monitoring-container + div .results-table td:nth-child(5) { 
+            width: 10% !important; 
+            text-align: center !important; 
+        }
+
+        /* Kolon 6: Eylemler (Daraltıldı) */
+        .monitoring-container + div .results-table th:nth-child(6), 
+        .monitoring-container + div .results-table td:nth-child(6) { 
+            width: 12% !important; 
+            text-align: center !important; 
+            white-space: nowrap !important; 
+        }
+
+
+        /* 2. HOVER EFEKTİ - SAĞ TARAFA AÇILMA */
+
+        /* Önceki scale efektini sıfırla ve yeni pozisyon tanımla */
+        #resultsTableBody .trademark-image-thumbnail-large:hover,
+        #monitoringListBody .trademark-image-thumbnail-large:hover {
+            transform: none !important; /* Merkezden büyümeyi iptal et */
+            
+            position: absolute !important;
+            top: -20px;       /* Hafif yukarı hizala */
+            left: 100%;       /* Kutunun tam sağ bitiminden başla */
+            margin-left: 15px; /* Görsel ile popup arasına boşluk koy */
+            
+            /* Yeni Boyut (60px * 4 = 240px) */
+            width: 240px !important; 
+            height: 240px !important;
+            
+            /* Görünüm Ayarları */
+            max-width: none !important;
+            max-height: none !important;
+            z-index: 999999 !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important;
+            border: 2px solid #1e3c72 !important;
+            border-radius: 8px;
+            background-color: #fff;
+        }
+
+        /* Ok işareti efekti (Opsiyonel - Popup hissi verir) */
+        #resultsTableBody .trademark-image-thumbnail-large:hover::after {
+            content: '';
+            position: absolute;
+            top: 30px;
+            right: 100%;
+            margin-top: -10px;
+            border-width: 10px;
+            border-style: solid;
+            border-color: transparent #1e3c72 transparent transparent;
+        }
+
     </style>
 </head>
 <body>
