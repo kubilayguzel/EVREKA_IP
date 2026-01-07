@@ -68,61 +68,78 @@ body, .page-wrapper {
     background: #fff;
 }
 
-/* İç tablo başlıkları */
+/* Başlıklar */
 .nested-table thead th {
     background-color: #f1f3f5 !important;
     color: #495057 !important;
     font-size: 13px !important;
     font-weight: 600;
     text-align: left !important;
-    padding: 6px 6px !important;
+    padding: 8px 8px !important;
 }
 
-/* İç tablo hücreleri */
+/* Hücreler */
 .nested-table td {
-    padding: 6px 6px !important;
+    padding: 8px 8px !important;
     text-align: left !important;
     vertical-align: middle !important;
 }
 
-/* Toggle (boş kolon) */
+/* Toggle boş kolon */
 .td-nested-toggle {
     width: 26px !important;
     padding: 0 !important;
 }
 
-/* Görsel kolonu */
+/* ============================================================
+   GÖRSEL KOLONU (2x)
+   ============================================================ */
 .col-nest-img,
 .td-nested-img {
-    width: 46px !important;
-    padding: 2px !important;
+    width: 90px !important;        /* ⬅️ 45px → 90px */
+    padding: 4px !important;
 }
 
+/* Görsel kutusu */
 .td-nested-img .tm-img-box {
+    width: 80px !important;
+    height: 80px !important;       /* ⬅️ Görsel 2 kat */
     margin: 0 !important;
 }
+
+/* Görselin kendisi */
+.td-nested-img img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+/* ============================================================
+   DİĞER KOLONLAR (YAYILMIŞ)
+   ============================================================ */
 
 /* Marka adı */
 .col-nest-name,
 .td-nested-name {
-    width: 30% !important;
+    width: 35% !important;         /* ⬅️ Biraz genişletildi */
     font-weight: 600;
     color: #1e3c72;
-    padding-left: 6px !important;
+    padding-left: 8px !important;
 }
 
 /* Başvuru No */
 .col-nest-appno,
 .td-nested-appno {
-    width: 16% !important;
+    width: 15% !important;
     white-space: nowrap;
 }
 
 /* Nice sınıfı */
 .col-nest-nice,
 .td-nested-nice {
-    width: auto !important;
+    width: auto !important;        /* Kalan alanı doldurur */
     font-size: 13px;
+    line-height: 1.4;
 }
 
 /* Tarih */
