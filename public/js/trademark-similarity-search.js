@@ -1157,23 +1157,67 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                 }
             } catch (e) {}
         }
-        const reportData = filteredResults.map(r => {
+        const reportData = [];
+        for (const r of filteredResults) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-            const ownerNameStr = _pickOwners(monitoredTm, monitoredTm, allPersons);
-            return {
+            let ipData = null;
+
+            // IP Kaydını Çek
+            if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
+                try {
+                    const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
+                    const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
+                    if (ipDoc.exists()) ipData = ipDoc.data();
+                } catch (e) { console.error("IP Record fetch error:", e); }
+            }
+
+            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+            const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
+            const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+            const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
+
+            let monitoredAppDate = "-";
+            const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
+            if (rawDate) {
+                if (typeof rawDate === 'string') {
+                    monitoredAppDate = rawDate.split('-').reverse().join('.');
+                } else {
+                    monitoredAppDate = _pickAppDate(ipData, monitoredTm);
+                }
+            }
+
+            let monitoredClasses = [];
+            if (ipData?.niceClasses) {
+                monitoredClasses = ipData.niceClasses;
+            } else if (ipData?.goodsAndServicesByClass) {
+                monitoredClasses = ipData.goodsAndServicesByClass.map(g => g.classNo);
+            } else {
+                monitoredClasses = _uniqNice(monitoredTm);
+            }
+
+            reportData.push({
                 monitoredMark: {
-                    name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
-                    ownerName: ownerNameStr || 'Tüm Sahipler',
-                    niceClasses: _uniqNice(monitoredTm)
+                    name: monitoredName,
+                    markName: monitoredName,
+                    imagePath: monitoredImg,
+                    ownerName: ownerNameStr,
+                    applicationNo: monitoredAppNo,
+                    applicationDate: monitoredAppDate,
+                    niceClasses: monitoredClasses
                 },
                 similarMark: {
                     name: r.markName,
-                    niceClasses: r.niceClasses,
-                    applicationNo: r.applicationNo,
-                    similarity: r.similarityScore
+                    markName: r.markName,
+                    imagePath: r.imagePath || null,
+                    niceClasses: r.niceClasses || [],
+                    applicationNo: r.applicationNo || "-",
+                    applicationDate: r.applicationDate || "-",
+                    similarity: r.similarityScore,
+                    holders: r.holders || [],
+                    ownerName: r.holders?.[0]?.name || "-"
                 }
-            };
-        });
+            });
+        }
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({
             results: reportData
@@ -1278,25 +1322,69 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 }
             } catch (e) {}
         }
-        const reportData = candidates.map(r => {
+        const reportData = [];
+        for (const r of candidates) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-            const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
-            return {
+            let ipData = null;
+
+            // IP Kaydını Çek
+            if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
+                try {
+                    const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
+                    const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
+                    if (ipDoc.exists()) ipData = ipDoc.data();
+                } catch (e) { console.error("IP Record fetch error:", e); }
+            }
+
+            const ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons);
+            const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
+            const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+            const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
+
+            let monitoredAppDate = "-";
+            const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
+            if (rawDate) {
+                if (typeof rawDate === 'string') {
+                    monitoredAppDate = rawDate.split('-').reverse().join('.');
+                } else {
+                    monitoredAppDate = _pickAppDate(ipData, monitoredTm);
+                }
+            }
+
+            let monitoredClasses = [];
+            if (ipData?.niceClasses) {
+                monitoredClasses = ipData.niceClasses;
+            } else if (ipData?.goodsAndServicesByClass) {
+                monitoredClasses = ipData.goodsAndServicesByClass.map(g => g.classNo);
+            } else {
+                monitoredClasses = _uniqNice(monitoredTm);
+            }
+
+            reportData.push({
                 monitoredMark: {
-                    name: monitoredTm?.title || r.monitoredTrademark,
-                    ownerName: ownerName || 'Tüm Sahipler',
-                    niceClasses: _uniqNice(monitoredTm)
+                    name: monitoredName,
+                    markName: monitoredName,
+                    imagePath: monitoredImg,
+                    ownerName: ownerNameStr,
+                    applicationNo: monitoredAppNo,
+                    applicationDate: monitoredAppDate,
+                    niceClasses: monitoredClasses
                 },
                 similarMark: {
                     name: r.markName,
-                    niceClasses: r.niceClasses,
-                    applicationNo: r.applicationNo,
+                    markName: r.markName,
+                    imagePath: r.imagePath || null,
+                    niceClasses: r.niceClasses || [],
+                    applicationNo: r.applicationNo || "-",
+                    applicationDate: r.applicationDate || "-",
                     similarity: r.similarityScore,
+                    holders: r.holders || [],
+                    ownerName: r.holders?.[0]?.name || "-",
                     bs: r.bs || null,
                     note: r.note || null
                 }
-            };
-        });
+            });
+        }
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({
             results: reportData
