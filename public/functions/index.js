@@ -4363,7 +4363,7 @@ async function createComparisonPage(group) {
             new Paragraph({
               children: [ 
                 new TextRun({ 
-                  text: "MÜVEKKİL MARKA", 
+                  text: "MÜVEKKİL MARKASI", 
                   bold: true, 
                   size: 28, 
                   color: "FFFFFF",
@@ -4592,7 +4592,7 @@ async function createComparisonPage(group) {
   const formatNiceClasses = (classes) => {
     if (!classes || classes.length === 0) return "-";
     const classArray = Array.isArray(classes) ? classes : String(classes).split(',').map(s => s.trim());
-    return classArray.map(c => `[${c}]`).join("  ");
+    return classArray.map(c => `[${c}]`).join(" ");
   };
 
   const monClasses = formatNiceClasses(monitoredMark.niceClasses);
