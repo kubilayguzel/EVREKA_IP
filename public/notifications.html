@@ -515,6 +515,15 @@ async function resolveType(notification) {
 
 async function resolveDocumentInfo(notification) {
   try {
+    // Önce izleme raporunu kontrol et
+    if (notification?.supplementaryAttachment) {
+      const sa = notification.supplementaryAttachment;
+      return {
+        fileName: sa.fileName || "izleme_raporu.docx",
+        fileUrl: sa.url || sa.downloadURL || sa.fileUrl || null
+      };
+    }
+
     if (!notification?.sourceDocumentId) return { fileName:"-", fileUrl:null };
 
     // 1) unindexed_pdfs'te dene
@@ -547,7 +556,7 @@ async function resolveDocumentInfo(notification) {
   }
 }
 
-    // ---------- Attachment helper (unified: task->EPATS + unindexed_pdfs) ----------
+// ---------- Attachment helper (unified: task->EPATS + unindexed_pdfs + izleme raporları) ----------
 async function getAttachmentPreviews(notification) {
   // Returns array of { fileName, fileUrl } items for UI display.
   const previews = [];
@@ -555,7 +564,53 @@ async function getAttachmentPreviews(notification) {
   const safeName = (name, defaultName = "ek.pdf") =>
     String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
 
-  // A) Task -> EPATS (createUniversalNotificationOnTaskCompleteV2)
+  // A) Marka İzleme Raporu (generateSimilarityReport) - ÖNCELİKLİ KONTROL
+  // Backend'de supplementaryAttachment, files array ve attachmentUrl olarak 3 farklı yerde tutuluyor
+  if (notification?.supplementaryAttachment) {
+    try {
+      const sa = notification.supplementaryAttachment;
+      const fileUrl = sa.url || sa.downloadURL || sa.fileUrl || null;
+      const fileName = safeName(sa.fileName, "izleme_raporu.docx");
+      if (fileUrl) {
+        previews.push({ fileName, fileUrl });
+      }
+    } catch (e) {
+      console.warn("getAttachmentPreviews supplementaryAttachment error:", e);
+    }
+  } else if (notification?.files && Array.isArray(notification.files) && notification.files.length > 0) {
+    // Fallback: files array'inden al (aynı izleme raporu burada da olabilir)
+    try {
+      notification.files.forEach(file => {
+        const fileUrl = file.url || file.downloadUrl || file.downloadURL || file.fileUrl || null;
+        const fileName = safeName(file.fileName, "ek_dosya.pdf");
+        // Mükerrer kontrol
+        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
+          previews.push({ fileName, fileUrl });
+        }
+      });
+    } catch (e) {
+      console.warn("getAttachmentPreviews files array error:", e);
+    }
+  } else if (notification?.attachmentUrl) {
+    // Son fallback: attachmentUrl (dosya adı tahmin et)
+    try {
+      const fileUrl = notification.attachmentUrl;
+      // URL'den dosya adını çıkarmaya çalış
+      const urlParts = fileUrl.split('/');
+      const lastPart = urlParts[urlParts.length - 1];
+      const fileName = safeName(
+        decodeURIComponent(lastPart.split('?')[0]), 
+        "izleme_raporu.docx"
+      );
+      if (!previews.some(p => p.fileUrl === fileUrl)) {
+        previews.push({ fileName, fileUrl });
+      }
+    } catch (e) {
+      console.warn("getAttachmentPreviews attachmentUrl error:", e);
+    }
+  }
+
+  // B) Task -> EPATS (createUniversalNotificationOnTaskCompleteV2)
   if (notification?.associatedTaskId) {
     try {
       const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
@@ -564,7 +619,9 @@ async function getAttachmentPreviews(notification) {
         if (epats) {
           const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
           const fileName = safeName(epats.name, "epats.pdf");
-          previews.push({ fileName, fileUrl: fileUrl || null });
+          if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
+            previews.push({ fileName, fileUrl: fileUrl || null });
+          }
         }
       }
     } catch (e) {
@@ -572,7 +629,7 @@ async function getAttachmentPreviews(notification) {
     }
   }
 
-  // B) unindexed_pdfs (createMailNotificationOnDocumentStatusChangeV2)
+  // C) unindexed_pdfs (createMailNotificationOnDocumentStatusChangeV2)
   if (notification?.sourceDocumentId) {
     try {
       const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
@@ -581,7 +638,7 @@ async function getAttachmentPreviews(notification) {
         const fileName = safeName(d.fileName, "document.pdf");
         const fileUrl  = d.fileUrl || d.downloadURL || null;
         // avoid duplicates by url
-        if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
+        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
           previews.push({ fileName, fileUrl });
         }
       } else {
@@ -601,7 +658,7 @@ async function getAttachmentPreviews(notification) {
               const ux = snap.docs[0].data() || {};
               const fileName = safeName(ux.fileName, "document.pdf");
               const fileUrl  = ux.fileUrl || ux.downloadURL || null;
-              if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
+              if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
                 previews.push({ fileName, fileUrl });
               }
             }
@@ -617,7 +674,6 @@ async function getAttachmentPreviews(notification) {
 
   return previews;
 }
-
     // ---------- Modals ----------
     function showMissingInfo(notification) {
       const modal = document.getElementById("missing-info-modal");
