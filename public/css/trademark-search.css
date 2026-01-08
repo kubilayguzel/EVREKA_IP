@@ -43,7 +43,7 @@ body, .page-wrapper {
 #monitoringTable th:nth-child(3), #monitoringTable td:nth-child(3) { width: 100px !important; text-align: center; }
 #monitoringTable th:nth-child(4), #monitoringTable td:nth-child(4) { width: 110px !important; text-align: center; }
 #monitoringTable th:nth-child(5), #monitoringTable td:nth-child(5) { width: 120px !important; text-align: center; }
-#monitoringTable th:nth-child(6), #monitoringTable td:nth-child(6) { width: 220px !important; text-align: center; }
+#monitoringTable th:nth-child(6), #monitoringTable td:nth-child(6) { width: 280px !important; text-align: center; }
 
 /* ============================================================
    3. ACCORDION İÇ TABLO (İZLENENLER DETAY)
