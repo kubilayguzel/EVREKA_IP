@@ -4314,13 +4314,20 @@ export const generateSimilarityReport = onCall(
 
             const recipients = await getRecipientsByApplicantIds([{ id: targetClientId }], "marka");
 
+            // Eğer CC boşsa evrekaMailCCList'ten ekle
+            let ccList = recipients.cc || [];
+            if (ccList.length === 0) {
+              const extraCC = await getCcFromEvrekaListByTransactionType("marka");
+              ccList = extraCC || [];
+            }
+
             // [FIRESTORE GÜNCELLEME] URL'li Kayıt
             await adminDb.collection("mail_notifications").add({
               clientId: targetClientId,
               applicantName: displayClientName,
               bulletinNo: String(bulletinNo),
               toList: recipients.to || [],
-              ccList: recipients.cc || [],
+              ccList: ccList,
               subject,
               body,
               status: "awaiting_client_approval",
