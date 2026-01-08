@@ -577,12 +577,21 @@ async function buildNotificationAttachments(db, notificationData) {
         }
         return true;
       }
+      
+      // buildNotificationAttachments fonksiyonu içinde addAsAttachmentOrLink kısmını bul:
       const [buf] = await bucket.file(storagePath).download();
+      
+      // [DÜZELTME] MIME Type dinamik hale getirildi
+      let contentType = "application/pdf";
+      if (storagePath.toLowerCase().endsWith(".zip")) contentType = "application/zip";
+      if (storagePath.toLowerCase().endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
       result.attachments.push({
         filename: name,
         content: buf,
-        contentType: "application/pdf",
+        contentType: contentType,
       });
+
       return true;
     } catch (e) {
       // storage erişilemezse son çare link
@@ -4215,124 +4224,134 @@ export const generateSimilarityReport = onCall(
   },
   async (request) => {
     try {
-      const { results } = request.data;
-      if (!results || !Array.isArray(results)) {
-        throw new Error("Geçersiz veri formatı");
-      }
+      const { results, bulletinNo, isGlobalRequest } = request.data;
+      if (!results || !Array.isArray(results)) throw new Error("Geçersiz veri formatı");
 
-      // --- Sahip bazında grupla ---
+      // --- 1. Verileri Müvekkil Bazında Grupla ---
       const owners = {};
       results.forEach((m) => {
-        const owner = (m.monitoredMark && m.monitoredMark.ownerName) || "Bilinmeyen Sahip";
-        if (!owners[owner]) owners[owner] = [];
-        owners[owner].push(m);
+        const ownerName = (m.monitoredMark && m.monitoredMark.ownerName) || "Bilinmeyen Sahip";
+        if (!owners[ownerName]) owners[ownerName] = [];
+        owners[ownerName].push(m);
       });
 
-      const archive = archiver("zip", { zlib: { level: 9 } });
+      const globalArchive = archiver("zip", { zlib: { level: 9 } });
       const passthrough = new stream.PassThrough();
-      archive.pipe(passthrough);
+      globalArchive.pipe(passthrough);
 
-      // Her sahip için ayrı dosya oluştur
-      for (const [ownerName, matches] of Object.entries(owners)) {
-        const doc = await createProfessionalReport(ownerName, matches);
-        const buffer = await Packer.toBuffer(doc);
-        archive.append(buffer, { name: `${sanitizeFileName(ownerName)}_Benzerlik_Raporu.docx` });
+      // --- 2. Her Müvekkil İçin Döngü (Rapor ve Bildirim) ---
+      for (const [ownerNameKey, matches] of Object.entries(owners)) {
+        // Word raporunu oluştur
+        const doc = await createProfessionalReport(ownerNameKey, matches);
+        const docBuffer = await Packer.toBuffer(doc);
+        
+        // Global ZIP'e ekle (İndirme için)
+        globalArchive.append(docBuffer, { name: `${sanitizeFileName(ownerNameKey)}_Benzerlik_Raporu.docx` });
+
+        // --- BİLDİRİM OLUŞTURMA MANTIĞI ---
+        const targetClientId = matches[0]?.monitoredMark?.clientId;
+        
+        if (targetClientId && bulletinNo) {
+          try {
+            // MÜKERRER KONTROLÜ
+            const existing = await adminDb.collection("mail_notifications")
+              .where("clientId", "==", targetClientId)
+              .where("bulletinNo", "==", String(bulletinNo))
+              .where("source", "==", "bulletin_watch_system")
+              .limit(1).get();
+
+            if (existing.empty) {
+              // MÜVEKKİL ADINI BUL
+              let displayClientName = ownerNameKey;
+              const personDoc = await adminDb.collection("persons").doc(targetClientId).get();
+              if (personDoc.exists) {
+                displayClientName = personDoc.data().name || personDoc.data().companyName || displayClientName;
+              }
+
+              // MÜVEKKİLE ÖZEL ZIP OLUŞTUR (Mail Eki İçin)
+              const indivZip = new AdmZip();
+              indivZip.addFile(`${sanitizeFileName(displayClientName)}_Rapor.docx`, docBuffer);
+              const indivZipBuffer = indivZip.toBuffer();
+              
+              const reportFileName = `${bulletinNo}_${sanitizeFileName(displayClientName)}_Izleme_Raporu.zip`;
+              const storagePath = `bulletin_reports/${bulletinNo}/${targetClientId}/${Date.now()}_${reportFileName}`;
+              
+              // Storage'a yükle
+              await admin.storage().bucket().file(storagePath).save(indivZipBuffer, { contentType: 'application/zip' });
+
+              // İTİRAZ SON TARİHİ HESAPLA
+              let objectionDeadline = "-";
+              try {
+                const bDateStr = matches[0]?.similarMark?.bulletinDate || matches[0]?.similarMark?.applicationDate;
+                if (bDateStr) {
+                  const parts = bDateStr.split(/[./-]/);
+                  const bDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                  if (!isNaN(bDate.getTime())) {
+                    const rawDue = addMonthsToDate(bDate, 2);
+                    const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+                    objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
+                  }
+                }
+              } catch (e) {}
+
+              // ALICILARI BUL
+              const recipients = await getRecipientsByApplicantIds([{ id: targetClientId }], "marka");
+
+              // ŞABLONU UYGULA
+              const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
+              let subject = `${bulletinNo} Sayılı Marka Bülteni İzleme Bildirimi - ${displayClientName}`;
+              let body = `<p>İzleme raporunuz ekte sunulmuştur.</p>`;
+
+              if (templateSnap.exists) {
+                const tmpl = templateSnap.data();
+                const replacements = { "{{bulletinNo}}": bulletinNo, "{{muvekkil_adi}}": displayClientName, "{{objection_deadline}}": objectionDeadline };
+                subject = tmpl.subject || subject;
+                body = tmpl.body || body;
+                for (const [k, v] of Object.entries(replacements)) {
+                  subject = subject.split(k).join(v);
+                  body = body.split(k).join(v);
+                }
+              }
+
+              // BİLDİRİMİ KAYDET
+              await adminDb.collection("mail_notifications").add({
+                clientId: targetClientId,
+                applicantName: displayClientName,
+                bulletinNo: String(bulletinNo),
+                toList: recipients.to || [],
+                ccList: recipients.cc || [],
+                subject,
+                body,
+                status: "awaiting_client_approval",
+                mode: "draft",
+                isDraft: true,
+                templateId: "tmpl_watchnotice",
+                notificationType: "marka",
+                source: "bulletin_watch_system",
+                assignedTo_uid: selcanUserId,
+                assignedTo_email: selcanUserEmail,
+                supplementaryAttachment: {
+                  storagePath,
+                  fileName: reportFileName
+                },
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+              logger.info(`✅ Bildirim Oluşturuldu: ${displayClientName}`);
+            } else {
+              logger.info(`ℹ️ Mükerrer Kayıt: ${targetClientId} için zaten bildirim var.`);
+            }
+          } catch (err) {
+            logger.error(`❌ Müvekkil (${targetClientId}) bildirimi oluşturulamadı:`, err);
+          }
+        }
       }
 
-      await archive.finalize();
+      await globalArchive.finalize();
       const chunks = [];
       for await (const chunk of passthrough) chunks.push(chunk);
       const finalBuffer = Buffer.concat(chunks);
-      // =================================================================
-      // 📝 BÜLTEN İZLEME BİLDİRİMİ OLUŞTURMA (HATA DÜZELTMELİ VERSİYON)
-      // =================================================================
-      const { bulletinNo, clientId, ownerName } = request.data;
 
-      if (clientId && bulletinNo) {
-        try {
-          // --- 1. MÜKERRER KONTROLÜ (Aynı bülten ve müvekkil için var mı?) ---
-          const existingNotif = await adminDb.collection("mail_notifications")
-            .where("clientId", "==", clientId)
-            .where("bulletinNo", "==", String(bulletinNo))
-            .where("notificationType", "==", "marka")
-            .where("source", "==", "bulletin_watch_system")
-            .limit(1)
-            .get();
-
-          if (!existingNotif.empty) {
-            logger.info(`⚠️ Bu bülten (${bulletinNo}) için müvekkile (${clientId}) zaten bildirim oluşturulmuş. Atlanıyor.`);
-          } else {
-            // --- 2. MÜVEKKİL ADINI BUL (Email yerine isim görünmesi için) ---
-            let displayClientName = ownerName || "Değerli Müvekkilimiz";
-            const personDoc = await adminDb.collection("persons").doc(clientId).get();
-            if (personDoc.exists) {
-              const pData = personDoc.data();
-              displayClientName = pData.name || pData.companyName || displayClientName;
-            }
-
-            // --- 3. RAPORU STORAGE'A KAYDET ---
-            const safeOwnerName = displayClientName.replace(/[^a-zA-Z0-9]/g, '_');
-            const reportFileName = `${bulletinNo}_${safeOwnerName}_Izleme_Raporu.zip`;
-            const storagePath = `bulletin_reports/${bulletinNo}/${clientId}/${Date.now()}_${reportFileName}`;
-            
-            const reportFile = admin.storage().bucket().file(storagePath);
-            await reportFile.save(finalBuffer, { contentType: 'application/zip' });
-
-            // --- 4. İTİRAZ SON TARİHİNİ HESAPLA ---
-            let objectionDeadline = "-";
-            try {
-              const sampleResult = results[0]?.similarMark;
-              const bDateStr = sampleResult?.bulletinDate || sampleResult?.applicationDate;
-              if (bDateStr) {
-                const parts = bDateStr.split(/[./-]/);
-                const bDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-                if (!isNaN(bDate.getTime())) {
-                  const rawDue = addMonthsToDate(bDate, 2);
-                  const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
-                  objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
-                }
-              }
-            } catch (e) { logger.warn("Tarih hesaplama hatası:", e); }
-
-            // --- 5. ŞABLON VE BİLDİRİM KAYDI ---
-            const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
-            let subject = `${bulletinNo} Sayılı Bülten İzleme Raporu`;
-            let body = `<p>Raporunuz ekte sunulmuştur.</p>`;
-
-            if (templateSnap.exists) {
-              const tmpl = templateSnap.data();
-              subject = (tmpl.subject || subject).replace(/{{bulletinNo}}/g, bulletinNo).replace(/{{muvekkil_adi}}/g, displayClientName);
-              body = tmpl.body.replace(/{{bulletinNo}}/g, bulletinNo).replace(/{{muvekkil_adi}}/g, displayClientName).replace(/{{objection_deadline}}/g, objectionDeadline);
-            }
-
-            const recipients = await getRecipientsByApplicantIds([{ id: clientId }], "marka");
-
-            await adminDb.collection("mail_notifications").add({
-              clientId,
-              applicantName: displayClientName, // Listede müvekkil adının çıkması için kritik alan
-              bulletinNo: String(bulletinNo), // Mükerrer kontrolü için ekledik
-              toList: recipients.to || [],
-              ccList: recipients.cc || [],
-              subject,
-              body,
-              status: "awaiting_client_approval",
-              mode: "draft",
-              isDraft: true,
-              notificationType: "marka",
-              source: "bulletin_watch_system",
-              assignedTo_uid: selcanUserId,
-              assignedTo_email: selcanUserEmail,
-              supplementaryAttachment: {
-                storagePath,
-                fileName: reportFileName
-              },
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            logger.info(`✅ Bildirim oluşturuldu: ${displayClientName}`);
-          }
-        } catch (err) { logger.error("Bildirim hatası:", err); }
-      }
       return {
         success: true,
         file: finalBuffer.toString("base64")
@@ -4343,7 +4362,6 @@ export const generateSimilarityReport = onCall(
     }
   }
 );
-
 
 // Ana rapor oluşturma fonksiyonu
 async function createProfessionalReport(ownerName, matches) {
