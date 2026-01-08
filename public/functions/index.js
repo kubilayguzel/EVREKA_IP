@@ -1486,6 +1486,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let rule = null;
     let template = null;
     let client = null;
+    let isEvaluationRequired = false;
     let subject = ""; 
     let body = "";    
     
