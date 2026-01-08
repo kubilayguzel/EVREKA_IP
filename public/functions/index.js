@@ -1484,12 +1484,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let rule = null;
     let template = null;
     let client = null;
-    let isEvaluationRequired = false;
     let subject = ""; 
-    let body = "";    
-    
-    // Hassas İşlem Tipleri Listesi
-    const SENSITIVE_TRANSACTION_IDS = ['7', '19', '49', '54'];
+    let body = "";
+    let isEvaluationRequired = false;
     
     let ipRecordData = null;
     let applicants = [];
@@ -1631,7 +1628,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         itirazSahibi: "-" 
     };
 
-    if (oppositionOwner) { enrichedData.itirazSahibi = oppositionOwner; }
+    if (oppositionOwner) {
+        enrichedData.itirazSahibi = oppositionOwner;
+    }
 
     if (ipRecordData) {
         const clean = (val) => (val ? String(val).trim() : "");
@@ -1680,125 +1679,222 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     enrichedData.deadlineFormatted = formatDate(rawDeadline);
 
     // ===============================================================
-    //  DİNAMİK KARAR VE DAVA ANALİZİ
+    //  DİNAMİK KARAR VE DAVA ANALİZİ (GÜNCELLENDİ)
     // ===============================================================
+    
+    // 1. Portföy Kontrolü (Self mi?)
     const isPortfolio = ipRecordData?.recordOwnerType === 'self';
-    let decisionAnalysis = { isLawsuitRequired: false, resultText: "-", statusText: "-", statusColor: "#333", summaryText: "", boxColor: "#e8f0fe", boxBorder: "#0d6efd" };
+
+    let decisionAnalysis = {
+        isLawsuitRequired: false,
+        resultText: "-",          
+        statusText: "-",          
+        statusColor: "#333",      
+        summaryText: "",          
+        boxColor: "#e8f0fe",      
+        boxBorder: "#0d6efd"      
+    };
+
     const txType = String(templateSearchType);
 
+    // Tip 31-36 Mantık Tablosu
     if (["31", "32", "33", "34", "35", "36"].includes(txType)) {
+        
+        // --- 31: Başvuru Sahibi - İtiraz Kabul ---
         if (txType === "31") {
             decisionAnalysis.resultText = "BAŞVURU SAHİBİ - İTİRAZ KABUL";
             if (isPortfolio) { 
+                // Self -> Lehimize (Başvurumuz Kabul Edildi / İtiraz Süreci Bitti)
                 decisionAnalysis.statusText = "LEHİMİZE (Kazanıldı)";
                 decisionAnalysis.statusColor = "#237804";
-                decisionAnalysis.summaryText = "Başvurumuza ilişkin yapılan itiraz kabul edilmiştir. Tescil süreci devam edecektir.";
+                decisionAnalysis.isLawsuitRequired = false;
+                decisionAnalysis.summaryText = "Başvurumuza ilişkin yapılan itiraz kabul edilmiştir (Başvuru Sahibi lehine sonuç). Tescil süreci devam edecektir.";
             } else { 
+                // 3. Taraf -> Aleyhimize (Rakip Kazandı, Biz Kaybettik)
                 decisionAnalysis.statusText = "ALEYHİMİZE (Rakip Kazandı)";
                 decisionAnalysis.statusColor = "#d32f2f";
                 decisionAnalysis.isLawsuitRequired = true;
-                decisionAnalysis.summaryText = "Rakip başvuru lehine karar verilmiştir. Bu karara karşı dava açılması gerekmektedir.";
+                decisionAnalysis.summaryText = "Rakip başvuru lehine karar verilmiştir (Bizim itirazımız reddedilmiş gibi işlem görür). Bu karara karşı dava açılması gerekmektedir.";
             }
-        } else if (txType === "32") {
+        }
+        
+        // --- 32: Başvuru Sahibi - İtiraz Kısmen Kabul ---
+        else if (txType === "32") {
             decisionAnalysis.resultText = "KISMEN KABUL";
             decisionAnalysis.statusText = "KISMEN ALEYHE";
             decisionAnalysis.statusColor = "#d97706";
-            decisionAnalysis.isLawsuitRequired = true;
-            decisionAnalysis.summaryText = isPortfolio ? "Başvurumuz kısmen kabul edilmiş, kısmen reddedilmiştir. Dava açma hakkımız doğmuştur." : "Rakip başvuru kısmen kabul edilmiştir. Dava açma hakkımız vardır.";
-        } else if (txType === "33") {
+            decisionAnalysis.isLawsuitRequired = true; // Her iki taraf için de kayıp kısımlar olabilir
+            
+            if (isPortfolio) {
+                decisionAnalysis.summaryText = "Başvurumuz kısmen kabul edilmiş, kısmen reddedilmiştir. Reddedilen sınıflar için dava açma hakkımız doğmuştur.";
+            } else {
+                decisionAnalysis.summaryText = "Rakip başvuru kısmen kabul edilmiştir. Rakibin kazandığı (bizim itirazımızın reddedildiği) kısımlar için dava açma hakkımız vardır.";
+            }
+        }
+
+        // --- 33: Başvuru Sahibi - İtiraz Ret ---
+        else if (txType === "33") {
             decisionAnalysis.resultText = "BAŞVURU SAHİBİ - İTİRAZ RET";
             if (isPortfolio) { 
+                // Self -> Aleyhimize (Başvurumuz Reddedildi)
                 decisionAnalysis.statusText = "ALEYHİMİZE (Başvurumuz Reddedildi)";
                 decisionAnalysis.statusColor = "#d32f2f";
                 decisionAnalysis.isLawsuitRequired = true;
-                decisionAnalysis.summaryText = "Başvurumuza ilişkin itiraz süreci aleyhimize sonuçlanmış ve başvurumuz reddedilmiştir.";
+                decisionAnalysis.summaryText = "Başvurumuza ilişkin itiraz süreci aleyhimize sonuçlanmış ve başvurumuz reddedilmiştir. Dava açılması gerekmektedir.";
             } else { 
+                // 3. Taraf -> Lehimize (Rakip Reddedildi)
                 decisionAnalysis.statusText = "LEHİMİZE (Rakip Reddedildi)";
                 decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
                 decisionAnalysis.summaryText = "Rakip başvurunun reddedilmesine karar verilmiştir. Karar lehimizedir.";
             }
-        } else if (txType === "34") {
+        }
+
+        // --- 34: İtiraz Sahibi - İtiraz Kabul ---
+        else if (txType === "34") {
             decisionAnalysis.resultText = "İTİRAZ SAHİBİ - İTİRAZ KABUL";
             if (isPortfolio) { 
+                // Self -> Aleyhimize (Bizim Yaptığımız İtiraz Kabul Edilmedi / Başvuru Aleyhine Sonuçlanan Durum?)
+                // DÜZELTME: "İtiraz Sahibi Kabul" genelde "İtiraz Edenin Talebi Kabul" demektir.
+                // Eğer Self isek ve İtiraz Sahibiysek -> Kazanmışızdır.
+                // Ancak "itiraz sahibi kabul ise benim aleyhime" dediniz (Self senaryosunda).
+                // BU, SİZİN VERDİĞİNİZ KURALA GÖRE AYARLANIYOR:
                 decisionAnalysis.statusText = "ALEYHİMİZE (Karşı Taraf Kazandı)";
                 decisionAnalysis.statusColor = "#d32f2f";
                 decisionAnalysis.isLawsuitRequired = true;
                 decisionAnalysis.summaryText = "İtiraz sahibi lehine karar verilmiştir (Aleyhimize). Dava açılması gerekmektedir.";
             } else { 
+                // 3. Taraf -> Lehimize
                 decisionAnalysis.statusText = "LEHİMİZE";
                 decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
                 decisionAnalysis.summaryText = "İtiraz sahibi lehine verilen karar bizim lehimizedir.";
             }
-        } else if (txType === "35") {
+        }
+
+        // --- 35: İtiraz Sahibi - İtiraz Kısmen Kabul ---
+        else if (txType === "35") {
             decisionAnalysis.resultText = "KISMEN KABUL";
             decisionAnalysis.statusText = "KISMEN ALEYHE";
             decisionAnalysis.statusColor = "#d97706";
             decisionAnalysis.isLawsuitRequired = true;
-            decisionAnalysis.summaryText = isPortfolio ? "Karar kısmen aleyhimize sonuçlanmıştır. Kaybettiğimiz kısımlar için dava açma hakkımız vardır." : "Karar kısmen lehimize, kısmen aleyhimizedir.";
-        } else if (txType === "36") {
+            
+            if (isPortfolio) {
+                decisionAnalysis.summaryText = "Karar kısmen aleyhimize sonuçlanmıştır. Kaybettiğimiz kısımlar için dava açma hakkımız vardır.";
+            } else {
+                decisionAnalysis.summaryText = "Karar kısmen lehimize, kısmen aleyhimizedir. Aleyhe olan kısımlar için dava açılabilir.";
+            }
+        }
+
+        // --- 36: İtiraz Sahibi - İtiraz Ret ---
+        else if (txType === "36") {
             decisionAnalysis.resultText = "İTİRAZ SAHİBİ - İTİRAZ RET";
             if (isPortfolio) { 
+                // Self -> Lehimize (İtiraz Sahibi Reddedildi -> Biz Kurtulduk)
+                // Kuralınız: "itiraz sahibi ret ise benim lehime"
                 decisionAnalysis.statusText = "LEHİMİZE (İtiraz Reddedildi)";
                 decisionAnalysis.statusColor = "#237804";
+                decisionAnalysis.isLawsuitRequired = false;
                 decisionAnalysis.summaryText = "İtiraz sahibinin talebi reddedilmiştir. Karar lehimizedir.";
             } else { 
+                // 3. Taraf -> Aleyhimize (Biz İtiraz Ettik, Reddedildi)
                 decisionAnalysis.statusText = "ALEYHİMİZE (İtirazımız Reddedildi)";
                 decisionAnalysis.statusColor = "#d32f2f";
                 decisionAnalysis.isLawsuitRequired = true;
                 decisionAnalysis.summaryText = "Yaptığımız itiraz reddedilmiştir. Karşı taraf tescil alacaktır. Dava açma hakkımız vardır.";
             }
         }
-    } else if (txType === "29") {
+    } 
+    // Tip 29 (Kısmen) ve 30 (Ret) Standart
+    else if (txType === "29") {
         decisionAnalysis = { isLawsuitRequired: true, resultText: "KISMEN KABUL", statusText: "KISMEN RET", statusColor: "#d97706", summaryText: "Karara itirazımız kısmen kabul edilmiştir." };
-    } else if (txType === "30") {
+    } 
+    else if (txType === "30") {
         decisionAnalysis = { isLawsuitRequired: true, resultText: "RET", statusText: "NİHAİ RET", statusColor: "#d32f2f", summaryText: "Karara itirazımız reddedilmiştir." };
     }
 
+    // --- DAVA TARİHİ HESAPLAMA (Eğer Dava Gerekliyse) ---
+    // Sadece lawsuitRequired true ise ve 31-36 veya 29-30 ise hesapla
     let davaSonTarihi = "-";
-    if (decisionAnalysis.isLawsuitRequired && fetchedTxnData?.date) {
+    const lawsuitTypes = ["29", "30", "31", "32", "33", "34", "35", "36"];
+    
+    if (decisionAnalysis.isLawsuitRequired && lawsuitTypes.includes(txType) && fetchedTxnData?.date) {
         const tebligDate = new Date(fetchedTxnData.date);
         let targetDate = new Date(tebligDate);
-        targetDate.setMonth(targetDate.getMonth() + 2);
         const originalDay = targetDate.getDate();
+        
+        targetDate.setMonth(targetDate.getMonth() + 2);
         if (targetDate.getDate() !== originalDay) targetDate.setDate(0); 
-        while (isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) { targetDate.setDate(targetDate.getDate() + 1); }
+
+        const maxIter = 30; 
+        let iter = 0;
+        while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < maxIter) {
+            targetDate.setDate(targetDate.getDate() + 1);
+            iter++;
+        }
         davaSonTarihi = formatDate(targetDate);
-    }
-    decisionAnalysis.boxColor = decisionAnalysis.isLawsuitRequired ? "#fff2f0" : "#f6ffed";
-    decisionAnalysis.boxBorder = decisionAnalysis.isLawsuitRequired ? "#ff4d4f" : "#52c41a";
-
-    // B) ALICILAR VE MÜVEKKİL FLAG BELİRLEME
-    if (!client && after.clientId) {
-        const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
-        if (clientSnapshot.exists) {
-            client = clientSnapshot.data();
-            isEvaluationRequired = client.is_evaluation_required === true; 
-        }
-    } else if (!client && applicants.length > 0) {
-        client = { name: applicants[0].name, id: applicants[0].id };
-        if (client.id) {
-            const cSnap = await adminDb.collection("persons").doc(client.id).get();
-            if (cSnap.exists) isEvaluationRequired = cSnap.data().is_evaluation_required === true;
-        }
+        console.log(`⚖️ Dava Tarihi (${txType}): ${davaSonTarihi}`);
     }
 
+    // Renk Ayarları (UI için)
+    if (decisionAnalysis.isLawsuitRequired) {
+        decisionAnalysis.boxColor = "#fff2f0"; 
+        decisionAnalysis.boxBorder = "#ff4d4f";
+    } else {
+        decisionAnalysis.boxColor = "#f6ffed"; 
+        decisionAnalysis.boxBorder = "#52c41a";
+    }
+
+    // ===============================================================
+
+    // B) Notification Type
+    const safeMainProcessType = String(after.mainProcessType || ipRecordData?.type || "marka").toLowerCase();
+    const notificationType = (safeMainProcessType === 'marka' || safeMainProcessType === 'trademark') ? 'marka' : safeMainProcessType;
+
+    // C) Alıcıları Belirle
     let toRecipients = [];
     let ccRecipientsSet = new Set();
-    const notificationType = (String(after.mainProcessType || ipRecordData?.type || "marka")).toLowerCase();
+
+    async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
+      const to = [], cc = [];
+      if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
+      for (let i = 0; i < personIds.length; i += 10) {
+        const batch = personIds.slice(i, i + 10);
+        const prs = await adminDb.collection("personsRelated").where("personId", "in", batch).get();
+        prs.forEach((doc) => {
+          const r = doc.data() || {};
+          const email = String(r.email || "").trim();
+          if (email && r?.responsible?.[categoryKey] === true) {
+              const notify = r?.notify?.[categoryKey] || {};
+              if (notify.to === true) to.push(email);
+              else if (notify.cc === true) cc.push(email);
+              else to.push(email);
+          }
+        });
+      }
+      return { to, cc };
+    }
 
     const owners = ipRecordData?.taskOwner || [];
-    taskOwnerIds = [...new Set([...taskOwnerIds, ...owners])]; 
+    taskOwnerIds.push(...owners);
+    taskOwnerIds = [...new Set(taskOwnerIds)]; 
 
     if (taskOwnerIds.length > 0) {
-      const rec = await getRecipientsByApplicantIds(taskOwnerIds.map(id => ({id})), notificationType);
-      rec.to.forEach(e => toRecipients.push(e));
-      rec.cc.forEach(e => ccRecipientsSet.add(e));
+      const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
+      toRecipients.push(...fromOwners.to);
+      fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
+      if (toRecipients.length === 0 && ccRecipientsSet.size === 0) {
+          for (const uid of taskOwnerIds) {
+              const p = await adminDb.collection("persons").doc(String(uid)).get();
+              if (p.exists && p.data().email) toRecipients.push(p.data().email);
+          }
+      }
     }
 
     if ((toRecipients.length + ccRecipientsSet.size) === 0) {
       const rec = await getRecipientsByApplicantIds(applicants, notificationType);
-      rec.to.forEach(e => toRecipients.push(e));
-      rec.cc.forEach(e => ccRecipientsSet.add(e));
+      (rec.to || []).forEach((e) => toRecipients.push(e));
+      (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
     if (templateSearchType) {
@@ -1806,101 +1902,236 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
     }
 
-    const finalTo = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
-    const finalCc = Array.from(ccRecipientsSet).filter((e) => !finalTo.includes(e));
+    toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
+    const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
-    // --- ŞABLON EŞLEŞTİRME ---
-    const querySubType = after.subProcessType || templateSearchType || null; 
-    let subTypeOptions = querySubType ? [String(querySubType), Number(querySubType)].filter(v => !isNaN(v) || typeof v === 'string') : [];
-
-    if (subTypeOptions.length > 0) {
-        const rulesSnapshot = await adminDb.collection("template_rules").where("sourceType", "==", "document").where("subProcessType", "in", subTypeOptions).get();
-        if (!rulesSnapshot.empty) {
-            let possibleMainTypes = [notificationType, 'marka', 'trademark'];
-            let matchedDoc = rulesSnapshot.docs.find(doc => possibleMainTypes.includes(String(doc.data().mainProcessType || "").toLowerCase()));
-            if (!matchedDoc && rulesSnapshot.size > 0) matchedDoc = rulesSnapshot.docs[0];
-            if (matchedDoc) {
-                rule = matchedDoc.data();
-                const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
-                if (templateSnapshot.exists) template = templateSnapshot.data();
-            }
+    // Client bilgisini ve değerlendirme durumunu belirle
+    if (after.clientId) {
+        const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
+        if (clientSnapshot.exists) {
+            client = clientSnapshot.data();
+            isEvaluationRequired = client.is_evaluation_required === true;
+            console.log(`👤 Client bulundu: ${client.name || client.companyName}, Değerlendirme Gerekli: ${isEvaluationRequired}`);
+        }
+    } else if (applicants.length > 0 && applicants[0].id) {
+        const clientSnapshot = await adminDb.collection("persons").doc(applicants[0].id).get();
+        if (clientSnapshot.exists) {
+            client = clientSnapshot.data();
+            isEvaluationRequired = client.is_evaluation_required === true;
+            console.log(`👤 Client (applicant'tan): ${client.name || client.companyName}, Değerlendirme Gerekli: ${isEvaluationRequired}`);
+        } else {
+            client = { name: applicants[0].name, id: applicants[0].id };
+            console.log(`👤 Client (applicant'tan - basit): ${client.name}`);
         }
     }
 
-    if (template && client) {
-      subject = String(template.subject || "");
-      body = String(template.body || "");
-      const params = { ...client, ...after, ...ipRecordData, ...fetchedTaskData, muvekkil_adi: "Değerli Müvekkilimiz", proje_adi: enrichedData.markName, islem_turu_adi: finalIslemTanimlamasi, teblig_tarihi: enrichedData.tebligTarihiFormatted, resmi_son_cevap_tarihi: enrichedData.deadlineFormatted, itiraz_sahibi: enrichedData.itirazSahibi, dava_son_tarihi: davaSonTarihi, dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none", karar_sonucu_baslik: decisionAnalysis.resultText, karar_durumu_metni: decisionAnalysis.statusText, karar_durumu_renk: decisionAnalysis.statusColor, aksiyon_kutusu_bg: decisionAnalysis.boxColor, aksiyon_kutusu_border: decisionAnalysis.boxBorder, markImageUrl: enrichedData.markImageUrl, applicantNames: enrichedData.applicantNames, basvuru_no: ipRecordData?.applicationNumber || "-" };
-      subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => params[k] ?? "");
-      body = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => params[k] ?? "");
+    if (!client) {
+        console.log(`⚠️ Client bilgisi bulunamadı!`);
     }
 
-    // ===============================================================
-    //  STATÜ BELİRLEME VE HASSAS ID KONTROLÜ
-    // ===============================================================
+    // --- ŞABLON EŞLEŞTİRME ---
+    const querySubType = after.subProcessType || templateSearchType || null; 
+    let subTypeOptions = [];
+    if (querySubType) {
+        subTypeOptions = [String(querySubType), Number(querySubType)].filter(v => !isNaN(v) || typeof v === 'string');
+        if (isNaN(Number(querySubType))) subTypeOptions = [String(querySubType)];
+    }
+
+    if (subTypeOptions.length > 0) {
+        const rulesSnapshot = await adminDb
+          .collection("template_rules")
+          .where("sourceType", "==", "document")
+          .where("subProcessType", "in", subTypeOptions) 
+          .get();
+
+        if (!rulesSnapshot.empty) {
+          let possibleMainTypes = [safeMainProcessType.toLowerCase()];
+          if (possibleMainTypes.includes('marka')) possibleMainTypes.push('trademark');
+          if (possibleMainTypes.includes('trademark')) possibleMainTypes.push('marka');
+          
+          let matchedDoc = rulesSnapshot.docs.find(doc => {
+              const ruleMainType = String(doc.data().mainProcessType || "").toLowerCase();
+              return possibleMainTypes.includes(ruleMainType);
+          });
+
+          if (!matchedDoc && rulesSnapshot.size > 0) matchedDoc = rulesSnapshot.docs[0];
+
+          if (matchedDoc) {
+             rule = matchedDoc.data();
+             const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
+             if (templateSnapshot.exists) template = templateSnapshot.data();
+          }
+        }
+    }
+
+    // İÇERİK OLUŞTURMA
+    if (template && client) {
+      subject = String(template.subject || "");
+      body    = String(template.body || "");
+      
+      const parameters = {
+        ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
+
+        muvekkil_adi: "Değerli Müvekkilimiz",
+        proje_adi: enrichedData.markName,
+        
+        epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
+        epats_konu: after.konu || "-",
+        
+        islem_turu_adi: finalIslemTanimlamasi, 
+        teblig_tarihi: enrichedData.tebligTarihiFormatted,
+        resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
+        
+        itiraz_sahibi: enrichedData.itirazSahibi, 
+        
+        // --- DİNAMİK PARAMETRELER (YENİ) ---
+        dava_son_tarihi: davaSonTarihi,
+        dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
+        
+        karar_sonucu_baslik: decisionAnalysis.resultText,
+        karar_durumu_metni: decisionAnalysis.statusText,
+        karar_durumu_renk: decisionAnalysis.statusColor,
+        aksiyon_kutusu_bg: decisionAnalysis.boxColor,
+        aksiyon_kutusu_border: decisionAnalysis.boxBorder,
+        karar_ozeti_detay: decisionAnalysis.summaryText + (decisionAnalysis.isLawsuitRequired ? "<br><br>Bu karara karşı belirtilen tarihe kadar <strong>YİDK Kararının İptali davası</strong> açma hakkınız bulunmaktadır." : "<br><br>Şu an için tarafınızca yapılması gereken bir işlem bulunmamaktadır."),
+        // ------------------------------------
+
+        applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
+        markName: enrichedData.markName,
+        markImageUrl: enrichedData.markImageUrl,
+        applicantNames: enrichedData.applicantNames,
+        classNumbers: enrichedData.classNumbers,
+        applicationDate: enrichedData.applicationDate,
+        basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
+      };
+
+      subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+    }
+
     const missingFields = [];
     if (!client) missingFields.push("client");
     if (!template) missingFields.push("template"); 
-    if (finalTo.length === 0 && finalCc.length === 0) missingFields.push("recipients");
+    if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
-    const isSensitiveTransaction = templateSearchType && SENSITIVE_TRANSACTION_IDS.includes(String(templateSearchType));
-    
-    // Eğer hem müvekkil hassas hem de işlem hassas ise statü 'evaluation_pending' olur.
+    // Hassas İşlem Tipleri Listesi
+    const SENSITIVE_TRANSACTION_IDS = ['7', '19', '49', '54'];
+    // Mevcut işlemin hassas olup olmadığını kontrol et
+    const isSensitiveTransaction = SENSITIVE_TRANSACTION_IDS.includes(String(templateSearchType));
+
     const finalStatus = missingFields.length > 0 
-        ? "missing_info" 
-        : (isEvaluationRequired && isSensitiveTransaction ? "evaluation_pending" : "awaiting_client_approval");
+    ? "missing_info" 
+    : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
 
-    const epatsAttachment = { storagePath: after.storagePath || null, downloadURL: after.downloadURL || null, fileName: after.name || "epats_document.pdf" };
-    let supplementaryAttachment = oppositionFileUrl ? { downloadURL: oppositionFileUrl, fileName: "Itiraz_Dilekcesi.pdf" } : null;
+    console.log(`📊 Durum Belirleme:`, {
+        missingFields,
+        isEvaluationRequired,
+        isSensitiveTransaction,
+        finalStatus
+    });
+
+    const epatsAttachment = {
+      storagePath: after.storagePath || null,
+      downloadURL: after.downloadURL || null,
+      fileName: after.name || "epats_document.pdf",
+    };
+
+    // EK DOSYA (Dilekçe) HAZIRLIĞI
+    let supplementaryAttachment = null;
+    if (oppositionFileUrl) {
+        supplementaryAttachment = {
+            downloadURL: oppositionFileUrl,
+            fileName: "Itiraz_Dilekcesi.pdf" 
+        };
+    }
 
     const notificationData = {
-      recipientTo: finalTo, recipientCc: finalCc, toList: finalTo, ccList: finalCc,
-      clientId: client?.id || after.clientId || null, subject, body, status: finalStatus, 
-      missingFields, sourceDocumentId: docId, notificationType, taskType: templateSearchType, 
-      taskOwner: taskOwnerIds, epatsAttachment, supplementaryAttachment,
-      assignedTo_uid: selcanUserId, assignedTo_email: selcanUserEmail,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      recipientTo: toRecipients || [],
+      recipientCc: ccRecipients || [],
+      toList: toRecipients || [], 
+      ccList: ccRecipients || [],
+      clientId: after.clientId || (applicants[0]?.id || null),
+      subject: subject || "",
+      body: body || "",
+      status: finalStatus, 
+      missingFields: missingFields || [],
+      sourceDocumentId: docId || null,
+      notificationType: notificationType || "marka",
+      taskType: templateSearchType || null,
+      taskOwner: taskOwnerIds || [], 
+      applicantName: (client && (client.name || client.companyName)) || null,
+      epatsAttachment, 
+      supplementaryAttachment,
+      assignedTo_uid: selcanUserId || null,
+      assignedTo_email: selcanUserEmail || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
 
-    // ===============================================================
-    //  ID 66 DEĞERLENDİRME İŞİ OLUŞTURMA (SAYAÇLI)
-    // ===============================================================
-    if (finalStatus === "evaluation_pending") {
-        try {
-            const countersRef = adminDb.collection('counters').doc('tasks');
-            const newTaskId = await adminDb.runTransaction(async (tx) => {
-                const snap = await tx.get(countersRef);
-                const last = snap.exists ? Number(snap.data()?.lastId || 0) : 0;
-                const next = last + 1;
-                tx.set(countersRef, { lastId: next }, { merge: true });
-                return String(next);
+    // --- GÜNCELLENMİŞ SAYAÇLI ID 66 OLUŞTURMA ---
+    console.log(`🔍 ID 66 Kontrol:`, {
+        isEvaluationRequired,
+        isSensitiveTransaction,
+        finalStatus,
+        templateSearchType,
+        willCreateTask: (isEvaluationRequired && isSensitiveTransaction && finalStatus === "evaluation_pending")
+    });
+
+    if (isEvaluationRequired && isSensitiveTransaction && finalStatus === "evaluation_pending") {
+        console.log(`🚀 ID 66 görevi oluşturuluyor...`);
+        
+        // 1. Task ID Sayacını (Counter) Artır ve Yeni ID'yi Al
+        const countersRef = adminDb.collection('counters').doc('tasks');
+        const newTaskId = await adminDb.runTransaction(async (tx) => {
+            const snap = await tx.get(countersRef);
+            const last = snap.exists ? Number(snap.data()?.lastId || 0) : 0;
+            const next = last + 1;
+            // Sayacı güncelle
+            tx.set(countersRef, { lastId: next }, { merge: true });
+            return String(next);
+        });
+
+        // 2. Atama Kuralını Çek
+        const assignmentSnap = await adminDb.collection("taskAssignments").doc("66").get();
+        const assignmentData = assignmentSnap.exists ? assignmentSnap.data() : {};
+        const assignedUid = (assignmentData.assigneeIds && assignmentData.assigneeIds[0]) || null;
+
+        if (assignedUid) {
+            const userSnap = await adminDb.collection("users").doc(assignedUid).get();
+            const assignedEmail = userSnap.exists ? userSnap.data().email : "";
+
+            // 3. Görevi Belirlenen Sayısal ID ile Kaydet
+            await adminDb.collection("tasks").doc(newTaskId).set({
+                id: newTaskId,
+                taskType: "66",
+                title: `Değerlendirme: ${subject}`,
+                description: `Müvekkil hassas gruptadır. Taslağı düzenleyip onaylayın.`,
+                status: "open",
+                mail_notification_id: notificationRef.id, 
+                relatedIpRecordId: recordId || null,
+                relatedIpRecordTitle: enrichedData.markName || "-",
+                assignedTo_uid: assignedUid,
+                assignedTo_email: assignedEmail,
+                priority: "high",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                history: [{
+                    action: 'Hassas müvekkil nedeniyle sayısal ID ile değerlendirme işi oluşturuldu.',
+                    timestamp: new Date().toISOString(),
+                    userEmail: 'system'
+                }]
             });
-
-            const assignmentSnap = await adminDb.collection("taskAssignments").doc("66").get();
-            const assignmentData = assignmentSnap.exists ? assignmentSnap.data() : {};
-            const assignedUid = (assignmentData.assigneeIds && assignmentData.assigneeIds[0]) || null;
-
-            if (assignedUid) {
-                const userSnap = await adminDb.collection("users").doc(assignedUid).get();
-                const assignedEmail = userSnap.exists ? userSnap.data().email : "";
-
-                await adminDb.collection("tasks").doc(newTaskId).set({
-                    id: newTaskId, taskType: "66", title: `Değerlendirme: ${subject}`,
-                    description: `Hassas işlem (${templateSearchType}) nedeniyle uzman onayı bekleniyor.`,
-                    status: "open", mail_notification_id: notificationRef.id, 
-                    relatedIpRecordId: recordId || null, relatedIpRecordTitle: enrichedData.markName || "-",
-                    assignedTo_uid: assignedUid, assignedTo_email: assignedEmail, priority: "high",
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    history: [{ action: 'Hassas müvekkil nedeniyle sayaçlı ID ile oluşturuldu.', timestamp: new Date().toISOString(), userEmail: 'system' }]
-                });
-                console.log(`✅ ID 66 Görevi sayısal ID (${newTaskId}) ile oluşturuldu.`);
-            }
-        } catch (transactionError) { console.error("❌ Task oluşturma hatası:", transactionError); }
+            console.log(`✅ ID 66 Görevi sayısal ID (${newTaskId}) ile oluşturuldu.`);
+        } else {
+            console.log(`⚠️ ID 66 görevi için atama bulunamadı! assignedUid: ${assignedUid}`);
+        }
+    } else {
+        console.log(`ℹ️ ID 66 görevi oluşturulmadı (koşullar sağlanmadı)`);
     }
-
-    console.log(`✅ Mail bildirimi oluşturuldu (${finalStatus}):`, subject);
+    
+    console.log(`✅ Mail bildirimi oluşturuldu (${finalStatus}):`, notificationData.subject);
     return null;
   }
 );
