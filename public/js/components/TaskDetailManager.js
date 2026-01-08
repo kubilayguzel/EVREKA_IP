@@ -35,6 +35,11 @@ export class TaskDetailManager {
     }
 
     render(task, options = {}) {
+
+        if (String(task.taskType) === '66') {
+            this._renderEvaluationEditor(task);
+            return;
+        }
         if (!this.container) return;
         if (!task) { this.showError('İş kaydı bulunamadı.'); return; }
 
@@ -311,5 +316,189 @@ export class TaskDetailManager {
 
         // 2. Eski Yapı: Tekil Sayı
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
+    }
+
+    async _renderEvaluationEditor(task) {
+    this.showLoading();
+    try {
+        // Firebase modüllerini dinamik yükle (Eğer sayfada yoksa)
+        const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const db = getFirestore();
+        
+        const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
+        if (!mailSnap.exists()) throw new Error("Mail taslağı bulunamadı.");
+        const mail = mailSnap.data();
+
+        this.container.innerHTML = `
+            <div class="card shadow-sm border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tasks mr-2"></i>Değerlendirme İşlemi (ID 66)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Müvekkile gönderilecek olan taslak metni aşağıdan düzenleyerek süreci tamamlayabilirsiniz.</p>
+                    <hr>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Mail Konusu:</label>
+                        <input type="text" class="form-control" value="${mail.subject}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-danger">Düzenlenecek Metin (Body):</label>
+                        <textarea id="eval-body-editor" class="form-control" rows="15" style="font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; line-height: 1.5;">${mail.body}</textarea>
+                    </div>
+                    <div class="text-right mt-4">
+                        <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow">
+                            <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Bitir ve Onaya Gönder
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
+    } catch (e) { this.showError("Hata: " + e.message); }
+}
+
+async _renderEvaluationEditor(task) {
+    this.showLoading();
+    try {
+        // Firebase modüllerini dinamik yükle (Eğer sayfada yoksa)
+        const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const db = getFirestore();
+        
+        const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
+        if (!mailSnap.exists()) throw new Error("Mail taslağı bulunamadı.");
+        const mail = mailSnap.data();
+
+        this.container.innerHTML = `
+            <div class="card shadow-sm border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tasks mr-2"></i>Değerlendirme İşlemi (ID 66)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Müvekkile gönderilecek olan taslak metni aşağıdan düzenleyerek süreci tamamlayabilirsiniz.</p>
+                    <hr>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Mail Konusu:</label>
+                        <input type="text" class="form-control" value="${mail.subject}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-danger">Düzenlenecek Metin (Body):</label>
+                        <textarea id="eval-body-editor" class="form-control" rows="15" style="font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; line-height: 1.5;">${mail.body}</textarea>
+                    </div>
+                    <div class="text-right mt-4">
+                        <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow">
+                            <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Bitir ve Onaya Gönder
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
+    } catch (e) { this.showError("Hata: " + e.message); }
+}
+
+async _renderEvaluationEditor(task) {
+    this.showLoading();
+    try {
+        // Firebase modüllerini dinamik yükle (Eğer sayfada yoksa)
+        const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const db = getFirestore();
+        
+        const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
+        if (!mailSnap.exists()) throw new Error("Mail taslağı bulunamadı.");
+        const mail = mailSnap.data();
+
+        this.container.innerHTML = `
+            <div class="card shadow-sm border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tasks mr-2"></i>Değerlendirme İşlemi (ID 66)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Müvekkile gönderilecek olan taslak metni aşağıdan düzenleyerek süreci tamamlayabilirsiniz.</p>
+                    <hr>
+                    <div class="form-group">
+                        <label class="font-weight-bold">Mail Konusu:</label>
+                        <input type="text" class="form-control" value="${mail.subject}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-danger">Düzenlenecek Metin (Body):</label>
+                        <textarea id="eval-body-editor" class="form-control" rows="15" style="font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; line-height: 1.5;">${mail.body}</textarea>
+                    </div>
+                    <div class="text-right mt-4">
+                        <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow">
+                            <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Bitir ve Onaya Gönder
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
+    } catch (e) { this.showError("Hata: " + e.message); }
+}
+
+    async _renderEvaluationEditor(task) {
+        this.showLoading();
+        try {
+            // Firebase modüllerini dinamik yükle (Eğer sayfada yoksa)
+            const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            const db = getFirestore();
+            
+            const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
+            if (!mailSnap.exists()) throw new Error("Mail taslağı bulunamadı.");
+            const mail = mailSnap.data();
+
+            this.container.innerHTML = `
+                <div class="card shadow-sm border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-tasks mr-2"></i>Değerlendirme İşlemi (ID 66)</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Müvekkile gönderilecek olan taslak metni aşağıdan düzenleyerek süreci tamamlayabilirsiniz.</p>
+                        <hr>
+                        <div class="form-group">
+                            <label class="font-weight-bold">Mail Konusu:</label>
+                            <input type="text" class="form-control" value="${mail.subject}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="font-weight-bold text-danger">Düzenlenecek Metin (Body):</label>
+                            <textarea id="eval-body-editor" class="form-control" rows="15" style="font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; line-height: 1.5;">${mail.body}</textarea>
+                        </div>
+                        <div class="text-right mt-4">
+                            <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow">
+                                <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Bitir ve Onaya Gönder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
+        } catch (e) { this.showError("Hata: " + e.message); }
+    }
+
+    async _submitEvaluation(task) {
+        const newBody = document.getElementById('eval-body-editor').value;
+        const { getFirestore, doc, updateDoc, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const db = getFirestore();
+
+        try {
+            // 1. Mail bildirimini güncelle ve statüsünü ilerlet
+            await updateDoc(doc(db, "mail_notifications", task.mail_notification_id), {
+                body: newBody,
+                status: "awaiting_client_approval", // Değerlendirme bitti, normal onay akışına dön
+                updatedAt: Timestamp.now()
+            });
+
+            // 2. Değerlendirme görevini kapat
+            await updateDoc(doc(db, "tasks", task.id), {
+                status: "completed",
+                updatedAt: Timestamp.now()
+            });
+
+            alert("Değerlendirme başarıyla kaydedildi. Mail gönderim onayına düştü.");
+            window.location.reload();
+        } catch (e) { alert("Güncelleme hatası: " + e.message); }
     }
 }
