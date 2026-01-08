@@ -965,6 +965,7 @@ const handleNoteCellClick = (cell) => {
     modal.classList.add('show');
     noteInput.focus();
 };
+
 const handleOwnerReportGeneration = async (event) => {
     event.stopPropagation();
     const btn = event.currentTarget;
@@ -993,6 +994,7 @@ const handleOwnerReportGeneration = async (event) => {
         for (const r of filteredResults) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
             let ipData = null;
+            let bulletinDateValue = "-";
 
             // 1. İlişkili IP Kaydını (ipRecords) Çek
             if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
@@ -1002,30 +1004,31 @@ const handleOwnerReportGeneration = async (event) => {
                     if (ipDoc.exists()) ipData = ipDoc.data();
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
-            // Bülten Tarihini Çek (trademarkBulletins tablosundan)
+
+            // 2. Bülten Tarihini Çek (trademarkBulletins tablosundan)
             if (r.bulletinId) {
                 try {
                     const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
                     if (bulletinDoc.exists()) {
                         const bulletinData = bulletinDoc.data();
-                        bulletinDateValue = bulletinData.bulletinDate || "-";
+                        bulletinDateValue = bulletinData.bulletinDate || r.bulletinDate || r.applicationDate || "-";
+                    } else {
+                        bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
                     }
                 } catch (e) { 
                     console.error("Bulletin fetch error:", e);
-                    // Fallback: r.bulletinDate veya applicationDate kullan
                     bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
                 }
             } else {
                 bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
             }
 
-            // 2. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            // 3. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
             let ownerNameStr = "-";
             if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
                 const ownerNames = [];
                 for (const applicant of ipData.applicants) {
                     if (applicant.id) {
-                        // persons tablosundan ismi çek
                         const person = allPersons.find(p => p.id === applicant.id);
                         if (person) {
                             ownerNames.push(person.name || person.companyName || applicant.id);
@@ -1038,32 +1041,30 @@ const handleOwnerReportGeneration = async (event) => {
                 }
                 ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
             } else {
-                // Fallback: _pickOwners kullan
                 ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
             }
 
-            // 3. Marka Adı (ipData.title veya brandText öncelikli)
+            // 4. Marka Adı (ipData.title veya brandText öncelikli)
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
 
-            // 4. Görsel (ipData.brandImageUrl öncelikli)
+            // 5. Görsel (ipData.brandImageUrl öncelikli)
             const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
 
-            // 5. Başvuru Numarası
+            // 6. Başvuru Numarası
             const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
 
-            // 6. Başvuru Tarihi (Formatlama)
+            // 7. Başvuru Tarihi
             let monitoredAppDate = "-";
             const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
             if (rawDate) {
-                // String "2022-03-17" gelirse veya Timestamp gelirse işle
                 if (typeof rawDate === 'string') {
-                    monitoredAppDate = rawDate.split('-').reverse().join('.'); // 2022-03-17 -> 17.03.2022
+                    monitoredAppDate = rawDate.split('-').reverse().join('.');
                 } else {
                     monitoredAppDate = _pickAppDate(ipData, monitoredTm);
                 }
             }
 
-            // 7. Nice Sınıfları (ipData.niceClasses veya goodsAndServicesByClass)
+            // 8. Nice Sınıfları
             let monitoredClasses = [];
             if (ipData?.niceClasses) {
                 monitoredClasses = ipData.niceClasses;
@@ -1073,18 +1074,15 @@ const handleOwnerReportGeneration = async (event) => {
                 monitoredClasses = _uniqNice(monitoredTm);
             }
 
-            // VERİ PAKETİNİ OLUŞTUR
             reportData.push({
                 monitoredMark: {
-                    name: monitoredName,                // DÜZELTİLDİ: Artık doğru isim
+                    name: monitoredName,
                     markName: monitoredName,
-                    imagePath: monitoredImg,            // DÜZELTİLDİ: ipRecord görseli
-                    ownerName: ownerNameStr,            // DÜZELTİLDİ: ipRecord sahipleri
-                    applicationNo: monitoredAppNo,      // DÜZELTİLDİ
-                    applicationDate: monitoredAppDate,  // DÜZELTİLDİ
-                    niceClasses: monitoredClasses,
-                    registrationNo: ipData?.registrationNumber || "-",
-                    registrationDate: ipData?.registrationDate || "-"
+                    imagePath: monitoredImg,
+                    ownerName: ownerNameStr,
+                    applicationNo: monitoredAppNo,
+                    applicationDate: monitoredAppDate,
+                    niceClasses: monitoredClasses
                 },
                 similarMark: {
                     name: r.markName,
@@ -1096,9 +1094,7 @@ const handleOwnerReportGeneration = async (event) => {
                     bulletinDate: bulletinDateValue,
                     similarity: r.similarityScore,
                     holders: r.holders || [],
-                    owner: r.holders?.[0]?.name || "-",
                     ownerName: r.holders?.[0]?.name || "-",
-                    objectionDeadline: r.objectionDeadline || "-",
                     bs: r.bs || null,
                     note: r.note || null
                 }
@@ -1129,6 +1125,7 @@ const handleOwnerReportGeneration = async (event) => {
         btn.innerHTML = '<i class="fas fa-file-pdf"></i> Rapor';
     }
 };
+
 const handleOwnerReportAndNotifyGeneration = async (event) => {
     event.stopPropagation();
     const btn = event.currentTarget;
@@ -1157,6 +1154,8 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         let createdTaskCount = 0;
         const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
         const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+        
+        // İtiraz görevlerini oluştur
         for (let i = 0; i < filteredResults.length; i++) {
             const r = filteredResults[i];
             try {
@@ -1191,39 +1190,42 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                 }
             } catch (e) {}
         }
+        
+        // Rapor oluştur
         const reportData = [];
-            for (const r of filteredResults) {
-                const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-                let ipData = null;
-                let bulletinDateValue = "-";
+        for (const r of filteredResults) {
+            const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+            let ipData = null;
+            let bulletinDateValue = "-";
 
-                // IP Kaydını Çek
-                if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
-                    try {
-                        const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
-                        const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
-                        if (ipDoc.exists()) ipData = ipDoc.data();
-                    } catch (e) { console.error("IP Record fetch error:", e); }
-                }
+            // 1. İlişkili IP Kaydını (ipRecords) Çek
+            if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
+                try {
+                    const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
+                    const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
+                    if (ipDoc.exists()) ipData = ipDoc.data();
+                } catch (e) { console.error("IP Record fetch error:", e); }
+            }
 
-                // Bülten Tarihini Çek (trademarkBulletins tablosundan)
-                if (r.bulletinId) {
-                    try {
-                        const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
-                        if (bulletinDoc.exists()) {
-                            const bulletinData = bulletinDoc.data();
-                            bulletinDateValue = bulletinData.bulletinDate || "-";
-                        }
-                    } catch (e) { 
-                        console.error("Bulletin fetch error:", e);
-                        // Fallback: r.bulletinDate veya applicationDate kullan
+            // 2. Bülten Tarihini Çek (trademarkBulletins tablosundan)
+            if (r.bulletinId) {
+                try {
+                    const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
+                    if (bulletinDoc.exists()) {
+                        const bulletinData = bulletinDoc.data();
+                        bulletinDateValue = bulletinData.bulletinDate || r.bulletinDate || r.applicationDate || "-";
+                    } else {
                         bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
                     }
-                } else {
+                } catch (e) { 
+                    console.error("Bulletin fetch error:", e);
                     bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
                 }
+            } else {
+                bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+            }
 
-            // Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            // 3. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
             let ownerNameStr = "-";
             if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
                 const ownerNames = [];
@@ -1243,10 +1245,17 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
             } else {
                 ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
             }
+
+            // 4. Marka Adı (ipData.title veya brandText öncelikli)
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
+
+            // 5. Görsel (ipData.brandImageUrl öncelikli)
             const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+
+            // 6. Başvuru Numarası
             const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
 
+            // 7. Başvuru Tarihi
             let monitoredAppDate = "-";
             const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
             if (rawDate) {
@@ -1257,6 +1266,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                 }
             }
 
+            // 8. Nice Sınıfları
             let monitoredClasses = [];
             if (ipData?.niceClasses) {
                 monitoredClasses = ipData.niceClasses;
@@ -1286,10 +1296,13 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
                     bulletinDate: bulletinDateValue,
                     similarity: r.similarityScore,
                     holders: r.holders || [],
-                    ownerName: r.holders?.[0]?.name || "-"
+                    ownerName: r.holders?.[0]?.name || "-",
+                    bs: r.bs || null,
+                    note: r.note || null
                 }
             });
         }
+        
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({
             results: reportData
@@ -1322,6 +1335,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor + Bildir';
     }
 };
+
 const handleGlobalReportAndNotifyGeneration = async (event) => {
     const btn = event.currentTarget;
     const bulletinKey = document.getElementById('bulletinSelect')?.value;
@@ -1342,6 +1356,8 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
         let createdTaskCount = 0;
         const candidates = allFilteredSimilarResults.filter(r => r?.monitoredTrademarkId && r?.applicationNo && r?.markName);
+        
+        // İtiraz görevlerini oluştur
         for (let i = 0; i < candidates.length; i++) {
             const r = candidates[i];
             try {
@@ -1394,12 +1410,15 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 }
             } catch (e) {}
         }
+        
+        // Rapor oluştur
         const reportData = [];
         for (const r of candidates) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
             let ipData = null;
+            let bulletinDateValue = "-";
 
-            // IP Kaydını Çek
+            // 1. İlişkili IP Kaydını (ipRecords) Çek
             if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
                 try {
                     const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
@@ -1408,7 +1427,25 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 } catch (e) { console.error("IP Record fetch error:", e); }
             }
 
-            // Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
+            // 2. Bülten Tarihini Çek (trademarkBulletins tablosundan)
+            if (r.bulletinId) {
+                try {
+                    const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
+                    if (bulletinDoc.exists()) {
+                        const bulletinData = bulletinDoc.data();
+                        bulletinDateValue = bulletinData.bulletinDate || r.bulletinDate || r.applicationDate || "-";
+                    } else {
+                        bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                    }
+                } catch (e) { 
+                    console.error("Bulletin fetch error:", e);
+                    bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                }
+            } else {
+                bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+            }
+
+            // 3. Sahip Bilgisini Çözümle (ipData.applicants -> persons tablosundan isim al)
             let ownerNameStr = "-";
             if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
                 const ownerNames = [];
@@ -1428,10 +1465,17 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
             } else {
                 ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
             }
+
+            // 4. Marka Adı (ipData.title veya brandText öncelikli)
             const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
+
+            // 5. Görsel (ipData.brandImageUrl öncelikli)
             const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+
+            // 6. Başvuru Numarası
             const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
 
+            // 7. Başvuru Tarihi
             let monitoredAppDate = "-";
             const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
             if (rawDate) {
@@ -1442,6 +1486,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 }
             }
 
+            // 8. Nice Sınıfları
             let monitoredClasses = [];
             if (ipData?.niceClasses) {
                 monitoredClasses = ipData.niceClasses;
@@ -1477,6 +1522,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                 }
             });
         }
+        
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({
             results: reportData
@@ -1507,6 +1553,8 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor + Bildir';
     }
 };
+
+
 const addGlobalOptionToBulletinSelect = () => {
     const select = document.getElementById('bulletinSelect');
     if (!select) return;
