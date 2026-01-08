@@ -2014,19 +2014,26 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (!template) missingFields.push("template"); 
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
-    // Hassas İşlem Tipleri Listesi
-    const SENSITIVE_TRANSACTION_IDS = ['7', '19', '49', '54'];
-    // Mevcut işlemin hassas olup olmadığını kontrol et
-    const isSensitiveTransaction = SENSITIVE_TRANSACTION_IDS.includes(String(templateSearchType));
+    // Hassas Task Type'ları (Tetiklenen İşlerin ID'leri)
+    const SENSITIVE_TASK_TYPES = ['7', '19', '49', '54'];
+
+    // Tetiklenen task'ın type'ını kontrol et
+    let triggeringTaskType = null;
+    if (fetchedTaskData?.taskType) {
+        triggeringTaskType = String(fetchedTaskData.taskType);
+    }
+
+    const isSensitiveTask = triggeringTaskType ? SENSITIVE_TASK_TYPES.includes(triggeringTaskType) : false;
 
     const finalStatus = missingFields.length > 0 
-    ? "missing_info" 
-    : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
+        ? "missing_info" 
+        : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
 
     console.log(`📊 Durum Belirleme:`, {
         missingFields,
         isEvaluationRequired,
-        isSensitiveTransaction,
+        isSensitiveTask,
+        triggeringTaskType,
         finalStatus
     });
 
@@ -2070,16 +2077,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
 
-    // --- GÜNCELLENMİŞ SAYAÇLI ID 66 OLUŞTURMA ---
     console.log(`🔍 ID 66 Kontrol:`, {
         isEvaluationRequired,
-        isSensitiveTransaction,
+        isSensitiveTask,
+        triggeringTaskType,
         finalStatus,
-        templateSearchType,
-        willCreateTask: (isEvaluationRequired && isSensitiveTransaction && finalStatus === "evaluation_pending")
+        willCreateTask: (isEvaluationRequired && isSensitiveTask && finalStatus === "evaluation_pending")
     });
 
-    if (isEvaluationRequired && isSensitiveTransaction && finalStatus === "evaluation_pending") {
+    if (isEvaluationRequired && isSensitiveTask && finalStatus === "evaluation_pending") {
         console.log(`🚀 ID 66 görevi oluşturuluyor...`);
         
         // 1. Task ID Sayacını (Counter) Artır ve Yeni ID'yi Al
