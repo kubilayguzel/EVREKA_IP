@@ -1058,6 +1058,7 @@ const buildReportData = async (results) => {
 
         reportData.push({
             monitoredMark: {
+                clientId: monitoredTm?.clientId || ipData?.clientId || null,
                 name: monitoredName,
                 markName: monitoredName,
                 imagePath: monitoredImg,
