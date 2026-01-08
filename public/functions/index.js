@@ -4233,10 +4233,8 @@ export const generateSimilarityReport = onCall(
     logger.log("🚀 [WATCH-NOTICE] generateSimilarityReport BAŞLADI.");
     try {
       const { results, bulletinNo } = request.data;
-
       if (!results || !Array.isArray(results)) throw new Error("Geçersiz veri formatı");
 
-      // --- 1. Müvekkil Bazında Gruplama ---
       const owners = {};
       results.forEach((m) => {
         const ownerName = (m.monitoredMark && m.monitoredMark.ownerName) || "Bilinmeyen Sahip";
@@ -4248,90 +4246,75 @@ export const generateSimilarityReport = onCall(
       const passthrough = new stream.PassThrough();
       globalArchive.pipe(passthrough);
 
-      // --- 2. DÖNGÜ: Her Müvekkil İçin Rapor ve Bildirim ---
       for (const [ownerNameKey, matches] of Object.entries(owners)) {
-        
-        // Word Raporu Oluştur (docBuffer hazır)
+        // 1. Raporu Oluştur (docBuffer)
         const doc = await createProfessionalReport(ownerNameKey, matches);
         const docBuffer = await Packer.toBuffer(doc);
-        
-        // Tarayıcıya inecek olan GLOBAL ZIP içine dökümanı ekle
         globalArchive.append(docBuffer, { name: `${sanitizeFileName(ownerNameKey)}_Benzerlik_Raporu.docx` });
 
         const targetClientId = matches[0]?.monitoredMark?.clientId;
         
         if (targetClientId && bulletinNo) {
           try {
-            // A) MÜKERRER KONTROLÜ
+            // Mükerrer Kontrolü
             const existing = await adminDb.collection("mail_notifications")
               .where("clientId", "==", targetClientId)
               .where("bulletinNo", "==", String(bulletinNo))
               .where("source", "==", "bulletin_watch_system")
               .limit(1).get();
 
-            if (!existing.empty) {
-              logger.info(`ℹ️ Mükerrer: ${ownerNameKey} için zaten bildirim var.`);
-              continue;
-            }
+            if (!existing.empty) continue;
 
-            // B) MÜVEKKİL ADI ÇÖZÜMLEME
+            // Müvekkil Adı Çözümleme
             let displayClientName = ownerNameKey;
             const personDoc = await adminDb.collection("persons").doc(targetClientId).get();
             if (personDoc.exists) {
               displayClientName = personDoc.data().name || personDoc.data().companyName || displayClientName;
             }
 
-            // C) İTİRAZ SON TARİHİ HESAPLA
-            let objectionDeadline = "-";
-            try {
-              const bDateStr = matches[0]?.similarMark?.bulletinDate || matches[0]?.similarMark?.applicationDate;
-              if (bDateStr) {
-                const parts = bDateStr.split(/[./-]/);
-                const bDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-                if (!isNaN(bDate.getTime())) {
-                  const rawDue = addMonthsToDate(bDate, 2);
-                  const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
-                  objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
-                }
-              }
-            } catch (e) { logger.warn("Tarih hesaplama hatası:", e); }
-
-            // D) RAPORU WORD (.docx) OLARAK STORAGE'A KAYDET
-            // ZIP paketleme (AdmZip) kaldırıldı, docBuffer doğrudan kaydediliyor.
+            // [STORAGE GÜNCELLEME] WORD OLARAK KAYDET VE URL OLUŞTUR
             const reportFileName = `${bulletinNo}_${sanitizeFileName(displayClientName)}_Izleme_Raporu.docx`;
             const storagePath = `bulletin_reports/${bulletinNo}/${targetClientId}/${Date.now()}_${reportFileName}`;
-            
-            await admin.storage().bucket().file(storagePath).save(docBuffer, { 
+            const file = admin.storage().bucket().file(storagePath);
+
+            await file.save(docBuffer, { 
                 contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
             });
 
-            // E) ŞABLON ÇEKME VE YERLEŞTİRME
-            const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
-            
-            let subject = `${bulletinNo} Sayılı Bülten İzleme Raporu`;
-            let body = `<p>Raporunuz ekte sunulmuştur.</p>`;
+            // SIGNED URL OLUŞTUR (Frontend bu linki kullanarak dosyayı gösterir)
+            const [signedUrl] = await file.getSignedUrl({
+                action: 'read',
+                expires: '01-01-2099' 
+            });
 
-            if (templateSnap.exists) {
-              const tmpl = templateSnap.data();
-              subject = tmpl.subject || subject;
-              body = tmpl.body || body;
-
-              const replacements = {
-                "{{bulletinNo}}": String(bulletinNo),
-                "{{muvekkil_adi}}": displayClientName,
-                "{{objection_deadline}}": objectionDeadline
-              };
-
-              for (const [key, val] of Object.entries(replacements)) {
-                subject = subject.split(key).join(val);
-                body = body.split(key).join(val);
-              }
+            // Şablon ve Replacements... (Aynı kalıyor)
+            let objectionDeadline = "-"; // (Yukarıdaki tarih hesaplama mantığı burada da kullanılabilir)
+            const bDateStr = matches[0]?.similarMark?.bulletinDate || matches[0]?.similarMark?.applicationDate;
+            if (bDateStr) {
+                const parts = bDateStr.split(/[./-]/);
+                const bDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                if (!isNaN(bDate.getTime())) {
+                    const rawDue = addMonthsToDate(bDate, 2);
+                    const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+                    objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
+                }
             }
 
-            // F) ALICILARI BUL
+            const replacements = { "{{bulletinNo}}": String(bulletinNo), "{{muvekkil_adi}}": displayClientName, "{{objection_deadline}}": objectionDeadline };
+            const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
+            let subject = `${bulletinNo} Sayılı Bülten İzleme Raporu`;
+            let body = `<p>Raporunuz ekte sunulmuştur.</p>`;
+            if (templateSnap.exists) {
+                const tmpl = templateSnap.data();
+                subject = tmpl.subject || subject; body = tmpl.body || body;
+                for (const [key, val] of Object.entries(replacements)) {
+                    subject = subject.split(key).join(val); body = body.split(key).join(val);
+                }
+            }
+
             const recipients = await getRecipientsByApplicantIds([{ id: targetClientId }], "marka");
 
-            // G) BİLDİRİMİ KAYDET
+            // [FIRESTORE GÜNCELLEME] URL'li Kayıt
             await adminDb.collection("mail_notifications").add({
               clientId: targetClientId,
               applicantName: displayClientName,
@@ -4343,24 +4326,18 @@ export const generateSimilarityReport = onCall(
               status: "awaiting_client_approval",
               mode: "draft",
               isDraft: true,
-              templateId: "tmpl_watchnotice",
               notificationType: "marka",
               source: "bulletin_watch_system",
               assignedTo_uid: selcanUserId,
               assignedTo_email: selcanUserEmail,
-              supplementaryAttachment: { 
-                  storagePath, 
-                  fileName: reportFileName // Dosya artık .docx uzantılı
-              },
+              attachmentUrl: signedUrl, // En üst seviye URL (Listedeki ikon için)
+              supplementaryAttachment: { storagePath, fileName: reportFileName, url: signedUrl },
+              files: [{ storagePath, fileName: reportFileName, url: signedUrl, downloadUrl: signedUrl }],
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            logger.info(`✅ [SUCCESS] Word bildirimi oluşturuldu: ${displayClientName}`);
-
-          } catch (loopErr) {
-            logger.error(`❌ [LOOP-ERROR] ${ownerNameKey} işlenirken hata:`, loopErr);
-          }
+          } catch (loopErr) { logger.error(`❌ [LOOP-ERROR]:`, loopErr); }
         }
       }
 
@@ -4451,8 +4428,7 @@ async function downloadImageAsBuffer(imagePath) {
   }
 }
 
-// Profesyonel Karşılaştırma Raporu (PRESTİJ MODERN MAVİ - REVİZE SÜRÜM)
-// Profesyonel Karşılaştırma Raporu (PRESTİJ MODERN MAVİ - FONT & RENK REVİZE)
+// Profesyonel Karşılaştırma Raporu (MODERN MAVİ - 9 PUNTO & BOLD REVİZE)
 async function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
@@ -4462,7 +4438,7 @@ async function createComparisonPage(group) {
   const tableRows = [];
   
   const FONT_FAMILY = "Montserrat";
-  const GLOBAL_FONT_SIZE = 18; // 9 Punto (Docx'te 18 yarım-puntoya eşittir)
+  const GLOBAL_FONT_SIZE = 18; // 9 Punto
   
   const COLORS = {
     CLIENT_HEADER: "1E40AF",    // Müvekkil (Safir Mavi)
@@ -4471,7 +4447,7 @@ async function createComparisonPage(group) {
     NICE_BG: "F1F5F9",          // Nice Sınıf Arka Plan
     BORDER_LIGHT: "E2E8F0",     // Kenarlıklar
     DEADLINE_BG: "DBEAFE",      // Alt Panel Arka Plan (Açık Mavi)
-    DEADLINE_TEXT: "1E40AF",    // Koyu Mavi Yazı ve Vurgular
+    DEADLINE_TEXT: "1E40AF",    // Koyu Mavi Yazı
     EXPERT_BG: "F8FAFC",        // Uzman Görüşü Arka Plan
     EXPERT_BORDER: "1E40AF"     // Uzman Görüşü Kenarlık
   };
@@ -4482,14 +4458,12 @@ async function createComparisonPage(group) {
     const bulletinDateStr = similarMark.bulletinDate || similarMark.applicationDate;
     if (bulletinDateStr) {
       let bulletinDate;
-      if (bulletinDateStr.includes('/')) {
-          const [day, month, year] = bulletinDateStr.split('/');
-          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      } else if (bulletinDateStr.includes('.')) {
-          const [day, month, year] = bulletinDateStr.split('.');
-          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      } else if (bulletinDateStr.includes('-')) {
-          bulletinDate = new Date(bulletinDateStr);
+      const parts = bulletinDateStr.split(/[./-]/);
+      if(parts.length === 3) {
+          // DD.MM.YYYY parse mantığı
+          bulletinDate = parts[2].length === 4 
+            ? new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
+            : new Date(bulletinDateStr);
       }
       if (bulletinDate && !isNaN(bulletinDate.getTime())) {
         const rawDue = addMonthsToDate(bulletinDate, 2);
@@ -4515,12 +4489,14 @@ async function createComparisonPage(group) {
           children: [
             new Paragraph({
               children: [ new TextRun({ text: "MÜVEKKİL MARKASI", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 100, after: 50 }
+              alignment: AlignmentType.CENTER, spacing: { before: 100, after: 50 }
+            }),
+            new Paragraph({
+              children: [ new TextRun({ text: "(İZLENEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER, spacing: { after: 100 }
             })
           ],
-          shading: { fill: COLORS.CLIENT_HEADER },
-          verticalAlign: "center",
+          shading: { fill: COLORS.CLIENT_HEADER }, verticalAlign: "center",
           borders: { right: { style: "single", size: 6, color: "FFFFFF" } }
         }),
         new TableCell({
@@ -4528,48 +4504,44 @@ async function createComparisonPage(group) {
           children: [
             new Paragraph({
               children: [ new TextRun({ text: "BENZER MARKA", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 100, after: 50 }
+              alignment: AlignmentType.CENTER, spacing: { before: 100, after: 50 }
+            }),
+            new Paragraph({
+              children: [ new TextRun({ text: "(BÜLTEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER, spacing: { after: 100 }
             })
           ],
-          shading: { fill: COLORS.SIMILAR_HEADER },
-          verticalAlign: "center"
+          shading: { fill: COLORS.SIMILAR_HEADER }, verticalAlign: "center"
         })
       ]
     })
   );
 
-  // ============ 2. GÖRSEL ALANLARI ============
+  // ============ 2. GÖRSEL ALANLARI (İSİMLER KALDIRILDI) ============
   const createVisualCell = (imageBuffer) => {
     const content = [];
     if (imageBuffer) {
         try {
             content.push(new Paragraph({
                 children: [ new ImageRun({ data: imageBuffer, transformation: { width: 160, height: 160 } }) ],
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 150, after: 150 }
+                alignment: AlignmentType.CENTER, spacing: { before: 150, after: 150 }
             }));
         } catch (e) { }
     } else {
-        content.push(
-          new Paragraph({
+        content.push(new Paragraph({
             children: [ new TextRun({ text: "(Görsel Yok)", size: GLOBAL_FONT_SIZE, color: "94A3B8", italics: true, font: FONT_FAMILY }) ],
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 200, after: 200 }
-          })
-        );
+            alignment: AlignmentType.CENTER, spacing: { before: 200, after: 200 }
+        }));
     }
     return new TableCell({ 
-        children: content, 
-        verticalAlign: "center",
-        shading: { fill: "FFFFFF" },
+        children: content, verticalAlign: "center", shading: { fill: "FFFFFF" },
         borders: { bottom: { style: "single", size: 4, color: COLORS.BORDER_LIGHT } }
     });
   };
 
   tableRows.push(new TableRow({ children: [createVisualCell(monitoredImageBuffer), createVisualCell(similarImageBuffer)] }));
 
-  // ============ 3. VERİ SATIRLARI (9 PUNTO SABİT) ============
+  // ============ 3. VERİ SATIRLARI (9 PUNTO) ============
   const createInfoRow = (label, val1, val2, bgColor = "FFFFFF") => {
     return new TableRow({
       children: [
@@ -4612,7 +4584,7 @@ async function createComparisonPage(group) {
         new TableCell({
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "İTİRAZ İÇİN SON TARİH", bold: false, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
+              children: [ new TextRun({ text: "İTİRAZ İÇİN SON TARİH", size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 }
             }),
             new Paragraph({
@@ -4626,16 +4598,14 @@ async function createComparisonPage(group) {
         new TableCell({
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "İTİRAZ BAŞARI ŞANSI", bold: false, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
+              children: [ new TextRun({ text: "İTİRAZ BAŞARI ŞANSI", size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 }
             }),
             new Paragraph({
               children: [
                 new TextRun({ 
                   text: successChance ? (successChance.includes('%') ? successChance : `%${successChance}`) : "-", 
-                  bold: true, size: GLOBAL_FONT_SIZE, 
-                  color: COLORS.DEADLINE_TEXT, // Renk sabit mavi yapıldı
-                  font: FONT_FAMILY
+                  bold: true, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY
                 })
               ],
               alignment: AlignmentType.CENTER, spacing: { after: 120 }
@@ -4663,7 +4633,6 @@ async function createComparisonPage(group) {
 
   elements.push(comparisonTable);
 
-  // ============ 5. UZMAN DEĞERLENDİRMESİ (9 PUNTO) ============
   if (similarMark.note && String(similarMark.note).trim() !== "") {
     elements.push(new Paragraph({ text: "", spacing: { after: 150 } }));
     let logoBuffer = null;
