@@ -547,77 +547,85 @@ async function resolveDocumentInfo(notification) {
   }
 }
 
-    // ---------- Attachment helper (unified: task->EPATS + unindexed_pdfs) ----------
-async function getAttachmentPreviews(notification) {
-  // Returns array of { fileName, fileUrl } items for UI display.
-  const previews = [];
+  // public/notifications.html içindeki fonksiyonu bu tam sürümle değiştirin
 
-  const safeName = (name, defaultName = "ek.pdf") =>
-    String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
+  async function getAttachmentPreviews(notification) {
+    // UI'da görüntülenecek { fileName, fileUrl } objelerini döndürür
+    const previews = [];
 
-  // A) Task -> EPATS (createUniversalNotificationOnTaskCompleteV2)
-  if (notification?.associatedTaskId) {
-    try {
-      const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
-      if (tSnap.exists()) {
-        const epats = (tSnap.data()?.details || {}).epatsDocument || null;
-        if (epats) {
-          const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
-          const fileName = safeName(epats.name, "epats.pdf");
-          previews.push({ fileName, fileUrl: fileUrl || null });
-        }
-      }
-    } catch (e) {
-      console.warn("getAttachmentPreviews task EPATS error:", e);
+    const safeName = (name, defaultName = "ek.pdf") =>
+      String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
+
+    // --- YENİ: Marka Benzerlik Raporları ve Doğrudan Ekler ---
+    
+    // 1. Doğrudan attachmentUrl alanı (Signed URL buradadır)
+    if (notification?.attachmentUrl) {
+      previews.push({
+        fileName: safeName(notification.attachmentName || notification.fileName || "Izleme_Raporu.docx"),
+        fileUrl: notification.attachmentUrl
+      });
     }
-  }
 
-  // B) unindexed_pdfs (createMailNotificationOnDocumentStatusChangeV2)
-  if (notification?.sourceDocumentId) {
-    try {
-      const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
-      if (u.exists()) {
-        const d = u.data() || {};
-        const fileName = safeName(d.fileName, "document.pdf");
-        const fileUrl  = d.fileUrl || d.downloadURL || null;
-        // avoid duplicates by url
-        if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
-          previews.push({ fileName, fileUrl });
+    // 2. files dizisi (Dizi formatında tutulan ekler)
+    if (Array.isArray(notification?.files)) {
+      notification.files.forEach(f => {
+        const url = f.url || f.downloadUrl || null;
+        if (url && !previews.some(p => p.fileUrl === url)) {
+          previews.push({
+            fileName: safeName(f.name || f.fileName || "ek.docx"),
+            fileUrl: url
+          });
         }
-      } else {
-        // Optional: indexed_documents -> find matching unindexed_pdfs by (evrakNo, userId)
-        try {
-          const idx = await getDoc(doc(db, "indexed_documents", notification.sourceDocumentId));
-          if (idx.exists()) {
-            const ix = idx.data() || {};
-            const qy = query(
-              collection(db, "unindexed_pdfs"),
-              where("evrakNo", "==", ix.etebsEvrakNo || null),
-              where("userId", "==", ix.userId || null),
-              limit(1)
-            );
-            const snap = await getDocs(qy);
-            if (!snap.empty) {
-              const ux = snap.docs[0].data() || {};
-              const fileName = safeName(ux.fileName, "document.pdf");
-              const fileUrl  = ux.fileUrl || ux.downloadURL || null;
-              if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
-                previews.push({ fileName, fileUrl });
-              }
+      });
+    }
+
+    // 3. supplementaryAttachment alanı
+    if (notification?.supplementaryAttachment?.url) {
+      const sUrl = notification.supplementaryAttachment.url;
+      if (!previews.some(p => p.fileUrl === sUrl)) {
+        previews.push({
+          fileName: safeName(notification.supplementaryAttachment.fileName || "ek.docx"),
+          fileUrl: sUrl
+        });
+      }
+    }
+
+    // --- MEVCUT KAYNAKLAR (Fallback) ---
+
+    // A) Task -> EPATS
+    if (notification?.associatedTaskId) {
+      try {
+        const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
+        if (tSnap.exists()) {
+          const epats = (tSnap.data()?.details || {}).epatsDocument || null;
+          if (epats) {
+            const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
+            const fileName = safeName(epats.name, "epats.pdf");
+            if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
+              previews.push({ fileName, fileUrl });
             }
           }
-        } catch (e) {
-          console.warn("getAttachmentPreviews indexed fallback error:", e);
         }
-      }
-    } catch (e) {
-      console.warn("getAttachmentPreviews unindexed_pdfs error:", e);
+      } catch (e) { console.warn("getAttachmentPreviews task EPATS error:", e); }
     }
+
+    // B) unindexed_pdfs
+    if (notification?.sourceDocumentId) {
+      try {
+        const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
+        if (u.exists()) {
+          const d = u.data() || {};
+          const fileName = safeName(d.fileName, "document.pdf");
+          const fileUrl  = d.fileUrl || d.downloadURL || null;
+          if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
+            previews.push({ fileName, fileUrl });
+          }
+        }
+      } catch (e) { console.warn("getAttachmentPreviews unindexed_pdfs error:", e); }
+    }
+
+    return previews;
   }
-
-  return previews;
-}
-
     // ---------- Modals ----------
     function showMissingInfo(notification) {
       const modal = document.getElementById("missing-info-modal");
