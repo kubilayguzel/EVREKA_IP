@@ -1908,6 +1908,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     if (!client && after.clientId) {
       const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
+      let isEvaluationRequired = false;
+      if (clientSnapshot.exists) {
+          const clientData = clientSnapshot.data();
+          isEvaluationRequired = clientData.is_evaluation_required === true;
+      }
       if (clientSnapshot.exists) client = clientSnapshot.data();
     } else if (!client && applicants.length > 0) {
        client = { name: applicants[0].name, id: applicants[0].id };
@@ -1998,7 +2003,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (!template) missingFields.push("template"); 
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
-    const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
+    const finalStatus = missingFields.length > 0 
+    ? "missing_info" 
+    : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
 
     const epatsAttachment = {
       storagePath: after.storagePath || null,
@@ -2038,7 +2045,37 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    await adminDb.collection("mail_notifications").add(notificationData);
+    const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
+
+    // --- YENİ: ID 66 DEĞERLENDİRME İŞİ OLUŞTURMA ---
+    if (isEvaluationRequired && finalStatus === "evaluation_pending") {
+        const assignmentSnap = await adminDb.collection("taskAssignments").doc("66").get();
+        const assignmentData = assignmentSnap.exists ? assignmentSnap.data() : {};
+        const assignedUid = (assignmentData.assigneeIds && assignmentData.assigneeIds[0]) || null;
+
+        if (assignedUid) {
+            const userSnap = await adminDb.collection("users").doc(assignedUid).get();
+            const assignedEmail = userSnap.exists ? userSnap.data().email : "";
+
+            await adminDb.collection("tasks").add({
+                taskType: "66",
+                title: `Değerlendirme: ${subject}`,
+                description: `Müvekkil hassas gruptadır. Lütfen taslağı düzenleyip onaylayın.`,
+                status: "open",
+                mail_notification_id: notificationRef.id, 
+                relatedIpRecordId: recordId || null,
+                assignedTo_uid: assignedUid,
+                assignedTo_email: assignedEmail,
+                priority: "high",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                history: [{
+                    action: 'Müvekkil ayarı nedeniyle değerlendirme işi oluşturuldu.',
+                    timestamp: new Date().toISOString(),
+                    userEmail: 'system'
+                }]
+            });
+        }
+    }
     console.log(`✅ Mail bildirimi oluşturuldu (${finalStatus}):`, notificationData.subject);
     return null;
   }
