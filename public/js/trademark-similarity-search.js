@@ -1205,9 +1205,8 @@ const handleReportGeneration = async (event, options = {}) => {
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({ 
             results: reportData, 
-            bulletinNo: bulletinNo,
-            clientId: ownerId || null, // Tekli işlemde dolu, globalde null gelir
-            isGlobalRequest: isGlobal  // Backend'in tüm sahiplere bildirim açması gerektiğini belirtir
+            bulletinNo: bulletinNo,    // Loglarda '474' olarak görünen değer buradan gidiyor
+            isGlobalRequest: isGlobal  // Toplu işlem olup olmadığını belirtir
         });
 
         if (response?.data?.success) {
