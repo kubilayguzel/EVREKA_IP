@@ -1092,10 +1092,14 @@ const buildReportData = async (results) => {
  * @param {String} ownerId - Sahip ID (opsiyonel)
  * @returns {Number} Oluşturulan görev sayısı
  */
+
 const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
     let createdTaskCount = 0;
     const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
     const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+    
+    // Müvekkillere göre grupla (her müvekkil için bir bildirim)
+    const clientReports = new Map(); // clientId -> { ownerName, results[] }
 
     for (const r of results) {
         try {
@@ -1156,9 +1160,54 @@ const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
                         console.error("Portfolio creation error:", portfolioErr);
                     }
                 }
+                
+                // Müvekkil gruplarına ekle (rapor için)
+                if (targetOwnerId) {
+                    if (!clientReports.has(targetOwnerId)) {
+                        // Müvekkil adını al
+                        const person = allPersons.find(p => p.id === targetOwnerId);
+                        const ownerName = person?.name || person?.companyName || 'Müvekkil';
+                        clientReports.set(targetOwnerId, {
+                            ownerName,
+                            results: []
+                        });
+                    }
+                    clientReports.get(targetOwnerId).results.push(r);
+                }
             }
         } catch (e) {
             console.error("Task creation error:", e);
+        }
+    }
+
+    // Her müvekkil için rapor oluştur ve bildirim kaydı ekle
+    if (clientReports.size > 0) {
+        const createClientNotificationFn = httpsCallable(functions, 'createClientReportNotification');
+        
+        for (const [clientId, clientData] of clientReports.entries()) {
+            try {
+                // Bu müvekkil için rapor verilerini hazırla
+                const clientReportData = await buildReportData(clientData.results);
+                
+                // Rapor oluştur
+                const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
+                const reportResponse = await generateReportFn({ results: clientReportData });
+                
+                if (reportResponse?.data?.success) {
+                    // Müvekkil bildirimi kaydı oluştur
+                    await createClientNotificationFn({
+                        clientId: clientId,
+                        bulletinNo: bulletinNo,
+                        reportZipBase64: reportResponse.data.file, // Base64
+                        reportFileName: `${clientData.ownerName.replace(/[^a-zA-Z0-9\s]/g, '_')}_Bulten_${bulletinNo}_Rapor.zip`,
+                        ownerName: clientData.ownerName
+                    });
+                    
+                    console.log(`✅ Müvekkil bildirimi kaydı oluşturuldu: ${clientId}`);
+                }
+            } catch (notifErr) {
+                console.error(`❌ Müvekkil bildirimi oluşturulamadı (${clientId}):`, notifErr);
+            }
         }
     }
 
@@ -1216,7 +1265,13 @@ const handleReportGeneration = async (event, options = {}) => {
 
         // Rapor oluştur
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-        const response = await generateReportFn({ results: reportData });
+        // [GÜNCELLEME] Backend'e bildirim için gerekli meta verileri de gönderiyoruz
+        const response = await generateReportFn({ 
+            results: reportData, 
+            bulletinNo: bulletinNo, // handleReportGeneration içinde yukarıda tanımlı
+            clientId: ownerId,      // handleReportGeneration parametresi veya options'tan gelen ID
+            ownerName: ownerName    // Rapor dosya adı için müvekkil ismi
+        });
 
         if (response?.data?.success) {
             // Başarı bildirimi
