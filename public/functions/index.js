@@ -4442,6 +4442,7 @@ async function downloadImageAsBuffer(imagePath) {
 }
 
 // Profesyonel Karşılaştırma Raporu (PRESTİJ MODERN MAVİ - REVİZE SÜRÜM)
+// Profesyonel Karşılaştırma Raporu (PRESTİJ MODERN MAVİ - FONT & RENK REVİZE)
 async function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
@@ -4451,19 +4452,18 @@ async function createComparisonPage(group) {
   const tableRows = [];
   
   const FONT_FAMILY = "Montserrat";
+  const GLOBAL_FONT_SIZE = 18; // 9 Punto (Docx'te 18 yarım-puntoya eşittir)
+  
   const COLORS = {
     CLIENT_HEADER: "1E40AF",    // Müvekkil (Safir Mavi)
     SIMILAR_HEADER: "64748B",   // Benzer (Platin Gri)
     TEXT_DARK: "1E293B",        // Genel Metin
     NICE_BG: "F1F5F9",          // Nice Sınıf Arka Plan
     BORDER_LIGHT: "E2E8F0",     // Kenarlıklar
-    DEADLINE_BG: "DBEAFE",      // Ortak Alt Panel Arka Plan (Açık Mavi)
-    DEADLINE_TEXT: "1E40AF",    // Koyu Mavi Yazı
+    DEADLINE_BG: "DBEAFE",      // Alt Panel Arka Plan (Açık Mavi)
+    DEADLINE_TEXT: "1E40AF",    // Koyu Mavi Yazı ve Vurgular
     EXPERT_BG: "F8FAFC",        // Uzman Görüşü Arka Plan
-    EXPERT_BORDER: "1E40AF",    // Uzman Görüşü Kenarlık
-    SUCCESS_HIGH: "059669",     // Başarı - Yüksek (Yeşil)
-    SUCCESS_MID: "D97706",      // Başarı - Orta (Turuncu)
-    SUCCESS_LOW: "DC2626"       // Başarı - Düşük (Kırmızı)
+    EXPERT_BORDER: "1E40AF"     // Uzman Görüşü Kenarlık
   };
 
   // ============ İTİRAZ SON TARİHİ HESAPLA ============
@@ -4498,15 +4498,20 @@ async function createComparisonPage(group) {
   // ============ 1. BAŞLIK SATIRI ============
   tableRows.push(
     new TableRow({
-      height: { value: 600, rule: "atLeast" },
+      height: { value: 400, rule: "atLeast" },
       children: [
         new TableCell({
           width: { size: 50, type: WidthType.PERCENTAGE },
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "MÜVEKKİL MARKASI", bold: true, size: 28, color: "FFFFFF", font: FONT_FAMILY }) ],
+              children: [ new TextRun({ text: "MÜVEKKİL MARKASI", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 150, after: 80 }
+              spacing: { before: 100, after: 50 }
+            }),
+            new Paragraph({
+              children: [ new TextRun({ text: "(İZLENEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 }
             })
           ],
           shading: { fill: COLORS.CLIENT_HEADER },
@@ -4517,9 +4522,14 @@ async function createComparisonPage(group) {
           width: { size: 50, type: WidthType.PERCENTAGE },
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "BENZER MARKA", bold: true, size: 28, color: "FFFFFF", font: FONT_FAMILY }) ],
+              children: [ new TextRun({ text: "BENZER MARKA", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 150, after: 80 }
+              spacing: { before: 100, after: 50 }
+            }),
+            new Paragraph({
+              children: [ new TextRun({ text: "(BÜLTEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 }
             })
           ],
           shading: { fill: COLORS.SIMILAR_HEADER },
@@ -4529,28 +4539,23 @@ async function createComparisonPage(group) {
     })
   );
 
-  // ============ 2. SADECE GÖRSELLER (İSİMLER KALDIRILDI) ============
+  // ============ 2. GÖRSEL ALANLARI ============
   const createVisualCell = (imageBuffer) => {
     const content = [];
     if (imageBuffer) {
         try {
             content.push(new Paragraph({
-                children: [ new ImageRun({ data: imageBuffer, transformation: { width: 180, height: 180 } }) ],
+                children: [ new ImageRun({ data: imageBuffer, transformation: { width: 160, height: 160 } }) ],
                 alignment: AlignmentType.CENTER,
-                spacing: { before: 250, after: 250 }
+                spacing: { before: 150, after: 150 }
             }));
         } catch (e) { }
     } else {
         content.push(
           new Paragraph({
-            children: [ new TextRun({ text: "📄", size: 48 }) ],
+            children: [ new TextRun({ text: "(Görsel Yok)", size: GLOBAL_FONT_SIZE, color: "94A3B8", italics: true, font: FONT_FAMILY }) ],
             alignment: AlignmentType.CENTER,
-            spacing: { before: 200, after: 100 }
-          }),
-          new Paragraph({
-            children: [ new TextRun({ text: "(Görsel Yok)", size: 18, color: "94A3B8", italics: true, font: FONT_FAMILY }) ],
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 200 }
+            spacing: { before: 200, after: 200 }
           })
         );
     }
@@ -4558,37 +4563,30 @@ async function createComparisonPage(group) {
         children: content, 
         verticalAlign: "center",
         shading: { fill: "FFFFFF" },
-        borders: { bottom: { style: "single", size: 6, color: COLORS.BORDER_LIGHT } }
+        borders: { bottom: { style: "single", size: 4, color: COLORS.BORDER_LIGHT } }
     });
   };
 
-  tableRows.push(
-    new TableRow({
-      children: [
-        createVisualCell(monitoredImageBuffer),
-        createVisualCell(similarImageBuffer)
-      ]
-    })
-  );
+  tableRows.push(new TableRow({ children: [createVisualCell(monitoredImageBuffer), createVisualCell(similarImageBuffer)] }));
 
-  // ============ 3. DETAY VERİ SATIRLARI ============
+  // ============ 3. VERİ SATIRLARI (9 PUNTO SABİT) ============
   const createInfoRow = (label, val1, val2, bgColor = "FFFFFF") => {
     return new TableRow({
       children: [
         new TableCell({
           children: [
-            new Paragraph({ children: [ new TextRun({ text: label, bold: true, size: 20, color: COLORS.SIMILAR_HEADER, font: FONT_FAMILY }) ], spacing: { before: 100, after: 50 } }),
-            new Paragraph({ children: [ new TextRun({ text: val1 || "-", size: 24, color: COLORS.TEXT_DARK, bold: true, font: FONT_FAMILY }) ], spacing: { after: 100 } })
+            new Paragraph({ children: [ new TextRun({ text: label, bold: true, size: GLOBAL_FONT_SIZE, color: COLORS.SIMILAR_HEADER, font: FONT_FAMILY }) ], spacing: { before: 80, after: 40 } }),
+            new Paragraph({ children: [ new TextRun({ text: val1 || "-", size: GLOBAL_FONT_SIZE, color: COLORS.TEXT_DARK, font: FONT_FAMILY }) ], spacing: { after: 80 } })
           ],
-          shading: { fill: bgColor }, margins: { left: 150 }, verticalAlign: "center",
+          shading: { fill: bgColor }, margins: { left: 120 }, verticalAlign: "center",
           borders: { right: { style: "single", size: 2, color: COLORS.BORDER_LIGHT } }
         }),
         new TableCell({
           children: [
-            new Paragraph({ children: [ new TextRun({ text: label, bold: true, size: 20, color: COLORS.SIMILAR_HEADER, font: FONT_FAMILY }) ], spacing: { before: 100, after: 50 } }),
-            new Paragraph({ children: [ new TextRun({ text: val2 || "-", size: 24, color: COLORS.TEXT_DARK, bold: true, font: FONT_FAMILY }) ], spacing: { after: 100 } })
+            new Paragraph({ children: [ new TextRun({ text: label, bold: true, size: GLOBAL_FONT_SIZE, color: COLORS.SIMILAR_HEADER, font: FONT_FAMILY }) ], spacing: { before: 80, after: 40 } }),
+            new Paragraph({ children: [ new TextRun({ text: val2 || "-", size: GLOBAL_FONT_SIZE, color: COLORS.TEXT_DARK, font: FONT_FAMILY }) ], spacing: { after: 80 } })
           ],
-          shading: { fill: bgColor }, margins: { left: 150 }, verticalAlign: "center"
+          shading: { fill: bgColor }, margins: { left: 120 }, verticalAlign: "center"
         })
       ]
     });
@@ -4601,25 +4599,25 @@ async function createComparisonPage(group) {
   };
 
   tableRows.push(createInfoRow("Nice Sınıfları", formatNiceClasses(monitoredMark.niceClasses), formatNiceClasses(similarMark.niceClasses), COLORS.NICE_BG));
-  tableRows.push(createInfoRow("Başvuru No", monitoredMark.applicationNo || "-", similarMark.applicationNo || "-"));
-  tableRows.push(createInfoRow("Başvuru Tarihi", monitoredMark.applicationDate || "-", similarMark.applicationDate || "-", "FAFAFA"));
-  tableRows.push(createInfoRow("Sahip", monitoredMark.ownerName || "-", similarMark.ownerName || "-"));
+  tableRows.push(createInfoRow("Başvuru No", monitoredMark.applicationNo, similarMark.applicationNo));
+  tableRows.push(createInfoRow("Başvuru Tarihi", monitoredMark.applicationDate, similarMark.applicationDate, "FAFAFA"));
+  tableRows.push(createInfoRow("Sahip", monitoredMark.ownerName, similarMark.ownerName));
 
-  // ============ 4. SON TARİH VE BAŞARI ŞANSI (REVİZE EDİLDİ) ============
+  // ============ 4. SON TARİH VE BAŞARI ŞANSI (BOLD & MAVİ) ============
   const successChance = similarMark.bs || ""; 
   tableRows.push(
     new TableRow({
-      height: { value: 700, rule: "atLeast" },
+      height: { value: 600, rule: "atLeast" },
       children: [
         new TableCell({
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "İTİRAZ İÇİN SON TARİH", bold: true, size: 20, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }
+              children: [ new TextRun({ text: "İTİRAZ İÇİN SON TARİH", bold: false, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 }
             }),
             new Paragraph({
-              children: [ new TextRun({ text: objectionDeadline, bold: true, size: 44, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER, spacing: { after: 200 }
+              children: [ new TextRun({ text: objectionDeadline, bold: true, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER, spacing: { after: 120 }
             })
           ],
           shading: { fill: COLORS.DEADLINE_BG }, verticalAlign: "center",
@@ -4628,26 +4626,22 @@ async function createComparisonPage(group) {
         new TableCell({
           children: [
             new Paragraph({
-              children: [ new TextRun({ text: "İTİRAZ BAŞARI ŞANSI", bold: true, size: 20, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER, spacing: { before: 200, after: 100 }
+              children: [ new TextRun({ text: "İTİRAZ BAŞARI ŞANSI", bold: false, size: GLOBAL_FONT_SIZE, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
+              alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 }
             }),
             new Paragraph({
               children: [
                 new TextRun({ 
                   text: successChance ? (successChance.includes('%') ? successChance : `%${successChance}`) : "-", 
-                  bold: true, size: 44, 
-                  color: !successChance ? "94A3B8" : (
-                    parseInt(successChance) >= 60 ? COLORS.SUCCESS_HIGH : 
-                    parseInt(successChance) >= 40 ? COLORS.SUCCESS_MID : COLORS.SUCCESS_LOW
-                  ),
+                  bold: true, size: GLOBAL_FONT_SIZE, 
+                  color: COLORS.DEADLINE_TEXT, // Renk sabit mavi yapıldı
                   font: FONT_FAMILY
                 })
               ],
-              alignment: AlignmentType.CENTER, spacing: { after: 200 }
+              alignment: AlignmentType.CENTER, spacing: { after: 120 }
             })
           ],
-          shading: { fill: COLORS.DEADLINE_BG }, // Arka plan artık sabit mavi
-          verticalAlign: "center",
+          shading: { fill: COLORS.DEADLINE_BG }, verticalAlign: "center",
           borders: { top: { style: "single", size: 8, color: COLORS.SIMILAR_HEADER } }
         })
       ]
@@ -4669,9 +4663,9 @@ async function createComparisonPage(group) {
 
   elements.push(comparisonTable);
 
-// ============ 5. DEĞERLENDİRME BÖLÜMÜ (UZMAN GÖRÜŞÜ) ============
-if (similarMark.note && String(similarMark.note).trim() !== "") {
-    elements.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+  // ============ 5. UZMAN DEĞERLENDİRMESİ (9 PUNTO) ============
+  if (similarMark.note && String(similarMark.note).trim() !== "") {
+    elements.push(new Paragraph({ text: "", spacing: { after: 150 } }));
     let logoBuffer = null;
     try { logoBuffer = await downloadImageAsBuffer('https://ip-manager-production-aab4b.web.app/evreka-logo.png'); } catch (e) { }
 
@@ -4682,13 +4676,11 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
           children: [
             new TableCell({
               children: [
-                ...(logoBuffer ? [
-                  new Paragraph({ children: [ new ImageRun({ data: logoBuffer, transformation: { width: 140, height: 70 } }) ], alignment: AlignmentType.CENTER, spacing: { before: 180, after: 120 } })
-                ] : []),
-                new Paragraph({ children: [ new TextRun({ text: "UZMAN DEĞERLENDİRMESİ", bold: true, size: 24, color: COLORS.EXPERT_BORDER, font: FONT_FAMILY }) ], alignment: AlignmentType.CENTER, spacing: { before: logoBuffer ? 0 : 180, after: 180 } })
+                ...(logoBuffer ? [ new Paragraph({ children: [ new ImageRun({ data: logoBuffer, transformation: { width: 100, height: 50 } }) ], alignment: AlignmentType.CENTER, spacing: { before: 100, after: 80 } }) ] : []),
+                new Paragraph({ children: [ new TextRun({ text: "UZMAN DEĞERLENDİRMESİ", bold: true, size: GLOBAL_FONT_SIZE, color: COLORS.EXPERT_BORDER, font: FONT_FAMILY }) ], alignment: AlignmentType.CENTER, spacing: { before: logoBuffer ? 0 : 120, after: 120 } })
               ],
               shading: { fill: "FFFFFF" }, verticalAlign: "center",
-              borders: { bottom: { style: "single", size: 6, color: COLORS.EXPERT_BORDER } }
+              borders: { bottom: { style: "single", size: 4, color: COLORS.EXPERT_BORDER } }
             })
           ]
         }),
@@ -4696,9 +4688,9 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
           children: [
             new TableCell({
               children: [
-                new Paragraph({ children: [ new TextRun({ text: String(similarMark.note).trim(), size: 22, color: COLORS.TEXT_DARK, font: FONT_FAMILY }) ], alignment: AlignmentType.LEFT, spacing: { before: 150, after: 150 } })
+                new Paragraph({ children: [ new TextRun({ text: String(similarMark.note).trim(), size: GLOBAL_FONT_SIZE, color: COLORS.TEXT_DARK, font: FONT_FAMILY }) ], alignment: AlignmentType.LEFT, spacing: { before: 100, after: 100 } })
               ],
-              shading: { fill: COLORS.EXPERT_BG }, margins: { left: 200, right: 200, top: 150, bottom: 150 }, verticalAlign: "center"
+              shading: { fill: COLORS.EXPERT_BG }, margins: { left: 150, right: 150, top: 100, bottom: 100 }, verticalAlign: "center"
             })
           ]
         })
