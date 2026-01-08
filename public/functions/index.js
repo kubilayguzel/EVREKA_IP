@@ -2012,7 +2012,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const SENSITIVE_TRANSACTION_IDS = ['7', '19', '49', '54'];
     // Mevcut işlemin hassas olup olmadığını kontrol et
     const isSensitiveTransaction = SENSITIVE_TRANSACTION_IDS.includes(String(templateSearchType));
-    
+
     const finalStatus = missingFields.length > 0 
     ? "missing_info" 
     : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
@@ -2055,37 +2055,55 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
+  const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
 
-    // --- YENİ: ID 66 DEĞERLENDİRME İŞİ OLUŞTURMA ---
-    if (isEvaluationRequired && finalStatus === "evaluation_pending") {
-        const assignmentSnap = await adminDb.collection("taskAssignments").doc("66").get();
-        const assignmentData = assignmentSnap.exists ? assignmentSnap.data() : {};
-        const assignedUid = (assignmentData.assigneeIds && assignmentData.assigneeIds[0]) || null;
+  // --- GÜNCELLENMİŞ SAYAÇLI ID 66 OLUŞTURMA ---
+  if (isEvaluationRequired && isSensitiveTransaction && finalStatus === "evaluation_pending") {
+      
+      // 1. Task ID Sayacını (Counter) Artır ve Yeni ID'yi Al
+      const countersRef = adminDb.collection('counters').doc('tasks');
+      const newTaskId = await adminDb.runTransaction(async (tx) => {
+          const snap = await tx.get(countersRef);
+          const last = snap.exists ? Number(snap.data()?.lastId || 0) : 0;
+          const next = last + 1;
+          // Sayacı güncelle
+          tx.set(countersRef, { lastId: next }, { merge: true });
+          return String(next);
+      });
 
-        if (assignedUid) {
-            const userSnap = await adminDb.collection("users").doc(assignedUid).get();
-            const assignedEmail = userSnap.exists ? userSnap.data().email : "";
+      // 2. Atama Kuralını Çek
+      const assignmentSnap = await adminDb.collection("taskAssignments").doc("66").get();
+      const assignmentData = assignmentSnap.exists ? assignmentSnap.data() : {};
+      const assignedUid = (assignmentData.assigneeIds && assignmentData.assigneeIds[0]) || null;
 
-            await adminDb.collection("tasks").add({
-                taskType: "66",
-                title: `Değerlendirme: ${subject}`,
-                description: `Müvekkil hassas gruptadır. Lütfen taslağı düzenleyip onaylayın.`,
-                status: "open",
-                mail_notification_id: notificationRef.id, 
-                relatedIpRecordId: recordId || null,
-                assignedTo_uid: assignedUid,
-                assignedTo_email: assignedEmail,
-                priority: "high",
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                history: [{
-                    action: 'Müvekkil ayarı nedeniyle değerlendirme işi oluşturuldu.',
-                    timestamp: new Date().toISOString(),
-                    userEmail: 'system'
-                }]
-            });
-        }
-    }
+      if (assignedUid) {
+          const userSnap = await adminDb.collection("users").doc(assignedUid).get();
+          const assignedEmail = userSnap.exists ? userSnap.data().email : "";
+
+          // 3. Görevi Belirlenen Sayısal ID ile Kaydet
+          await adminDb.collection("tasks").doc(newTaskId).set({
+              id: newTaskId, // Sayısal ID (Örn: 1452)
+              taskType: "66",
+              title: `Değerlendirme: ${subject}`,
+              description: `Müvekkil hassas gruptadır. Taslağı düzenleyip onaylayın.`,
+              status: "open",
+              mail_notification_id: notificationRef.id, 
+              relatedIpRecordId: recordId || null,
+              relatedIpRecordTitle: enrichedData.markName || "-",
+              assignedTo_uid: assignedUid,
+              assignedTo_email: assignedEmail,
+              priority: "high",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              history: [{
+                  action: 'Hassas müvekkil nedeniyle sayısal ID ile değerlendirme işi oluşturuldu.',
+                  timestamp: new Date().toISOString(),
+                  userEmail: 'system'
+              }]
+          });
+          console.log(`✅ ID 66 Görevi sayısal ID (${newTaskId}) ile oluşturuldu.`);
+      }
+  }
     console.log(`✅ Mail bildirimi oluşturuldu (${finalStatus}):`, notificationData.subject);
     return null;
   }
