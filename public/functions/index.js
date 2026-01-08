@@ -2008,6 +2008,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (!template) missingFields.push("template"); 
     if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
 
+    // Hassas İşlem Tipleri Listesi
+    const SENSITIVE_TRANSACTION_IDS = ['7', '19', '49', '54'];
+    // Mevcut işlemin hassas olup olmadığını kontrol et
+    const isSensitiveTransaction = SENSITIVE_TRANSACTION_IDS.includes(String(templateSearchType));
+    
     const finalStatus = missingFields.length > 0 
     ? "missing_info" 
     : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
