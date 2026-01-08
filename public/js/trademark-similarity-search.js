@@ -1086,25 +1086,14 @@ const buildReportData = async (results) => {
     return reportData;
 };
 
-/**
- * İtiraz görevleri oluşturur ve 3. taraf portföy kayıtlarını ekler
- * @param {Array} results - Benzerlik sonuçları
- * @param {String} bulletinNo - Bülten numarası
- * @param {String} ownerId - Sahip ID (opsiyonel)
- * @returns {Number} Oluşturulan görev sayısı
- */
-
 const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
     let createdTaskCount = 0;
     const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
     const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
-    
-    // Müvekkillere göre grupla (her müvekkil için bir bildirim)
-    const clientReports = new Map(); // clientId -> { ownerName, results[] }
 
     for (const r of results) {
         try {
-            // Duplicate kontrolü
+            // 1. Mevcut görev kontrolü (Mükerrer görev açmamak için)
             const existingTaskQuery = query(collection(db, 'tasks'), where('taskType', '==', '20'));
             const existingTaskSnap = await getDocs(existingTaskQuery);
             
@@ -1126,6 +1115,7 @@ const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
             
             if (duplicateTask) continue;
 
+            // 2. Görevi oluştur
             const taskResponse = await createObjectionTaskFn({
                 monitoredMarkId: r.monitoredTrademarkId,
                 similarMark: {
@@ -1152,74 +1142,20 @@ const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
 
             if (taskResponse?.data?.success) {
                 createdTaskCount++;
+                // Portföy kaydı oluşturma (Eklenti desteğiyle)
                 const taskId = taskResponse?.data?.taskId;
                 const bulletinRecordId = taskResponse?.data?.bulletinRecordId || r.bulletinRecordId || r.bulletinId;
                 if (taskId && bulletinRecordId && window.portfolioByOppositionCreator) {
-                    try {
-                        await window.portfolioByOppositionCreator.createThirdPartyPortfolioFromBulletin(bulletinRecordId, taskId);
-                    } catch (portfolioErr) {
-                        console.error("Portfolio creation error:", portfolioErr);
-                    }
-                }
-                
-                // Müvekkil gruplarına ekle (rapor için)
-                if (targetOwnerId) {
-                    if (!clientReports.has(targetOwnerId)) {
-                        // Müvekkil adını al
-                        const person = allPersons.find(p => p.id === targetOwnerId);
-                        const ownerName = person?.name || person?.companyName || 'Müvekkil';
-                        clientReports.set(targetOwnerId, {
-                            ownerName,
-                            results: []
-                        });
-                    }
-                    clientReports.get(targetOwnerId).results.push(r);
+                    await window.portfolioByOppositionCreator.createThirdPartyPortfolioFromBulletin(bulletinRecordId, taskId);
                 }
             }
         } catch (e) {
             console.error("Task creation error:", e);
         }
     }
-
-    // Her müvekkil için rapor oluştur ve bildirim kaydı ekle
-    if (clientReports.size > 0) {
-        const createClientNotificationFn = httpsCallable(functions, 'createClientReportNotification');
-        
-        for (const [clientId, clientData] of clientReports.entries()) {
-            try {
-                // Bu müvekkil için rapor verilerini hazırla
-                const clientReportData = await buildReportData(clientData.results);
-                
-                // Rapor oluştur
-                const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-                const reportResponse = await generateReportFn({ results: clientReportData });
-                
-                if (reportResponse?.data?.success) {
-                    // Müvekkil bildirimi kaydı oluştur
-                    await createClientNotificationFn({
-                        clientId: clientId,
-                        bulletinNo: bulletinNo,
-                        reportZipBase64: reportResponse.data.file, // Base64
-                        reportFileName: `${clientData.ownerName.replace(/[^a-zA-Z0-9\s]/g, '_')}_Bulten_${bulletinNo}_Rapor.zip`,
-                        ownerName: clientData.ownerName
-                    });
-                    
-                    console.log(`✅ Müvekkil bildirimi kaydı oluşturuldu: ${clientId}`);
-                }
-            } catch (notifErr) {
-                console.error(`❌ Müvekkil bildirimi oluşturulamadı (${clientId}):`, notifErr);
-            }
-        }
-    }
-
     return createdTaskCount;
 };
 
-/**
- * Ana rapor oluşturma fonksiyonu (tüm senaryolar için)
- * @param {Event} event - Click event
- * @param {Object} options - Konfigürasyon seçenekleri
- */
 const handleReportGeneration = async (event, options = {}) => {
     event.stopPropagation();
     const btn = event.currentTarget;
@@ -1264,14 +1200,13 @@ const handleReportGeneration = async (event, options = {}) => {
         // Rapor verilerini hazırla
         const reportData = await buildReportData(filteredResults);
 
-        // Rapor oluştur çağrısını bul ve şu şekilde değiştir:
+        // Rapor oluştur ve Bildirimleri Backend'de tetikle
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({ 
             results: reportData, 
-            bulletinNo: bulletinNo, 
-            clientId: ownerId || null,      // Tekli işlemde dolu, globalde null
-            ownerName: ownerName || null,   // Tekli işlemde dolu, globalde null
-            isGlobalRequest: isGlobal       // [YENİ] Backend'in toplu işlem yapacağını bilmesi için
+            bulletinNo: bulletinNo,
+            clientId: ownerId || null, // Tekli işlemde dolu, globalde null gelir
+            isGlobalRequest: isGlobal  // Backend'in tüm sahiplere bildirim açması gerektiğini belirtir
         });
 
         if (response?.data?.success) {
