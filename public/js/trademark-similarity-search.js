@@ -1035,7 +1035,8 @@ const buildReportData = async (results) => {
         const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
         const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
         const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
-
+        const monitoredClientId = ipData?.clientId || monitoredTm?.clientId || null;
+        
         let monitoredAppDate = "-";
         const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
         if (rawDate) {
@@ -1263,14 +1264,14 @@ const handleReportGeneration = async (event, options = {}) => {
         // Rapor verilerini hazırla
         const reportData = await buildReportData(filteredResults);
 
-        // Rapor oluştur
+        // Rapor oluştur çağrısını bul ve şu şekilde değiştir:
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-        // [GÜNCELLEME] Backend'e bildirim için gerekli meta verileri de gönderiyoruz
         const response = await generateReportFn({ 
             results: reportData, 
-            bulletinNo: bulletinNo, // handleReportGeneration içinde yukarıda tanımlı
-            clientId: ownerId,      // handleReportGeneration parametresi veya options'tan gelen ID
-            ownerName: ownerName    // Rapor dosya adı için müvekkil ismi
+            bulletinNo: bulletinNo, 
+            clientId: ownerId || null,      // Tekli işlemde dolu, globalde null
+            ownerName: ownerName || null,   // Tekli işlemde dolu, globalde null
+            isGlobalRequest: isGlobal       // [YENİ] Backend'in toplu işlem yapacağını bilmesi için
         });
 
         if (response?.data?.success) {
