@@ -4507,11 +4507,6 @@ async function createComparisonPage(group) {
               children: [ new TextRun({ text: "MÜVEKKİL MARKASI", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 100, after: 50 }
-            }),
-            new Paragraph({
-              children: [ new TextRun({ text: "(İZLENEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 100 }
             })
           ],
           shading: { fill: COLORS.CLIENT_HEADER },
@@ -4525,11 +4520,6 @@ async function createComparisonPage(group) {
               children: [ new TextRun({ text: "BENZER MARKA", bold: true, size: GLOBAL_FONT_SIZE, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 100, after: 50 }
-            }),
-            new Paragraph({
-              children: [ new TextRun({ text: "(BÜLTEN)", size: 14, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 100 }
             })
           ],
           shading: { fill: COLORS.SIMILAR_HEADER },
