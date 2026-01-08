@@ -1099,8 +1099,6 @@ const handleOwnerReportGeneration = async (event) => {
                     owner: r.holders?.[0]?.name || "-",
                     ownerName: r.holders?.[0]?.name || "-",
                     objectionDeadline: r.objectionDeadline || "-",
-                    
-                    // Eklenen Manuel Veriler
                     bs: r.bs || null,
                     note: r.note || null
                 }
@@ -1470,7 +1468,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
                     niceClasses: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
-                    bulletinDate: r.bulletinDate || r.applicationDate || "-",
+                    bulletinDate: bulletinDateValue,
                     similarity: r.similarityScore,
                     holders: r.holders || [],
                     ownerName: r.holders?.[0]?.name || "-",
