@@ -579,18 +579,25 @@ async function buildNotificationAttachments(db, notificationData) {
       }
       
       // buildNotificationAttachments fonksiyonu içinde addAsAttachmentOrLink kısmını bul:
-      const [buf] = await bucket.file(storagePath).download();
-      
-      // [KRİTİK DÜZELTME] Sadece PDF değil, ZIP dosyasını da desteklemesi için
-      let contentType = "application/pdf";
-      if (name.toLowerCase().endsWith(".zip")) contentType = "application/zip";
-      if (name.toLowerCase().endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      if (storagePath) {
+            const [buf] = await bucket.file(storagePath).download();
+            
+            // MIME Type Belirleme
+            let contentType = "application/pdf";
+            const lowerName = name.toLowerCase();
+            
+            if (lowerName.endsWith(".zip")) {
+              contentType = "application/zip";
+            } else if (lowerName.endsWith(".docx")) {
+              contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            }
 
-      result.attachments.push({
-        filename: name,
-        content: buf,
-        contentType: contentType,
-      });
+            result.attachments.push({
+              filename: name,
+              content: buf,
+              contentType: contentType,
+            });
+        }
 
       return true;
     } catch (e) {
@@ -4244,9 +4251,11 @@ export const generateSimilarityReport = onCall(
       // --- 2. DÖNGÜ: Her Müvekkil İçin Rapor ve Bildirim ---
       for (const [ownerNameKey, matches] of Object.entries(owners)) {
         
-        // Word Raporu Oluştur
+        // Word Raporu Oluştur (docBuffer hazır)
         const doc = await createProfessionalReport(ownerNameKey, matches);
         const docBuffer = await Packer.toBuffer(doc);
+        
+        // Tarayıcıya inecek olan GLOBAL ZIP içine dökümanı ekle
         globalArchive.append(docBuffer, { name: `${sanitizeFileName(ownerNameKey)}_Benzerlik_Raporu.docx` });
 
         const targetClientId = matches[0]?.monitoredMark?.clientId;
@@ -4265,20 +4274,19 @@ export const generateSimilarityReport = onCall(
               continue;
             }
 
-            // B) MÜVEKKİL ADI ÇÖZÜMLEME (applicantName için)
+            // B) MÜVEKKİL ADI ÇÖZÜMLEME
             let displayClientName = ownerNameKey;
             const personDoc = await adminDb.collection("persons").doc(targetClientId).get();
             if (personDoc.exists) {
               displayClientName = personDoc.data().name || personDoc.data().companyName || displayClientName;
             }
 
-            // C) İTİRAZ SON TARİHİ HESAPLA (Her müvekkilin kendi sonuçlarından)
+            // C) İTİRAZ SON TARİHİ HESAPLA
             let objectionDeadline = "-";
             try {
               const bDateStr = matches[0]?.similarMark?.bulletinDate || matches[0]?.similarMark?.applicationDate;
               if (bDateStr) {
                 const parts = bDateStr.split(/[./-]/);
-                // DD.MM.YYYY parse
                 const bDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
                 if (!isNaN(bDate.getTime())) {
                   const rawDue = addMonthsToDate(bDate, 2);
@@ -4288,15 +4296,16 @@ export const generateSimilarityReport = onCall(
               }
             } catch (e) { logger.warn("Tarih hesaplama hatası:", e); }
 
-            // D) MÜVEKKİLE ÖZEL ZIP (Mail eki)
-            const indivZip = new AdmZip();
-            indivZip.addFile(`${sanitizeFileName(displayClientName)}_Rapor.docx`, docBuffer);
-            const indivZipBuffer = indivZip.toBuffer();
-            const reportFileName = `${bulletinNo}_${sanitizeFileName(displayClientName)}_Izleme_Raporu.zip`;
+            // D) RAPORU WORD (.docx) OLARAK STORAGE'A KAYDET
+            // ZIP paketleme (AdmZip) kaldırıldı, docBuffer doğrudan kaydediliyor.
+            const reportFileName = `${bulletinNo}_${sanitizeFileName(displayClientName)}_Izleme_Raporu.docx`;
             const storagePath = `bulletin_reports/${bulletinNo}/${targetClientId}/${Date.now()}_${reportFileName}`;
-            await admin.storage().bucket().file(storagePath).save(indivZipBuffer, { contentType: 'application/zip' });
+            
+            await admin.storage().bucket().file(storagePath).save(docBuffer, { 
+                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+            });
 
-            // E) ŞABLON ÇEKME VE YERLEŞTİRME (Placeholder Fix)
+            // E) ŞABLON ÇEKME VE YERLEŞTİRME
             const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
             
             let subject = `${bulletinNo} Sayılı Bülten İzleme Raporu`;
@@ -4307,14 +4316,12 @@ export const generateSimilarityReport = onCall(
               subject = tmpl.subject || subject;
               body = tmpl.body || body;
 
-              // Değişkenleri eşle (Senin şablonundaki isimlerle tam uyumlu)
               const replacements = {
                 "{{bulletinNo}}": String(bulletinNo),
                 "{{muvekkil_adi}}": displayClientName,
                 "{{objection_deadline}}": objectionDeadline
               };
 
-              // Değiştirme işlemini yap
               for (const [key, val] of Object.entries(replacements)) {
                 subject = subject.split(key).join(val);
                 body = body.split(key).join(val);
@@ -4341,12 +4348,15 @@ export const generateSimilarityReport = onCall(
               source: "bulletin_watch_system",
               assignedTo_uid: selcanUserId,
               assignedTo_email: selcanUserEmail,
-              supplementaryAttachment: { storagePath, fileName: reportFileName },
+              supplementaryAttachment: { 
+                  storagePath, 
+                  fileName: reportFileName // Dosya artık .docx uzantılı
+              },
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            logger.info(`✅ [SUCCESS] Bildirim oluşturuldu: ${displayClientName}`);
+            logger.info(`✅ [SUCCESS] Word bildirimi oluşturuldu: ${displayClientName}`);
 
           } catch (loopErr) {
             logger.error(`❌ [LOOP-ERROR] ${ownerNameKey} işlenirken hata:`, loopErr);
