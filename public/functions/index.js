@@ -4441,7 +4441,7 @@ async function downloadImageAsBuffer(imagePath) {
   }
 }
 
-// Profesyonel Karşılaştırma Raporu (GÜNCELLENMİŞ VERSİYON)
+// Profesyonel Karşılaştırma Raporu (MODERN PLATİN & BUZ MAVİSİ VERSİYONU)
 async function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
@@ -4450,59 +4450,57 @@ async function createComparisonPage(group) {
   const elements = [];
   const tableRows = [];
   
-  // Font tanımlaması - Montserrat
+  // Font ve Renk Paleti Tanımlamaları
   const FONT_FAMILY = "Montserrat";
+  const COLORS = {
+    CLIENT_HEADER: "1E40AF",    // Müvekkil Markası (Derin Safir)
+    SIMILAR_HEADER: "64748B",   // Benzer Marka (Platin Gri)
+    TEXT_DARK: "1E293B",        // Genel Metin (Koyu Antrasit)
+    NICE_BG: "F1F5F9",          // Nice Sınıfları Arka Plan (Buz Mavisi)
+    BORDER_LIGHT: "E2E8F0",     // İnce Kenarlıklar (Açık Gri)
+    DEADLINE_BG: "DBEAFE",      // Son Tarih Arka Plan (Açık Mavi)
+    DEADLINE_TEXT: "1E40AF",    // Son Tarih Metin (Koyu Mavi)
+    EXPERT_BG: "F8FAFC",        // Uzman Görüşü Arka Plan (Platin Beyaz)
+    EXPERT_BORDER: "1E40AF",    // Uzman Görüşü Kenarlık
+    SUCCESS_HIGH: "059669",     // Başarı Şansı - Yüksek (Zümrüt)
+    SUCCESS_MID: "D97706",      // Başarı Şansı - Orta (Kehribar)
+    SUCCESS_LOW: "DC2626"       // Başarı Şansı - Düşük (Kırmızı)
+  };
 
-    // ============ İTİRAZ SON TARİHİ HESAPLA ============
-    let objectionDeadline = "-";
-    try {
-      // Benzer markadan bülten tarihi al
-      const bulletinDateStr = similarMark.bulletinDate || similarMark.applicationDate;
-      if (bulletinDateStr) {
-        let bulletinDate;
-        
-        // Tarih formatını parse et (DD.MM.YYYY veya YYYY-MM-DD)
-        if (bulletinDateStr.includes('/')) {
-            // DD/MM/YYYY formatı
-            const [day, month, year] = bulletinDateStr.split('/');
-            bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        } else if (bulletinDateStr.includes('.')) {
-            // DD.MM.YYYY formatı
-            const [day, month, year] = bulletinDateStr.split('.');
-            bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        } else if (bulletinDateStr.includes('-')) {
-            // YYYY-MM-DD formatı
-            bulletinDate = new Date(bulletinDateStr);
-        }
-        
-        if (bulletinDate && !isNaN(bulletinDate.getTime())) {
-          // +2 ay ekle
-          const rawDue = addMonthsToDate(bulletinDate, 2);
-          // İlk iş günü (hafta sonu + TR tatilleri)
-          const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
-          
-          // DD.MM.YYYY formatına çevir
-          const day = String(adjustedDue.getDate()).padStart(2, '0');
-          const month = String(adjustedDue.getMonth() + 1).padStart(2, '0');
-          const year = adjustedDue.getFullYear();
-          objectionDeadline = `${day}.${month}.${year}`;
-        }
+  // ============ İTİRAZ SON TARİHİ HESAPLA ============
+  let objectionDeadline = "-";
+  try {
+    const bulletinDateStr = similarMark.bulletinDate || similarMark.applicationDate;
+    if (bulletinDateStr) {
+      let bulletinDate;
+      if (bulletinDateStr.includes('/')) {
+          const [day, month, year] = bulletinDateStr.split('/');
+          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } else if (bulletinDateStr.includes('.')) {
+          const [day, month, year] = bulletinDateStr.split('.');
+          bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } else if (bulletinDateStr.includes('-')) {
+          bulletinDate = new Date(bulletinDateStr);
       }
-    } catch (e) {
-      console.error("Objection deadline calculation error:", e);
+      
+      if (bulletinDate && !isNaN(bulletinDate.getTime())) {
+        const rawDue = addMonthsToDate(bulletinDate, 2);
+        const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+        const day = String(adjustedDue.getDate()).padStart(2, '0');
+        const month = String(adjustedDue.getMonth() + 1).padStart(2, '0');
+        const year = adjustedDue.getFullYear();
+        objectionDeadline = `${day}.${month}.${year}`;
+      }
     }
+  } catch (e) { console.error("Objection deadline error:", e); }
 
   // ============ GÖRSELLERİ İNDİR ============
   let monitoredImageBuffer = null;
   let similarImageBuffer = null;
-  
-  // URL kontrolü yaparak indir (http/https veya gs://)
   if (monitoredMark.imagePath) monitoredImageBuffer = await downloadImageAsBuffer(monitoredMark.imagePath);
   if (similarMark.imagePath) similarImageBuffer = await downloadImageAsBuffer(similarMark.imagePath);
 
   // ============ 1. BAŞLIK SATIRI ============
-  const headerColor = "1F4E79"; 
-
   tableRows.push(
     new TableRow({
       height: { value: 600, rule: "atLeast" },
@@ -4511,33 +4509,17 @@ async function createComparisonPage(group) {
           width: { size: 50, type: WidthType.PERCENTAGE },
           children: [
             new Paragraph({
-              children: [ 
-                new TextRun({ 
-                  text: "MÜVEKKİL MARKASI", 
-                  bold: true, 
-                  size: 28, 
-                  color: "FFFFFF",
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "MÜVEKKİL MARKASI", bold: true, size: 28, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 150, after: 80 }
             }),
             new Paragraph({
-              children: [ 
-                new TextRun({ 
-                  text: "(İZLENEN)", 
-                  size: 20, 
-                  color: "FFFFFF",
-                  italics: true,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "(İZLENEN)", size: 20, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { after: 150 }
             })
           ],
-          shading: { fill: headerColor },
+          shading: { fill: COLORS.CLIENT_HEADER },
           verticalAlign: "center",
           borders: { right: { style: "single", size: 6, color: "FFFFFF" } }
         }),
@@ -4545,33 +4527,17 @@ async function createComparisonPage(group) {
           width: { size: 50, type: WidthType.PERCENTAGE },
           children: [
             new Paragraph({
-              children: [ 
-                new TextRun({ 
-                  text: "BENZER MARKA", 
-                  bold: true, 
-                  size: 28, 
-                  color: "FFFFFF",
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "BENZER MARKA", bold: true, size: 28, color: "FFFFFF", font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 150, after: 80 }
             }),
             new Paragraph({
-              children: [ 
-                new TextRun({ 
-                  text: "(BÜLTEN)", 
-                  size: 20, 
-                  color: "FFFFFF",
-                  italics: true,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "(BÜLTEN)", size: 20, color: "FFFFFF", italics: true, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { after: 150 }
             })
           ],
-          shading: { fill: "C0392B" },
+          shading: { fill: COLORS.SIMILAR_HEADER },
           verticalAlign: "center"
         })
       ]
@@ -4579,28 +4545,16 @@ async function createComparisonPage(group) {
   );
 
   // ============ 2. MARKA İSİMLERİ VE GÖRSELLER ============
-  
-  const createVisualCell = (name, imageBuffer, textColor, bgColor = "FAFAFA") => {
+  const createVisualCell = (name, imageBuffer, textColor) => {
     const content = [];
-    
-    // 1. İsim
     content.push(
         new Paragraph({
-            children: [ 
-              new TextRun({ 
-                text: name || "-", 
-                bold: true, 
-                size: 30, 
-                color: textColor,
-                font: FONT_FAMILY
-              })
-            ],
+            children: [ new TextRun({ text: name || "-", bold: true, size: 30, color: textColor, font: FONT_FAMILY }) ],
             alignment: AlignmentType.CENTER,
             spacing: { before: 200, after: 150 }
         })
     );
 
-    // 2. Görsel (Varsa)
     if (imageBuffer) {
         try {
             content.push(new Paragraph({
@@ -4608,33 +4562,17 @@ async function createComparisonPage(group) {
                 alignment: AlignmentType.CENTER,
                 spacing: { before: 150, after: 200 }
             }));
-        } catch (e) { /* Hata yut */ }
+        } catch (e) { }
     } else {
         content.push(
+          new Paragraph({ children: [], spacing: { before: 150, after: 150 } }),
           new Paragraph({
-            children: [],
-            spacing: { before: 150, after: 150 }
-          }),
-          new Paragraph({
-            children: [ 
-              new TextRun({ 
-                text: "📄", 
-                size: 48
-              })
-            ],
+            children: [ new TextRun({ text: "📄", size: 48 }) ],
             alignment: AlignmentType.CENTER,
             spacing: { after: 100 }
           }),
           new Paragraph({
-            children: [ 
-              new TextRun({ 
-                text: "(Görsel Yok)", 
-                size: 20, 
-                color: "999999", 
-                italics: true,
-                font: FONT_FAMILY
-              })
-            ],
+            children: [ new TextRun({ text: "(Görsel Yok)", size: 20, color: "94A3B8", italics: true, font: FONT_FAMILY }) ],
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 }
           })
@@ -4644,101 +4582,63 @@ async function createComparisonPage(group) {
     return new TableCell({ 
         children: content, 
         verticalAlign: "center",
-        shading: { fill: bgColor },
-        borders: { 
-          bottom: { style: "single", size: 6, color: "E0E0E0" },
-          right: imageBuffer ? { style: "single", size: 2, color: "E0E0E0" } : undefined
-        }
+        shading: { fill: "FFFFFF" },
+        borders: { bottom: { style: "single", size: 6, color: COLORS.BORDER_LIGHT } }
     });
   };
 
   tableRows.push(
     new TableRow({
       children: [
-        createVisualCell(monitoredMark.markName, monitoredImageBuffer, "1F4E79"),
-        createVisualCell(similarMark.markName, similarImageBuffer, "C0392B")
+        createVisualCell(monitoredMark.markName, monitoredImageBuffer, COLORS.CLIENT_HEADER),
+        createVisualCell(similarMark.markName, similarImageBuffer, COLORS.SIMILAR_HEADER)
       ]
     })
   );
 
   // ============ 3. DETAY VERİ SATIRLARI ============
-  const createInfoRow = (label, val1, val2, bgColor = "FFFFFF", labelColor = "1F4E79") => {
+  const createInfoRow = (label, val1, val2, bgColor = "FFFFFF", labelColor = COLORS.SIMILAR_HEADER) => {
     return new TableRow({
       children: [
         new TableCell({
           children: [
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: label, 
-                  bold: true, 
-                  size: 22, 
-                  color: labelColor,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: label, bold: true, size: 22, color: labelColor, font: FONT_FAMILY }) ],
               alignment: AlignmentType.LEFT,
               spacing: { before: 100, after: 50 }
             }),
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: val1 || "-", 
-                  size: 24, 
-                  color: "000000",
-                  bold: true,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: val1 || "-", size: 24, color: COLORS.TEXT_DARK, bold: true, font: FONT_FAMILY }) ],
               alignment: AlignmentType.LEFT,
               spacing: { after: 100 }
             })
           ],
           shading: { fill: bgColor },
-          margins: { left: 150, right: 150, top: 100, bottom: 100 },
+          margins: { left: 150 },
           verticalAlign: "center",
-          borders: {
-            right: { style: "single", size: 2, color: "E0E0E0" }
-          }
+          borders: { right: { style: "single", size: 2, color: COLORS.BORDER_LIGHT } }
         }),
         new TableCell({
           children: [
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: label, 
-                  bold: true, 
-                  size: 22, 
-                  color: labelColor,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: label, bold: true, size: 22, color: labelColor, font: FONT_FAMILY }) ],
               alignment: AlignmentType.LEFT,
               spacing: { before: 100, after: 50 }
             }),
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: val2 || "-", 
-                  size: 24, 
-                  color: "000000",
-                  bold: true,
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: val2 || "-", size: 24, color: COLORS.TEXT_DARK, bold: true, font: FONT_FAMILY }) ],
               alignment: AlignmentType.LEFT,
               spacing: { after: 100 }
             })
           ],
           shading: { fill: bgColor },
-          margins: { left: 150, right: 150, top: 100, bottom: 100 },
+          margins: { left: 150 },
           verticalAlign: "center"
         })
       ]
     });
   };
 
-  // Nice Sınıflar - Daha görsel gösterim
   const formatNiceClasses = (classes) => {
     if (!classes || classes.length === 0) return "-";
     const classArray = Array.isArray(classes) ? classes : String(classes).split(',').map(s => s.trim());
@@ -4747,24 +4647,13 @@ async function createComparisonPage(group) {
 
   const monClasses = formatNiceClasses(monitoredMark.niceClasses);
   const simClasses = formatNiceClasses(similarMark.niceClasses);
-  tableRows.push(createInfoRow("Nice Sınıfları", monClasses, simClasses, "EBF5FB", "2471A3"));
+  
+  tableRows.push(createInfoRow("Nice Sınıfları", monClasses, simClasses, COLORS.NICE_BG, COLORS.CLIENT_HEADER));
+  tableRows.push(createInfoRow("Başvuru No", monitoredMark.applicationNo || "-", similarMark.applicationNo || "-"));
+  tableRows.push(createInfoRow("Başvuru Tarihi", monitoredMark.applicationDate || "-", similarMark.applicationDate || "-", "FAFAFA"));
+  tableRows.push(createInfoRow("Sahip", monitoredMark.ownerName || "-", similarMark.ownerName || "-"));
 
-  // Başvuru No
-  const monAppNo = monitoredMark.applicationNo || "-";
-  const simAppNo = similarMark.applicationNo || "-";
-  tableRows.push(createInfoRow("Başvuru No", monAppNo, simAppNo));
-
-  // Tarihler (Başvuru)
-  const monDate = monitoredMark.applicationDate || "-";
-  const simDate = similarMark.applicationDate || "-";
-  tableRows.push(createInfoRow("Başvuru Tarihi", monDate, simDate, "F4F6F7"));
-
-  // Sahip Bilgisi
-  const monOwner = monitoredMark.ownerName || "-";
-  const simOwner = similarMark.ownerName || "-";
-  tableRows.push(createInfoRow("Sahip", monOwner, simOwner));
-
-  // ============ 4. BAŞARI ŞANSI (MODERN TASARIM) ============
+  // ============ 4. SON TARİH VE BAŞARI ŞANSI ============
   const successChance = similarMark.bs || ""; 
   tableRows.push(
     new TableRow({
@@ -4773,51 +4662,27 @@ async function createComparisonPage(group) {
         new TableCell({
           children: [
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: "İTİRAZ İÇİN SON TARİH", 
-                  bold: true, 
-                  size: 24, 
-                  color: "C0392B",
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "İTİRAZ İÇİN SON TARİH", bold: true, size: 24, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 200, after: 120 }
             }),
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: objectionDeadline, 
-                  bold: true, 
-                  size: 48, 
-                  color: "C0392B",
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: objectionDeadline, bold: true, size: 48, color: COLORS.DEADLINE_TEXT, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 80, after: 200 }
             })
           ],
-          shading: { fill: "FADBD8" },
+          shading: { fill: COLORS.DEADLINE_BG },
           verticalAlign: "center",
           borders: { 
-            top: { style: "single", size: 8, color: "C0392B" },
-            right: { style: "single", size: 2, color: "E0E0E0" }
+            top: { style: "single", size: 8, color: COLORS.CLIENT_HEADER },
+            right: { style: "single", size: 4, color: "FFFFFF" } 
           }
         }),
         new TableCell({
           children: [
             new Paragraph({
-              children: [
-                new TextRun({ 
-                  text: "İTİRAZ BAŞARI ŞANSI", 
-                  bold: true, 
-                  size: 24, 
-                  color: "C0392B",
-                  font: FONT_FAMILY
-                })
-              ],
+              children: [ new TextRun({ text: "İTİRAZ BAŞARI ŞANSI", bold: true, size: 24, color: COLORS.SIMILAR_HEADER, font: FONT_FAMILY }) ],
               alignment: AlignmentType.CENTER,
               spacing: { before: 200, after: 120 }
             }),
@@ -4827,9 +4692,9 @@ async function createComparisonPage(group) {
                   text: successChance || "-", 
                   bold: true, 
                   size: 48, 
-                  color: !successChance ? "CCCCCC" : (
-                    parseInt(successChance) >= 60 ? "27AE60" : 
-                    parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
+                  color: !successChance ? "94A3B8" : (
+                    parseInt(successChance) >= 60 ? COLORS.SUCCESS_HIGH : 
+                    parseInt(successChance) >= 40 ? COLORS.SUCCESS_MID : COLORS.SUCCESS_LOW
                   ),
                   font: FONT_FAMILY
                 })
@@ -4839,30 +4704,29 @@ async function createComparisonPage(group) {
             })
           ],
           shading: { 
-            fill: !successChance ? "F8F9FA" : (
-              parseInt(successChance) >= 60 ? "E8F8F5" : 
-              parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
+            fill: !successChance ? "F8FAFC" : (
+              parseInt(successChance) >= 60 ? "ECFDF5" : 
+              parseInt(successChance) >= 40 ? "FFFBEB" : "FEF2F2"
             )
           },
           verticalAlign: "center",
           borders: { 
-            top: { style: "single", size: 8, color: "C0392B" }
+            top: { style: "single", size: 8, color: COLORS.SIMILAR_HEADER }
           }
         })
       ]
     })
   );
 
-  // Tabloyu Oluştur
   const comparisonTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     borders: {
-      top: { style: "single", size: 4, color: "999999" },
-      bottom: { style: "single", size: 4, color: "999999" },
-      left: { style: "single", size: 4, color: "999999" },
-      right: { style: "single", size: 4, color: "999999" },
-      insideHorizontal: { style: "single", size: 2, color: "E0E0E0" },
-      insideVertical: { style: "single", size: 2, color: "E0E0E0" }
+      top: { style: "single", size: 4, color: COLORS.SIMILAR_HEADER },
+      bottom: { style: "single", size: 4, color: COLORS.SIMILAR_HEADER },
+      left: { style: "single", size: 4, color: COLORS.SIMILAR_HEADER },
+      right: { style: "single", size: 4, color: COLORS.SIMILAR_HEADER },
+      insideHorizontal: { style: "single", size: 2, color: COLORS.BORDER_LIGHT },
+      insideVertical: { style: "single", size: 2, color: COLORS.BORDER_LIGHT }
     },
     rows: tableRows
   });
@@ -4870,17 +4734,13 @@ async function createComparisonPage(group) {
   elements.push(comparisonTable);
 
 // ============ 5. DEĞERLENDİRME BÖLÜMÜ (UZMAN GÖRÜŞÜ) ============
-// Sadece note doluysa göster (boş string, null, undefined değilse)
 if (similarMark.note && String(similarMark.note).trim() !== "") {
     elements.push(new Paragraph({ text: "", spacing: { after: 200 } }));
-    // Logo'yu indir
     let logoBuffer = null;
     try {
-      const logoUrl = 'https://ip-manager-production-aab4b.web.app/evreka-logo.png';
-      logoBuffer = await downloadImageAsBuffer(logoUrl);
-    } catch (e) {
-      console.error("Logo download error:", e);
-    }
+      logoBuffer = await downloadImageAsBuffer('https://ip-manager-production-aab4b.web.app/evreka-logo.png');
+    } catch (e) { }
+
     const noteTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
@@ -4888,29 +4748,16 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
           children: [
             new TableCell({
               children: [
-                // Logo (varsa)
                 ...(logoBuffer ? [
                   new Paragraph({
-                    children: [ 
-                      new ImageRun({ 
-                        data: logoBuffer, 
-                        transformation: { width: 140, height: 70 }
-                      })
-                    ],
+                    children: [ new ImageRun({ data: logoBuffer, transformation: { width: 140, height: 70 } }) ],
                     alignment: AlignmentType.CENTER,
                     spacing: { before: 180, after: 120 }
                   })
                 ] : []),
-                // Başlık
                 new Paragraph({
                   children: [
-                    new TextRun({ 
-                      text: "UZMAN DEĞERLENDİRMESİ", 
-                      bold: true, 
-                      size: 24, 
-                      color: "4CAF50",
-                      font: FONT_FAMILY
-                    })
+                    new TextRun({ text: "UZMAN DEĞERLENDİRMESİ", bold: true, size: 24, color: COLORS.EXPERT_BORDER, font: FONT_FAMILY })
                   ],
                   alignment: AlignmentType.CENTER,
                   spacing: { before: logoBuffer ? 0 : 180, after: 180 }
@@ -4918,9 +4765,7 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
               ],
               shading: { fill: "FFFFFF" },
               verticalAlign: "center",
-              borders: {
-                bottom: { style: "single", size: 6, color: "4CAF50" }
-              }
+              borders: { bottom: { style: "single", size: 6, color: COLORS.EXPERT_BORDER } }
             })
           ]
         }),
@@ -4930,18 +4775,13 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ 
-                      text: String(similarMark.note).trim(), 
-                      size: 22, 
-                      color: "2C3E50",
-                      font: FONT_FAMILY
-                    })
+                    new TextRun({ text: String(similarMark.note).trim(), size: 22, color: COLORS.TEXT_DARK, font: FONT_FAMILY })
                   ],
                   alignment: AlignmentType.LEFT,
                   spacing: { before: 150, after: 150 }
                 })
               ],
-              shading: { fill: "ECF0F1" },
+              shading: { fill: COLORS.EXPERT_BG },
               margins: { left: 200, right: 200, top: 150, bottom: 150 },
               verticalAlign: "center"
             })
@@ -4949,10 +4789,10 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
         })
       ],
       borders: {
-        top: { style: "single", size: 4, color: "4CAF50" },
-        bottom: { style: "single", size: 4, color: "4CAF50" },
-        left: { style: "single", size: 4, color: "4CAF50" },
-        right: { style: "single", size: 4, color: "4CAF50" }
+        top: { style: "single", size: 4, color: COLORS.EXPERT_BORDER },
+        bottom: { style: "single", size: 4, color: COLORS.EXPERT_BORDER },
+        left: { style: "single", size: 4, color: COLORS.EXPERT_BORDER },
+        right: { style: "single", size: 4, color: COLORS.EXPERT_BORDER }
       }
     });
 
