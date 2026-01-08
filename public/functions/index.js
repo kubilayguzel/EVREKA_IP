@@ -1908,15 +1908,19 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
     if (!client && after.clientId) {
-      const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
-      let isEvaluationRequired = false;
-      if (clientSnapshot.exists) {
-          const clientData = clientSnapshot.data();
-          isEvaluationRequired = clientData.is_evaluation_required === true;
-      }
-      if (clientSnapshot.exists) client = clientSnapshot.data();
+        const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
+        if (clientSnapshot.exists) {
+            client = clientSnapshot.data();
+            // Değişkeni burada güncelliyoruz
+            isEvaluationRequired = client.is_evaluation_required === true; 
+        }
     } else if (!client && applicants.length > 0) {
-       client = { name: applicants[0].name, id: applicants[0].id };
+        client = { name: applicants[0].name, id: applicants[0].id };
+        // Eğer applicants üzerinden gidiliyorsa da kontrol etmek isterseniz:
+        if (client.id) {
+            const cSnap = await adminDb.collection("persons").doc(client.id).get();
+            if (cSnap.exists) isEvaluationRequired = cSnap.data().is_evaluation_required === true;
+        }
     }
 
     // --- ŞABLON EŞLEŞTİRME ---
