@@ -4783,7 +4783,7 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
                     children: [ 
                       new ImageRun({ 
                         data: logoBuffer, 
-                        transformation: { width: 140, height: 47 }
+                        transformation: { width: 200, height: 47 }
                       })
                     ],
                     alignment: AlignmentType.CENTER,
