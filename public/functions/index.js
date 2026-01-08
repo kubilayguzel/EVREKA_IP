@@ -4762,7 +4762,14 @@ async function createComparisonPage(group) {
 // Sadece note doluysa göster (boş string, null, undefined değilse)
 if (similarMark.note && String(similarMark.note).trim() !== "") {
     elements.push(new Paragraph({ text: "", spacing: { after: 200 } }));
-
+    // Logo'yu indir
+    let logoBuffer = null;
+    try {
+      const logoUrl = 'https://ip-manager-production-aab4b.web.app/evreka-logo.png';
+      logoBuffer = await downloadImageAsBuffer(logoUrl);
+    } catch (e) {
+      console.error("Logo download error:", e);
+    }
     const noteTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
@@ -4770,22 +4777,39 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
           children: [
             new TableCell({
               children: [
+                // Logo (varsa)
+                ...(logoBuffer ? [
+                  new Paragraph({
+                    children: [ 
+                      new ImageRun({ 
+                        data: logoBuffer, 
+                        transformation: { width: 140, height: 47 }
+                      })
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 180, after: 120 }
+                  })
+                ] : []),
+                // Başlık
                 new Paragraph({
                   children: [
                     new TextRun({ 
                       text: "UZMAN DEĞERLENDİRMESİ", 
                       bold: true, 
                       size: 24, 
-                      color: "FFFFFF",
+                      color: "4CAF50",
                       font: FONT_FAMILY
                     })
                   ],
                   alignment: AlignmentType.CENTER,
-                  spacing: { before: 120, after: 120 }
+                  spacing: { before: logoBuffer ? 0 : 180, after: 180 }
                 })
               ],
-              shading: { fill: "34495E" },
-              verticalAlign: "center"
+              shading: { fill: "FFFFFF" },
+              verticalAlign: "center",
+              borders: {
+                bottom: { style: "single", size: 6, color: "4CAF50" }
+              }
             })
           ]
         }),
@@ -4814,10 +4838,10 @@ if (similarMark.note && String(similarMark.note).trim() !== "") {
         })
       ],
       borders: {
-        top: { style: "single", size: 4, color: "34495E" },
-        bottom: { style: "single", size: 4, color: "34495E" },
-        left: { style: "single", size: 4, color: "34495E" },
-        right: { style: "single", size: 4, color: "34495E" }
+        top: { style: "single", size: 4, color: "4CAF50" },
+        bottom: { style: "single", size: 4, color: "4CAF50" },
+        left: { style: "single", size: 4, color: "4CAF50" },
+        right: { style: "single", size: 4, color: "4CAF50" }
       }
     });
 
