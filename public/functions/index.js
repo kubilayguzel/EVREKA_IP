@@ -4243,7 +4243,105 @@ export const generateSimilarityReport = onCall(
       const chunks = [];
       for await (const chunk of passthrough) chunks.push(chunk);
       const finalBuffer = Buffer.concat(chunks);
+      const { bulletinNo, clientId, ownerName } = request.data;
 
+      // Sadece tekil müvekkil raporu üretiliyorsa (clientId varsa) bildirimi oluştur
+      if (clientId) {
+        try {
+          const safeOwnerName = (ownerName || "Muvekkil").replace(/[^a-zA-Z0-9]/g, '_');
+          const reportFileName = `${bulletinNo}_${safeOwnerName}_Benzerlik_Izleme_Raporu.zip`;
+          const storagePath = `bulletin_reports/${bulletinNo}/${clientId}/${Date.now()}_${reportFileName}`;
+          
+          // 1. Raporu Storage'a Kaydet (Mail ekinde kullanılacak dosya)
+          const reportFile = admin.storage().bucket().file(storagePath);
+          await reportFile.save(finalBuffer, { contentType: 'application/zip' });
+
+          // 2. Yasal İtiraz Son Tarihini Hesapla
+          let objectionDeadline = "-";
+          try {
+            // İlk sonuçtan bülten tarihini alıyoruz
+            const sampleResult = results[0]?.similarMark;
+            const bDateStr = sampleResult?.bulletinDate || sampleResult?.applicationDate;
+            
+            if (bDateStr) {
+              let bDate;
+              // Tarih formatını parse et (GG.AA.YYYY veya GG/AA/YYYY)
+              if (bDateStr.includes('/')) {
+                const [d, m, y] = bDateStr.split('/');
+                bDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+              } else if (bDateStr.includes('.')) {
+                const [d, m, y] = bDateStr.split('.');
+                bDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+              } else {
+                bDate = new Date(bDateStr);
+              }
+
+              if (bDate && !isNaN(bDate.getTime())) {
+                // +2 Ay ve İş Günü Kaydırması (utils.js'deki fonksiyonları kullanır)
+                const rawDue = addMonthsToDate(bDate, 2);
+                const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+                objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
+              }
+            }
+          } catch (dateErr) {
+            console.warn("Deadline calculation error:", dateErr);
+          }
+
+          // 3. Şablonu Çek ve Değişkenleri Doldur
+          let subject = `${bulletinNo} Sayılı Marka Bülteni İzleme Bildirimi`;
+          let body = `<p>Marka bülteni izleme raporunuz ekte sunulmuştur.</p>`;
+          
+          const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_watchnotice").get();
+          if (templateSnap.exists) {
+            const tmpl = templateSnap.data();
+            subject = tmpl.subject || subject;
+            body = tmpl.body || body;
+
+            // Parametre Eşleşmeleri
+            const replacements = {
+              "{{bulletinNo}}": bulletinNo || "-",
+              "{{muvekkil_adi}}": ownerName || "Değerli Müvekkilimiz",
+              "{{objection_deadline}}": objectionDeadline
+            };
+
+            // Değişkenleri Yerleştir
+            for (const [key, val] of Object.entries(replacements)) {
+              subject = subject.split(key).join(val);
+              body = body.split(key).join(val);
+            }
+          }
+
+          // 4. Alıcıları Belirle (Müvekkilin sorumlu kişileri)
+          const recipients = await getRecipientsByApplicantIds([{ id: clientId }], "marka");
+
+          // 5. mail_notifications Koleksiyonuna Taslağı Kaydet
+          await adminDb.collection("mail_notifications").add({
+            clientId,
+            toList: recipients.to || [],
+            ccList: recipients.cc || [],
+            subject,
+            body,
+            status: "awaiting_client_approval", // Onay bekleyenler alanına düşer
+            mode: "draft",
+            isDraft: true,
+            templateId: "tmpl_watchnotice",
+            notificationType: "marka",
+            source: "bulletin_watch_system",
+            assignedTo_uid: selcanUserId, // index.js başında tanımlı olan Selcan Hn.
+            assignedTo_email: selcanUserEmail,
+            supplementaryAttachment: {
+              storagePath,
+              fileName: reportFileName
+            },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          logger.info(`✅ Bülten izleme bildirimi oluşturuldu. Müvekkil: ${ownerName}`);
+        } catch (notifErr) {
+          logger.error("❌ Bildirim oluşturma hatası:", notifErr);
+        }
+      }
       return {
         success: true,
         file: finalBuffer.toString("base64")
@@ -4254,6 +4352,7 @@ export const generateSimilarityReport = onCall(
     }
   }
 );
+
 
 // Ana rapor oluşturma fonksiyonu
 async function createProfessionalReport(ownerName, matches) {
