@@ -4321,13 +4321,14 @@ export const generateSimilarityReport = onCall(
               ccList = extraCC || [];
             }
 
-            // [FIRESTORE GÜNCELLEME] URL'li Kayıt
+            // [FIRESTORE GÜNCELLEME] Temiz Yapı
             await adminDb.collection("mail_notifications").add({
               clientId: targetClientId,
               applicantName: displayClientName,
               bulletinNo: String(bulletinNo),
+              objectionDeadline: objectionDeadline,
               toList: recipients.to || [],
-              ccList: ccList,
+              ccList: recipients.cc || [],
               subject,
               body,
               status: "awaiting_client_approval",
@@ -4337,9 +4338,11 @@ export const generateSimilarityReport = onCall(
               source: "bulletin_watch_system",
               assignedTo_uid: selcanUserId,
               assignedTo_email: selcanUserEmail,
-              attachmentUrl: signedUrl, // En üst seviye URL (Listedeki ikon için)
-              supplementaryAttachment: { storagePath, fileName: reportFileName, url: signedUrl },
-              files: [{ storagePath, fileName: reportFileName, url: signedUrl, downloadUrl: signedUrl }],
+              files: [{ 
+                fileName: reportFileName, 
+                storagePath: storagePath, 
+                url: signedUrl 
+              }],
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
