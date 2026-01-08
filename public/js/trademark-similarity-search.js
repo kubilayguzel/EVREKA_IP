@@ -970,11 +970,6 @@ const handleNoteCellClick = (cell) => {
 // RAPOR OLUŞTURMA - REFACTORED VERSİON
 // ============================================================================
 
-/**
- * Rapor verilerini hazırlar (IP Records, Bulletin Date, Owner bilgilerini çeker)
- * @param {Array} results - Filtrelenmiş benzerlik sonuçları
- * @returns {Array} Backend'e gönderilecek rapor verisi
- */
 const buildReportData = async (results) => {
     const reportData = [];
     
@@ -1010,7 +1005,7 @@ const buildReportData = async (results) => {
             bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
         }
 
-        // 3. Sahip Bilgisini Çözümle
+        // 3. Sahip Bilgisini Çözümle (Rapor içeriği için isimleri birleştirir)
         let ownerNameStr = "-";
         if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
             const ownerNames = [];
@@ -1031,11 +1026,16 @@ const buildReportData = async (results) => {
             ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
         }
 
+        // [KRİTİK GÜNCELLEME] 
+        // Backend'in ihtiyacı olan gerçek clientId (UUID) bilgisini 
+        // projenin standart fonksiyonu üzerinden güvenli bir şekilde alıyoruz.
+        const ownerInfo = _getOwnerKey(ipData, monitoredTm, allPersons);
+        const monitoredClientId = ownerInfo.id; // UUID burada yer alır
+
         // 4. Diğer Bilgiler
         const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
         const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
         const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
-        const monitoredClientId = ipData?.clientId || monitoredTm?.clientId || null;
         
         let monitoredAppDate = "-";
         const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
@@ -1056,9 +1056,12 @@ const buildReportData = async (results) => {
             monitoredClasses = _uniqNice(monitoredTm);
         }
 
+        // Log ekleyerek tarayıcı konsolundan doğruluğunu kontrol edebilirsiniz
+        console.log(`✅ [FRONTEND] Raporlanıyor: ${monitoredName}, ClientId: ${monitoredClientId}`);
+
         reportData.push({
             monitoredMark: {
-                clientId: monitoredTm?.clientId || ipData?.clientId || null,
+                clientId: monitoredClientId, // Artık null gelmeyecektir
                 name: monitoredName,
                 markName: monitoredName,
                 imagePath: monitoredImg,
