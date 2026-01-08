@@ -547,85 +547,61 @@ async function resolveDocumentInfo(notification) {
   }
 }
 
-  // public/notifications.html içindeki fonksiyonu bu tam sürümle değiştirin
+async function getAttachmentPreviews(notification) {
+  const previews = [];
+  const safeName = (name, defaultName = "ek.docx") =>
+    String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
 
-  async function getAttachmentPreviews(notification) {
-    // UI'da görüntülenecek { fileName, fileUrl } objelerini döndürür
-    const previews = [];
+  // 1. Marka Benzerlik Raporu Alanları (Kritik Alanlar)
+  if (notification?.attachmentUrl) {
+    previews.push({
+      fileName: safeName(notification.attachmentName || notification.fileName || "Izleme_Raporu.docx"),
+      fileUrl: notification.attachmentUrl
+    });
+  }
 
-    const safeName = (name, defaultName = "ek.pdf") =>
-      String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
-
-    // --- YENİ: Marka Benzerlik Raporları ve Doğrudan Ekler ---
-    
-    // 1. Doğrudan attachmentUrl alanı (Signed URL buradadır)
-    if (notification?.attachmentUrl) {
-      previews.push({
-        fileName: safeName(notification.attachmentName || notification.fileName || "Izleme_Raporu.docx"),
-        fileUrl: notification.attachmentUrl
-      });
-    }
-
-    // 2. files dizisi (Dizi formatında tutulan ekler)
-    if (Array.isArray(notification?.files)) {
-      notification.files.forEach(f => {
-        const url = f.url || f.downloadUrl || null;
-        if (url && !previews.some(p => p.fileUrl === url)) {
-          previews.push({
-            fileName: safeName(f.name || f.fileName || "ek.docx"),
-            fileUrl: url
-          });
-        }
-      });
-    }
-
-    // 3. supplementaryAttachment alanı
-    if (notification?.supplementaryAttachment?.url) {
-      const sUrl = notification.supplementaryAttachment.url;
-      if (!previews.some(p => p.fileUrl === sUrl)) {
+  // 2. files dizisi kontrolü
+  if (Array.isArray(notification?.files)) {
+    notification.files.forEach(f => {
+      const url = f.url || f.downloadUrl || null;
+      if (url && !previews.some(p => p.fileUrl === url)) {
         previews.push({
-          fileName: safeName(notification.supplementaryAttachment.fileName || "ek.docx"),
-          fileUrl: sUrl
+          fileName: safeName(f.name || f.fileName || "ek.docx"),
+          fileUrl: url
         });
       }
-    }
-
-    // --- MEVCUT KAYNAKLAR (Fallback) ---
-
-    // A) Task -> EPATS
-    if (notification?.associatedTaskId) {
-      try {
-        const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
-        if (tSnap.exists()) {
-          const epats = (tSnap.data()?.details || {}).epatsDocument || null;
-          if (epats) {
-            const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
-            const fileName = safeName(epats.name, "epats.pdf");
-            if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-              previews.push({ fileName, fileUrl });
-            }
-          }
-        }
-      } catch (e) { console.warn("getAttachmentPreviews task EPATS error:", e); }
-    }
-
-    // B) unindexed_pdfs
-    if (notification?.sourceDocumentId) {
-      try {
-        const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
-        if (u.exists()) {
-          const d = u.data() || {};
-          const fileName = safeName(d.fileName, "document.pdf");
-          const fileUrl  = d.fileUrl || d.downloadURL || null;
-          if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-            previews.push({ fileName, fileUrl });
-          }
-        }
-      } catch (e) { console.warn("getAttachmentPreviews unindexed_pdfs error:", e); }
-    }
-
-    return previews;
+    });
   }
+
+  // 3. supplementaryAttachment haritası kontrolü
+  if (notification?.supplementaryAttachment?.url) {
+    const sUrl = notification.supplementaryAttachment.url;
+    if (!previews.some(p => p.fileUrl === sUrl)) {
+      previews.push({
+        fileName: safeName(notification.supplementaryAttachment.fileName || "ek.docx"),
+        fileUrl: sUrl
+      });
+    }
+  }
+
+  // 4. MEVCUT KAYNAKLAR (Görevden gelen EPATS vb.)
+  if (notification?.associatedTaskId) {
+    try {
+      const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
+      if (tSnap.exists()) {
+        const epats = (tSnap.data()?.details || {}).epatsDocument || null;
+        if (epats) {
+          const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
+          previews.push({ fileName: safeName(epats.name, "epats.pdf"), fileUrl });
+        }
+      }
+    } catch (e) { console.warn("EPATS error:", e); }
+  }
+
+  return previews;
+}
+
+
     // ---------- Modals ----------
     function showMissingInfo(notification) {
       const modal = document.getElementById("missing-info-modal");
@@ -895,7 +871,7 @@ function collectModalRecipients() {
 // ---------- Firestore listener ----------
 let notificationsUnsub = null;
 function startNotificationListener() {
-      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "asc"));
+      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "desc"));
       notificationsUnsub && notificationsUnsub();
     notificationsUnsub = onSnapshot(qy, async (snapshot) => {
         loader.style.display = "none";
