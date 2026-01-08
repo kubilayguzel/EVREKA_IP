@@ -4654,7 +4654,7 @@ async function createComparisonPage(group) {
   tableRows.push(createInfoRow("Sahip", monOwner, simOwner));
 
   // ============ 4. BAŞARI ŞANSI (MODERN TASARIM) ============
-  const successChance = similarMark.bs || "Belirtilmedi"; 
+  const successChance = similarMark.bs || ""; 
   tableRows.push(
     new TableRow({
       height: { value: 700, rule: "atLeast" },
@@ -4713,10 +4713,10 @@ async function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({ 
-                  text: successChance, 
+                  text: successChance || "-", 
                   bold: true, 
                   size: 48, 
-                  color: successChance === "Belirtilmedi" ? "999999" : (
+                  color: !successChance ? "CCCCCC" : (
                     parseInt(successChance) >= 60 ? "27AE60" : 
                     parseInt(successChance) >= 40 ? "F39C12" : "E74C3C"
                   ),
@@ -4728,7 +4728,7 @@ async function createComparisonPage(group) {
             })
           ],
           shading: { 
-            fill: successChance === "Belirtilmedi" ? "F8F9FA" : (
+            fill: !successChance ? "F8F9FA" : (
               parseInt(successChance) >= 60 ? "E8F8F5" : 
               parseInt(successChance) >= 40 ? "FEF5E7" : "FADBD8"
             )
@@ -4758,8 +4758,9 @@ async function createComparisonPage(group) {
 
   elements.push(comparisonTable);
 
-  // ============ 5. DEĞERLENDİRME BÖLÜMÜ (UZMAN GÖRÜŞÜ) ============
-  if (similarMark.note) {
+// ============ 5. DEĞERLENDİRME BÖLÜMÜ (UZMAN GÖRÜŞÜ) ============
+// Sadece note doluysa göster (boş string, null, undefined değilse)
+if (similarMark.note && String(similarMark.note).trim() !== "") {
     elements.push(new Paragraph({ text: "", spacing: { after: 200 } }));
 
     const noteTable = new Table({
@@ -4795,7 +4796,7 @@ async function createComparisonPage(group) {
                 new Paragraph({
                   children: [
                     new TextRun({ 
-                      text: similarMark.note, 
+                      text: String(similarMark.note).trim(), 
                       size: 22, 
                       color: "2C3E50",
                       font: FONT_FAMILY
