@@ -539,12 +539,51 @@ export class DocumentReviewManager {
     }
 
     renderHeader() {
-        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
+        if (document.getElementById('fileNameDisplay')) {
+            document.getElementById('fileNameDisplay').textContent = this.pdfData?.fileName || 'Dosya yükleniyor...';
+        }
+        
         const matchInfoEl = document.getElementById('matchInfoDisplay');
+        if (!matchInfoEl) return;
+
         if (this.matchedRecord) {
-            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
+            // Marka görselini belirle
+            const imgUrl = this.matchedRecord.brandImageUrl || 
+                        this.matchedRecord.trademarkImage || 
+                        this.matchedRecord.publicImageUrl || 
+                        './img/no-image.png'; // Varsayılan görsel
+
+            // Başvuru sahiplerini metin olarak birleştir
+            const applicantNames = Array.isArray(this.matchedRecord.applicants) 
+                ? this.matchedRecord.applicants.map(a => a.name).filter(Boolean).join(', ')
+                : (this.matchedRecord.clientName || '-');
+
+            matchInfoEl.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="mr-3 border rounded bg-white p-1 shadow-sm" style="width: 70px; height: 70px; overflow: hidden;">
+                        <img src="${imgUrl}" class="img-fluid w-100 h-100" style="object-fit: contain;" 
+                            onerror="this.src='./img/no-image.png'">
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <h6 class="mb-1 text-primary font-weight-bold text-truncate" title="${this.matchedRecord.title}">
+                            ${this.matchedRecord.title}
+                        </h6>
+                        <div class="d-flex small text-dark mb-1">
+                            <span class="mr-3"><strong>No:</strong> ${this.matchedRecord.applicationNumber || '-'}</span>
+                        </div>
+                        <div class="small text-muted text-truncate" title="${applicantNames}">
+                            <i class="fas fa-user-tie mr-1"></i>${applicantNames}
+                        </div>
+                    </div>
+                    <div class="ml-2">
+                        <span class="badge badge-success badge-pill px-3 py-2"><i class="fas fa-check mr-1"></i>Bağlandı</span>
+                    </div>
+                </div>`;
         } else {
-            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
+            matchInfoEl.innerHTML = `
+                <div class="d-flex align-items-center justify-content-center h-100 py-3">
+                    <div class="text-warning font-weight-bold"><i class="fas fa-exclamation-circle mr-2"></i>Eşleşen Kayıt Bulunmuyor</div>
+                </div>`;
         }
     }
 
