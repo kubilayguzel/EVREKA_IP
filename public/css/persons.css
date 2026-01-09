@@ -1,0 +1,21 @@
+/* public/css/persons.css */
+.persons-container { background: #fff; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px; }
+.persons-header { padding: 20px 30px; border-bottom: 1px solid #f0f2f5; display: flex; justify-content: space-between; align-items: center; }
+.search-group { display: flex; gap: 10px; max-width: 500px; flex-grow: 1; }
+
+/* Modal & Form Stilleri */
+.modal-content { border-radius: 20px; border: none; box-shadow: 0 15px 50px rgba(0,0,0,0.2); }
+.form-label { font-weight: 600; color: #1e3c72; margin-bottom: 5px; font-size: 0.9rem; }
+.form-input, .form-select { border-radius: 10px; border: 1px solid #e2e8f0; padding: 10px 15px; }
+
+/* Mail Tercihleri (Kritik Alan) */
+.mail-prefs-grid { background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 10px; }
+.mail-scope-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #fff; border: 1px solid #edf2f7; border-radius: 8px; margin-bottom: 5px; }
+.mail-scope-row .label { font-weight: 600; color: #2d3748; min-width: 100px; }
+.mail-scope-row .toggles label { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; background: #f1f5f9; cursor: pointer; border: 1px solid #cbd5e1; }
+.mail-scope-row .toggles label.disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Badge Stilleri */
+.type-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; color: #fff; }
+.type-gercek { background: #3182ce; }
+.type-tuzel { background: #38a169; }
