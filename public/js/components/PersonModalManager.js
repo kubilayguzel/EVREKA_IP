@@ -291,11 +291,10 @@ export class PersonModalManager {
         }
     }
 
-    // personId: Düzenleme için, callback: İşlem bitince çalışacak özel fonksiyon
     async open(personId = null, callback = null) {
         this.isEdit = !!personId;
         this.currentPersonId = personId;
-        this.tempCallback = callback; // Geçici callback kaydet
+        this.tempCallback = callback; // Başarı durumunda çalışacak fonksiyonu sakla
         this.resetForm();
 
         await this.loadInitialData();
@@ -307,7 +306,26 @@ export class PersonModalManager {
             document.getElementById('personModalTitle').textContent = 'Yeni Kişi Ekle';
         }
 
-        $('#personModal').modal('show');
+        // --- EKRAN KARARMASINI ÖNLEYEN GÜVENLİ AÇILIŞ ---
+        if (window.$) {
+            const $modal = $('#personModal');
+            
+            // 1. Modalı body'nin en sonuna taşı (Z-index çakışmalarını %100 çözer)
+            $modal.appendTo('body');
+            
+            // 2. Modalı başlat
+            $modal.modal({ backdrop: 'static', keyboard: false });
+            $modal.modal('show');
+
+            // 3. Arka plan katmanının (backdrop) modalın altında kalmasını zorla
+            $modal.on('shown.bs.modal', function () {
+                const zIndex = 1050 + (10 * $('.modal:visible').length);
+                $(this).css('z-index', zIndex);
+                setTimeout(() => {
+                    $('.modal-backdrop').not('.modal-stack').css('z-index', zIndex - 1).addClass('modal-stack');
+                }, 0);
+            });
+        }
     }
 
     syncMailPrefsAvailability() {
