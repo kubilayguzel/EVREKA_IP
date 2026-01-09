@@ -437,46 +437,53 @@ export class PersonModalManager {
     }
 
     editRelated(idx, isLoaded) {
-        // Düzenlenecek veriyi seç
         const data = isLoaded ? this.relatedLoaded[idx] : this.relatedDraft[idx];
-        
-        // Form alanlarını doldur
-        document.getElementById('relatedId').value = isLoaded ? data.id : idx; // Draft ise index'i, loaded ise ID'yi tut
+        if (!data) return;
+
+        // 1. Temel Bilgiler
+        document.getElementById('relatedId').value = isLoaded ? data.id : idx;
         document.getElementById('relatedName').value = data.name || '';
         document.getElementById('relatedEmail').value = data.email || '';
         document.getElementById('relatedPhone').value = data.phone || '';
 
-        // Sorumlu alanları (Checkbox) set et
+        // 2. ÖNCE Sorumlu Alanları (Checkbox) Set Et
         const resp = data.responsible || {};
-        ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'].forEach(s => {
-            const cb = document.getElementById(`scope${s.charAt(0).toUpperCase() + s.slice(1)}`);
+        const scopes = ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'];
+        
+        scopes.forEach(s => {
+            const id = 'scope' + s.charAt(0).toUpperCase() + s.slice(1);
+            const cb = document.getElementById(id);
             if (cb) {
-                cb.checked = !!resp[s];
+                // Veritabanında 'patent' (küçük) veya 'Patent' (büyük) olabilir, ikisini de kontrol et
+                cb.checked = !!(resp[s] || resp[s.charAt(0).toUpperCase() + s.slice(1)]);
             }
         });
 
-        // To / CC tercihlerini set et
-        const notify = data.notify || {};
-        ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'].forEach(s => {
-            const toInput = document.querySelector(`.mail-to[data-scope="${s}"]`);
-            const ccInput = document.querySelector(`.mail-cc[data-scope="${s}"]`);
-            if (toInput) toInput.checked = !!(notify[s] && notify[s].to);
-            if (ccInput) ccInput.checked = !!(notify[s] && notify[s].cc);
-        });
-
-        // To/CC kutularının aktiflik durumunu güncelle
+        // 3. KRİTİK ADIM: UI Kilidini Aç (To/CC'ler set edilmeden önce disabled durumundan çıkmalı)
         this.syncMailPrefsAvailability();
 
-        // Butonları değiştir: Ekle'yi gizle, Güncelle ve İptal'i göster
+        // 4. SONRA To / CC Tercihlerini Set Et
+        const notify = data.notify || {};
+        scopes.forEach(s => {
+            const toInput = document.querySelector(`.mail-to[data-scope="${s}"]`);
+            const ccInput = document.querySelector(`.mail-cc[data-scope="${s}"]`);
+            
+            // Veriyi normalize et (küçük/büyük harf esnekliği)
+            const prefs = notify[s] || notify[s.charAt(0).toUpperCase() + s.slice(1)] || { to: false, cc: false };
+            
+            if (toInput) toInput.checked = !!prefs.to;
+            if (ccInput) ccInput.checked = !!prefs.cc;
+        });
+
+        // 5. Buton ve Görünüm Ayarları
         document.getElementById('addRelatedBtn').style.display = 'none';
         document.getElementById('updateRelatedBtn').style.display = 'inline-block';
         document.getElementById('cancelRelatedBtn').style.display = 'inline-block';
         
-        // Düzenleme modunda olduğumuzu belirtmek için geçici bir değişken
         this.editingRelated = { idx, isLoaded };
         
-        // Formun olduğu bölüme odaklanması için (opsiyonel)
-        document.getElementById('relatedForm').scrollIntoView({ behavior: 'smooth' });
+        const form = document.getElementById('relatedForm');
+        if(form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     updateRelatedHandler() {
