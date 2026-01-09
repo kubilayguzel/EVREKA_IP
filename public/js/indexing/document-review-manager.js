@@ -60,27 +60,84 @@ export class DocumentReviewManager {
     }
 
     setupEventListeners() {
-        const saveBtn = document.getElementById('saveTransactionBtn');
-        if (saveBtn) {
-            const newSaveBtn = saveBtn.cloneNode(true);
-            saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
-            newSaveBtn.addEventListener('click', (e) => { e.preventDefault(); this.handleSave(); });
+            // --- Mevcut Kaydet Butonu Mantığı ---
+            const saveBtn = document.getElementById('saveTransactionBtn');
+            if (saveBtn) {
+                const newSaveBtn = saveBtn.cloneNode(true);
+                saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+                newSaveBtn.addEventListener('click', (e) => { e.preventDefault(); this.handleSave(); });
+            }
+
+            // --- Mevcut Arama Girişi Mantığı ---
+            const searchInput = document.getElementById('manualSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', debounce((e) => this.handleManualSearch(e.target.value), 300));
+                document.addEventListener('click', (e) => {
+                    const searchResults = document.getElementById('manualSearchResults');
+                    if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                        searchResults.style.display = 'none';
+                    }
+                });
+            }
+
+            // --- Mevcut Seçim Kutusu Mantığı ---
+            const parentSelect = document.getElementById('parentTransactionSelect');
+            if (parentSelect) parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
+
+            // ==========================================================
+            // GÜNCELLEME: Tarih ve İşlem Türü Değişim Dinleyicileri
+            // ==========================================================
+            const childSelect = document.getElementById('detectedType');
+            const dateInput = document.getElementById('detectedDate');
+            
+            if (childSelect) {
+                childSelect.addEventListener('change', () => {
+                    this.checkSpecialFields();      // Mevcut itiraz alanı kontrolü
+                    this.updateCalculatedDeadline(); // YENİ: Tarih hesaplamayı tetikle
+                });
+            }
+            
+            if (dateInput) {
+                dateInput.addEventListener('change', () => {
+                    this.updateCalculatedDeadline(); // YENİ: Tarih hesaplamayı tetikle
+                });
+            }
         }
-        const searchInput = document.getElementById('manualSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', debounce((e) => this.handleManualSearch(e.target.value), 300));
-            document.addEventListener('click', (e) => {
-                const searchResults = document.getElementById('manualSearchResults');
-                if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-                    searchResults.style.display = 'none';
-                }
-            });
+
+        // YENİ METOT: Resmi Son Tarihi Hesapla ve Ekrana Yazdır
+        updateCalculatedDeadline() {
+            const dateVal = document.getElementById('detectedDate').value;
+            const typeId = document.getElementById('detectedType').value;
+            const displayInput = document.getElementById('calculatedDeadlineDisplay');
+            
+            // Alanlar eksikse kutuyu temizle ve çık
+            if (!dateVal || !typeId || !displayInput) {
+                if(displayInput) displayInput.value = "";
+                return;
+            }
+
+            // Seçilen işlem tipinin süresini (duePeriod) bul
+            const typeObj = this.allTransactionTypes.find(t => String(t.id) === String(typeId));
+            
+            if (!typeObj || typeObj.duePeriod === undefined) {
+                displayInput.value = "Süre tanımlanmamış";
+                return;
+            }
+
+            // Hesaplama Başlangıcı
+            const deliveryDate = new Date(dateVal);
+            let duePeriod = Number(typeObj.duePeriod || 0);
+            
+            // utils.js'deki merkezi fonksiyonları kullanıyoruz
+            // 1. Belirtilen ay kadar ekle
+            let officialDate = addMonthsToDate(deliveryDate, duePeriod);
+            
+            // 2. Hafta sonu ve resmi tatilleri kontrol ederek bir sonraki iş gününü bul
+            officialDate = findNextWorkingDay(officialDate, TURKEY_HOLIDAYS);
+            
+            // 3. Ekranda kullanıcıya göster (Örn: 20.03.2026)
+            displayInput.value = officialDate.toLocaleDateString('tr-TR');
         }
-        const parentSelect = document.getElementById('parentTransactionSelect');
-        if (parentSelect) parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
-        const childSelect = document.getElementById('detectedType');
-        if (childSelect) childSelect.addEventListener('change', () => this.checkSpecialFields());
-    }
 
     async loadData() {
         try {
