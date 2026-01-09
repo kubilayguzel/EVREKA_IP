@@ -1,6 +1,6 @@
 // public/js/persons/PersonUIManager.js
 import { PersonDataManager } from './PersonDataManager.js';
-import Pagination from '../pagination.js'; // Pagination sınıfını içe aktar
+import Pagination from '../pagination.js';
 
 export class PersonUIManager {
     constructor() {
@@ -8,11 +8,10 @@ export class PersonUIManager {
         this.allPersons = [];      
         this.filteredData = [];    
         
-        // Sıralama Ayarları
         this.sortColumn = 'name';
         this.sortDirection = 'asc';
 
-        // Pagination Nesnesini Başlat
+        // Pagination nesnesini oluştur
         this.pagination = new Pagination({
             containerId: 'paginationContainer',
             itemsPerPage: 10,
@@ -28,7 +27,6 @@ export class PersonUIManager {
         }
     }
 
-    // Arama Fonksiyonu
     filterPersons(query) {
         const term = query.toLowerCase().trim();
         
@@ -42,10 +40,11 @@ export class PersonUIManager {
                 (p.tpeNo || '').includes(term)
             );
         }
+        // Arama yapıldığında 1. sayfaya dön
+        this.pagination.currentPage = 1;
         this.applyFiltersAndSort();
     }
 
-    // Sıralama Tetikleyici (Tablo başlıkları için)
     handleSort(column) {
         if (this.sortColumn === column) {
             this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -57,11 +56,13 @@ export class PersonUIManager {
     }
 
     applyFiltersAndSort() {
-        const dataToSort = (this.filteredData.length > 0 || document.getElementById('personSearchInput').value) 
+        // Eğer arama yapılmamışsa tüm veriyi kullan
+        const sourceData = (document.getElementById('personSearchInput')?.value) 
                            ? this.filteredData 
                            : this.allPersons;
 
-        dataToSort.sort((a, b) => {
+        // Sıralama Mantığı
+        sourceData.sort((a, b) => {
             let valA = (a[this.sortColumn] || '').toString().toLowerCase();
             let valB = (b[this.sortColumn] || '').toString().toLowerCase();
             
@@ -70,10 +71,18 @@ export class PersonUIManager {
             return 0;
         });
 
-        this.filteredData = dataToSort;
+        this.filteredData = sourceData;
         
-        // Pagination'ı yeni verilerle güncelle
-        this.pagination.setTotalItems(this.filteredData.length);
+        // HATA DÜZELTMESİ: pagination.js içinde metot ismi farklı olabilir. 
+        // En güvenli yöntem doğrudan toplam item sayısını atayıp render etmektir.
+        if (typeof this.pagination.setTotalItems === 'function') {
+            this.pagination.setTotalItems(this.filteredData.length);
+        } else {
+            // Eğer fonksiyon yoksa, İş Yönetimi sayfasındaki diğer yaygın kullanım:
+            this.pagination.totalItems = this.filteredData.length;
+            this.pagination.render(); 
+        }
+        
         this.renderTable();
     }
 
@@ -82,8 +91,8 @@ export class PersonUIManager {
         if (!tableBody) return;
 
         tableBody.innerHTML = '';
-
-        // Pagination üzerinden mevcut sayfa verisini al
+        
+        // Pagination'dan o anki sayfanın verisini al
         const paginatedData = this.pagination.getCurrentPageData(this.filteredData);
 
         if (paginatedData.length === 0) {
