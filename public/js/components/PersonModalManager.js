@@ -3,6 +3,8 @@ import { personService, db } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
 import { collection, doc, writeBatch, deleteDoc, updateDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+const $ = window.jQuery || window.$;
+
 export class PersonModalManager {
     constructor(options = {}) {
         this.dataManager = new PersonDataManager();
@@ -20,224 +22,144 @@ export class PersonModalManager {
         this.setupEventListeners();
     }
 
-    // Modal HTML yapısını (Tüm form alanlarıyla birlikte) enjekte eder
     ensureModalMarkup() {
-        if (document.getElementById('personModal')) return;
+    if (document.getElementById('personModal')) return;
 
-        const modalHtml = `
-        <div id="personModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
-            <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
-                <div class="modal-content shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
-                    <div class="modal-header bg-light border-bottom">
-                        <h5 class="modal-title font-weight-bold" id="personModalTitle">Yeni Kişi Ekle</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body p-4" style="max-height: 80vh; overflow-y: auto;">
-                        <form id="personForm">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label class="form-label">Kişi Tipi <span class="text-danger">*</span></label>
-                                        <select id="personType" class="form-control" required>
-                                            <option value="gercek">Gerçek Kişi</option>
-                                            <option value="tuzel">Tüzel Kişi (Firma)</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label" id="personNameLabel">Ad Soyad / Firma Adı <span class="text-danger">*</span></label>
-                                        <input type="text" id="personName" class="form-control" required>
-                                    </div>
-                                    <div id="gercekFields">
-                                        <div class="form-row">
-                                            <div class="form-group col-md-6">
-                                                <label class="form-label">TC Kimlik No</label>
-                                                <input type="text" id="personTckn" class="form-control" maxlength="11">
-                                            </div>
-                                            <div class="form-group col-md-6">
-                                                <label class="form-label">Doğum Tarihi</label>
-                                                <input type="date" id="personBirthDate" class="form-control">
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="tuzelFields" style="display:none;">
+    const modalHtml = `
+    <div id="personModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+        <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 20px; background: #f4f7f6;">
+                <div class="modal-header bg-white border-bottom p-4">
+                    <h5 class="modal-title font-weight-bold text-primary" id="personModalTitle">Yeni Kişi Ekle</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true" style="font-size: 1.5rem;">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4" style="max-height: 75vh; overflow-y: auto;">
+                    <form id="personForm">
+                        <div class="card border-0 shadow-sm rounded-lg mb-4">
+                            <div class="card-body p-4">
+                                <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2"><i class="fas fa-info-circle mr-2"></i>Genel Bilgiler</h6>
+                                <div class="row">
+                                    <div class="col-md-6 border-right">
                                         <div class="form-group">
-                                            <label class="form-label">Vergi No (VKN)</label>
-                                            <input type="text" id="personVkn" class="form-control" maxlength="10">
+                                            <label class="form-label small font-weight-bold text-muted">KİŞİ TİPİ *</label>
+                                            <select id="personType" class="form-control rounded-lg border-2" required>
+                                                <option value="gercek">Gerçek Kişi</option>
+                                                <option value="tuzel">Tüzel Kişi (Firma)</option>
+                                            </select>
                                         </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-row">
-                                        <div class="form-group col-md-6">
-                                            <label class="form-label">TPE Müşteri No</label>
-                                            <input type="text" id="personTpeNo" class="form-control">
+                                        <div class="form-group">
+                                            <label class="form-label small font-weight-bold text-muted" id="personNameLabel">AD SOYAD / FİRMA ADI *</label>
+                                            <input type="text" id="personName" class="form-control rounded-lg border-2" required>
                                         </div>
-                                        <div class="form-group col-md-6">
-                                            <label class="form-label">Telefon</label>
-                                            <input type="tel" id="personPhone" class="form-control" placeholder="+90 5__ ___ __ __">
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">E-posta</label>
-                                        <input type="email" id="personEmail" class="form-control">
-                                    </div>
-                                    <div class="form-group mb-0">
-                                        <div class="custom-control custom-switch mt-4">
-                                            <input type="checkbox" class="custom-control-input" id="is_evaluation_required">
-                                            <label class="custom-control-label font-weight-bold" for="is_evaluation_required">
-                                                Değerlendirme İşlemi Gerekli (ID 66)
-                                            </label>
-                                            <p class="small text-muted">Bu müvekkile giden bildirimler önce uzman onayına düşer.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="my-4">
-
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="form-group">
-                                        <label class="form-label">Adres Ülke / İl</label>
-                                        <div class="row">
-                                            <div class="col-md-4">
-                                                <select id="countrySelect" class="form-control"></select>
+                                        <div id="gercekFields">
+                                            <div class="form-row">
+                                                <div class="form-group col-md-6">
+                                                    <label class="form-label small font-weight-bold text-muted">TC KİMLİK NO</label>
+                                                    <input type="text" id="personTckn" class="form-control rounded-lg" maxlength="11">
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    <label class="form-label small font-weight-bold text-muted">DOĞUM TARİHİ</label>
+                                                    <input type="date" id="personBirthDate" class="form-control rounded-lg">
+                                                </div>
                                             </div>
-                                            <div class="col-md-4">
-                                                <select id="provinceSelect" class="form-control"></select>
-                                                <input type="text" id="provinceText" class="form-control" style="display:none;" placeholder="İl/Eyalet">
-                                            </div>
-                                            <div class="col-md-4">
-                                                <input type="text" id="personAddress" class="form-control" placeholder="Tam Adres Bilgisi">
+                                        </div>
+                                        <div id="tuzelFields" style="display:none;">
+                                            <div class="form-group"><label class="form-label small font-weight-bold text-muted">VERGİ NO (VKN)</label><input type="text" id="personVkn" class="form-control rounded-lg" maxlength="10"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6"><label class="form-label small font-weight-bold text-muted">TPE MÜŞTERİ NO</label><input type="text" id="personTpeNo" class="form-control rounded-lg"></div>
+                                            <div class="form-group col-md-6"><label class="form-label small font-weight-bold text-muted">TELEFON</label><input type="tel" id="personPhone" class="form-control rounded-lg" placeholder="+90 5__ ___ __ __"></div>
+                                        </div>
+                                        <div class="form-group"><label class="form-label small font-weight-bold text-muted">E-POSTA</label><input type="email" id="personEmail" class="form-control rounded-lg"></div>
+                                        <div class="bg-light p-3 rounded border">
+                                            <div class="custom-control custom-switch">
+                                                <input type="checkbox" class="custom-control-input" id="is_evaluation_required">
+                                                <label class="custom-control-label font-weight-bold text-dark" for="is_evaluation_required">Değerlendirme İşlemi Gerekli (ID 66)</label>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                            <hr class="my-4">
-
-                            <div class="section-title mb-3 d-flex justify-content-between align-items-center">
-                                <h6 class="font-weight-bold text-primary mb-0"><i class="fas fa-users mr-2"></i>İlgili Kişiler & Mail Tercihleri</h6>
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="toggleRelatedSectionBtn">
-                                    İlgilileri Yönet
-                                </button>
+                        </div>
+                        <div class="card border-0 shadow-sm rounded-lg mb-4">
+                            <div class="card-body p-4">
+                                <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2"><i class="fas fa-map-marker-alt mr-2"></i>Adres Bilgileri</h6>
+                                <div class="row">
+                                    <div class="col-md-4"><label class="small font-weight-bold text-muted">ÜLKE</label><select id="countrySelect" class="form-control rounded-lg border-2"></select></div>
+                                    <div class="col-md-4"><label class="small font-weight-bold text-muted">İL / EYALET</label><select id="provinceSelect" class="form-control rounded-lg border-2"></select><input type="text" id="provinceText" class="form-control rounded-lg" style="display:none;" placeholder="İl giriniz"></div>
+                                    <div class="col-md-4"><label class="small font-weight-bold text-muted">TAM ADRES</label><input type="text" id="personAddress" class="form-control rounded-lg border-2" placeholder="Mahalle, Sokak, No..."></div>
+                                </div>
                             </div>
-
-                            <div id="relatedSection" style="display:none;">
-                                <div class="card bg-light border-0 mb-3">
-                                    <div class="card-body">
-                                        <div class="row" id="relatedForm">
-                                            <input type="hidden" id="relatedId">
-                                            <div class="col-md-4">
-                                                <div class="form-group">
-                                                    <label class="small font-weight-bold">Ad Soyad</label>
-                                                    <input type="text" id="relatedName" class="form-control form-control-sm">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="small font-weight-bold">E-posta</label>
-                                                    <input type="email" id="relatedEmail" class="form-control form-control-sm">
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="small font-weight-bold">Sorumlu Olduğu Alanlar</label>
-                                                <div class="d-flex flex-wrap gap-2 mb-2">
-                                                    <div class="custom-control custom-checkbox mr-3">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scopePatent" value="patent">
-                                                        <label class="custom-control-label small" for="scopePatent">Patent</label>
-                                                    </div>
-                                                    <div class="custom-control custom-checkbox mr-3">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scopeMarka" value="marka">
-                                                        <label class="custom-control-label small" for="scopeMarka">Marka</label>
-                                                    </div>
-                                                    <div class="custom-control custom-checkbox mr-3">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scopeTasarim" value="tasarim">
-                                                        <label class="custom-control-label small" for="scopeTasarim">Tasarım</label>
-                                                    </div>
-                                                </div>
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    <div class="custom-control custom-checkbox mr-3">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scopeDava" value="dava">
-                                                        <label class="custom-control-label small" for="scopeDava">Dava</label>
-                                                    </div>
-                                                    <div class="custom-control custom-checkbox">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scopeMuhasebe" value="muhasebe">
-                                                        <label class="custom-control-label small" for="scopeMuhasebe">Muhasebe</label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="small font-weight-bold">Mail To / CC Tercihleri</label>
-                                                <div class="mail-prefs-grid small">
-                                                    ${['patent','marka','tasarim','dava','muhasebe'].map(s => `
-                                                        <div class="mail-scope-row d-flex justify-content-between mb-1">
-                                                            <span class="text-capitalize">${s}</span>
-                                                            <div class="toggles">
-                                                                <label class="mr-2 disabled"><input type="checkbox" class="mail-to" data-scope="${s}" checked> To</label>
-                                                                <label class="disabled"><input type="checkbox" class="mail-cc" data-scope="${s}"> CC</label>
-                                                            </div>
-                                                        </div>
-                                                    `).join('')}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="text-right mt-2">
-                                            <button type="button" class="btn btn-sm btn-secondary" id="cancelRelatedBtn" style="display:none;">İptal</button>
-                                            <button type="button" class="btn btn-sm btn-primary" id="addRelatedBtn">Ekle</button>
-                                            <button type="button" class="btn btn-sm btn-success" id="updateRelatedBtn" style="display:none;">Güncelle</button>
+                        </div>
+                        <div class="card border-0 shadow-sm rounded-lg mb-4 overflow-hidden">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center p-3">
+                                <h6 class="text-primary font-weight-bold mb-0"><i class="fas fa-users-cog mr-2"></i>İlgili Kişiler & Mail Bildirimleri</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="toggleRelatedSectionBtn">İlgilileri Yönet</button>
+                            </div>
+                            <div id="relatedSection" style="display:none;" class="card-body bg-light">
+                                <div class="row bg-white p-3 rounded border mx-0 shadow-sm mb-3">
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="relatedId">
+                                        <div class="form-group mb-2"><label class="small font-weight-bold">Ad Soyad *</label><input type="text" id="relatedName" class="form-control form-control-sm"></div>
+                                        <div class="form-group mb-2"><label class="small font-weight-bold">E-posta</label><input type="email" id="relatedEmail" class="form-control form-control-sm"></div>
+                                    </div>
+                                    <div class="col-md-4 border-left">
+                                        <label class="small font-weight-bold">Sorumlu Alanlar</label>
+                                        <div class="d-flex flex-wrap gap-2 mt-1">
+                                            ${['Patent', 'Marka', 'Tasarim', 'Dava', 'Muhasebe'].map(s => `
+                                                <div class="custom-control custom-checkbox mr-3 mb-2">
+                                                    <input type="checkbox" class="custom-control-input scope-cb" id="scope${s}" value="${s.toLowerCase()}">
+                                                    <label class="custom-control-label small" for="scope${s}">${s}</label>
+                                                </div>`).join('')}
                                         </div>
                                     </div>
-                                </div>
-                                <div id="relatedListContainer" class="list-group small mb-3">
+                                    <div class="col-md-4 border-left">
+                                        <label class="small font-weight-bold">Mail To / CC</label>
+                                        <div class="mail-prefs-grid small bg-light p-2 rounded border">
+                                            ${['patent','marka','tasarim','dava','muhasebe'].map(s => `
+                                                <div class="mail-scope-row d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
+                                                    <span class="text-capitalize font-weight-bold">${s}</span>
+                                                    <div class="toggles">
+                                                        <label class="mb-0 mr-1 disabled"><input type="checkbox" class="mail-to" data-scope="${s}" checked> To</label>
+                                                        <label class="mb-0 disabled"><input type="checkbox" class="mail-cc" data-scope="${s}"> CC</label>
+                                                    </div>
+                                                </div>`).join('')}
+                                        </div>
                                     </div>
-                            </div>
-
-                            <hr class="my-4">
-
-                            <h6 class="font-weight-bold text-primary mb-3"><i class="fas fa-file-pdf mr-2"></i>Evraklar (Vekaletname vb.)</h6>
-                            <div class="row mb-3 bg-light p-3 rounded mx-0">
-                                <div class="col-md-3">
-                                    <label class="small font-weight-bold">Evrak Türü</label>
-                                    <select id="docType" class="form-control form-control-sm">
-                                        <option value="Vekaletname">Vekaletname</option>
-                                        <option value="Kimlik Belgesi">Kimlik Belgesi</option>
-                                        <option value="İmza Sirküleri">İmza Sirküleri</option>
-                                        <option value="Diğer">Diğer</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="small font-weight-bold">Geçerlilik Tarihi</label>
-                                    <input type="date" id="docDate" class="form-control form-control-sm">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="small font-weight-bold">Ülke</label>
-                                    <select id="docCountry" class="form-control form-control-sm"></select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="small font-weight-bold">Dosya</label>
-                                    <div class="d-flex">
-                                        <input type="file" id="docFile" class="form-control-file small" accept=".pdf">
-                                        <button type="button" class="btn btn-sm btn-primary ml-2" id="addDocBtn">Ekle</button>
+                                    <div class="col-12 text-right border-top mt-3 pt-3">
+                                        <button type="button" class="btn btn-sm btn-secondary" id="cancelRelatedBtn" style="display:none;">İptal</button>
+                                        <button type="button" class="btn btn-sm btn-primary px-4" id="addRelatedBtn">➕ İlgili Ekle</button>
+                                        <button type="button" class="btn btn-sm btn-success px-4" id="updateRelatedBtn" style="display:none;">✔️ Güncelle</button>
                                     </div>
                                 </div>
+                                <div id="relatedListContainer" class="list-group list-group-flush rounded border shadow-sm bg-white"></div>
                             </div>
-                            <div id="docListContainer" class="list-group small">
-                                </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer bg-light">
-                        <button type="button" class="btn btn-secondary px-4" data-dismiss="modal">Vazgeç</button>
-                        <button type="button" class="btn btn-primary px-5" id="savePersonBtn">
-                            <i class="fas fa-save mr-2"></i>Kaydet
-                        </button>
-                    </div>
+                        </div>
+                        <div class="card border-0 shadow-sm rounded-lg p-4">
+                            <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2"><i class="fas fa-file-pdf mr-2"></i>Evrak Listesi (PDF)</h6>
+                            <div class="row bg-light p-3 rounded-lg border mx-0 mb-3 align-items-end">
+                                <div class="col-md-3"><label class="small font-weight-bold text-muted">EVRAK TÜRÜ</label><select id="docType" class="form-control form-control-sm"><option value="Vekaletname">Vekaletname</option><option value="Diğer">Diğer</option></select></div>
+                                <div class="col-md-3"><label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label><input type="date" id="docDate" class="form-control form-control-sm"></div>
+                                <div class="col-md-3"><label class="small font-weight-bold text-muted">ÜLKE</label><select id="docCountry" class="form-control form-control-sm"></select></div>
+                                <div class="col-md-3 text-right"><div class="d-flex align-items-center"><input type="file" id="docFile" class="form-control-file small" accept=".pdf"><button type="button" class="btn btn-sm btn-primary shadow-sm ml-2" id="addDocBtn">➕</button></div></div>
+                            </div>
+                            <div id="docListContainer" class="list-group list-group-flush rounded border bg-white"></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-white border-top p-4">
+                    <button type="button" class="btn btn-secondary px-4 rounded-pill" data-dismiss="modal">Vazgeç</button>
+                    <button type="button" class="btn btn-primary btn-lg px-5 rounded-pill shadow" id="savePersonBtn"><i class="fas fa-save mr-2"></i>Kaydet</button>
                 </div>
             </div>
-        </div>`;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
 
     setupEventListeners() {
         // TCKN/VKN Sadece Rakam ve Hane Sınırı
@@ -297,7 +219,7 @@ export class PersonModalManager {
             document.getElementById('personModalTitle').textContent = 'Yeni Kişi Ekle';
         }
 
-        window.$('#personModal').modal('show');
+        $('#personModal').modal('show');
     }
 
     syncMailPrefsAvailability() {
