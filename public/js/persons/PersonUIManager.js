@@ -89,16 +89,11 @@ export class PersonUIManager {
                 this.pagination.currentPage = 1;
             }
 
-            // KRİTİK: DOM'un yerleşmesi için render işlemini mikro-task'e alıyoruz
-            setTimeout(() => {
-                if (typeof this.pagination.render === 'function') {
-                    this.pagination.render(); 
-                }
-            }, 0);
+            // Pagination render - setTimeout gereksiz, direkt çağır
+            this.pagination.render(); 
         }
         
         this.renderTable();
-    }
 
     renderTable() {
         const tableBody = document.getElementById('personsTableBody');
