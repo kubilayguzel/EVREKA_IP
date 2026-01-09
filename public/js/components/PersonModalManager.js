@@ -416,18 +416,17 @@ export class PersonModalManager {
             // 4. İlgilileri Kaydet (Batch ile)
             await this.saveRelatedToDb(savedId);
 
-            showNotification('Kişi bilgileri başarıyla kaydedildi.', 'success');
-            window.$('#personModal').modal('hide');
-            // Geri dönecek tam veri objesi
+            // --- TEMİZLENMİŞ BÖLÜM: Veri Dönüşü ve UI Kapatma ---
             const finalPersonObject = { id: savedId, ...personData };
 
-            // Eğer open() ile özel bir callback verildiyse onu çalıştır, yoksa varsayılanı
+            // Callback kontrolü
             if (this.tempCallback) {
                 this.tempCallback(finalPersonObject);
             } else {
                 this.onSuccess(finalPersonObject);
             }
 
+            // Modal'ı kapat ve bildirimi göster (Tek sefer)
             showNotification('Kişi bilgileri başarıyla kaydedildi.', 'success');
             window.$('#personModal').modal('hide');
 
