@@ -69,3 +69,16 @@
 }
 .type-gercek { background: #3182ce; }
 .type-tuzel { background: #38a169; }
+/* Modal Kararma Sorununu Çözen Z-Index Ayarı */
+.modal { 
+    z-index: 1060 !important; 
+}
+
+.modal-backdrop { 
+    z-index: 1050 !important; 
+}
+
+/* Modalın üstte görünmesini garanti altına alan ek stil */
+#personModal {
+    background-color: rgba(0, 0, 0, 0.5); /* Hafif kararma efekti */
+}
