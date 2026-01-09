@@ -209,4 +209,38 @@ export class TaskUpdateUIManager {
             return d.toISOString().split('T')[0];
         } catch { return ''; }
     }
+
+    ensureRenewalDataModal() {
+    if (document.getElementById('renewalDataModal')) return;
+
+    const modalHtml = `
+    <div class="modal fade" id="renewalDataModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content shadow-sm">
+                <div class="modal-header bg-light text-dark border-bottom">
+                    <h5 class="modal-title font-weight-bold">
+                        <i class="fas fa-redo mr-2"></i>Yenileme Bilgileri
+                    </h5>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="renewalWarningArea" class="alert alert-warning border-0 mb-4" style="display: none; font-size: 0.9em;">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <span id="renewalWarningText"></span>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label class="font-weight-bold mb-1">Yeni Koruma (Yenileme) Tarihi</label>
+                        <input type="date" id="modalRenewalDate" class="form-control">
+                        <small class="text-muted d-block mt-1">Yenileme işlemi sonrası geçerli olacak yeni koruma tarihini giriniz.</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-primary px-4" id="btnSaveRenewalData">
+                        <i class="fas fa-check mr-2"></i>Kaydet ve Kapat
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
 }
