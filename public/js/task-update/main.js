@@ -499,8 +499,9 @@ class TaskUpdateController {
     }
 
     // --- KAYDETME VE YÖNLENDİRME ---
+
     async saveTaskChanges() {
-        // 1. EPATS Validasyonu
+        // 1. EPATS Validasyonu: Eğer bir dosya yüklendiyse form alanlarını kontrol et
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
@@ -511,11 +512,12 @@ class TaskUpdateController {
                 return;
             }
             
+            // Dosya objesine form verilerini ekle
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        // 2. Veri Objesini Hazırla
+        // 2. Görev (Task) Veri Objesini Hazırla
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -526,34 +528,84 @@ class TaskUpdateController {
             updatedAt: new Date().toISOString(),
             documents: this.currentDocuments,
             details: this.taskData.details || {},
-
-            // --- 🔥 DÜZELTME 4: Yeni İlişkileri Pakete Ekle ---
-            relatedIpRecordId: this.selectedIpRecordId, // Marka/Patent ID
-            taskOwner: this.selectedPersonId            // Taraf ID
+            relatedIpRecordId: this.selectedIpRecordId, // Güncel varlık ID
+            taskOwner: this.selectedPersonId            // Güncel taraf ID
         };
 
-        // 3. EPATS Evrak Durumu
+        // 3. EPATS Verilerini Details içine yerleştir
         if (this.uploadedEpatsFile) {
             updateData.details.epatsDocument = this.uploadedEpatsFile;
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
         } else {
-            // Dosya silinmişse NULL yap
             updateData.details.epatsDocument = null; 
         }
 
-        // 4. Gönder
+        // 4. Ana Görev Güncellemesini Veritabanına Gönder
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
-            // Başvuru Verisi (App No) varsa IP Record'a işle
-            if (this.tempApplicationData && this.taskData.relatedIpRecordId) {
-                await this.dataManager.updateIpRecord(this.taskData.relatedIpRecordId, {
+            const recordId = this.selectedIpRecordId;
+            const taskType = String(this.taskData.taskType);
+
+            // ==========================================================
+            // ÖZEL DURUM A: Sahip Değişimi (İşlem Tipi 3, 5, 18)
+            // ==========================================================
+            const ownerChangeTypes = ['3', '5', '18'];
+            if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
+                try {
+                    // Hafızadaki kayıttan eski sahipleri al
+                    const record = this.masterData.ipRecords.find(r => r.id === recordId);
+                    if (record) {
+                        const oldApplicants = record.applicants || record.owners || [];
+                        
+                        // Eski sahip bilgilerini yedekle (ID ve İsim)
+                        const oldOwnerData = oldApplicants.map(a => ({
+                            id: a.id || '',
+                            name: a.name || a.applicantName || 'Bilinmeyen'
+                        }));
+
+                        // Yeni sahibin detaylarını persons listesinden bul
+                        const newPerson = this.masterData.persons.find(p => String(p.id) === String(this.selectedPersonId));
+                        
+                        if (newPerson) {
+                            const newApplicants = [{
+                                id: newPerson.id,
+                                name: newPerson.name,
+                                email: newPerson.email || null,
+                                address: newPerson.address || null
+                            }];
+
+                            // 1. IP Kaydının asıl sahibini (applicants) güncelle
+                            await this.dataManager.updateIpRecord(recordId, { applicants: newApplicants });
+                            console.log("✅ IP Kaydı yeni sahibiyle güncellendi.");
+
+                            // 2. Bu görevin bağlı olduğu Transaction dökümanına eski sahipleri işle
+                            const transactionId = this.taskData.transactionId;
+                            if (transactionId) {
+                                await this.dataManager.updateTransaction(recordId, transactionId, { 
+                                    oldOwnerData: oldOwnerData 
+                                });
+                                console.log("✅ İşlem geçmişine (Transaction) eski sahip verileri eklendi.");
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Sahip güncelleme sürecinde hata:", err);
+                }
+            }
+
+            // ==========================================================
+            // ÖZEL DURUM B: Başvuru Verisi (App No) Güncelleme
+            // ==========================================================
+            if (this.tempApplicationData && recordId) {
+                await this.dataManager.updateIpRecord(recordId, {
                     applicationNumber: this.tempApplicationData.appNo,
                     applicationDate: this.tempApplicationData.appDate
                 });
+                console.log("✅ Başvuru numarası ve tarihi güncellendi.");
             }
             
-            showNotification('Değişiklikler kaydedildi.', 'success');
+            showNotification('Değişiklikler başarıyla kaydedildi.', 'success');
             
             setTimeout(() => {
                 window.location.href = 'task-management.html';
