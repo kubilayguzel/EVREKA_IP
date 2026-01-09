@@ -65,9 +65,10 @@ export class PersonUIManager {
 
     applyFiltersAndSort() {
         const term = document.getElementById('personSearchInput')?.value || '';
-        const sourceData = term ? this.filteredData : this.allPersons;
+        // Arama varsa filtrelenmiş veriyi, yoksa tüm veriyi al
+        let sourceData = term ? [...this.filteredData] : [...this.allPersons];
 
-        // 1. Sıralama Yap
+        // 1. Sıralama (Sorting)
         sourceData.sort((a, b) => {
             let valA = (a[this.sortColumn] || '').toString().toLowerCase();
             let valB = (b[this.sortColumn] || '').toString().toLowerCase();
@@ -78,19 +79,24 @@ export class PersonUIManager {
 
         this.filteredData = sourceData;
         
-        // 2. Pagination Güncelleme
+        // 2. Pagination Senkronizasyonu
         if (this.pagination) {
+            // Toplam kayıt sayısını ata
             this.pagination.totalItems = this.filteredData.length;
             
-            // EĞER SAYAÇ GÖRÜNMÜYORSA: Kütüphanenin render'ını zorla tetikle
-            // Bazı versiyonlarda update() bazılarında render() kullanılır. 
-            // İkisini de kapsayan en güvenli yol:
-            if (typeof this.pagination.render === 'function') {
-                this.pagination.render(); 
+            // Eğer arama yapıldıysa veya ilk yükleme ise sayfayı 1'e çek
+            if (term || this.pagination.currentPage === undefined) {
+                this.pagination.currentPage = 1;
             }
+
+            // KRİTİK: DOM'un yerleşmesi için render işlemini mikro-task'e alıyoruz
+            setTimeout(() => {
+                if (typeof this.pagination.render === 'function') {
+                    this.pagination.render(); 
+                }
+            }, 0);
         }
         
-        // 3. Tabloyu Çiz
         this.renderTable();
     }
 
