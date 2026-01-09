@@ -28,10 +28,6 @@ import {
     generateUUID 
 } from '../../utils.js';
 
-// Servisler
-import { PdfExtractor } from './pdf-extractor.js';
-import { PdfAnalyzer } from './pdf-analyzer.js';
-
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 const SELCAN_UID = '8A9HHfdKKNR3WKl6tCtJH5Khjkx1'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
@@ -45,8 +41,6 @@ export class DocumentReviewManager {
         this.analysisResult = null;
         this.currentTransactions = []; 
         this.allTransactionTypes = []; 
-        this.pdfExtractor = new PdfExtractor();
-        this.analyzer = new PdfAnalyzer();
         this.init();
     }
 
@@ -97,7 +91,6 @@ export class DocumentReviewManager {
             if (this.pdfData.matchedRecordId) await this.selectRecord(this.pdfData.matchedRecordId);
             else this.renderHeader();
             this.renderHeader();
-            await this.runAnalysis();
         } catch (error) {
             console.error('Veri yükleme hatası:', error);
             showNotification('Veri yükleme hatası: ' + error.message, 'error');
@@ -232,17 +225,6 @@ export class DocumentReviewManager {
         
         if (this.analysisResult && this.analysisResult.detectedType) {
             this.autoSelectChildType(childSelect);
-        }
-    }
-
-    autoSelectChildType(selectElement) {
-        const detectedName = this.analysisResult.detectedType.name.toLowerCase();
-        const options = Array.from(selectElement.options);
-        const matchedOption = options.find(opt => opt.text.toLowerCase().includes(detectedName));
-        if (matchedOption) { 
-            matchedOption.selected = true; 
-            this.checkSpecialFields();
-            selectElement.dispatchEvent(new Event('change'));
         }
     }
 
@@ -518,26 +500,6 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- EKSİK OLAN FONKSİYONLAR BURAYA EKLENDİ ---
-    
-    async runAnalysis() {
-        const loadingEl = document.getElementById('analysisLoading');
-        const resultsEl = document.getElementById('analysisResults');
-        const pdfViewerEl = document.getElementById('pdfViewer');
-        if(loadingEl) loadingEl.style.display = 'block';
-        if(resultsEl) resultsEl.style.display = 'none';
-        try {
-            if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
-            const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
-            this.analysisResult = this.analyzer.analyze(fullText);
-            this.renderAnalysisResults();
-        } catch (error) { console.error(error); } 
-        finally {
-            if(loadingEl) loadingEl.style.display = 'none';
-            if(resultsEl) resultsEl.style.display = 'block';
-        }
-    }
-
     renderHeader() {
         if (document.getElementById('fileNameDisplay')) {
             document.getElementById('fileNameDisplay').textContent = this.pdfData?.fileName || 'Dosya yükleniyor...';
@@ -585,16 +547,6 @@ export class DocumentReviewManager {
                     <div class="text-warning font-weight-bold"><i class="fas fa-exclamation-circle mr-2"></i>Eşleşen Kayıt Bulunmuyor</div>
                 </div>`;
         }
-    }
-
-    renderAnalysisResults() {
-        const dateInput = document.getElementById('detectedDate');
-        const summaryBox = document.getElementById('analysisSummary');
-        if (dateInput && this.analysisResult.decisionDate) {
-            const parts = this.analysisResult.decisionDate.split('.');
-            if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-        if (summaryBox) summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
     }
 
     async handleManualSearch(query) {
