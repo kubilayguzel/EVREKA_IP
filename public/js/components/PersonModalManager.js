@@ -143,35 +143,44 @@ export class PersonModalManager {
                             <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2">
                                 <i class="fas fa-file-pdf mr-2"></i>Evrak Listesi (PDF)
                             </h6>
-                            <div class="row bg-light p-3 rounded-lg border mx-0 mb-3 align-items-end">
-                                <div class="col-md-2 mb-2">
-                                    <label class="small font-weight-bold text-muted">EVRAK TÜRÜ</label>
-                                    <select id="docType" class="form-control form-control-sm border-2">
-                                        <option value="Vekaletname">Vekaletname</option>
-                                        <option value="Kimlik Belgesi">Kimlik Belgesi</option>
-                                        <option value="İmza Sirküleri">İmza Sirküleri</option>
-                                        <option value="Diğer">Diğer</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="small font-weight-bold text-muted">VEKALET VERİLEN TARAF / NOT</label>
-                                    <input type="text" id="docProxyParty" class="form-control form-control-sm border-2" placeholder="Örn: Evreka Patent">
-                                </div>
-                                <div class="col-md-2 mb-2">
-                                    <label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label>
-                                    <input type="date" id="docDate" class="form-control form-control-sm">
-                                </div>
-                                <div class="col-md-2 mb-2">
-                                    <label class="small font-weight-bold text-muted">ÜLKE</label>
-                                    <select id="docCountry" class="form-control form-control-sm border-2"></select>
-                                </div>
-                                <div class="col-md-3">
-                                    <div id="docDropZone" class="file-upload-area py-2" style="border: 2px dashed #a8dadc; background: #f1faee; cursor: pointer; text-align: center; border-radius: 10px; transition: all 0.3s;">
-                                        <i class="fas fa-cloud-upload-alt text-primary mb-1"></i>
-                                        <div class="small font-weight-bold" id="docFileNameDisplay">PDF Sürükle veya Tıkla</div>
-                                        <input type="file" id="docFile" style="display: none;" accept=".pdf">
+                            <div class="bg-light p-3 rounded-lg border mb-3">
+                                <div class="row align-items-end mb-3">
+                                    <div class="col-md-3 mb-2">
+                                        <label class="small font-weight-bold text-muted">EVRAK TÜRÜ</label>
+                                        <select id="docType" class="form-control form-control-sm border-2">
+                                            <option value="Vekaletname">Vekaletname</option>
+                                            <option value="Kimlik Belgesi">Kimlik Belgesi</option>
+                                            <option value="İmza Sirküleri">İmza Sirküleri</option>
+                                            <option value="Diğer">Diğer</option>
+                                        </select>
                                     </div>
-                                    <button type="button" class="btn btn-sm btn-primary btn-block mt-2 shadow-sm" id="addDocBtn">➕ Evrak Listesine Ekle</button>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="small font-weight-bold text-muted">VEKALET VERİLEN TARAF / NOT</label>
+                                        <input type="text" id="docProxyParty" class="form-control form-control-sm border-2" placeholder="Örn: Ofis / Avukat Adı">
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label>
+                                        <input type="date" id="docDate" class="form-control form-control-sm border-2">
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="small font-weight-bold text-muted">ÜLKE</label>
+                                        <select id="docCountry" class="form-control form-control-sm border-2"></select>
+                                    </div>
+                                </div>
+
+                                <div class="row align-items-center">
+                                    <div class="col-md-9">
+                                        <div id="docDropZone" class="file-upload-area py-3" style="border: 2px dashed #a8dadc; background: #f1faee; cursor: pointer; text-align: center; border-radius: 12px; transition: all 0.3s;">
+                                            <i class="fas fa-cloud-upload-alt text-primary fa-lg mr-2"></i>
+                                            <span class="font-weight-bold text-dark" id="docFileNameDisplay">PDF Dosyasını Buraya Sürükleyin veya Tıklayın</span>
+                                            <input type="file" id="docFile" style="display: none;" accept=".pdf">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" class="btn btn-primary btn-block shadow-sm" id="addDocBtn" style="height: 52px; font-weight: bold;">
+                                            <i class="fas fa-plus mr-2"></i>Listeye Ekle
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div id="docListContainer" class="list-group list-group-flush rounded border bg-white"></div>
@@ -458,9 +467,8 @@ export class PersonModalManager {
         // Temizlik
         fileInput.value = '';
         document.getElementById('docProxyParty').value = '';
-        document.getElementById('docFileNameDisplay').innerText = 'PDF Sürükle veya Tıkla';
-    }
-    
+        document.getElementById('docFileNameDisplay').innerText = 'PDF Dosyasını Buraya Sürükleyin veya Tıklayın';    }
+
     renderDocuments() {
         const cont = document.getElementById('docListContainer');
         cont.innerHTML = this.documents.length === 0 ? '<div class="p-4 text-center text-muted small">Henüz evrak eklenmedi.</div>' : '';
