@@ -592,12 +592,29 @@ export class DocumentReviewManager {
             const imgUrl = this.matchedRecord.brandImageUrl || 
                         this.matchedRecord.trademarkImage || 
                         this.matchedRecord.publicImageUrl || 
-                        './img/no-image.png'; // Varsayılan görsel
+                        './img/no-image.png'; 
 
-            // Başvuru sahiplerini metin olarak birleştir
-            const applicantNames = Array.isArray(this.matchedRecord.applicants) 
-                ? this.matchedRecord.applicants.map(a => a.name).filter(Boolean).join(', ')
-                : (this.matchedRecord.clientName || '-');
+            // ==========================================================
+            // SAHİP BİLGİSİ ÇÖZÜMLEME (GÜNCELLENDİ)
+            // ==========================================================
+            let applicantNames = '-';
+            
+            // 1. 'applicants' dizisini kontrol et
+            if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
+                applicantNames = this.matchedRecord.applicants
+                    .map(a => typeof a === 'string' ? a : (a.name || a.applicantName))
+                    .filter(Boolean).join(', ');
+            } 
+            // 2. 'owners' dizisini kontrol et (Demo verilerinde bu kullanılıyor)
+            else if (Array.isArray(this.matchedRecord.owners) && this.matchedRecord.owners.length > 0) {
+                applicantNames = this.matchedRecord.owners
+                    .map(o => typeof o === 'string' ? o : (o.name || o.applicantName))
+                    .filter(Boolean).join(', ');
+            }
+            // 3. Tekil alanları kontrol et
+            else {
+                applicantNames = this.matchedRecord.clientName || this.matchedRecord.applicantName || '-';
+            }
 
             matchInfoEl.innerHTML = `
                 <div class="d-flex align-items-center">
