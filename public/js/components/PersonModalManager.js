@@ -140,12 +140,39 @@ export class PersonModalManager {
                             </div>
                         </div>
                         <div class="card border-0 shadow-sm rounded-lg p-4">
-                            <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2"><i class="fas fa-file-pdf mr-2"></i>Evrak Listesi (PDF)</h6>
+                            <h6 class="text-primary font-weight-bold mb-4 border-bottom pb-2">
+                                <i class="fas fa-file-pdf mr-2"></i>Evrak Listesi (PDF)
+                            </h6>
                             <div class="row bg-light p-3 rounded-lg border mx-0 mb-3 align-items-end">
-                                <div class="col-md-3"><label class="small font-weight-bold text-muted">EVRAK TÜRÜ</label><select id="docType" class="form-control form-control-sm"><option value="Vekaletname">Vekaletname</option><option value="Diğer">Diğer</option></select></div>
-                                <div class="col-md-3"><label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label><input type="date" id="docDate" class="form-control form-control-sm"></div>
-                                <div class="col-md-3"><label class="small font-weight-bold text-muted">ÜLKE</label><select id="docCountry" class="form-control form-control-sm"></select></div>
-                                <div class="col-md-3 text-right"><div class="d-flex align-items-center"><input type="file" id="docFile" class="form-control-file small" accept=".pdf"><button type="button" class="btn btn-sm btn-primary shadow-sm ml-2" id="addDocBtn">➕</button></div></div>
+                                <div class="col-md-2 mb-2">
+                                    <label class="small font-weight-bold text-muted">EVRAK TÜRÜ</label>
+                                    <select id="docType" class="form-control form-control-sm border-2">
+                                        <option value="Vekaletname">Vekaletname</option>
+                                        <option value="Kimlik Belgesi">Kimlik Belgesi</option>
+                                        <option value="İmza Sirküleri">İmza Sirküleri</option>
+                                        <option value="Diğer">Diğer</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="small font-weight-bold text-muted">VEKALET VERİLEN TARAF / NOT</label>
+                                    <input type="text" id="docProxyParty" class="form-control form-control-sm border-2" placeholder="Örn: Evreka Patent">
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label>
+                                    <input type="date" id="docDate" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label class="small font-weight-bold text-muted">ÜLKE</label>
+                                    <select id="docCountry" class="form-control form-control-sm border-2"></select>
+                                </div>
+                                <div class="col-md-3">
+                                    <div id="docDropZone" class="file-upload-area py-2" style="border: 2px dashed #a8dadc; background: #f1faee; cursor: pointer; text-align: center; border-radius: 10px; transition: all 0.3s;">
+                                        <i class="fas fa-cloud-upload-alt text-primary mb-1"></i>
+                                        <div class="small font-weight-bold" id="docFileNameDisplay">PDF Sürükle veya Tıkla</div>
+                                        <input type="file" id="docFile" style="display: none;" accept=".pdf">
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary btn-block mt-2 shadow-sm" id="addDocBtn">➕ Evrak Listesine Ekle</button>
+                                </div>
                             </div>
                             <div id="docListContainer" class="list-group list-group-flush rounded border bg-white"></div>
                         </div>
@@ -203,6 +230,40 @@ export class PersonModalManager {
         // Telefon Formatlama
         this.addPhoneListeners('personPhone');
         this.addPhoneListeners('relatedPhone');
+
+        // --- SÜRÜKLE BIRAK MANTIĞI ---
+        const dropZone = document.getElementById('docDropZone');
+        const fileInput = document.getElementById('docFile');
+        const fileNameDisplay = document.getElementById('docFileNameDisplay');
+
+        if (dropZone && fileInput) {
+            dropZone.onclick = () => fileInput.click();
+
+            dropZone.ondragover = (e) => {
+                e.preventDefault();
+                dropZone.style.background = "#e0f2f1";
+                dropZone.style.borderColor = "#4db6ac";
+            };
+
+            dropZone.ondragleave = () => {
+                dropZone.style.background = "#f1faee";
+                dropZone.style.borderColor = "#a8dadc";
+            };
+
+            dropZone.ondrop = (e) => {
+                e.preventDefault();
+                dropZone.style.background = "#f1faee";
+                dropZone.style.borderColor = "#a8dadc";
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    fileNameDisplay.innerText = e.dataTransfer.files[0].name;
+                }
+            };
+
+            fileInput.onchange = () => {
+                if (fileInput.files.length) fileNameDisplay.innerText = fileInput.files[0].name;
+            };
+        }
     }
 
     async open(personId = null) {
@@ -375,14 +436,16 @@ export class PersonModalManager {
         this.renderRelatedList();
     }
 
-    // --- Evrak (Document) İşlemleri ---
     addDocumentHandler() {
         const fileInput = document.getElementById('docFile');
         const file = fileInput.files[0];
+        const proxyParty = document.getElementById('docProxyParty').value.trim();
+
         if (!file) return showNotification('Lütfen bir dosya seçin.', 'warning');
 
         this.documents.push({
             type: document.getElementById('docType').value,
+            proxyParty: proxyParty, // Yeni alan
             validityDate: document.getElementById('docDate').value,
             countryCode: document.getElementById('docCountry').value,
             fileName: file.name,
@@ -391,27 +454,33 @@ export class PersonModalManager {
         });
 
         this.renderDocuments();
+        
+        // Temizlik
         fileInput.value = '';
+        document.getElementById('docProxyParty').value = '';
+        document.getElementById('docFileNameDisplay').innerText = 'PDF Sürükle veya Tıkla';
     }
-
+    
     renderDocuments() {
-        const container = document.getElementById('docListContainer');
-        container.innerHTML = '';
-        if (!this.documents.length) return;
-
-        this.documents.forEach((d, idx) => {
-            const item = `
-                <div class="list-group-item d-flex justify-content-between align-items-center p-2">
-                    <div>
-                        <i class="fas fa-file-pdf text-danger mr-2"></i>
-                        <span>${d.type} - ${d.fileName}</span>
-                        ${d.validityDate ? `<small class="ml-2 text-muted">(S.T: ${d.validityDate})</small>` : ''}
+        const cont = document.getElementById('docListContainer');
+        cont.innerHTML = this.documents.length === 0 ? '<div class="p-4 text-center text-muted small">Henüz evrak eklenmedi.</div>' : '';
+        
+        this.documents.forEach((d, i) => {
+            cont.insertAdjacentHTML('beforeend', `
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-file-pdf text-danger fa-2x mr-3"></i>
+                        <div>
+                            <div class="font-weight-bold text-dark">${d.type} ${d.proxyParty ? `(${d.proxyParty})` : ''}</div>
+                            <div class="small text-muted">
+                                ${d.fileName} ${d.validityDate ? ` • S.T: ${d.validityDate}` : ''}
+                            </div>
+                        </div>
                     </div>
-                    <button type="button" class="btn btn-sm text-danger" onclick="window.personModal.removeDocument(${idx})">
+                    <button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle" onclick="window.personModal.removeDocument(${i})">
                         <i class="fas fa-times"></i>
                     </button>
-                </div>`;
-            container.insertAdjacentHTML('beforeend', item);
+                </div>`);
         });
     }
 
