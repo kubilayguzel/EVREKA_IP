@@ -23,7 +23,15 @@ export class PersonUIManager {
         const res = await this.dataManager.fetchPersons();
         if (res.success) {
             this.allPersons = res.data;
-            this.applyFiltersAndSort(); 
+            this.filteredData = [...this.allPersons]; // Önce filtreli veriyi doldur
+            
+            // Pagination ayarlarını yap ve İLK ÇİZİMİ ZORLA
+            if (this.pagination) {
+                this.pagination.totalItems = this.allPersons.length;
+                this.pagination.currentPage = 1; // Sayfayı 1'e sabitle
+            }
+            
+            this.applyFiltersAndSort(); // Tabloyu ve pagination'ı çiz
         }
     }
 
@@ -56,15 +64,13 @@ export class PersonUIManager {
     }
 
     applyFiltersAndSort() {
-        const sourceData = (document.getElementById('personSearchInput')?.value) 
-                           ? this.filteredData 
-                           : this.allPersons;
+        const term = document.getElementById('personSearchInput')?.value || '';
+        const sourceData = term ? this.filteredData : this.allPersons;
 
-        // Sıralama Mantığı
+        // 1. Sıralama Yap
         sourceData.sort((a, b) => {
             let valA = (a[this.sortColumn] || '').toString().toLowerCase();
             let valB = (b[this.sortColumn] || '').toString().toLowerCase();
-            
             if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
             if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
             return 0;
@@ -72,17 +78,19 @@ export class PersonUIManager {
 
         this.filteredData = sourceData;
         
-        // --- BURASI KRİTİK: Sayfalamayı Güncelle ve Çiz ---
+        // 2. Pagination Güncelleme
         if (this.pagination) {
-            // Toplam kayıt sayısını ver
             this.pagination.totalItems = this.filteredData.length;
             
-            // Sayfa sayısını ve butonları HTML'e basan asıl komut:
+            // EĞER SAYAÇ GÖRÜNMÜYORSA: Kütüphanenin render'ını zorla tetikle
+            // Bazı versiyonlarda update() bazılarında render() kullanılır. 
+            // İkisini de kapsayan en güvenli yol:
             if (typeof this.pagination.render === 'function') {
                 this.pagination.render(); 
             }
         }
         
+        // 3. Tabloyu Çiz
         this.renderTable();
     }
 
