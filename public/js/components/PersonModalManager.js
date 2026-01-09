@@ -418,19 +418,106 @@ export class PersonModalManager {
         all.forEach((r, idx) => {
             const isLoaded = !!r.id;
             const item = `
-                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-2">
-                    <div>
-                        <strong class="d-block">${r.name}</strong>
+                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-2" 
+                     style="cursor: pointer;" 
+                     onclick="window.personModal.editRelated(${idx}, ${isLoaded})">
+                    <div style="flex-grow: 1;">
+                        <strong class="d-block text-dark">${r.name}</strong>
                         <small class="text-muted">${r.email || ''} ${r.phone || ''}</small>
                     </div>
                     <div>
-                        <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="window.personModal.removeRelated(${idx}, ${isLoaded})">
+                        <button type="button" class="btn btn-sm btn-outline-danger border-0" 
+                                onclick="event.stopPropagation(); window.personModal.removeRelated(${idx}, ${isLoaded})">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>`;
             container.insertAdjacentHTML('beforeend', item);
         });
+    }
+
+    editRelated(idx, isLoaded) {
+        // Düzenlenecek veriyi seç
+        const data = isLoaded ? this.relatedLoaded[idx] : this.relatedDraft[idx];
+        
+        // Form alanlarını doldur
+        document.getElementById('relatedId').value = isLoaded ? data.id : idx; // Draft ise index'i, loaded ise ID'yi tut
+        document.getElementById('relatedName').value = data.name || '';
+        document.getElementById('relatedEmail').value = data.email || '';
+        document.getElementById('relatedPhone').value = data.phone || '';
+
+        // Sorumlu alanları (Checkbox) set et
+        const resp = data.responsible || {};
+        ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'].forEach(s => {
+            const cb = document.getElementById(`scope${s.charAt(0).toUpperCase() + s.slice(1)}`);
+            if (cb) {
+                cb.checked = !!resp[s];
+            }
+        });
+
+        // To / CC tercihlerini set et
+        const notify = data.notify || {};
+        ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'].forEach(s => {
+            const toInput = document.querySelector(`.mail-to[data-scope="${s}"]`);
+            const ccInput = document.querySelector(`.mail-cc[data-scope="${s}"]`);
+            if (toInput) toInput.checked = !!(notify[s] && notify[s].to);
+            if (ccInput) ccInput.checked = !!(notify[s] && notify[s].cc);
+        });
+
+        // To/CC kutularının aktiflik durumunu güncelle
+        this.syncMailPrefsAvailability();
+
+        // Butonları değiştir: Ekle'yi gizle, Güncelle ve İptal'i göster
+        document.getElementById('addRelatedBtn').style.display = 'none';
+        document.getElementById('updateRelatedBtn').style.display = 'inline-block';
+        document.getElementById('cancelRelatedBtn').style.display = 'inline-block';
+        
+        // Düzenleme modunda olduğumuzu belirtmek için geçici bir değişken
+        this.editingRelated = { idx, isLoaded };
+        
+        // Formun olduğu bölüme odaklanması için (opsiyonel)
+        document.getElementById('relatedForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    updateRelatedHandler() {
+        if (!this.editingRelated) return;
+        const { idx, isLoaded } = this.editingRelated;
+
+        const name = document.getElementById('relatedName').value.trim();
+        if (!name) return showNotification('İlgili adı zorunludur.', 'warning');
+
+        // Formdaki yeni verileri topla
+        const scopes = Array.from(document.querySelectorAll('.scope-cb:checked')).map(cb => cb.value);
+        const notify = {};
+        ['patent','marka','tasarim','dava','muhasebe'].forEach(s => {
+            notify[s] = {
+                to: document.querySelector(`.mail-to[data-scope="${s}"]`).checked,
+                cc: document.querySelector(`.mail-cc[data-scope="${s}"]`).checked
+            };
+        });
+
+        const updatedData = {
+            name,
+            email: document.getElementById('relatedEmail').value.trim(),
+            phone: document.getElementById('relatedPhone').value.trim(),
+            responsible: scopes.reduce((obj, s) => ({ ...obj, [s]: true }), {}),
+            notify
+        };
+
+        // İlgili diziyi güncelle
+        if (isLoaded) {
+            // Firestore'daki ID'yi koru
+            const oldId = this.relatedLoaded[idx].id;
+            this.relatedLoaded[idx] = { id: oldId, ...updatedData };
+            // Not: Firestore güncellemesi handleSave sırasında veya anlık yapılabilir. 
+            // Şimdilik liste üzerinden yönetiyoruz.
+        } else {
+            this.relatedDraft[idx] = updatedData;
+        }
+
+        this.renderRelatedList();
+        this.resetRelatedForm();
+        showNotification('İlgili bilgileri güncellendi.', 'success');
     }
 
     async removeRelated(idx, isLoaded) {
