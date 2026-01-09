@@ -12,19 +12,16 @@ class TaskUpdateController {
         this.dataManager = new TaskUpdateDataManager();
         this.uiManager = new TaskUpdateUIManager();
         this.accrualManager = null; 
-
         this.taskId = null;
         this.taskData = null;
         this.masterData = {}; 
-        
         this.currentDocuments = [];
         this.uploadedEpatsFile = null;
         this.statusBeforeEpatsUpload = null;
         this.tempApplicationData = null; 
-
-        // 🔥 STATE: Seçili İlişkileri Hafızada Tutmak İçin
         this.selectedIpRecordId = null;
         this.selectedPersonId = null;
+        this.tempRenewalData = null;
     }
 
     async init() {
@@ -51,6 +48,8 @@ class TaskUpdateController {
                 alert('Sayfa yüklenemedi: ' + e.message);
             }
         });
+        this.uiManager.ensureRenewalDataModal();
+        this.setupRenewalModalEvents();
     }
 
     async refreshTaskData() {
@@ -224,6 +223,58 @@ class TaskUpdateController {
         }
     }
 
+    setupRenewalModalEvents() {
+        const btn = document.getElementById('btnSaveRenewalData');
+        if (btn) {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                const newDate = document.getElementById('modalRenewalDate').value;
+                if (!newDate) {
+                    alert('Lütfen yeni koruma tarihini giriniz.');
+                    return;
+                }
+                this.tempRenewalData = newDate;
+                if (window.$) $('#renewalDataModal').modal('hide');
+            };
+        }
+    }
+
+    handleRenewalLogic() {
+        const record = this.masterData.ipRecords.find(r => r.id === this.selectedIpRecordId);
+        if (!record) return;
+
+        // Menşei kontrolü (Harf duyarsız)
+        const isTurkpatent = (record.origin || '').toUpperCase() === 'TÜRKPATENT';
+        const currentRenewalDate = record.renewalDate;
+        
+        const modalDateInput = document.getElementById('modalRenewalDate');
+        const warningArea = document.getElementById('renewalWarningArea');
+        const warningText = document.getElementById('renewalWarningText');
+
+        // Reset
+        modalDateInput.value = '';
+        warningArea.style.display = 'none';
+
+        if (isTurkpatent && currentRenewalDate) {
+            let dateObj = (typeof currentRenewalDate === 'object' && currentRenewalDate.toDate) 
+                ? currentRenewalDate.toDate() 
+                : new Date(currentRenewalDate);
+
+            if (!isNaN(dateObj.getTime())) {
+                // 10 yıl ekle
+                const nextRenewalDate = new Date(dateObj);
+                nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 10);
+                
+                modalDateInput.value = nextRenewalDate.toISOString().split('T')[0];
+                warningText.textContent = "Koruma tarihi bu tarih olarak güncellenecektir.";
+                warningArea.style.display = 'block';
+            }
+        }
+
+        if (window.$) {
+            $('#renewalDataModal').modal({ backdrop: 'static', keyboard: false, show: true });
+        }
+    }
     renderSearchResults(items, type) {
         const container = type === 'ipRecord' ? this.uiManager.elements.ipResults : this.uiManager.elements.partyResults;
         container.innerHTML = '';
@@ -290,7 +341,6 @@ class TaskUpdateController {
         
         try {
             const url = await this.dataManager.uploadFile(file, path);
-            
             this.uploadedEpatsFile = {
                 id, name: file.name, url, storagePath: path, size: file.size,
                 uploadedAt: new Date().toISOString()
@@ -300,27 +350,23 @@ class TaskUpdateController {
 
             // Statüyü "Tamamlandı" yap
             const statusSelect = document.getElementById('taskStatus');
-            if(statusSelect) {
-                statusSelect.value = 'completed'; 
-                statusSelect.style.border = "2px solid #28a745";
-                setTimeout(() => statusSelect.style.border = "", 2000);
+            if(statusSelect) statusSelect.value = 'completed'; 
+
+            // --- YENİ: Yenileme (22) Mantığı ---
+            if (String(this.taskData.taskType) === '22') {
+                this.handleRenewalLogic();
             }
 
-            // Modal Kontrolü
+            // Mevcut Başvuru Modalı Kontrolü
             const isApp = this.isApplicationTask(this.taskData.taskType);
             if (isApp) {
                 if (typeof $ !== 'undefined') {
                     this.uiManager.ensureApplicationDataModal();
                     setTimeout(() => {
-                        $('#applicationDataModal').modal({
-                            backdrop: 'static',
-                            keyboard: false,
-                            show: true
-                        });
+                        $('#applicationDataModal').modal({ backdrop: 'static', keyboard: false, show: true });
                     }, 100);
                 }
             }
-
         } catch (e) {
             console.error('EPATS yükleme hatası:', e);
             alert('Dosya yüklenirken hata oluştu: ' + e.message);
@@ -499,25 +545,20 @@ class TaskUpdateController {
     }
 
     // --- KAYDETME VE YÖNLENDİRME ---
-
     async saveTaskChanges() {
-        // 1. EPATS Validasyonu: Eğer bir dosya yüklendiyse form alanlarını kontrol et
+        // 1. EPATS Validasyonu
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
-            
             if (!evrakNo || !evrakDate) {
-                alert('UYARI: EPATS evrakı yüklediniz. Lütfen "TürkPatent Evrak No" ve "Evrak Tarihi" alanlarını doldurunuz.');
-                document.getElementById('turkpatentEvrakNo').focus();
+                alert('Lütfen "TürkPatent Evrak No" ve "Evrak Tarihi" alanlarını doldurunuz.');
                 return;
             }
-            
-            // Dosya objesine form verilerini ekle
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        // 2. Görev (Task) Veri Objesini Hazırla
+        // 2. Veri Objesini Hazırla
         const updateData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
@@ -528,88 +569,57 @@ class TaskUpdateController {
             updatedAt: new Date().toISOString(),
             documents: this.currentDocuments,
             details: this.taskData.details || {},
-            relatedIpRecordId: this.selectedIpRecordId, // Güncel varlık ID
-            taskOwner: this.selectedPersonId            // Güncel taraf ID
+            relatedIpRecordId: this.selectedIpRecordId,
+            taskOwner: this.selectedPersonId
         };
 
-        // 3. EPATS Verilerini Details içine yerleştir
         if (this.uploadedEpatsFile) {
             updateData.details.epatsDocument = this.uploadedEpatsFile;
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
-        } else {
-            updateData.details.epatsDocument = null; 
         }
 
-        // 4. Ana Görev Güncellemesini Veritabanına Gönder
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
             const recordId = this.selectedIpRecordId;
             const taskType = String(this.taskData.taskType);
 
-            // ==========================================================
-            // ÖZEL DURUM A: Sahip Değişimi (İşlem Tipi 3, 5, 18)
-            // ==========================================================
+            // --- ÖZEL DURUM 1: Sahip Değişimi (3, 5, 18) ---
             const ownerChangeTypes = ['3', '5', '18'];
             if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
                 try {
-                    // Hafızadaki kayıttan eski sahipleri al
                     const record = this.masterData.ipRecords.find(r => r.id === recordId);
                     if (record) {
-                        const oldApplicants = record.applicants || record.owners || [];
-                        
-                        // Eski sahip bilgilerini yedekle (ID ve İsim)
-                        const oldOwnerData = oldApplicants.map(a => ({
-                            id: a.id || '',
-                            name: a.name || a.applicantName || 'Bilinmeyen'
-                        }));
-
-                        // Yeni sahibin detaylarını persons listesinden bul
+                        const oldOwnerData = (record.applicants || record.owners || []).map(a => ({ id: a.id || '', name: a.name || a.applicantName || 'Bilinmeyen' }));
                         const newPerson = this.masterData.persons.find(p => String(p.id) === String(this.selectedPersonId));
-                        
                         if (newPerson) {
-                            const newApplicants = [{
-                                id: newPerson.id,
-                                name: newPerson.name,
-                                email: newPerson.email || null,
-                                address: newPerson.address || null
-                            }];
-
-                            // 1. IP Kaydının asıl sahibini (applicants) güncelle
+                            const newApplicants = [{ id: newPerson.id, name: newPerson.name, email: newPerson.email || null, address: newPerson.address || null }];
                             await this.dataManager.updateIpRecord(recordId, { applicants: newApplicants });
-                            console.log("✅ IP Kaydı yeni sahibiyle güncellendi.");
-
-                            // 2. Bu görevin bağlı olduğu Transaction dökümanına eski sahipleri işle
-                            const transactionId = this.taskData.transactionId;
-                            if (transactionId) {
-                                await this.dataManager.updateTransaction(recordId, transactionId, { 
-                                    oldOwnerData: oldOwnerData 
-                                });
-                                console.log("✅ İşlem geçmişine (Transaction) eski sahip verileri eklendi.");
+                            if (this.taskData.transactionId) {
+                                await this.dataManager.updateTransaction(recordId, this.taskData.transactionId, { oldOwnerData });
                             }
                         }
                     }
-                } catch (err) {
-                    console.error("Sahip güncelleme sürecinde hata:", err);
-                }
+                } catch (err) { console.error("Sahip güncelleme hatası:", err); }
             }
 
-            // ==========================================================
-            // ÖZEL DURUM B: Başvuru Verisi (App No) Güncelleme
-            // ==========================================================
+            // --- ÖZEL DURUM 2: Başvuru Verisi (2, 5, 8) ---
             if (this.tempApplicationData && recordId) {
                 await this.dataManager.updateIpRecord(recordId, {
                     applicationNumber: this.tempApplicationData.appNo,
                     applicationDate: this.tempApplicationData.appDate
                 });
-                console.log("✅ Başvuru numarası ve tarihi güncellendi.");
+            }
+
+            // --- ÖZEL DURUM 3: Yenileme Verisi (22) ---
+            if (this.tempRenewalData && recordId) {
+                await this.dataManager.updateIpRecord(recordId, {
+                    renewalDate: this.tempRenewalData
+                });
             }
             
-            showNotification('Değişiklikler başarıyla kaydedildi.', 'success');
-            
-            setTimeout(() => {
-                window.location.href = 'task-management.html';
-            }, 1000); 
+            showNotification('Değişiklikler kaydedildi.', 'success');
+            setTimeout(() => { window.location.href = 'task-management.html'; }, 1000); 
         } else {
             alert('Hata: ' + res.error);
         }
