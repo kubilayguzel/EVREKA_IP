@@ -94,12 +94,7 @@ class TaskUpdateController {
     // --- YENİ FONKSİYON: Alanları Kilitleme Mantığı ---
     lockFieldsIfApplicationTask() {
         // Hangi tiplerde kilitlenecek? (Başvuru ID'leri)
-        const lockedTypes = [
-            '2', '5', '8', 
-            'trademark_application', 
-            'patent_application', 
-            'design_application'
-        ];
+        const lockedTypes = ['2'];
         
         const isLocked = lockedTypes.includes(String(this.taskData.taskType));
         
@@ -412,7 +407,7 @@ class TaskUpdateController {
 
     isApplicationTask(taskType) {
         if (!taskType) return false;
-        const applicationTypeIds = ['2', '5', '8', 'trademark_application', 'patent_application', 'design_application'];
+        const applicationTypeIds = ['2'];
         return applicationTypeIds.includes(String(taskType));
     }
 
