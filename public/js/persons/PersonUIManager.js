@@ -56,7 +56,6 @@ export class PersonUIManager {
     }
 
     applyFiltersAndSort() {
-        // Eğer arama yapılmamışsa tüm veriyi kullan
         const sourceData = (document.getElementById('personSearchInput')?.value) 
                            ? this.filteredData 
                            : this.allPersons;
@@ -73,14 +72,15 @@ export class PersonUIManager {
 
         this.filteredData = sourceData;
         
-        // HATA DÜZELTMESİ: pagination.js içinde metot ismi farklı olabilir. 
-        // En güvenli yöntem doğrudan toplam item sayısını atayıp render etmektir.
-        if (typeof this.pagination.setTotalItems === 'function') {
-            this.pagination.setTotalItems(this.filteredData.length);
-        } else {
-            // Eğer fonksiyon yoksa, İş Yönetimi sayfasındaki diğer yaygın kullanım:
+        // --- BURASI KRİTİK: Sayfalamayı Güncelle ve Çiz ---
+        if (this.pagination) {
+            // Toplam kayıt sayısını ver
             this.pagination.totalItems = this.filteredData.length;
-            this.pagination.render(); 
+            
+            // Sayfa sayısını ve butonları HTML'e basan asıl komut:
+            if (typeof this.pagination.render === 'function') {
+                this.pagination.render(); 
+            }
         }
         
         this.renderTable();
