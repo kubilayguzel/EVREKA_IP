@@ -555,8 +555,16 @@ export class PersonModalManager {
         window.personModal = this; // Global erişim için (remove metodları)
     }
 
+// PersonModalManager.js
     addPhoneListeners(id) {
         const el = document.getElementById(id);
+        
+        // KRİTİK DÜZELTME: Eğer eleman bulunamazsa işlemi durdur (Hata almayı önler)
+        if (!el) {
+            console.warn(`Uyarı: ${id} ID'li telefon inputu bulunamadı.`);
+            return;
+        }
+
         el.onfocus = () => { if(!el.value) el.value = '+90 '; };
         el.oninput = (e) => {
             let v = e.target.value.replace(/\D/g, '');
