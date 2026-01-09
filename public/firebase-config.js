@@ -573,25 +573,41 @@ export const ipRecordsService = {
         try {
             const term = searchTerm.toLowerCase();
             
-            // Not: Firestore'da 'contains' sorgusu olmadığı için son 500 kaydı çekip 
-            // istemci tarafında filtreliyoruz. Performans için ilerde Algolia kullanılabilir.
+            // ÖNCE: Uygulama Numarası ile Tam Eşleşme Sorgusu (Çok Hızlıdır)
+            const appNoQuery = query(collection(db, 'ipRecords'), 
+                                    where("applicationNumber", "==", searchTerm.trim()), 
+                                    limit(5));
+            const appSnap = await getDocs(appNoQuery);
+            
+            if (!appSnap.empty) {
+                return { success: true, data: appSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+            }
+
+            // SONRA: Eğer numara değilse, mevcut "fetch 500" mantığını 
+            // Cache'i zorlayarak (daha önce indiyse anında gelir) çalıştırın.
             const q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(500));
-            const snapshot = await getDocs(q);
+            
+            // getDocsFromCache kullanımı hızı inanılmaz artırır
+            let snapshot;
+            try {
+                snapshot = await getDocsFromCache(q);
+                if (snapshot.empty) snapshot = await getDocs(q);
+            } catch (e) {
+                snapshot = await getDocs(q);
+            }
             
             const results = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
                 const title = (data.title || '').toLowerCase();
                 const appNo = (data.applicationNumber || '').toLowerCase();
-                const wipoNo = (data.wipoIR || '').toLowerCase();
-                const aripoNo = (data.aripoIR || '').toLowerCase();
 
-                if (title.includes(term) || appNo.includes(term) || wipoNo.includes(term) || aripoNo.includes(term)) {
+                if (title.includes(term) || appNo.includes(term)) {
                     results.push({ id: doc.id, ...data });
                 }
             });
 
-            return { success: true, data: results };
+            return { success: true, data: results.slice(0, 20) }; // Sadece ilk 20 sonucu dönmek yeterli
         } catch (error) {
             console.error("Kayıt arama hatası:", error);
             return { success: false, error: error.message };
