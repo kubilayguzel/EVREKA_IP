@@ -4,59 +4,97 @@
     <meta charset="UTF-8">
     <title>IPGATE - Kişi Yönetimi</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="./css/shared-styles.css">
-    <link rel="stylesheet" href="./css/persons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <link rel="stylesheet" href="css/shared-styles.css">
+    <link rel="stylesheet" href="css/persons.css"> 
 </head>
 <body>
     <div id="layout-placeholder"></div>
+
     <div class="page-wrapper">
-        <main class="main-container">
-            <section class="page-header">
-                <h1 class="page-title">Kişi Yönetimi</h1>
-                <div class="search-group">
-                    <input type="text" id="personSearchInput" class="form-control" placeholder="Hızlı Ara...">
-                    <button class="btn btn-primary" id="addNewPersonBtn">➕ Yeni Kişi</button>
-                </div>
-            </section>
+        <main class="persons-container-wrapper">
             
-            <div class="persons-container">
-                <table class="table persons-table">
-                    <thead>
-                        <tr>
-                            <th>Sıra</th>
-                            <th>Ad Soyad / Firma Adı</th>
-                            <th>TCKN / VKN</th>
-                            <th>TPE No</th>
-                            <th>E-posta</th>
-                            <th>Tip</th>
-                            <th>İşlemler</th>
-                        </tr>
-                    </thead>
-                    <tbody id="personsTableBody"></tbody>
-                </table>
-                <div id="paginationContainer"></div>
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Kişi Yönetimi</h1>
+                    <p class="page-subtitle">Sistemdeki tüm gerçek ve tüzel kişileri yönetin.</p>
+                </div>
+                <button class="btn btn-primary btn-lg px-4" id="addNewPersonBtn">
+                    <i class="fas fa-user-plus mr-2"></i> Yeni Kişi Ekle
+                </button>
+            </div>
+
+            <div class="persons-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="search-input-group">
+                        <i class="fas fa-search text-muted mt-1"></i>
+                        <input type="text" id="personSearchInput" placeholder="İsim, e-posta veya TCKN/VKN ile ara...">
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="persons-table">
+                        <thead>
+                            <tr>
+                                <th>Sıra</th>
+                                <th>Ad Soyad / Firma Adı</th>
+                                <th>Kimlik / Vergi No</th>
+                                <th>TPE Müşteri No</th>
+                                <th>E-posta</th>
+                                <th>Kişi Tipi</th>
+                                <th class="text-right">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="personsTableBody">
+                            </tbody>
+                    </table>
+                </div>
+                
+                <div id="paginationContainer" class="mt-4"></div>
             </div>
         </main>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script type="module">
+        import { loadSharedLayout } from './js/layout-loader.js';
         import { PersonModalManager } from './js/components/PersonModalManager.js';
         import { PersonUIManager } from './js/persons/PersonUIManager.js';
-        import { loadSharedLayout } from './js/layout-loader.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // 1. Ortak Layout Yükle (Sol menü ve İkonlar için)
             await loadSharedLayout({ activeMenuLink: 'persons.html' });
-            
+
+            // 2. UI ve Modal Yönetimini Başlat
             const ui = new PersonUIManager();
-            const modal = new PersonModalManager({ onSuccess: () => ui.loadPersons() });
+            const modal = new PersonModalManager({
+                onSuccess: () => ui.loadPersons()
+            });
 
-            ui.loadPersons();
+            // 3. İlk Yükleme
+            await ui.loadPersons();
 
+            // 4. Global Event Listeners
             document.getElementById('addNewPersonBtn').onclick = () => modal.open();
             
-            document.getElementById('personsTableBody').onclick = (e) => {
-                if (e.target.classList.contains('edit-btn')) modal.open(e.target.dataset.id);
-                if (e.target.classList.contains('delete-btn')) { /* Silme onayı ve işlemi */ }
+            // Tablodaki "Düzenle" ve "Sil" butonları için delegation
+            document.getElementById('personsTableBody').addEventListener('click', (e) => {
+                const id = e.target.dataset.id;
+                if (e.target.classList.contains('edit-btn')) {
+                    modal.open(id);
+                } else if (e.target.classList.contains('delete-btn')) {
+                    if(confirm('Kişiyi silmek istediğinizden emin misiniz?')) {
+                        ui.deletePerson(id);
+                    }
+                }
+            });
+
+            // Arama
+            document.getElementById('personSearchInput').oninput = (e) => {
+                ui.filterPersons(e.target.value);
             };
         });
     </script>
