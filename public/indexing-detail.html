@@ -145,7 +145,7 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-        
+
     </style>
 </head>
 <body>
@@ -220,40 +220,30 @@
                             <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-robot mr-2"></i>İndeksleme Detayları</h6>
                         </div>
                         <div class="card-body analysis-panel p-3">
-                            
-                            <div id="analysisLoading" class="text-center py-5">
-                                <div class="spinner-border text-primary mb-3" role="status"></div>
-                                <p class="text-muted">Analiz ediliyor...</p>
-                            </div>
-                            
-                            <div id="analysisResults" style="display: none;">
-                                <div class="alert alert-light border small mb-3 rounded bg-light">
-                                    <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
+                            <div id="analysisResults">
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1 text-uppercase">Tebliğ Tarihi</label>
+                                    <input type="date" id="detectedDate" class="form-control border-primary shadow-sm">
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih (Tebliğ Tarihi)</label>
-                                    <input type="date" id="detectedDate" class="form-control">
-                                </div>
-
-                                <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">
+                                    <label class="font-weight-bold small text-muted mb-1 text-uppercase">
                                         Bağlı Olduğu İşlem (Parent)
                                         <i class="fas fa-info-circle text-info" title="Bu evrak hangi ana işlemin devamı?"></i>
                                     </label>
-                                    <select id="parentTransactionSelect" class="form-control">
+                                    <select id="parentTransactionSelect" class="form-control border-primary shadow-sm">
                                         <option value="">-- Önce Kayıt Seçiniz --</option>
                                     </select>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
-                                    <select id="detectedType" class="form-control" disabled>
+                                    <label class="font-weight-bold small text-muted mb-1 text-uppercase">İşlem Türü (Evrak Tipi)</label>
+                                    <select id="detectedType" class="form-control border-primary shadow-sm" disabled>
                                         <option value="">-- Önce Bağlı İşlem Seçiniz --</option>
                                     </select>
                                 </div>
 
-                                <div id="oppositionSection" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                <div id="oppositionSection" style="display: none; background: #fff7e6; padding: 15px; border-radius: 12px; border: 1px solid #ffe58f; margin-bottom: 15px;">
                                     <h6 class="text-warning font-weight-bold small"><i class="fas fa-exclamation-triangle mr-1"></i>İtiraz Detayları</h6>
                                     
                                     <div class="form-group mb-2">
@@ -268,12 +258,12 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
-                                    <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
+                                    <label class="font-weight-bold small text-muted mb-1 text-uppercase">Açıklama / Notlar</label>
+                                    <textarea id="transactionNotes" class="form-control border-primary shadow-sm" rows="4" placeholder="İsteğe bağlı not ekleyebilirsiniz..."></textarea>
                                 </div>
 
-                                <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
-                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
+                                <button id="saveTransactionBtn" class="btn btn-primary btn-block py-3 mt-4 shadow font-weight-bold rounded-pill text-uppercase" style="letter-spacing: 1px;">
+                                    <i class="fas fa-check-circle mr-2"></i> İndekslemeyi Tamamla
                                 </button>
                             </div>
                         </div>
