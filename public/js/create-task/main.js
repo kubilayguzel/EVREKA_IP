@@ -1,8 +1,9 @@
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { loadSharedLayout, openPersonModal } from '../layout-loader.js';
+import { loadSharedLayout } from '../layout-loader.js';
 import { initializeNiceClassification, getSelectedNiceClasses } from '../nice-classification.js';
 import { TASK_IDS } from './TaskConstants.js';
 import { auth } from '../../firebase-config.js';
+import { PersonModalManager } from '../components/PersonModalManager.js';
 
 // Modüller
 import { TaskDataManager } from './TaskDataManager.js';
@@ -45,6 +46,7 @@ class CreateTaskController {
             selectedOwners: [],
             isWithdrawalTask: false, searchSource: 'portfolio', isNiceClassificationInitialized: false, selectedWipoAripoChildren: []
         };
+        this.personModal = new PersonModalManager();
         
     }
 
@@ -211,38 +213,33 @@ setupEventListeners() {
                 this.validator.checkCompleteness(this.state);
             }
 
-            // --- C) MODAL VE EKLEME ---
-
-            // Yeni Kişi Ekleme (GÜNCELLENDİ: Owner Desteği)
+            // --- C) ORTAK MODAL ENTEGRASYONU (Müvekkil, Başvuru Sahibi, Sahip) ---
             if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn') || e.target.closest('#addNewOwnerBtn')) {
                 const isApplicant = e.target.closest('#addNewApplicantBtn'); 
-                const isOwner = e.target.closest('#addNewOwnerBtn'); // YENİ
+                const isOwner = e.target.closest('#addNewOwnerBtn');
 
-                openPersonModal((newPerson) => { 
+                // Ortak Modalımızı Açıyoruz
+                this.personModal.open(null, (newPerson) => { 
+                    // 1. Genel Listeye Ekle
                     this.state.allPersons.push(newPerson); 
                     
+                    // 2. Tıklanan butona göre ilgili listeye ve UI'ya ekle
                     if (isApplicant) {
-                        if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
+                        if(!this.state.selectedApplicants.some(a => a.id === newPerson.id)) {
                             this.state.selectedApplicants.push(newPerson);
                             this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
                         }
                     } 
-                    else if (isOwner) { // YENİ
+                    else if (isOwner) {
                         this.handlePersonSelection(newPerson, 'owner');
                     }
                     else {
+                        // Müvekkil / İlgili Taraf
                         this.handlePersonSelection(newPerson, 'relatedParty'); 
                     }
+                    
                     this.validator.checkCompleteness(this.state);
                 });
-
-                // Ülke seçimini tetikle (varsa)
-                setTimeout(() => {
-                    const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
-                    if (countrySelect && ['Turkey','TR','Türkiye'].includes(countrySelect.value)) {
-                        countrySelect.dispatchEvent(new Event('change'));
-                    }
-                }, 300);
             }
             
             // --- D) TAHAKKUK UI ---
