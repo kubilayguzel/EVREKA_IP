@@ -1,7 +1,8 @@
 // public/js/task-update/TaskUpdateDataManager.js
 
-import { taskService, ipRecordsService, personService, accrualService, transactionTypeService, storage } from '../../firebase-config.js';
+import { taskService, ipRecordsService, personService, accrualService, transactionTypeService, storage, db } from '../../firebase-config.js';
 import { ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 export class TaskUpdateDataManager {
     
@@ -111,5 +112,10 @@ export class TaskUpdateDataManager {
         // Şimdilik placeholder
         console.warn('Bulletin data fetch not implemented completely');
         return null;
+    }
+    // --- TRANSACTION GÜNCELLEME ---
+    async updateTransaction(recordId, transactionId, data) {
+        const txRef = doc(db, 'ipRecords', recordId, 'transactions', transactionId);
+        return await updateDoc(txRef, data);
     }
 }
