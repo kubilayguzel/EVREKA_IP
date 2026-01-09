@@ -82,3 +82,23 @@
 #personModal {
     background-color: rgba(0, 0, 0, 0.5); /* Hafif kararma efekti */
 }
+/* Soft Badges */
+.badge-soft-primary { background-color: #eef2ff; color: #4f46e5; border: 1px solid #e0e7ff; }
+.badge-soft-success { background-color: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7; }
+
+/* Action Buttons (Job Management Style) */
+.action-btn {
+    border: none;
+    background: #f8fafc;
+    color: #64748b;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.action-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.action-btn.edit-btn:hover { background: #fffbeb; color: #d97706; }
+.action-btn.delete-btn:hover { background: #fef2f2; color: #dc2626; }
