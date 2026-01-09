@@ -173,7 +173,7 @@ export default class Pagination {
     }
 
     createPageButton(page) {
-        return `<button class="pagination-btn ${page === this.currentPage ? 'current' : ''}" data-page="${page}">${page}</button>`;
+        return `<button class="pagination-btn ${page === this.currentPage ? 'pagination-btn-active' : ''}" data-page="${page}">${page}</button>`;
     }
 
     attachEventListeners() {
