@@ -144,10 +144,32 @@ export class DocumentReviewManager {
             const docRef = doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId);
             const docSnap = await getDoc(docRef);
             if (!docSnap.exists()) throw new Error('PDF kaydı bulunamadı.');
+            
             this.pdfData = { id: docSnap.id, ...docSnap.data() };
-            if (this.pdfData.matchedRecordId) await this.selectRecord(this.pdfData.matchedRecordId);
-            else this.renderHeader();
+
+            // ==========================================================
+            // PDF'İ GÖRÜNTÜLEME (KRİTİK GÜNCELLEME)
+            // ==========================================================
+            const pdfViewerEl = document.getElementById('pdfViewer');
+            if (pdfViewerEl) {
+                // Veritabanındaki alana göre fileUrl veya downloadURL kullanılır
+                const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
+                if (pdfUrl) {
+                    pdfViewerEl.src = pdfUrl;
+                } else {
+                    console.warn("PDF URL'si bulunamadı. Lütfen veritabanını kontrol edin.");
+                }
+            }
+
+            if (this.pdfData.matchedRecordId) {
+                await this.selectRecord(this.pdfData.matchedRecordId);
+            } else {
+                this.renderHeader();
+            }
+            
             this.renderHeader();
+            // Artık runAnalysis() çağrısı yapılmıyor, PDF direkt yükleniyor.
+
         } catch (error) {
             console.error('Veri yükleme hatası:', error);
             showNotification('Veri yükleme hatası: ' + error.message, 'error');
