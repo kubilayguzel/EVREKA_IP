@@ -1144,3 +1144,15 @@ button.action-btn[data-action="edit"]:hover {
     border-color: #6c757d;
 }
 }
+/* Modal Z-Index Fix: Ekran kararmasını ve tıklanamama sorununu çözer */
+.modal {
+    z-index: 1060 !important;
+}
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+/* Modal açıldığında body'nin kaymasını önle */
+body.modal-open {
+    overflow: hidden !important;
+    padding-right: 0 !important;
+}
