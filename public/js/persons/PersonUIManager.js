@@ -84,6 +84,8 @@ export class PersonUIManager {
             // update() metodu totalItems, totalPages hesaplar ve render eder
             this.pagination.update(this.filteredData.length);
         }
+        
+        this.renderTable();
     }
 
     renderTable() {
