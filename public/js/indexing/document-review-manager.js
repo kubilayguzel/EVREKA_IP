@@ -181,11 +181,46 @@ export class DocumentReviewManager {
             const result = await ipRecordsService.getRecordById(recordId);
             if (result.success) {
                 this.matchedRecord = result.data;
-                this.renderHeader();
+
+                // ==========================================================
+                // HİBRİT SAHİP BİLGİSİ ÇÖZÜMLEME (DOĞRUDAN İSİM VEYA ID)
+                // ==========================================================
+                let namesList = [];
+                const rawApps = this.matchedRecord.applicants || this.matchedRecord.owners || [];
+                
+                for (const app of rawApps) {
+                    // Durum A: Başvuru sahibi doğrudan bir metin ise
+                    if (typeof app === 'string') {
+                        namesList.push(app);
+                    } 
+                    // Durum B: Başvuru sahibi bir nesne ise
+                    else if (app && typeof app === 'object') {
+                        // 1. Nesne içinde doğrudan isim alanı varsa (Sizin paylaştığınız durum)
+                        if (app.name || app.applicantName) {
+                            namesList.push(app.name || app.applicantName);
+                        } 
+                        // 2. İsim yok ama ID varsa, persons koleksiyonundan çek
+                        else if (app.id) {
+                            try {
+                                const pDoc = await getDoc(doc(db, 'persons', app.id));
+                                if (pDoc.exists()) {
+                                    const pData = pDoc.data();
+                                    namesList.push(pData.name || pData.companyName || '-');
+                                }
+                            } catch (e) {
+                                console.error("Kişi bilgisi sorgulanırken hata:", e);
+                            }
+                        }
+                    }
+                }
+                
+                // Elde edilen isimleri virgülle birleştirip geçici alana yazıyoruz
+                this.matchedRecord.resolvedNames = namesList.length > 0 ? namesList.join(', ') : '-';
+
+                this.renderHeader(); // Görseli güncelle
                 await this.loadParentTransactions(recordId);
                 showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
 
-                console.log('📤 Event gönderiliyor: record-selected', recordId);
                 document.dispatchEvent(new CustomEvent('record-selected', { 
                     detail: { recordId: recordId } 
                 }));
@@ -588,33 +623,13 @@ export class DocumentReviewManager {
         if (!matchInfoEl) return;
 
         if (this.matchedRecord) {
-            // Marka görselini belirle
             const imgUrl = this.matchedRecord.brandImageUrl || 
                         this.matchedRecord.trademarkImage || 
                         this.matchedRecord.publicImageUrl || 
-                        './img/no-image.png'; 
+                        './img/no-image.png';
 
-            // ==========================================================
-            // SAHİP BİLGİSİ ÇÖZÜMLEME (GÜNCELLENDİ)
-            // ==========================================================
-            let applicantNames = '-';
-            
-            // 1. 'applicants' dizisini kontrol et
-            if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
-                applicantNames = this.matchedRecord.applicants
-                    .map(a => typeof a === 'string' ? a : (a.name || a.applicantName))
-                    .filter(Boolean).join(', ');
-            } 
-            // 2. 'owners' dizisini kontrol et (Demo verilerinde bu kullanılıyor)
-            else if (Array.isArray(this.matchedRecord.owners) && this.matchedRecord.owners.length > 0) {
-                applicantNames = this.matchedRecord.owners
-                    .map(o => typeof o === 'string' ? o : (o.name || o.applicantName))
-                    .filter(Boolean).join(', ');
-            }
-            // 3. Tekil alanları kontrol et
-            else {
-                applicantNames = this.matchedRecord.clientName || this.matchedRecord.applicantName || '-';
-            }
+            // selectRecord'da hazırladığımız akıllı listeyi kullanıyoruz
+            const applicantNames = this.matchedRecord.resolvedNames || '-';
 
             matchInfoEl.innerHTML = `
                 <div class="d-flex align-items-center">
