@@ -1,21 +1,71 @@
 /* public/css/persons.css */
-.persons-container { background: #fff; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px; }
-.persons-header { padding: 20px 30px; border-bottom: 1px solid #f0f2f5; display: flex; justify-content: space-between; align-items: center; }
-.search-group { display: flex; gap: 10px; max-width: 500px; flex-grow: 1; }
 
-/* Modal & Form Stilleri */
-.modal-content { border-radius: 20px; border: none; box-shadow: 0 15px 50px rgba(0,0,0,0.2); }
-.form-label { font-weight: 600; color: #1e3c72; margin-bottom: 5px; font-size: 0.9rem; }
-.form-input, .form-select { border-radius: 10px; border: 1px solid #e2e8f0; padding: 10px 15px; }
+/* --- GENEL SAYFA YAPISI (Task Update ile Uyumlu) --- */
+.persons-container-wrapper { width: 100%; padding: 30px; padding-top: 120px; }
 
-/* Mail Tercihleri (Kritik Alan) */
-.mail-prefs-grid { background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 10px; }
-.mail-scope-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #fff; border: 1px solid #edf2f7; border-radius: 8px; margin-bottom: 5px; }
-.mail-scope-row .label { font-weight: 600; color: #2d3748; min-width: 100px; }
-.mail-scope-row .toggles label { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; background: #f1f5f9; cursor: pointer; border: 1px solid #cbd5e1; }
-.mail-scope-row .toggles label.disabled { opacity: 0.4; cursor: not-allowed; }
+/* Header Alanı */
+.page-header { 
+    background: rgba(255, 255, 255, 0.95); 
+    padding: 30px; 
+    border-radius: 20px; 
+    margin-bottom: 30px; 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+}
+
+/* Ana Kart Yapısı (Task Update'teki Section-Card gibi) */
+.persons-card { 
+    background: #ffffff; 
+    padding: 30px; 
+    border-radius: 20px; 
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05); 
+    margin-bottom: 25px; 
+    border: 1px solid #e1e8ed;
+}
+
+/* Tablo Stilleri */
+.persons-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.persons-table th { 
+    background: #f8fafc; 
+    color: #1e3c72; 
+    font-weight: 700; 
+    padding: 15px; 
+    border-bottom: 2px solid #edf2f5;
+    text-transform: uppercase;
+    font-size: 0.85em;
+}
+.persons-table td { padding: 15px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+.persons-table tr:hover { background-color: #f8fafc; }
+
+/* Arama ve Filtreleme (Header içindeki yapı) */
+.search-input-group { 
+    display: flex; 
+    gap: 15px; 
+    background: #f8fafc; 
+    padding: 10px 20px; 
+    border-radius: 15px; 
+    border: 1px solid #e2e8f0;
+    max-width: 500px;
+    width: 100%;
+}
+.search-input-group input { 
+    border: none; 
+    background: transparent; 
+    width: 100%; 
+    outline: none; 
+    font-size: 0.95em; 
+}
 
 /* Badge Stilleri */
-.type-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; color: #fff; }
+.type-badge {
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+}
 .type-gercek { background: #3182ce; }
 .type-tuzel { background: #38a169; }
