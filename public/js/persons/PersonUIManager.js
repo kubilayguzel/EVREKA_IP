@@ -94,6 +94,7 @@ export class PersonUIManager {
         }
         
         this.renderTable();
+    }
 
     renderTable() {
         const tableBody = document.getElementById('personsTableBody');
