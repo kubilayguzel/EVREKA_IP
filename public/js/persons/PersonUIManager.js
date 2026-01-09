@@ -81,19 +81,9 @@ export class PersonUIManager {
         
         // 2. Pagination Senkronizasyonu
         if (this.pagination) {
-            // Toplam kayıt sayısını ata
-            this.pagination.totalItems = this.filteredData.length;
-            
-            // Eğer arama yapıldıysa veya ilk yükleme ise sayfayı 1'e çek
-            if (term || this.pagination.currentPage === undefined) {
-                this.pagination.currentPage = 1;
-            }
-
-            // Pagination render - setTimeout gereksiz, direkt çağır
-            this.pagination.render(); 
+            // update() metodu totalItems, totalPages hesaplar ve render eder
+            this.pagination.update(this.filteredData.length);
         }
-        
-        this.renderTable();
     }
 
     renderTable() {
