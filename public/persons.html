@@ -92,6 +92,11 @@
 
             // 4. Verileri İlk Kez Yükle
             await ui.loadPersons();
+            setTimeout(() => {
+                if (window.ui && window.ui.pagination) {
+                    window.ui.pagination.render();
+                }
+            }, 500);
 
             // 5. Yeni Kişi Ekleme Butonu
             document.getElementById('addNewPersonBtn').onclick = () => modal.open();
