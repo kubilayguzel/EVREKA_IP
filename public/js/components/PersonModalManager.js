@@ -437,7 +437,20 @@ export class PersonModalManager {
 
     async loadProvinces(code) {
         const provinces = await this.dataManager.getProvinces(code);
-        document.getElementById('provinceSelect').innerHTML = provinces.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+        
+        const options = ['<option value="">İl Seçiniz</option>'].concat(
+            provinces.map(p => {
+                // Veri obje ise code/id/name/label alanlarını dene, değilse doğrudan kendisini kullan
+                const pCode = (p.code || p.id || p).toString();
+                const pName = (p.name || p.label || p).toString();
+                return `<option value="${pCode}">${pName}</option>`;
+            })
+        ).join('');
+        
+        const provinceSel = document.getElementById('provinceSelect');
+        if (provinceSel) {
+            provinceSel.innerHTML = options;
+        }
     }
 
     async loadPersonData(id) {
