@@ -291,9 +291,11 @@ export class PersonModalManager {
         }
     }
 
-    async open(personId = null) {
+    // personId: Düzenleme için, callback: İşlem bitince çalışacak özel fonksiyon
+    async open(personId = null, callback = null) {
         this.isEdit = !!personId;
         this.currentPersonId = personId;
+        this.tempCallback = callback; // Geçici callback kaydet
         this.resetForm();
 
         await this.loadInitialData();
@@ -398,7 +400,18 @@ export class PersonModalManager {
 
             showNotification('Kişi bilgileri başarıyla kaydedildi.', 'success');
             window.$('#personModal').modal('hide');
-            this.onSuccess(savedId);
+            // Geri dönecek tam veri objesi
+            const finalPersonObject = { id: savedId, ...personData };
+
+            // Eğer open() ile özel bir callback verildiyse onu çalıştır, yoksa varsayılanı
+            if (this.tempCallback) {
+                this.tempCallback(finalPersonObject);
+            } else {
+                this.onSuccess(finalPersonObject);
+            }
+
+            showNotification('Kişi bilgileri başarıyla kaydedildi.', 'success');
+            window.$('#personModal').modal('hide');
 
         } catch (err) {
             showNotification('Kayıt hatası: ' + err.message, 'error');
