@@ -29,7 +29,9 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div class="search-input-group">
                         <i class="fas fa-search text-muted mt-1"></i>
-                        <input type="text" id="personSearchInput" placeholder="İsim, e-posta veya TCKN/VKN ile ara...">
+                        <input type="text" id="personSearchInput" class="form-control border-0 bg-transparent" 
+                               placeholder="İsim, e-posta veya TPE no ile ara..." 
+                               oninput="ui.filterPersons(this.value)">
                     </div>
                 </div>
 
@@ -38,11 +40,21 @@
                         <thead>
                             <tr>
                                 <th style="width: 50px;">#</th>
-                                <th onclick="ui.handleSort('name')" style="cursor:pointer;">Ad Soyad / Firma Adı <i class="fas fa-sort ml-1 text-muted small"></i></th>
-                                <th onclick="ui.handleSort('tckn')" style="cursor:pointer;">Kimlik / VKN <i class="fas fa-sort ml-1 text-muted small"></i></th>
-                                <th onclick="ui.handleSort('tpeNo')" style="cursor:pointer;">TPE No <i class="fas fa-sort ml-1 text-muted small"></i></th>
-                                <th onclick="ui.handleSort('email')" style="cursor:pointer;">E-posta <i class="fas fa-sort ml-1 text-muted small"></i></th>
-                                <th onclick="ui.handleSort('type')" style="cursor:pointer;">Tip <i class="fas fa-sort ml-1 text-muted small"></i></th>
+                                <th onclick="ui.handleSort('name')" style="cursor:pointer;">
+                                    Ad Soyad / Firma Adı <i class="fas fa-sort ml-1 text-muted small"></i>
+                                </th>
+                                <th onclick="ui.handleSort('tckn')" style="cursor:pointer;">
+                                    Kimlik / VKN <i class="fas fa-sort ml-1 text-muted small"></i>
+                                </th>
+                                <th onclick="ui.handleSort('tpeNo')" style="cursor:pointer;">
+                                    TPE No <i class="fas fa-sort ml-1 text-muted small"></i>
+                                </th>
+                                <th onclick="ui.handleSort('email')" style="cursor:pointer;">
+                                    E-posta <i class="fas fa-sort ml-1 text-muted small"></i>
+                                </th>
+                                <th onclick="ui.handleSort('type')" style="cursor:pointer;">
+                                    Tip <i class="fas fa-sort ml-1 text-muted small"></i>
+                                </th>
                                 <th class="text-right">İşlemler</th>
                             </tr>
                         </thead>
@@ -65,38 +77,41 @@
         import { PersonUIManager } from './js/persons/PersonUIManager.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // 1. Ortak Layout Yükle (Sol menü ve İkonlar için)
+            // 1. Ortak Layout Yükle
             await loadSharedLayout({ activeMenuLink: 'persons.html' });
 
-            // 2. UI ve Modal Yönetimini Başlat
+            // 2. UI Yöneticisini Başlat ve Globale Tanıt (Sorting ve Arama için)
             const ui = new PersonUIManager();
             window.ui = ui;
+
+            // 3. Modal Yöneticisini Başlat ve Globale Tanıt (İç butonlar için)
             const modal = new PersonModalManager({
                 onSuccess: () => ui.loadPersons()
             });
+            window.personModal = modal;
 
-            // 3. İlk Yükleme
+            // 4. Verileri İlk Kez Yükle
             await ui.loadPersons();
 
-            // 4. Global Event Listeners
+            // 5. Yeni Kişi Ekleme Butonu
             document.getElementById('addNewPersonBtn').onclick = () => modal.open();
             
-            // Tablodaki "Düzenle" ve "Sil" butonları için delegation
+            // 6. Tablo Olay Dinleyicileri (Edit ve Delete)
             document.getElementById('personsTableBody').addEventListener('click', (e) => {
-                const id = e.target.dataset.id;
-                if (e.target.classList.contains('edit-btn')) {
+                // Tıklanan element veya parent'ında data-id var mı bak
+                const target = e.target.closest('button');
+                if (!target) return;
+                
+                const id = target.dataset.id;
+                
+                if (target.classList.contains('edit-btn')) {
                     modal.open(id);
-                } else if (e.target.classList.contains('delete-btn')) {
-                    if(confirm('Kişiyi silmek istediğinizden emin misiniz?')) {
+                } else if (target.classList.contains('delete-btn')) {
+                    if(confirm('Bu kişiyi sistemden silmek istediğinizden emin misiniz?')) {
                         ui.deletePerson(id);
                     }
                 }
             });
-
-            // Arama
-            document.getElementById('personSearchInput').oninput = (e) => {
-                ui.filterPersons(e.target.value);
-            };
         });
     </script>
 </body>
