@@ -34,9 +34,13 @@ export class PersonUIManager {
                     <td>${p.tpeNo || '-'}</td>
                     <td>${p.email || '-'}</td>
                     <td><span class="type-badge type-${p.type}">${p.type === 'gercek' ? 'Gerçek' : 'Tüzel'}</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-warning edit-btn" data-id="${p.id}">Düzenle</button>
-                        <button class="btn btn-sm btn-danger delete-btn" data-id="${p.id}">Sil</button>
+                    <td class="text-right">
+                        <button class="btn btn-sm btn-outline-warning edit-btn mr-1" data-id="${p.id}" title="Düzenle">
+                            <i class="fas fa-edit edit-btn" data-id="${p.id}"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${p.id}" title="Sil">
+                            <i class="fas fa-trash-alt delete-btn" data-id="${p.id}"></i>
+                        </button>
                     </td>
                 </tr>`;
             tableBody.insertAdjacentHTML('beforeend', row);
