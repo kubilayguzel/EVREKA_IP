@@ -37,12 +37,12 @@
                     <table class="persons-table">
                         <thead>
                             <tr>
-                                <th>Sıra</th>
-                                <th>Ad Soyad / Firma Adı</th>
-                                <th>Kimlik / Vergi No</th>
-                                <th>TPE Müşteri No</th>
-                                <th>E-posta</th>
-                                <th>Kişi Tipi</th>
+                                <th style="width: 50px;">#</th>
+                                <th onclick="ui.handleSort('name')" style="cursor:pointer;">Ad Soyad / Firma Adı <i class="fas fa-sort ml-1 text-muted small"></i></th>
+                                <th onclick="ui.handleSort('tckn')" style="cursor:pointer;">Kimlik / VKN <i class="fas fa-sort ml-1 text-muted small"></i></th>
+                                <th onclick="ui.handleSort('tpeNo')" style="cursor:pointer;">TPE No <i class="fas fa-sort ml-1 text-muted small"></i></th>
+                                <th onclick="ui.handleSort('email')" style="cursor:pointer;">E-posta <i class="fas fa-sort ml-1 text-muted small"></i></th>
+                                <th onclick="ui.handleSort('type')" style="cursor:pointer;">Tip <i class="fas fa-sort ml-1 text-muted small"></i></th>
                                 <th class="text-right">İşlemler</th>
                             </tr>
                         </thead>
@@ -70,6 +70,7 @@
 
             // 2. UI ve Modal Yönetimini Başlat
             const ui = new PersonUIManager();
+            window.ui = ui;
             const modal = new PersonModalManager({
                 onSuccess: () => ui.loadPersons()
             });
