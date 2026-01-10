@@ -562,59 +562,58 @@
         }
 
         setupAuthStateListener() {
-            auth.onAuthStateChanged(async (user) => {
-                if (!user) {
-                    console.log('ℹ️ No authenticated Firebase user.');
-                    return;
-                }
-
-                const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
-                if (inSignupFlow && !user.emailVerified) {
-                    console.log('🟡 Signup flow in progress, suppressing success notification.');
-                    return;
-                }
-
-                if (!inSignupFlow && !user.emailVerified) {
-                    showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
-                    await authService.signOut();
-                    return;
-                }
-                
-                // ROL KONTROLÜ - Firebase token'dan al (en güncel)
-                const tokenResult = await user.getIdTokenResult(true);
-                const userRole = tokenResult.claims.role || 'belirsiz';
-
-                // LocalStorage'a güncel rol ile kaydet
-                const userData = {
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName,
-                    role: userRole,
-                    isSuperAdmin: userRole === 'superadmin'
-                };
-                localStorage.setItem('currentUser', JSON.stringify(userData));
-
-                // Rol bazlı yönlendirme
-                if (userRole === 'belirsiz') {
-                    showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
-                    window.location.href = 'client-pending.html';
-                    return;
-                }
-
-                if (userRole === 'client') {
-                    showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
-                    window.location.href = 'client-portal.html';
-                    return;
-                }
-
-                // Normal kullanıcılar için ana sayfaya yönlendir
-                sessionStorage.removeItem('signup_flow');
-                showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
-                setTimeout(() => {
-                    window.location.href = 'portfolio.html';
-                }, 1000);
-            });
+    auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+            console.log('ℹ️ No authenticated Firebase user.');
+            return;
         }
+
+        const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
+        if (inSignupFlow && !user.emailVerified) {
+            console.log('🟡 Signup flow in progress, suppressing success notification.');
+            return;
+        }
+
+        if (!inSignupFlow && !user.emailVerified) {
+            showNotification('Lütfen e-posta adresinizi doğrulayın.', 'warning');
+            await authService.signOut();
+            return;
+        }
+        
+        // --- DÜZELTİLEN KISIM BAŞLANGICI ---
+        // ROL KONTROLÜ - Firebase Token yerine doğrudan Firestore'dan çekiyoruz
+        const userRole = await authService.getUserRole(user.uid) || 'belirsiz';
+
+        // LocalStorage'a güncel rol ile kaydet
+        const userData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            role: userRole,
+            isSuperAdmin: userRole === 'superadmin'
+        };
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        // --- DÜZELTİLEN KISIM SONU ---
+
+        // Rol bazlı yönlendirme
+        if (userRole === 'belirsiz') {
+            window.location.href = 'client-pending.html';
+            return;
+        }
+
+        if (userRole === 'client') {
+            window.location.href = 'client-portal.html';
+            return;
+        }
+
+        // Başarılı giriş: Dashboard/Portfolio sayfasına yönlendir
+        sessionStorage.removeItem('signup_flow');
+        showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
+        setTimeout(() => {
+            window.location.href = 'portfolio.html';
+        }, 1000);
+    });
+}
 
         switchTab(tabName) {
             if (tabName === this.currentTab) return;
