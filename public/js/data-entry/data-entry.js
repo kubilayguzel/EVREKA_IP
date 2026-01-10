@@ -2,7 +2,8 @@
 
 // 1. Üst Modüller
 import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceClasses } from '../nice-classification.js';
-import { loadSharedLayout, openPersonModal, ensurePersonModal } from '../layout-loader.js';
+import { loadSharedLayout} from '../layout-loader.js';
+import { PersonModalManager } from '../components/PersonModalManager.js';
 
 // 2. Servisler ve Konfigürasyonlar
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../../firebase-config.js';
@@ -55,6 +56,7 @@ class DataEntryModule {
         this.suitSubjectAsset = null;
 
         this.authService = auth;
+        this.personModal = new PersonModalManager();
         
         // Stratejiler
         this.strategies = {
@@ -411,10 +413,10 @@ class DataEntryModule {
         const addApplicantBtn = document.getElementById('addApplicantBtn');
         if (addApplicantBtn) {
             addApplicantBtn.addEventListener('click', () => {
-                openPersonModal((newPerson) => {
+                // Yeni merkezi modalı aç
+                this.personModal.open(null, (newPerson) => {
                     this.allPersons.push(newPerson);
                     this.addSelectedPerson(newPerson, 'applicant');
-                    this.hideAddPersonModal();
                 });
             });
         }
@@ -1108,7 +1110,8 @@ class DataEntryModule {
         this.renderSuitSubjectAssetSection();
         
         document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
-            openPersonModal((newPerson) => {
+            // Yeni merkezi modalı aç
+            this.personModal.open(null, (newPerson) => {
                 this.allPersons.push(newPerson);
                 this.selectSuitClient(newPerson);
             });
