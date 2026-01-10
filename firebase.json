@@ -7,15 +7,27 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      { "source": "/tp-sorgu", "destination": "/tp-sorgu.html" },
-      { "source": "/tp-sorgu.html", "destination": "/tp-sorgu.html" },
-      { "source": "**", "destination": "/index.html" }
+      {
+        "source": "/tp-sorgu",
+        "destination": "/tp-sorgu.html"
+      },
+      {
+        "source": "/tp-sorgu.html",
+        "destination": "/tp-sorgu.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ],
     "headers": [
       {
         "source": "**/*.@(html|js|css)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
         ]
       }
     ]
@@ -36,5 +48,14 @@
         "npm --prefix \"$RESOURCE_DIR\" run lint"
       ]
     }
-  ]
+  ],
+  "firestore": {
+    "database": "(default)",
+    "location": "eur3",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
 }
