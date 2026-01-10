@@ -178,84 +178,91 @@
 
             // RemindersInboxModule içindeki loadAllSources metodunu bu sürümle değiştirin:
             async loadAllSources() {
-                const activeList = document.getElementById('activeList');
-                activeList.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Bildirimler taranıyor...</p></div>';
+            const activeList = document.getElementById('activeList');
+            activeList.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Bildirimler taranıyor...</p></div>';
 
-                try {
-                    const [remindersRes, ipRes, tasksSnap, personsSnap] = await Promise.all([
-                        reminderService.getReminders(),
-                        ipRecordsService.getRecords(),
-                        getDocs(collection(db, "tasks")),
-                        getDocs(collection(db, "persons"))
-                    ]);
+            try {
+                const [remindersRes, ipRes, tasksSnap, personsSnap] = await Promise.all([
+                    reminderService.getReminders(),
+                    ipRecordsService.getRecords(),
+                    getDocs(collection(db, "tasks")),
+                    getDocs(collection(db, "persons"))
+                ]);
 
-                    console.log("Ham Veriler:", { 
-                        tasks: tasksSnap.size, 
-                        persons: personsSnap.size, 
-                        manual: remindersRes.data?.length 
+                this.allIpRecords = ipRes.success ? ipRes.data : [];
+                let rawReminders = remindersRes.success ? remindersRes.data : [];
+
+                // 1. İşleri (Tasks) Dönüştür - Veri alanlarını kontrol ederek
+                const taskReminders = tasksSnap.docs.map(doc => {
+                    const data = doc.data();
+                    if (data.status === 'completed') return null;
+                    
+                    // Veritabanınızdaki farklı olası alan isimlerini kontrol ediyoruz
+                    const title = data.taskTitle || data.title || "Başlıksız İş";
+                    const dueDate = data.taskDueDate || data.dueDate || data.officialDue || data.operationalDue;
+                    
+                    if (!dueDate) return null; // Tarihi olmayan işi hatırlatıcıya ekleme
+
+                    const diff = this.getDayDiff(dueDate);
+
+                    // Filtre: Gelecek 90 gün ve geçmiş 30 günü göster (Test için genişletildi)
+                    if (diff > 90 || diff < -30) return null; 
+
+                    return {
+                        id: doc.id,
+                        type: 'auto-task',
+                        category: 'İŞ TAKİBİ',
+                        title: title,
+                        message: `Sayın kullanıcı, <b>"${title}"</b> başlıklı işin süresine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`,
+                        dueDate: dueDate,
+                        status: 'active',
+                        isRead: true,
+                        link: `task-update.html?id=${doc.id}`
+                    };
+                }).filter(Boolean);
+
+                // 2. Evrakları (Documents) Dönüştür
+                const docReminders = [];
+                personsSnap.forEach(pDoc => {
+                    const p = pDoc.data();
+                    (p.documents || []).forEach((d, idx) => {
+                        const diff = this.getDayDiff(d.validityDate);
+                        // Evraklar için bitime 1 yıl kala göster (Takip kolaylığı için)
+                        if (diff <= 365 && diff >= -30) { 
+                            docReminders.push({
+                                id: `${pDoc.id}_doc_${idx}`,
+                                type: 'auto-doc',
+                                category: 'EVRAK SÜRESİ',
+                                title: `${d.type} Geçerlilik`,
+                                message: `Dikkat: <b>${p.name}</b> adına kayıtlı <b>${d.type}</b> belgesinin süresi doluyor (Kalan: ${diff} gün).`,
+                                dueDate: d.validityDate,
+                                status: 'active',
+                                isRead: false,
+                                link: 'persons.html'
+                            });
+                        }
                     });
+                });
 
-                    this.allIpRecords = ipRes.success ? ipRes.data : [];
-                    let rawReminders = remindersRes.success ? remindersRes.data : [];
+                // 3. Manuel Notlar (ReferenceError: rawManual hatası burada düzeltildi)
+                const manualReminders = rawReminders.map(r => ({
+                    ...r,
+                    type: 'manual',
+                    category: r.category || 'KİŞİSEL NOT',
+                    message: r.description || r.title,
+                    isRead: r.isRead || false
+                }));
 
-                    // 1. İşleri (Tasks) Dönüştür (Filtreyi 30 güne çıkardık)
-                    const taskReminders = tasksSnap.docs.map(doc => {
-                        const data = doc.data();
-                        if (data.status === 'completed') return null;
-                        
-                        const diff = this.getDayDiff(data.taskDueDate);
-                        // DEBUG: Konsola yazdır ki neden filtrelendiğini görelim
-                        console.log(`Task: ${data.taskTitle}, Diff: ${diff}`);
+                // 5. Birleştir ve Sırala
+                this.combinedReminders = [...manualReminders, ...taskReminders, ...docReminders]
+                    .sort((a, b) => new Date(this.formatIsoDate(a.dueDate)) - new Date(this.formatIsoDate(b.dueDate)));
 
-                        // Filtre: Gelecek 30 gün ve geçmiş 60 gün (Test için genişlettik)
-                        if (diff > 30 || diff < -60) return null; 
+                this.renderInbox();
 
-                        return {
-                            id: doc.id, type: 'auto-task', category: 'İŞ TAKİBİ',
-                            title: data.taskTitle,
-                            message: `Sayın kullanıcı, <b>"${data.taskTitle}"</b> başlıklı işin resmi son tarihine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`,
-                            dueDate: data.taskDueDate, status: 'active', isRead: true,
-                            link: `task-update.html?id=${doc.id}`
-                        };
-                    }).filter(Boolean);
-
-                    // 2. Evrakları (Documents) Dönüştür
-                    const docReminders = [];
-                    personsSnap.forEach(pDoc => {
-                        const p = pDoc.data();
-                        (p.documents || []).forEach((d, idx) => {
-                            const diff = this.getDayDiff(d.validityDate);
-                            console.log(`Doc: ${p.name} - ${d.type}, Diff: ${diff}`);
-
-                            if (diff <= 60 && diff >= -30) { // 60 gün kaladan 30 gün geçmişe kadar
-                                docReminders.push({
-                                    id: `${pDoc.id}_doc_${idx}`, type: 'auto-doc', category: 'EVRAK SÜRESİ',
-                                    title: `${d.type} Geçerlilik`,
-                                    message: `Dikkat: <b>${p.name}</b> adına kayıtlı <b>${d.type}</b> belgesinin süresi dolmak üzere.`,
-                                    dueDate: d.validityDate, status: 'active', isRead: false, link: 'persons.html'
-                                });
-                            }
-                        });
-                    });
-
-                    // 3. Manuel Notlar
-                    const manualReminders = rawManual.map(r => ({
-                        ...r, type: 'manual', category: r.category || 'KİŞİSEL NOT',
-                        message: r.description || r.title, isRead: r.isRead || false
-                    }));
-
-                    this.combinedReminders = [...manualReminders, ...taskReminders, ...docReminders]
-                        .sort((a, b) => new Date(this.formatIsoDate(a.dueDate)) - new Date(this.formatIsoDate(b.dueDate)));
-
-                    console.log("Birleştirilmiş Hatırlatıcı Sayısı:", this.combinedReminders.length);
-                    this.renderInbox();
-
-                } catch (error) {
-                    console.error("Yükleme hatası:", error);
-                    showNotification("Veriler birleştirilirken hata oluştu.", "error");
-                }
+            } catch (error) {
+                console.error("Yükleme hatası:", error);
             }
-
+        }
             // Tarih ayrıştırma için daha güvenli metod (Noktalı formatı destekler)
             getDayDiff(dateStr) {
                 if (!dateStr) return 999;
