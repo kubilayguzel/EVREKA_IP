@@ -8,84 +8,114 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
     <style>
-        /* Inbox & Client Portal Style Reminders */
-        .page-wrapper { background: #f8f9fa; min-height: 100vh; }
-        .main-container { padding-top: 100px; max-width: 1000px; margin: 0 auto; padding-bottom: 50px; }
+        /* Task Update Tasarım Dilinden Uyarlanan Stiller */
+        .page-wrapper { background: #f4f7fa; min-height: 100vh; }
+        .main-container { padding-top: 100px; max-width: 900px; margin: 0 auto; padding-bottom: 50px; }
 
-        /* Sekme Tasarımı */
-        .nav-tabs { border-bottom: none; margin-bottom: 25px; gap: 5px; }
+        /* Başlık Alanı */
+        .page-header h1 { color: #1e3c72; font-weight: 700; font-size: 1.8rem; }
+        
+        /* Sekme Tasarımı (Task Update ile uyumlu) */
+        .nav-tabs { border-bottom: 2px solid #e1e8ed; margin-bottom: 25px; }
         .nav-tabs .nav-link { 
-            border: none; color: #6c757d; font-weight: 600; padding: 12px 25px; 
-            border-radius: 12px; transition: all 0.3s; background: transparent;
+            border: none; color: #64748b; font-weight: 600; padding: 10px 20px; 
+            border-bottom: 3px solid transparent; transition: all 0.3s;
         }
         .nav-tabs .nav-link.active { 
-            color: #1e3c72; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            color: #1e3c72; border-bottom: 3px solid #1e3c72; background: transparent;
         }
 
-        /* Hatırlatıcı Kartı (Inbox Stili) */
+        /* Hatırlatıcı Kartı (section-card Yapısında) */
         .reminder-inbox-item {
-            background: white; border-radius: 15px; padding: 20px; margin-bottom: 15px;
-            border: 1px solid #edf2f7; border-left: 6px solid #cbd5e0; 
-            display: flex; flex-direction: column; transition: all 0.2s ease;
-            position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid #e1e8ed;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            position: relative;
         }
-        .reminder-inbox-item:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+        .reminder-inbox-item:hover {
+            box-shadow: 0 10px 15px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+
+        /* Task Update Stilindeki Başlıklar */
+        .reminder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 10px;
+        }
+        .category-tag {
+            color: #1e3c72;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .reminder-date { color: #94a3b8; font-size: 0.85rem; font-weight: 500; }
         
-        /* Okunmadı Durumu */
-        .reminder-inbox-item.unread { background: #f0f7ff; border-color: #d1e3f8; }
-        .reminder-inbox-item.unread .reminder-subject { font-weight: 700; color: #1e3c72; }
-        .unread-indicator { 
-            width: 10px; height: 10px; background: #007bff; border-radius: 50%; 
-            display: inline-block; margin-right: 10px; 
+        /* İçerik Alanı */
+        .reminder-subject { font-size: 1.25rem; font-weight: 700; color: #334155; margin-bottom: 8px; }
+        .reminder-message { font-size: 1rem; color: #475569; line-height: 1.6; }
+
+        /* Okunmadı Belirteci */
+        .reminder-inbox-item.unread { border-top: 3px solid #1e3c72; background: #f8fafc; }
+        .unread-dot { 
+            width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; 
+            display: inline-block; margin-right: 8px; 
         }
 
-        /* Aciliyet Renkleri */
-        .reminder-inbox-item.overdue { border-left-color: #e53e3e; }
-        .reminder-inbox-item.today { border-left-color: #dd6b20; }
-        .reminder-inbox-item.upcoming { border-left-color: #3182ce; }
+        /* Aciliyet Şeritleri (Sol kenar) */
+        .reminder-inbox-item.overdue { border-left: 5px solid #ef4444; }
+        .reminder-inbox-item.today { border-left: 5px solid #f59e0b; }
+        .reminder-inbox-item.upcoming { border-left: 5px solid #3b82f6; }
 
-        .reminder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .category-tag { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #a0aec0; }
-        .reminder-date { font-size: 0.8rem; color: #718096; }
-        .reminder-subject { font-size: 1.15rem; margin-bottom: 6px; color: #2d3748; }
-        .reminder-message { font-size: 0.95rem; color: #4a5568; line-height: 1.6; }
-
+        /* Alt Aksiyonlar */
         .reminder-footer { 
-            margin-top: 15px; padding-top: 12px; border-top: 1px solid #f7fafc; 
+            margin-top: 20px; padding-top: 15px; 
             display: flex; justify-content: space-between; align-items: center;
         }
-        .action-links .btn-link { font-size: 0.85rem; font-weight: 600; color: #4a5568; text-decoration: none; margin-right: 20px; cursor: pointer; }
-        .action-links .btn-link:hover { color: #1e3c72; }
-        .btn-detail { background: #edf2f7; color: #2d3748; border: none; padding: 6px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; transition: 0.2s; }
-        .btn-detail:hover { background: #e2e8f0; }
+        .btn-action { 
+            font-size: 0.85rem; font-weight: 600; color: #64748b; 
+            text-decoration: none; padding: 6px 12px; border-radius: 6px; 
+            transition: 0.2s; cursor: pointer;
+        }
+        .btn-action:hover { background: #f1f5f9; color: #1e3c72; text-decoration: none; }
+        .btn-go-detail { 
+            background: #1e3c72; color: white; border: none; 
+            padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+        }
+        .btn-go-detail:hover { background: #162a50; color: white; text-decoration: none; }
 
-        /* Modal Stilleri */
-        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-        .modal.show { display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: white; width: 90%; max-width: 600px; padding: 0; border-radius: 20px; overflow: hidden; }
-        
-        .empty-state { text-align: center; padding: 60px 20px; color: #a0aec0; }
-        .search-results-list { position: absolute; background: white; border: 1px solid #ddd; width: 100%; z-index: 10; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        /* Modal & Boş Durum */
+        .modal.show { display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.6); }
+        .empty-state { text-align: center; padding: 80px 20px; color: #94a3b8; }
+        .empty-state i { font-size: 3.5rem; margin-bottom: 20px; opacity: 0.5; }
     </style>
 </head>
 <body>
     <div id="layout-placeholder"></div>
     <div class="page-wrapper">
         <main class="main-container">
-            <section class="page-header d-flex justify-content-between align-items-end mb-4">
+            <section class="page-header d-flex justify-content-between align-items-center mb-5">
                 <div>
-                    <h1 class="page-title mb-1" style="color: #1a365d; font-weight: 800;">Bildirim Merkezi</h1>
-                    <p class="text-muted mb-0">Önemli tarihler ve sistem güncellemeleri hakkında kişisel asistanınız.</p>
+                    <h1>Bildirim Merkezi</h1>
+                    <p class="text-muted mb-0">Önemli tarihler ve süreç güncellemeleri.</p>
                 </div>
-                <button class="btn btn-primary rounded-pill px-4" id="addReminderBtn" style="background: #1a365d; border: none; font-weight: 600;">
-                    <i class="fas fa-plus mr-2"></i>Not Oluştur
+                <button class="btn btn-primary rounded-pill px-4 shadow-sm" id="addReminderBtn" style="background: #1e3c72; border: none; font-weight: 600;">
+                    <i class="fas fa-plus mr-2"></i>Yeni Not
                 </button>
             </section>
     
             <ul class="nav nav-tabs" id="reminderTabs" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active" id="active-tab" data-toggle="tab" href="#activeReminders">
-                        Gelen Kutusu <span class="badge badge-pill badge-primary ml-1" id="activeCount">0</span>
+                        Gelen Kutusu <span class="badge badge-pill badge-primary ml-1" id="activeCount" style="background: #1e3c72;">0</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -93,7 +123,7 @@
                 </li>
             </ul>
 
-            <div class="tab-content">
+            <div class="tab-content mt-4">
                 <div class="tab-pane fade show active" id="activeReminders">
                     <div id="activeList"></div>
                 </div>
@@ -105,44 +135,38 @@
     </div>
 
     <div id="reminderModal" class="modal">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-0 p-4 pb-0 d-flex justify-content-between">
-                <h3 class="modal-title" id="reminderModalTitle" style="color: #1a365d; font-weight: 700;">Not Oluştur</h3>
-                <span id="closeReminderModal" style="cursor: pointer; font-size: 28px;">&times;</span>
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 p-4 pb-0 d-flex justify-content-between align-items-center">
+                <h4 style="color: #1e3c72; font-weight: 700; margin: 0;">Hatırlatıcı Oluştur</h4>
+                <button type="button" class="close" id="closeReminderModal" style="font-size: 1.5rem;">&times;</button>
             </div>
             <form id="reminderForm" class="p-4">
                 <input type="hidden" id="reminderId">
-                <div class="form-group mb-3">
-                    <label class="small font-weight-bold text-muted">BAŞLIK</label>
-                    <input type="text" id="reminderTitle" class="form-control border-2" placeholder="Örn: Toplantı Notu" required>
+                <div class="form-group mb-4">
+                    <label class="small font-weight-bold text-muted mb-2">BAŞLIK</label>
+                    <input type="text" id="reminderTitle" class="form-control" style="border-radius: 8px; border: 1.5px solid #e2e8f0; padding: 12px;" placeholder="Hatırlatma başlığı..." required>
                 </div>
-                <div class="form-row mb-3">
+                <div class="form-row mb-4">
                     <div class="form-group col-md-6">
-                        <label class="small font-weight-bold text-muted">KATEGORİ</label>
-                        <select id="reminderCategory" class="form-control border-2">
+                        <label class="small font-weight-bold text-muted mb-2">KATEGORİ</label>
+                        <select id="reminderCategory" class="form-control" style="border-radius: 8px; border: 1.5px solid #e2e8f0;">
                             <option value="KİŞİSEL NOT">Genel Not</option>
                             <option value="TOPLANTI">Toplantı</option>
                             <option value="EVRAK">Evrak Takibi</option>
                         </select>
                     </div>
                     <div class="form-group col-md-6">
-                        <label class="small font-weight-bold text-muted">SON TARİH</label>
-                        <input type="date" id="reminderDueDate" class="form-control border-2" required>
+                        <label class="small font-weight-bold text-muted mb-2">TARİH</label>
+                        <input type="date" id="reminderDueDate" class="form-control" style="border-radius: 8px; border: 1.5px solid #e2e8f0;" required>
                     </div>
                 </div>
-                <div class="form-group mb-3">
-                    <label class="small font-weight-bold text-muted">MESAJ</label>
-                    <textarea id="reminderDescription" class="form-control border-2" rows="3" placeholder="Hatırlatma detayları..."></textarea>
+                <div class="form-group mb-4">
+                    <label class="small font-weight-bold text-muted mb-2">DETAYLAR</label>
+                    <textarea id="reminderDescription" class="form-control" style="border-radius: 8px; border: 1.5px solid #e2e8f0;" rows="3" placeholder="Hatırlatma detaylarını buraya ekleyin..."></textarea>
                 </div>
-                <div class="form-group position-relative">
-                    <label class="small font-weight-bold text-muted">İLGİLİ VARLIK (OPSİYONEL)</label>
-                    <input type="text" id="relatedIpRecordSearch" class="form-control border-2" placeholder="Marka ara...">
-                    <div id="relatedIpRecordSearchResults" class="search-results-list" style="display:none;"></div>
-                    <div id="selectedIpRecordDisplay" class="mt-2 p-2 bg-light rounded border small d-none"></div>
-                </div>
-                <div class="modal-footer border-0 pt-4 px-0">
-                    <button type="button" class="btn btn-secondary rounded-pill px-4" id="cancelReminderBtn">Vazgeç</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-5" style="background: #1a365d;">Kaydet</button>
+                <div class="modal-footer border-0 p-0 pt-2">
+                    <button type="button" class="btn btn-light rounded-pill px-4 mr-2" id="cancelReminderBtn" style="font-weight: 600;">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 shadow-sm" style="background: #1e3c72; font-weight: 600;">Kaydet</button>
                 </div>
             </form>
         </div>
@@ -155,14 +179,13 @@
         import { reminderService, ipRecordsService, auth, db } from './firebase-config.js';
         import { showNotification } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
-        import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         class RemindersInboxModule {
             constructor() {
                 this.currentUser = null;
                 this.combinedReminders = [];
                 this.allIpRecords = [];
-                this.selectedRelatedIpRecord = null;
             }
 
             async init() {
@@ -176,115 +199,81 @@
                 });
             }
 
-            // RemindersInboxModule içindeki loadAllSources metodunu bu sürümle değiştirin:
             async loadAllSources() {
-            const activeList = document.getElementById('activeList');
-            activeList.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Bildirimler taranıyor...</p></div>';
+                const listEl = document.getElementById('activeList');
+                listEl.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" style="color: #1e3c72 !important;"></div></div>';
+                
+                try {
+                    const [remRes, tasksSnap, personsSnap] = await Promise.all([
+                        reminderService.getReminders(),
+                        getDocs(collection(db, "tasks")),
+                        getDocs(collection(db, "persons"))
+                    ]);
 
-            try {
-                const [remindersRes, ipRes, tasksSnap, personsSnap] = await Promise.all([
-                    reminderService.getReminders(),
-                    ipRecordsService.getRecords(),
-                    getDocs(collection(db, "tasks")),
-                    getDocs(collection(db, "persons"))
-                ]);
+                    const rawManual = remRes.success ? remRes.data : [];
 
-                this.allIpRecords = ipRes.success ? ipRes.data : [];
-                let rawReminders = remindersRes.success ? remindersRes.data : [];
+                    // 1. İşler (Tasks)
+                    const taskReminders = tasksSnap.docs.map(doc => {
+                        const d = doc.data();
+                        if (d.status === 'completed') return null;
+                        const title = d.taskTitle || d.title || "İsimsiz Görev";
+                        const date = d.taskDueDate || d.dueDate || d.officialDue || d.operationalDue;
+                        if (!date) return null;
+                        
+                        const diff = this.getDayDiff(date);
+                        if (diff > 30 || diff < -30) return null;
 
-                // 1. İşleri (Tasks) Dönüştür - Veri alanlarını kontrol ederek
-                const taskReminders = tasksSnap.docs.map(doc => {
-                    const data = doc.data();
-                    if (data.status === 'completed') return null;
-                    
-                    // Veritabanınızdaki farklı olası alan isimlerini kontrol ediyoruz
-                    const title = data.taskTitle || data.title || "Başlıksız İş";
-                    const dueDate = data.taskDueDate || data.dueDate || data.officialDue || data.operationalDue;
-                    
-                    if (!dueDate) return null; // Tarihi olmayan işi hatırlatıcıya ekleme
+                        return {
+                            id: doc.id, type: 'auto-task', category: 'İŞ TAKİBİ', title: title,
+                            message: `<b>"${title}"</b> başlıklı işin süresine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>. Lütfen süreci kontrol ediniz.`,
+                            dueDate: date, status: 'active', isRead: true, link: `task-update.html?id=${doc.id}`
+                        };
+                    }).filter(Boolean);
 
-                    const diff = this.getDayDiff(dueDate);
-
-                    // Filtre: Gelecek 90 gün ve geçmiş 30 günü göster (Test için genişletildi)
-                    if (diff > 90 || diff < -30) return null; 
-
-                    return {
-                        id: doc.id,
-                        type: 'auto-task',
-                        category: 'İŞ TAKİBİ',
-                        title: title,
-                        message: `Sayın kullanıcı, <b>"${title}"</b> başlıklı işin süresine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`,
-                        dueDate: dueDate,
-                        status: 'active',
-                        isRead: true,
-                        link: `task-update.html?id=${doc.id}`
-                    };
-                }).filter(Boolean);
-
-                // 2. Evrakları (Documents) Dönüştür
-                const docReminders = [];
-                personsSnap.forEach(pDoc => {
-                    const p = pDoc.data();
-                    (p.documents || []).forEach((d, idx) => {
-                        const diff = this.getDayDiff(d.validityDate);
-                        // Evraklar için bitime 1 yıl kala göster (Takip kolaylığı için)
-                        if (diff <= 365 && diff >= -30) { 
-                            docReminders.push({
-                                id: `${pDoc.id}_doc_${idx}`,
-                                type: 'auto-doc',
-                                category: 'EVRAK SÜRESİ',
-                                title: `${d.type} Geçerlilik`,
-                                message: `Dikkat: <b>${p.name}</b> adına kayıtlı <b>${d.type}</b> belgesinin süresi doluyor (Kalan: ${diff} gün).`,
-                                dueDate: d.validityDate,
-                                status: 'active',
-                                isRead: false,
-                                link: 'persons.html'
-                            });
-                        }
+                    // 2. Kişi Evrakları
+                    const docReminders = [];
+                    personsSnap.forEach(pDoc => {
+                        const p = pDoc.data();
+                        (p.documents || []).forEach((d, idx) => {
+                            const diff = this.getDayDiff(d.validityDate);
+                            if (diff <= 60 && diff >= -15) {
+                                docReminders.push({
+                                    id: `${pDoc.id}_doc_${idx}`, type: 'auto-doc', category: 'EVRAK TAKİBİ',
+                                    title: `${d.type} Süresi`,
+                                    message: `<b>${p.name}</b> adına kayıtlı <b>${d.type}</b> belgesinin geçerlilik süresi doluyor (Kalan: ${diff} gün).`,
+                                    dueDate: d.validityDate, status: 'active', isRead: false, link: 'persons.html'
+                                });
+                            }
+                        });
                     });
-                });
 
-                // 3. Manuel Notlar (ReferenceError: rawManual hatası burada düzeltildi)
-                const manualReminders = rawReminders.map(r => ({
-                    ...r,
-                    type: 'manual',
-                    category: r.category || 'KİŞİSEL NOT',
-                    message: r.description || r.title,
-                    isRead: r.isRead || false
-                }));
+                    // 3. Manuel Notlar
+                    const manualReminders = rawManual.map(r => ({
+                        ...r, type: 'manual', category: r.category || 'KİŞİSEL NOT',
+                        message: r.description || r.title, isRead: r.isRead || false
+                    }));
 
-                // 5. Birleştir ve Sırala
-                this.combinedReminders = [...manualReminders, ...taskReminders, ...docReminders]
-                    .sort((a, b) => new Date(this.formatIsoDate(a.dueDate)) - new Date(this.formatIsoDate(b.dueDate)));
+                    this.combinedReminders = [...manualReminders, ...taskReminders, ...docReminders]
+                        .sort((a, b) => new Date(this.formatIsoDate(a.dueDate)) - new Date(this.formatIsoDate(b.dueDate)));
 
-                this.renderInbox();
-
-            } catch (error) {
-                console.error("Yükleme hatası:", error);
+                    this.renderInbox();
+                } catch (e) { console.error(e); }
             }
-        }
-            // Tarih ayrıştırma için daha güvenli metod (Noktalı formatı destekler)
-            getDayDiff(dateStr) {
-                if (!dateStr) return 999;
-                const isoDate = this.formatIsoDate(dateStr);
-                const target = new Date(isoDate);
-                if (isNaN(target.getTime())) return 999;
 
+            getDayDiff(dateStr) {
+                const target = new Date(this.formatIsoDate(dateStr));
+                if (isNaN(target)) return 999;
                 target.setHours(0,0,0,0);
-                const today = new Date();
-                today.setHours(0,0,0,0);
+                const today = new Date(); today.setHours(0,0,0,0);
                 return Math.round((target - today) / (1000 * 60 * 60 * 24));
             }
 
-            // "10.01.2026" -> "2026-01-10" dönüşümü yapar
-            formatIsoDate(dateStr) {
-                if (!dateStr || typeof dateStr !== 'string') return dateStr;
-                if (dateStr.includes('.')) {
-                    const parts = dateStr.split('.');
-                    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                }
-                return dateStr;
+            formatIsoDate(d) {
+                if (!d || typeof d !== 'string') return d;
+                if (d.includes('.')) { const p = d.split('.'); return `${p[2]}-${p[1]}-${p[0]}`; }
+                return d;
             }
+
             renderInbox() {
                 const activeList = document.getElementById('activeList');
                 const closedList = document.getElementById('closedList');
@@ -298,17 +287,17 @@
                     const html = `
                         <div class="reminder-inbox-item ${urgency} ${item.isRead ? '' : 'unread'}" data-id="${item.id}">
                             <div class="reminder-header">
-                                <span class="category-tag">${!item.isRead ? '<span class="unread-indicator"></span>' : ''}${item.category}</span>
-                                <span class="reminder-date">${new Date(item.dueDate).toLocaleDateString('tr-TR')}</span>
+                                <span class="category-tag">${!item.isRead ? '<span class="unread-dot"></span>' : ''}${item.category}</span>
+                                <span class="reminder-date"><i class="far fa-clock mr-1"></i>${new Date(this.formatIsoDate(item.dueDate)).toLocaleDateString('tr-TR')}</span>
                             </div>
                             <div class="reminder-subject">${item.title}</div>
                             <div class="reminder-message">${item.message}</div>
                             <div class="reminder-footer">
                                 <div class="action-links">
-                                    ${item.type === 'manual' ? `<a class="btn-link text-primary mark-read-btn" data-id="${item.id}">${item.isRead ? 'Okundu' : 'Okundu İşaretle'}</a>` : ''}
-                                    <a class="btn-link text-danger archive-btn" data-id="${item.id}">Kapat & Arşivle</a>
+                                    ${item.type === 'manual' ? `<a class="btn-action mark-read-btn" data-id="${item.id}">${item.isRead ? 'Okundu' : 'Okundu İşaretle'}</a>` : ''}
+                                    <a class="btn-action archive-btn text-danger" data-id="${item.id}">Kapat ve Arşivle</a>
                                 </div>
-                                <a href="${item.link || '#'}" class="btn-detail">Detayı Gör <i class="fas fa-chevron-right ml-1"></i></a>
+                                <a href="${item.link || '#'}" class="btn-go-detail">İncele <i class="fas fa-arrow-right ml-1"></i></a>
                             </div>
                         </div>`;
                     
@@ -317,7 +306,7 @@
                 });
 
                 document.getElementById('activeCount').textContent = aCount;
-                if (aCount === 0) activeList.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i>Tüm bildirimler tamamlandı.</div>';
+                if (aCount === 0) activeList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Tüm bildirimler temizlendi!</p></div>';
             }
 
             setupEvents() {
@@ -325,7 +314,6 @@
                 document.getElementById('closeReminderModal').onclick = () => this.closeModal();
                 document.getElementById('cancelReminderBtn').onclick = () => this.closeModal();
                 document.getElementById('reminderForm').onsubmit = (e) => this.handleSave(e);
-                document.getElementById('relatedIpRecordSearch').oninput = (e) => this.searchIp(e.target.value);
 
                 document.addEventListener('click', async (e) => {
                     const id = e.target.dataset.id;
@@ -334,7 +322,7 @@
 
                     if (e.target.closest('.archive-btn')) {
                         if (item.type === 'manual') await reminderService.updateReminder(id, { status: 'completed' });
-                        item.status = 'completed'; showNotification("Arşive taşındı.", "info"); this.renderInbox();
+                        item.status = 'completed'; showNotification("Bildirim arşive taşındı.", "info"); this.renderInbox();
                     }
                     if (e.target.closest('.mark-read-btn')) {
                         if (item.type === 'manual') await reminderService.updateReminder(id, { isRead: true });
@@ -343,12 +331,7 @@
                 });
             }
 
-            showModal() { 
-                document.getElementById('reminderForm').reset(); 
-                document.getElementById('reminderId').value = '';
-                document.getElementById('selectedIpRecordDisplay').classList.add('d-none');
-                document.getElementById('reminderModal').classList.add('show'); 
-            }
+            showModal() { document.getElementById('reminderModal').classList.add('show'); }
             closeModal() { document.getElementById('reminderModal').classList.remove('show'); }
 
             async handleSave(e) {
@@ -358,34 +341,16 @@
                     description: document.getElementById('reminderDescription').value,
                     dueDate: document.getElementById('reminderDueDate').value,
                     category: document.getElementById('reminderCategory').value,
-                    userId: this.currentUser.uid, isRead: false, status: 'active',
-                    relatedIpRecordId: this.selectedRelatedIpRecord?.id || null
+                    userId: this.currentUser.uid, isRead: false, status: 'active', createdAt: new Date().toISOString()
                 };
                 await reminderService.addReminder(data);
-                showNotification("Not kaydedildi.", "success");
-                this.closeModal(); this.loadAllSources();
+                showNotification("Not başarıyla oluşturuldu.", "success");
+                this.closeModal(); await this.loadAllSources();
             }
-
-            searchIp(q) {
-                const div = document.getElementById('relatedIpRecordSearchResults');
-                if (q.length < 3) { div.style.display = 'none'; return; }
-                const found = this.allIpRecords.filter(r => (r.title||r.markName||'').toLowerCase().includes(q.toLowerCase())).slice(0,5);
-                div.innerHTML = found.map(r => `<div class="p-2 border-bottom cursor-pointer" onclick="window.inbox.selectIp('${r.id}')"><small>${r.title||r.markName}</small></div>`).join('');
-                div.style.display = 'block';
-            }
-            selectIp(id) {
-                const rec = this.allIpRecords.find(r => r.id === id);
-                this.selectedRelatedIpRecord = rec;
-                const disp = document.getElementById('selectedIpRecordDisplay');
-                disp.innerHTML = `Seçili: ${rec.title||rec.markName} <span class="ml-2 text-danger" onclick="window.inbox.clearIp()">&times;</span>`;
-                disp.classList.remove('d-none');
-                document.getElementById('relatedIpRecordSearchResults').style.display = 'none';
-            }
-            clearIp() { this.selectedRelatedIpRecord = null; document.getElementById('selectedIpRecordDisplay').classList.add('d-none'); }
         }
 
-        window.inbox = new RemindersInboxModule();
-        window.inbox.init();
+        const inbox = new RemindersInboxModule();
+        inbox.init();
     </script>
 </body>
 </html>
