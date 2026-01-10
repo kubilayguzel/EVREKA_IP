@@ -3,16 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPGATE - Bildirim Merkezi v3</title>
+    <title>IPGATE - Bildirim Merkezi v3.1</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
     <style>
         :root { --primary-blue: #1e3c72; --dark-slate: #1e293b; --slate-600: #475569; --slate-200: #e2e8f0; }
-        .page-wrapper { background: #f1f5f9; min-height: 100vh; } /* Arka plan biraz daha gri, kartlar öne çıksın */
+        .page-wrapper { background: #f1f5f9; min-height: 100vh; }
         .main-container { padding-top: 100px; max-width: 950px; margin: 0 auto; padding-bottom: 80px; }
 
-        /* Timeline ve Numaralandırma */
+        /* Notification Container (Sağ Üst) */
+        #notification-container {
+            position: fixed; top: 20px; right: 20px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        /* Timeline Yapısı */
         .reminders-timeline { position: relative; padding-left: 50px; }
         .reminders-timeline::before {
             content: ''; position: absolute; left: 20px; top: 0; bottom: 0;
@@ -32,7 +38,6 @@
             background: white; border-radius: 16px; padding: 28px; margin-bottom: 28px;
             border: 1px solid rgba(30, 41, 59, 0.1);
             position: relative; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            /* Güçlendirilmiş Gölgeler */
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
         }
         .reminder-card:hover { 
@@ -41,51 +46,48 @@
             border-color: var(--primary-blue);
         }
 
-        /* Okunmadı (Canlı/Koyu) */
+        /* Okunmadı (Canlı) */
         .reminder-card.unread { background: #ffffff; border-top: 4px solid var(--primary-blue); }
         .reminder-card.unread .title-text { color: var(--dark-slate); font-weight: 800; }
         .unread-indicator { width: 12px; height: 12px; background: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; box-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
 
-        /* Okundu (Sönük ama Efektli) */
-        .reminder-card.read { 
-            background: #f8fafc; 
-            opacity: 0.85; 
-            border-left: 8px solid #94a3b8 !important; /* Daha kalın gri şerit */
-        }
+        /* Okundu (Sönük) */
+        .reminder-card.read { background: #f8fafc; opacity: 0.85; border-left: 8px solid #94a3b8 !important; }
         .reminder-card.read .title-text { color: #64748b; font-weight: 600; }
 
-        /* Aciliyet Şeritleri (Sol kenar - Daha belirgin) */
+        /* Aciliyet Şeritleri */
         .reminder-card.unread.overdue { border-left: 8px solid #dc2626; }
         .reminder-card.unread.today { border-left: 8px solid #ea580c; }
         .reminder-card.unread.upcoming { border-left: 8px solid #2563eb; }
 
-        .icon-box { width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .icon-box { width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
         .icon-task { background: #dbeafe; color: #1e40af; }
         .icon-doc { background: #ffe4e6; color: #9f1239; }
         .icon-manual { background: #dcfce7; color: #166534; }
 
-        /* Alt Aksiyonlar ve Butonlar */
+        /* Butonlar */
         .action-group { display: flex; gap: 15px; }
         .btn-action { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; border: none; background: transparent; padding: 5px 0; transition: 0.3s; cursor: pointer; }
-        .btn-action:hover { transform: scale(1.05); text-decoration: none; }
         .btn-action.read-toggle-btn { color: #2563eb; }
         .btn-action.archive-btn { color: #dc2626; }
 
         .btn-incele { 
-            background: var(--primary-blue); color: white !important; 
-            border-radius: 10px; font-weight: 700; padding: 10px 22px; 
-            font-size: 0.85rem; box-shadow: 0 4px 6px rgba(30, 60, 114, 0.2);
-            transition: 0.3s;
+            background: var(--primary-blue); color: white !important; border-radius: 10px; font-weight: 700; padding: 10px 22px; 
+            font-size: 0.85rem; box-shadow: 0 4px 6px rgba(30, 60, 114, 0.2); transition: 0.3s;
         }
-        .btn-incele:hover { background: #0f172a; box-shadow: 0 6px 12px rgba(0,0,0,0.2); }
+        .btn-incele:hover { background: #0f172a; transform: scale(1.05); text-decoration: none; }
 
-        /* Sayfalama */
         .pagination-container { display: flex; justify-content: center; gap: 10px; margin-top: 50px; }
-        .page-btn { border: 1px solid var(--slate-200); background: white; padding: 10px 20px; border-radius: 12px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: 0.2s; }
-        .page-btn.active { background: var(--primary-blue); color: white; border-color: var(--primary-blue); }
+        .page-btn { border: 1px solid var(--slate-200); background: white; padding: 10px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+        .page-btn.active { background: var(--primary-blue); color: white; }
+
+        /* Modal */
+        .modal.show { display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.6); }
     </style>
 </head>
 <body>
+    <div id="notification-container"></div>
+    
     <div id="layout-placeholder"></div>
     <div class="page-wrapper">
         <main class="main-container">
@@ -107,6 +109,43 @@
             <div class="reminders-timeline" id="timelineContainer"></div>
             <div class="pagination-container" id="paginationControls"></div>
         </main>
+    </div>
+
+    <div id="reminderModal" class="modal">
+        <div class="modal-content shadow-lg w-100 border-0" style="max-width: 600px; border-radius: 20px;">
+            <div class="modal-header border-0 p-4 pb-0 d-flex justify-content-between">
+                <h4 style="color: #1e3c72; font-weight: 700;">Yeni Not Oluştur</h4>
+                <button class="close" id="closeReminderModal" style="cursor:pointer">&times;</button>
+            </div>
+            <form id="reminderForm" class="p-4">
+                <div class="form-group mb-4">
+                    <label class="small font-weight-bold text-muted mb-2 text-uppercase">Başlık</label>
+                    <input type="text" id="reminderTitle" class="form-control" style="border-radius: 10px;" required>
+                </div>
+                <div class="form-row mb-4">
+                    <div class="form-group col-md-6">
+                        <label class="small font-weight-bold text-muted mb-2 text-uppercase">Kategori</label>
+                        <select id="reminderCategory" class="form-control" style="border-radius: 10px;">
+                            <option value="KİŞİSEL NOT">Genel Not</option>
+                            <option value="TOPLANTI">Toplantı</option>
+                            <option value="EVRAK">Evrak Takibi</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label class="small font-weight-bold text-muted mb-2 text-uppercase">Tarih</label>
+                        <input type="date" id="reminderDueDate" class="form-control" style="border-radius: 10px;" required>
+                    </div>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="small font-weight-bold text-muted mb-2 text-uppercase">Mesaj</label>
+                    <textarea id="reminderDescription" class="form-control" style="border-radius: 10px;" rows="3"></textarea>
+                </div>
+                <div class="modal-footer border-0 p-0 pt-2">
+                    <button type="button" class="btn btn-light rounded-pill px-4" id="cancelReminderBtn">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5" style="background: #1e3c72;">Kaydet</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script type="module">
@@ -147,7 +186,7 @@
 
                     const rawManual = remRes.success ? remRes.data : [];
 
-                    // --- TASKLAR (Geniş Filtre 365/180) ---
+                    // --- TASKLAR (365/180) ---
                     const taskReminders = tasksSnap.docs.map(doc => {
                         const d = doc.data();
                         if (d.status === 'completed') return null;
@@ -155,10 +194,10 @@
                         if (!date) return null;
                         const diff = this.getDayDiff(date);
                         if (diff > 365 || diff < -180) return null;
-                        return { id: doc.id, type: 'task', category: 'İŞ TAKİBİ', title: d.taskTitle || d.title || "İsimsiz İş", message: `<b>"${d.taskTitle || d.title}"</b> işinin son tarihine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`, dueDate: date, status: 'active', isRead: true, link: `task-update.html?id=${doc.id}` };
+                        return { id: doc.id, type: 'task', category: 'İŞ TAKİBİ', title: d.taskTitle || d.title || "İsimsiz İş", message: `<b>"${d.taskTitle || d.title}"</b> işine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`, dueDate: date, status: 'active', isRead: true, link: `task-update.html?id=${doc.id}` };
                     }).filter(Boolean);
 
-                    // --- EVRAKLAR (Geniş Filtre 365) ---
+                    // --- EVRAKLAR ---
                     const docReminders = [];
                     personsSnap.forEach(pDoc => {
                         const p = pDoc.data();
@@ -207,18 +246,18 @@
                             <div class="icon-box ${iconColor} mr-3 shadow-sm"><i class="fas ${icon}"></i></div>
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span class="category-text uppercase font-weight-bold" style="font-size: 0.75rem; letter-spacing: 1px;">
+                                    <span class="category-text uppercase font-weight-bold">
                                         ${!item.isRead ? '<span class="unread-indicator"></span>' : ''}${item.category}
                                     </span>
                                     <span class="small text-muted font-weight-bold"><i class="far fa-clock mr-1"></i>${new Date(this.formatIsoDate(item.dueDate)).toLocaleDateString('tr-TR')}</span>
                                 </div>
-                                <h5 class="title-text mb-2" style="font-size: 1.3rem;">${item.title}</h5>
-                                <p class="mb-4 text-secondary" style="font-size: 1rem; line-height: 1.6;">${item.message}</p>
+                                <h5 class="title-text mb-2">${item.title}</h5>
+                                <p class="mb-4 text-secondary" style="line-height: 1.6;">${item.message}</p>
                                 <div class="reminder-footer border-top pt-3 d-flex justify-content-between align-items-center">
                                     <div class="action-group">
                                         <button class="btn-action read-toggle-btn" data-id="${item.id}">
                                             <i class="fas ${item.isRead ? 'fa-envelope' : 'fa-envelope-open'} mr-1"></i>
-                                            ${item.isRead ? 'Okunmadı İşaretle' : 'Okundu İşaretle'}
+                                            ${item.isRead ? 'Okunmadı' : 'Okundu'}
                                         </button>
                                         <button class="btn-action archive-btn" data-id="${item.id}">
                                             <i class="fas fa-archive mr-1"></i>Arşivle
@@ -234,7 +273,6 @@
                 this.renderPagination(filtered.length);
             }
 
-            // --- YARDIMCI METODLAR ---
             getDayDiff(dStr) { const target = new Date(this.formatIsoDate(dStr)); if (isNaN(target)) return 999; target.setHours(0,0,0,0); const today = new Date(); today.setHours(0,0,0,0); return Math.round((target - today) / (1000 * 60 * 60 * 24)); }
             formatIsoDate(d) { if (!d || typeof d !== 'string') return d; if (d.includes('.')) { const p = d.split('.'); return `${p[2]}-${p[1]}-${p[0]}`; } return d; }
 
@@ -260,16 +298,14 @@
                     if (!id) return;
                     const item = this.combinedData.find(x => x.id === id);
 
-                    // --- OKUNDU / OKUNMADI TOGGLE ---
                     if (e.target.closest('.read-toggle-btn')) {
                         const newState = !item.isRead;
                         if (item.type === 'manual') await reminderService.updateReminder(id, { isRead: newState });
                         item.isRead = newState;
-                        showNotification(newState ? "Okundu işaretlendi." : "Okunmadı olarak işaretlendi.", "success");
+                        showNotification(newState ? "Okundu işaretlendi." : "Okunmadı işaretlendi.", "success");
                         this.render();
                     }
 
-                    // --- ARŞİVLEME ---
                     if (e.target.closest('.archive-btn')) {
                         if (item.type === 'manual') await reminderService.updateReminder(id, { status: 'completed' });
                         item.status = 'completed';
@@ -278,7 +314,22 @@
                     }
                 });
 
-                document.getElementById('addReminderBtn').onclick = () => alert("Not Ekleme Modalı Açılıyor...");
+                document.getElementById('addReminderBtn').onclick = () => {
+                    document.getElementById('reminderForm').reset();
+                    document.getElementById('reminderModal').classList.add('show');
+                };
+                
+                document.getElementById('closeReminderModal').onclick = () => document.getElementById('reminderModal').classList.remove('show');
+                document.getElementById('cancelReminderBtn').onclick = () => document.getElementById('reminderModal').classList.remove('show');
+
+                document.getElementById('reminderForm').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const data = { title: document.getElementById('reminderTitle').value, description: document.getElementById('reminderDescription').value, dueDate: document.getElementById('reminderDueDate').value, category: document.getElementById('reminderCategory').value, userId: this.currentUser.uid, isRead: false, status: 'active', createdAt: new Date().toISOString() };
+                    await reminderService.addReminder(data);
+                    showNotification("Yeni hatırlatma başarıyla oluşturuldu.", "success");
+                    document.getElementById('reminderModal').classList.remove('show');
+                    await this.loadAllSources();
+                };
             }
         }
 
