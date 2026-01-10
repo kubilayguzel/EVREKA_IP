@@ -176,42 +176,58 @@
                 });
             }
 
+            // RemindersInboxModule içindeki loadAllSources metodunu bu sürümle değiştirin:
             async loadAllSources() {
-                document.getElementById('activeList').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+                const activeList = document.getElementById('activeList');
+                activeList.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Bildirimler taranıyor...</p></div>';
+
                 try {
-                    const [remRes, ipRes, tasksSnap, personsSnap] = await Promise.all([
+                    const [remindersRes, ipRes, tasksSnap, personsSnap] = await Promise.all([
                         reminderService.getReminders(),
                         ipRecordsService.getRecords(),
                         getDocs(collection(db, "tasks")),
                         getDocs(collection(db, "persons"))
                     ]);
 
-                    this.allIpRecords = ipRes.success ? ipRes.data : [];
-                    const rawManual = remRes.success ? remRes.data : [];
+                    console.log("Ham Veriler:", { 
+                        tasks: tasksSnap.size, 
+                        persons: personsSnap.size, 
+                        manual: remindersRes.data?.length 
+                    });
 
-                    // --- 1. OTOMATİK İŞLER (Tasks) ---
+                    this.allIpRecords = ipRes.success ? ipRes.data : [];
+                    let rawReminders = remindersRes.success ? remindersRes.data : [];
+
+                    // 1. İşleri (Tasks) Dönüştür (Filtreyi 30 güne çıkardık)
                     const taskReminders = tasksSnap.docs.map(doc => {
-                        const d = doc.data();
-                        if (d.status === 'completed') return null;
-                        const diff = this.getDayDiff(d.taskDueDate);
-                        if (diff > 7 || diff < -30) return null;
+                        const data = doc.data();
+                        if (data.status === 'completed') return null;
+                        
+                        const diff = this.getDayDiff(data.taskDueDate);
+                        // DEBUG: Konsola yazdır ki neden filtrelendiğini görelim
+                        console.log(`Task: ${data.taskTitle}, Diff: ${diff}`);
+
+                        // Filtre: Gelecek 30 gün ve geçmiş 60 gün (Test için genişlettik)
+                        if (diff > 30 || diff < -60) return null; 
 
                         return {
                             id: doc.id, type: 'auto-task', category: 'İŞ TAKİBİ',
-                            title: d.taskTitle,
-                            message: `Sayın kullanıcı, <b>"${d.taskTitle}"</b> başlıklı işin resmi son tarihine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`,
-                            dueDate: d.taskDueDate, status: 'active', isRead: true,
+                            title: data.taskTitle,
+                            message: `Sayın kullanıcı, <b>"${data.taskTitle}"</b> başlıklı işin resmi son tarihine <b>${diff === 0 ? 'BUGÜN' : (diff > 0 ? diff + ' gün kaldı' : Math.abs(diff) + ' gün geçti')}</b>.`,
+                            dueDate: data.taskDueDate, status: 'active', isRead: true,
                             link: `task-update.html?id=${doc.id}`
                         };
                     }).filter(Boolean);
 
-                    // --- 2. OTOMATİK EVRAKLAR (Documents) ---
+                    // 2. Evrakları (Documents) Dönüştür
                     const docReminders = [];
                     personsSnap.forEach(pDoc => {
                         const p = pDoc.data();
                         (p.documents || []).forEach((d, idx) => {
                             const diff = this.getDayDiff(d.validityDate);
-                            if (diff <= 30 && diff >= -10) {
+                            console.log(`Doc: ${p.name} - ${d.type}, Diff: ${diff}`);
+
+                            if (diff <= 60 && diff >= -30) { // 60 gün kaladan 30 gün geçmişe kadar
                                 docReminders.push({
                                     id: `${pDoc.id}_doc_${idx}`, type: 'auto-doc', category: 'EVRAK SÜRESİ',
                                     title: `${d.type} Geçerlilik`,
@@ -222,26 +238,46 @@
                         });
                     });
 
-                    // --- 3. MANUEL NOTLAR ---
+                    // 3. Manuel Notlar
                     const manualReminders = rawManual.map(r => ({
                         ...r, type: 'manual', category: r.category || 'KİŞİSEL NOT',
                         message: r.description || r.title, isRead: r.isRead || false
                     }));
 
                     this.combinedReminders = [...manualReminders, ...taskReminders, ...docReminders]
-                        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+                        .sort((a, b) => new Date(this.formatIsoDate(a.dueDate)) - new Date(this.formatIsoDate(b.dueDate)));
 
+                    console.log("Birleştirilmiş Hatırlatıcı Sayısı:", this.combinedReminders.length);
                     this.renderInbox();
-                } catch (e) { console.error(e); }
+
+                } catch (error) {
+                    console.error("Yükleme hatası:", error);
+                    showNotification("Veriler birleştirilirken hata oluştu.", "error");
+                }
             }
 
+            // Tarih ayrıştırma için daha güvenli metod (Noktalı formatı destekler)
             getDayDiff(dateStr) {
                 if (!dateStr) return 999;
-                const target = new Date(dateStr); target.setHours(0,0,0,0);
-                const today = new Date(); today.setHours(0,0,0,0);
+                const isoDate = this.formatIsoDate(dateStr);
+                const target = new Date(isoDate);
+                if (isNaN(target.getTime())) return 999;
+
+                target.setHours(0,0,0,0);
+                const today = new Date();
+                today.setHours(0,0,0,0);
                 return Math.round((target - today) / (1000 * 60 * 60 * 24));
             }
 
+            // "10.01.2026" -> "2026-01-10" dönüşümü yapar
+            formatIsoDate(dateStr) {
+                if (!dateStr || typeof dateStr !== 'string') return dateStr;
+                if (dateStr.includes('.')) {
+                    const parts = dateStr.split('.');
+                    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                return dateStr;
+            }
             renderInbox() {
                 const activeList = document.getElementById('activeList');
                 const closedList = document.getElementById('closedList');
