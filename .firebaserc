@@ -1,8 +1,6 @@
 {
   "projects": {
-    "default": "ip-manager-production-aab4b",
-    "ip-manager-production": "ip-manager-production-aab4b"
-  },
-  "targets": {},
-  "etags": {}
+    "test": "ip-manager-production-aab4b",
+    "production": "ipgate-31bd2"
+  }
 }
