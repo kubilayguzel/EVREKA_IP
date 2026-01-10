@@ -18,7 +18,8 @@ import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, del
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
 // --- Firebase App Initialization ---
-const firebaseConfig = {
+// 1. TEST/Geliştirme Ortamı (Mevcut projeniz)
+const testConfig = {
   apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
   authDomain: "ip-manager-production-aab4b.firebaseapp.com",
   projectId: "ip-manager-production-aab4b",
@@ -27,6 +28,23 @@ const firebaseConfig = {
   appId: "1:594650169512:web:43496005e063a40511829d",
   measurementId: "G-QY1P3ZCMC4"
 };
+
+// 2. CANLI/Production Ortamı (Yeni oluşturduğunuz proje)
+const prodConfig = {
+  apiKey: "AIzaSyAV2w2GJVm_gU7LtDW-GM1sFdroA0lroXw",
+  authDomain: "ipgate-31bd2.firebaseapp.com",
+  projectId: "ipgate-31bd2",
+  storageBucket: "ipgate-31bd2.firebasestorage.app",
+  messagingSenderId: "105921768418",
+  appId: "1:105921768418:web:30e6240bcc635f1453a7bb",
+  measurementId: "G-8JRJ0DLLRG"
+};
+
+// Çalışılan URL'ye göre otomatik seçim: 
+// Localhost'ta veya test URL'sindeyseniz testConfig, aksi halde prodConfig kullanılır.
+const firebaseConfig = (window.location.hostname === "localhost" || window.location.hostname.includes("ip-manager-production-aab4b"))
+  ? testConfig 
+  : prodConfig;
 
 let app, auth, db, storage;
 let isFirebaseAvailable = false;
