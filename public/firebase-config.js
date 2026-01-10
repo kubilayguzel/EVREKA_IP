@@ -2298,3 +2298,46 @@ export function redirectOnLogout(redirectTo = 'index.html') {
         }
     });
 }
+
+// Hatırlatıcı Servisi (Eksik olan kısım)
+export const reminderService = {
+    // Tüm hatırlatıcıları getir
+    async getReminders() {
+        try {
+            const q = query(collection(db, "reminders"), orderBy("dueDate", "asc"));
+            const querySnapshot = await getDocs(q);
+            const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            return { success: true, data };
+        } catch (error) {
+            console.error("Hatırlatıcılar çekilemedi:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Yeni hatırlatıcı ekle
+    async addReminder(reminderData) {
+        try {
+            const docRef = await addDoc(collection(db, "reminders"), {
+                ...reminderData,
+                createdAt: new Date().toISOString()
+            });
+            return { success: true, id: docRef.id };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Hatırlatıcı güncelle (Okundu yap veya Arşivle)
+    async updateReminder(id, updateData) {
+        try {
+            const docRef = doc(db, "reminders", id);
+            await updateDoc(docRef, {
+                ...updateData,
+                updatedAt: new Date().toISOString()
+            });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+};
