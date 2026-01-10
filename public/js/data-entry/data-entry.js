@@ -1481,8 +1481,6 @@ export default DataEntryModule;
 
 document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout({ activeMenuLink: 'data-entry.html' }).catch(console.error);
-  if (typeof ensurePersonModal === 'function') ensurePersonModal();
-
   let started = false;
   const boot = () => {
     if (started) return; started = true;
