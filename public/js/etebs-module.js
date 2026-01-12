@@ -518,6 +518,20 @@ updateTabBadge() {
         this.showTokenStatus('loading', 'Tebligatlar çekiliyor...');
 
         const result = await etebsService.getDailyNotifications(token);
+        if (result.success && result.data) {
+            const records = window.indexingModule && Array.isArray(window.indexingModule.allRecords)
+                ? window.indexingModule.allRecords
+                : [];
+
+            this.notifications = result.data.map(n => {
+                const isMatched = records.some(r => r.applicationNumber === n.dosyaNo);
+                return { ...n, matched: isMatched };
+            });
+            // ... işlemler devam eder
+        } else {
+            this.showTokenStatus('error', result.error || 'Veri alınamadı');
+            return; // Hata varsa işlem yapmayı bırak
+        }
         console.log("📡 getDailyNotifications sonucu:", result);
         console.log("📋 Gelen Data Array:", result.data);
 
