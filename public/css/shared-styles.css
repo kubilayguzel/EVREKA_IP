@@ -1157,17 +1157,28 @@ body.modal-open {
     padding-right: 0 !important;
 }
 /* Büyütülmüş önizleme görseli için gerekli stiller */
+/* main.js içindeki hover mantığı için gerekli stil */
 .floating-trademark-preview {
     position: fixed;
-    z-index: 10000;
-    max-width: 350px;
-    max-height: 350px;
-    border: 3px solid #1e3c72;
+    z-index: 99999;
+    max-width: 300px;
+    max-height: 300px;
+    border: 2px solid #1e3c72;
     border-radius: 12px;
     background: white;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    pointer-events: none; /* Mouse hareketini engellememesi için */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    pointer-events: none; /* Mouse'un resme takılmaması için */
     display: none;
     object-fit: contain;
     padding: 10px;
+}
+
+/* Tablodaki küçük resimlerin sınıfını sabitleyin */
+.trademark-image-thumbnail {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
 }
