@@ -493,145 +493,60 @@ updateTabBadge() {
         }
     }
 
- async fetchNotifications() {
+// etebs-module.js içindeki fetchNotifications fonksiyonunu güncelleyin
+async fetchNotifications() {
     console.log("✅ fetchNotifications başladı");
     const tokenInput = document.getElementById('etebsTokenInput');
     if (!tokenInput) return;
 
     const token = tokenInput.value.trim();
-    console.log("🔑 Token:", token);
-
     if (!token) {
         this.showTokenStatus('error', 'Token giriniz');
         return;
     }
 
     const fetchBtn = document.getElementById('fetchNotificationsBtn');
-    if (!fetchBtn) return;
-
     const originalText = fetchBtn.innerHTML;
     
     try {
-        fetchBtn.innerHTML = '<span class="loading-spinner"></span><span>Yükleniyor...</span>';
+        fetchBtn.innerHTML = '<span class="loading-spinner"></span><span>Sorgulanıyor...</span>';
         fetchBtn.disabled = true;
-        
-        this.showTokenStatus('loading', 'Tebligatlar çekiliyor...');
+        this.showTokenStatus('loading', 'Tebligat listesi alınıyor...');
 
+        // ÖNEMLİ: getDailyNotifications fonksiyonuna "sadece liste" parametresi 
+        // eklenmiş bir mod varsa onu kullanın veya timeout'u yönetin.
         const result = await etebsService.getDailyNotifications(token);
-        if (result.success && result.data) {
-            const records = window.indexingModule && Array.isArray(window.indexingModule.allRecords)
-                ? window.indexingModule.allRecords
-                : [];
 
+        if (result.success) {
+            // Veri geldiğinde işlemleri yap
             this.notifications = result.data.map(n => {
+                const records = window.indexingModule?.allRecords || [];
                 const isMatched = records.some(r => r.applicationNumber === n.dosyaNo);
                 return { ...n, matched: isMatched };
             });
-            // ... işlemler devam eder
-        } else {
-            this.showTokenStatus('error', result.error || 'Veri alınamadı');
-            return; // Hata varsa işlem yapmayı bırak
-        }
-        console.log("📡 getDailyNotifications sonucu:", result);
-        console.log("📋 Gelen Data Array:", result.data);
 
-        const records = window.indexingModule && Array.isArray(window.indexingModule.allRecords)
-            ? window.indexingModule.allRecords
-            : [];
-
-        // ✅ Tek seferde eşleştirme yap ve ata
-        this.notifications = result.data.map(n => {
-            const isMatched = records.some(r => r.applicationNumber === n.dosyaNo);
-            return {
-                ...n,
-                matched: isMatched
-            };
-        });
-
-        this.filteredNotifications = [...this.notifications];
-
-        if (result.success) {
-            console.log("📊 İşleme başlanıyor...");
+            this.filteredNotifications = [...this.notifications];
+            this.displayNotifications();
+            this.updateStatistics();
+            this.showNotificationsSection();
+            this.updateTabBadge();
             
-            // 1. Token kaydetme
-            try {
-                const currentUser = authService.getCurrentUser();
-                if (currentUser) {
-                    await etebsService.saveToken(token, currentUser.uid);
-                    console.log("✅ Token kaydedildi");
-                }
-            } catch (tokenError) {
-                console.error("❌ Token kaydetme hatası:", tokenError);
-            }
-            
-            // 2. Status gösterme
-            try {
-                this.showTokenStatus(
-                    'success',
-                    `${result.totalCount} tebligat alındı (${result.matchedCount} eşleşen, ${result.unmatchedCount} eşleşmeyen)`
-                );
-                console.log("✅ Token status gösterildi");
-            } catch (statusError) {
-                console.error("❌ Token status hatası:", statusError);
-            }
-
-            // 3. Notifications gösterme
-            try {
-                this.displayNotifications();
-                console.log("✅ Notifications gösterildi");
-            } catch (displayError) {
-                console.error("❌ Display notifications hatası:", displayError);
-            }
-
-            // 4. İstatistikleri güncelleme
-            try {
-                this.updateStatistics();
-                console.log("✅ İstatistikler güncellendi");
-            } catch (statsError) {
-                console.error("❌ İstatistik güncelleme hatası:", statsError);
-            }
-
-            // 5. Section'ı gösterme
-            try {
-                this.showNotificationsSection();
-                console.log("✅ Notifications section gösterildi");
-            } catch (sectionError) {
-                console.error("❌ Show section hatası:", sectionError);
-            }
-
-            // 6. Tab badge güncelleme
-            try {
-                this.updateTabBadge();
-                console.log("✅ Tab badge güncellendi");
-            } catch (badgeError) {
-                console.error("❌ Tab badge hatası:", badgeError);
-            }
-
-            // 7. Başarı notifikasyonu
-            try {
-                showNotification(
-                    `${result.totalCount} tebligat bulundu. ${result.savedCount} tanesi başarıyla kaydedildi!`, 
-                    'success'
-                );
-            } catch (notifError) {
-                console.error("❌ Notification hatası:", notifError);
-            }
-
+            showNotification(`${result.totalCount} tebligat bulundu.`, 'success');
         } else {
-            this.showTokenStatus('error', result.error);
-            showNotification(`ETEBS Hatası: ${result.error}`, 'error');
+            // 504 veya Fetch hatası durumunda özel mesaj
+            if (result.error?.includes('Failed to fetch') || result.error?.includes('timeout')) {
+                this.showTokenStatus('error', 'Sunucu yanıt vermiyor (Zaman aşımı). Lütfen biraz bekleyip tekrar deneyin.');
+                showNotification('İşlem çok uzun sürdüğü için kesildi. Liste kısmi olarak yüklenmiş olabilir.', 'warning');
+            } else {
+                this.showTokenStatus('error', result.error || 'Veri alınamadı');
+            }
         }
-
     } catch (error) {
         console.error('❌ Fetch notifications error:', error);
-        console.error('❌ Error stack:', error.stack);
-        this.showTokenStatus('error', 'Beklenmeyen bir hata oluştu');
-        showNotification('ETEBS bağlantısında hata oluştu', 'error');
+        this.showTokenStatus('error', 'Bağlantı hatası oluştu');
     } finally {
-        if (fetchBtn) {
-            fetchBtn.innerHTML = originalText;
-            fetchBtn.disabled = false;
-        }
+        fetchBtn.innerHTML = originalText;
+        fetchBtn.disabled = false;
     }
 }
 
