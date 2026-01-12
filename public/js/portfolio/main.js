@@ -80,6 +80,7 @@ class PortfolioController {
     }
 
     // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
+
     setupImageHover() {
         let previewEl = document.getElementById('floating-preview');
         if (!previewEl) {
@@ -90,35 +91,24 @@ class PortfolioController {
         }
 
         const tableBody = document.getElementById('portfolioTableBody');
-        if (!tableBody) return;
-
+        
         tableBody.addEventListener('mouseover', (e) => {
-            const targetImg = e.target.closest('.trademark-image-thumbnail');
-            if (targetImg && targetImg.src) {
-                previewEl.src = targetImg.src;
-                // Resim yüklendiğinde pozisyonu tekrar hesapla (0px genişlik hatasını önler)
-                previewEl.onload = () => {
+            if (e.target.classList.contains('trademark-image-thumbnail')) {
+                const src = e.target.src;
+                if (src) {
+                    previewEl.src = src;
                     previewEl.style.display = 'block';
-                    this.positionPreview(e, previewEl);
-                };
-                // Eğer resim zaten cache'teyse onload tetiklenmeyebilir:
-                if (previewEl.complete) {
-                    previewEl.style.display = 'block';
-                    this.positionPreview(e, previewEl);
+                    
+                    const rect = e.target.getBoundingClientRect();
+                    previewEl.style.left = (rect.right + 10) + 'px';
+                    previewEl.style.top = rect.top + 'px';
                 }
             }
         });
-
-        tableBody.addEventListener('mousemove', (e) => {
-            if (previewEl.style.display === 'block') {
-                this.positionPreview(e, previewEl);
-            }
-        });
-
+        
         tableBody.addEventListener('mouseout', (e) => {
-            if (e.target.closest('.trademark-image-thumbnail')) {
+            if (e.target.classList.contains('trademark-image-thumbnail')) {
                 previewEl.style.display = 'none';
-                previewEl.src = ''; // Kaynak temizleme
             }
         });
     }
