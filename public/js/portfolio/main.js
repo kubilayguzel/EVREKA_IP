@@ -85,20 +85,20 @@ class PortfolioController {
         if (!previewEl) {
             previewEl = document.createElement('img');
             previewEl.id = 'floating-preview';
-            previewEl.className = 'floating-trademark-preview';
+            previewEl.className = 'floating-trademark-preview'; // CSS sınıfı burada
             document.body.appendChild(previewEl);
         }
 
         const tableBody = document.getElementById('portfolioTableBody');
-        
+        if (!tableBody) return;
+
+        // Önemli: Delegation için target kontrolünü güçlendirin
         tableBody.addEventListener('mouseover', (e) => {
-            if (e.target.classList.contains('trademark-image-thumbnail')) {
-                const src = e.target.src;
-                if (src) {
-                    previewEl.src = src;
-                    previewEl.style.display = 'block';
-                    this.positionPreview(e, previewEl);
-                }
+            const target = e.target.closest('.trademark-image-thumbnail'); // En yakın görseli bul
+            if (target && target.src) {
+                previewEl.src = target.src;
+                previewEl.style.display = 'block';
+                this.positionPreview(e, previewEl);
             }
         });
 
@@ -109,7 +109,7 @@ class PortfolioController {
         });
 
         tableBody.addEventListener('mouseout', (e) => {
-            if (e.target.classList.contains('trademark-image-thumbnail')) {
+            if (e.target.closest('.trademark-image-thumbnail')) {
                 previewEl.style.display = 'none';
             }
         });
