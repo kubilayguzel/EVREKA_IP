@@ -85,7 +85,7 @@ class PortfolioController {
         if (!previewEl) {
             previewEl = document.createElement('img');
             previewEl.id = 'floating-preview';
-            previewEl.className = 'floating-trademark-preview'; // CSS sınıfı burada
+            previewEl.className = 'floating-trademark-preview';
             document.body.appendChild(previewEl);
         }
 
@@ -93,11 +93,19 @@ class PortfolioController {
         if (!tableBody) return;
 
         tableBody.addEventListener('mouseover', (e) => {
-            const targetImg = e.target.closest('.trademark-image-thumbnail'); // target yerine closest kullanın
+            const targetImg = e.target.closest('.trademark-image-thumbnail');
             if (targetImg && targetImg.src) {
                 previewEl.src = targetImg.src;
-                previewEl.style.display = 'block';
-                this.positionPreview(e, previewEl);
+                // Resim yüklendiğinde pozisyonu tekrar hesapla (0px genişlik hatasını önler)
+                previewEl.onload = () => {
+                    previewEl.style.display = 'block';
+                    this.positionPreview(e, previewEl);
+                };
+                // Eğer resim zaten cache'teyse onload tetiklenmeyebilir:
+                if (previewEl.complete) {
+                    previewEl.style.display = 'block';
+                    this.positionPreview(e, previewEl);
+                }
             }
         });
 
@@ -110,6 +118,7 @@ class PortfolioController {
         tableBody.addEventListener('mouseout', (e) => {
             if (e.target.closest('.trademark-image-thumbnail')) {
                 previewEl.style.display = 'none';
+                previewEl.src = ''; // Kaynak temizleme
             }
         });
     }
