@@ -68,97 +68,63 @@ export class PortfolioUpdateManager {
     }
 
     setupEventListeners() {
+        // --- 1. Arama ve Seçim Dinleyicileri ---
         if (this.elements.searchInput) {
             this.elements.searchInput.addEventListener('input', debounce((e) => this.handleSearch(e.target.value), 300));
         }
+
         if (this.elements.searchResults) {
             this.elements.searchResults.addEventListener('click', (e) => {
                 const item = e.target.closest('.search-result-item');
                 if (item) this.selectRecord(item.dataset.id);
             });
         }
+
         if (this.elements.selectedDisplay) {
             this.elements.selectedDisplay.addEventListener('click', (e) => {
                 if (e.target.closest('.remove-selected-item-btn')) this.clearSelection();
             });
         }
 
+        // --- 2. İşlem Tipi Değişim Dinleyicisi (Tescil Belgesi Kontrolü) ---
         if (this.elements.childTransactionType) {
             this.elements.childTransactionType.addEventListener('change', () => {
                 this.handleTransactionTypeChange();
             });
         }
 
-        if (this.elements.btnNiceAddModal) this.elements.btnNiceAddModal.addEventListener('click', () => this.openNiceModal());
-        if (this.elements.btnSaveAll) this.elements.btnSaveAll.addEventListener('click', () => this.saveAllChanges());
-        if (this.elements.btnAddBulletin) this.elements.btnAddBulletin.addEventListener('click', () => this.addBulletin());
+        // --- 3. Buton Dinleyicileri ---
+        // Merkezi Nice modalını açar
+        if (this.elements.btnNiceAddModal) {
+            this.elements.btnNiceAddModal.addEventListener('click', () => this.openNiceModal());
+        }
 
+        // Kaydetme butonunu tetikler (3. Adım burada devreye girecek)
+        if (this.elements.btnSaveAll) {
+            this.elements.btnSaveAll.addEventListener('click', () => this.saveAllChanges());
+        }
+
+        // Bülten ekleme butonu
+        if (this.elements.btnAddBulletin) {
+            this.elements.btnAddBulletin.addEventListener('click', () => this.addBulletin());
+        }
+
+        // --- 4. Global Silme Dinleyicileri ---
         document.addEventListener('click', (e) => {
-            if (e.target.matches('.delete-bulletin-btn')) this.removeBulletin(e.target.dataset.index);
+            // Bülten silme
+            if (e.target.matches('.delete-bulletin-btn')) {
+                this.removeBulletin(e.target.dataset.index);
+            }
+            
+            // Sınıf silme (Merkezi yapıya yönlendirilir)
             if (e.target.matches('[data-remove-class]') || e.target.closest('[data-remove-class]')) {
                 const btn = e.target.closest('[data-remove-class]');
                 this.removeNiceClass(btn.getAttribute('data-remove-class'));
             }
         });
-        
-        // --- ACCORDION DÜZELTMESİ ---
-        if (this.elements.niceAccordion) {
-            // Textarea değişikliklerini yakala
-            this.elements.niceAccordion.addEventListener('input', (e) => {
-                if (e.target.classList.contains('gs-textarea')) {
-                    this.state.goodsAndServicesMap[e.target.dataset.class] = e.target.value;
-                }
-            });
 
-            // Açma/Kapama mantığı
-            this.elements.niceAccordion.addEventListener('click', (e) => {
-                const headerBtn = e.target.closest('.nice-accordion-btn');
-                if (!headerBtn) return;
-
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const targetId = headerBtn.getAttribute('data-target-id');
-                const targetContent = document.getElementById(targetId);
-                
-                if(!targetContent) return;
-
-                // Diğer tüm panelleri kapat
-                const allContents = this.elements.niceAccordion.querySelectorAll('.nice-collapse-content');
-                allContents.forEach(el => {
-                    if (el.id !== targetId) {
-                        el.style.display = 'none';
-                        el.classList.remove('show');
-                        // İkonu düzelt
-                        const btn = document.querySelector(`[data-target-id="${el.id}"] i`);
-                        if(btn) {
-                            btn.classList.remove('fa-chevron-down');
-                            btn.classList.add('fa-chevron-right');
-                        }
-                    }
-                });
-
-                // Tıklananı toggle et
-                const isVisible = targetContent.classList.contains('show');
-                const icon = headerBtn.querySelector('i');
-
-                if (isVisible) {
-                    targetContent.style.display = 'none';
-                    targetContent.classList.remove('show');
-                    if(icon) {
-                        icon.classList.remove('fa-chevron-down');
-                        icon.classList.add('fa-chevron-right');
-                    }
-                } else {
-                    targetContent.style.display = 'block';
-                    targetContent.classList.add('show');
-                    if(icon) {
-                        icon.classList.remove('fa-chevron-right');
-                        icon.classList.add('fa-chevron-down');
-                    }
-                }
-            });
-        }
+        // NOT: Eski "ACCORDION DÜZELTMESİ" bloğu tamamen kaldırıldı. 
+        // Çünkü bu işlemler artık merkezi nice-classification.js içinde yapılıyor.
     }
 
     handleTransactionTypeChange() {
@@ -245,7 +211,13 @@ export class PortfolioUpdateManager {
 
         // HATA KAYNAĞI: Fonksiyonların doğru çağrılması
         this.renderBulletins();
-        this.renderNiceEditor(); 
+        // Merkezi Nice editörünü başlat (eğer kayıtlı veri varsa yükle)
+        if (r.goodsAndServicesByClass) {
+            const formattedClasses = r.goodsAndServicesByClass.map(g => 
+                g.items.map(item => `(${g.classNo}-1) ${item}`).join('\n')
+            ).flat();
+            setSelectedNiceClasses(formattedClasses);
+        } 
     }
 
     populateStatusDropdown(currentStatus) {
@@ -295,61 +267,6 @@ export class PortfolioUpdateManager {
         if (!nClasses.length && gsList.length > 0) nClasses = gsList.map(item => String(item.classNo));
         if (!nClasses.length && data.niceClass) nClasses = Array.isArray(data.niceClass) ? data.niceClass.map(String) : [String(data.niceClass)];
         this.state.niceClasses = nClasses.map(String);
-    }
-
-    renderNiceEditor() {
-        if (!this.elements.niceChips) return;
-        
-        if (this.state.niceClasses.length === 0) {
-            this.elements.niceChips.innerHTML = '<div class="text-muted small">Sınıf eklenmemiş.</div>';
-            if (this.elements.niceAccordion) this.elements.niceAccordion.innerHTML = '';
-            return;
-        }
-
-        this.elements.niceChips.innerHTML = this.state.niceClasses
-            .sort((a, b) => Number(a) - Number(b))
-            .map(c => `
-                <span class="badge badge-primary border mr-1 mb-1 p-2 shadow-sm" style="font-size: 0.9em;">
-                    Nice ${c}
-                    <span style="cursor:pointer; margin-left:8px; opacity:0.7;" data-remove-class="${c}" title="Sil">
-                        <i class="fas fa-times"></i>
-                    </span>
-                </span>
-            `).join('');
-
-        if (!this.elements.niceAccordion) return;
-
-        this.elements.niceAccordion.innerHTML = this.state.niceClasses
-            .sort((a, b) => Number(a) - Number(b))
-            .map((c, idx) => {
-                const content = this.state.goodsAndServicesMap[String(c)] || '';
-                const panelId = `nice-panel-${c}`;
-                // Hepsi kapalı başlasın, kullanıcı tıklayınca açsın
-                return `
-                    <div class="card mb-2 border">
-                        <div class="card-header p-0 bg-light" id="heading-${c}">
-                            <h6 class="mb-0">
-                                <button class="btn btn-link btn-block text-left py-3 px-3 text-dark font-weight-bold nice-accordion-btn" 
-                                        type="button" 
-                                        data-target-id="${panelId}"
-                                        style="text-decoration: none; display: flex; align-items: center;">
-                                    <i class="fas fa-chevron-right mr-2 text-primary" style="font-size:0.8em; transition: transform 0.2s;"></i>
-                                    Nice ${c} — Mal & Hizmet Listesi
-                                </button>
-                            </h6>
-                        </div>
-                        <div id="${panelId}" class="nice-collapse-content" style="display:none;">
-                            <div class="card-body p-2">
-                                <textarea class="form-control gs-textarea border-0 bg-light" 
-                                    data-class="${c}" 
-                                    rows="10" 
-                                    style="resize:vertical; font-size:0.9rem;"
-                                    placeholder="Sınıf ${c} için maddeleri buraya yapıştırın...">${content}</textarea>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
     }
 
     // --- Helper Metodlar ---
