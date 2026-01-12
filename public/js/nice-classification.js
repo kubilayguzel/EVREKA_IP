@@ -420,6 +420,7 @@ class NiceClassificationManager {
         this.selectedClasses = {};
         this.elements = {}; 
         this.class35Manager = new Class35_5Manager(this);
+        this.classTexts = {};
     }
 
     async init() {
@@ -548,6 +549,16 @@ class NiceClassificationManager {
                 }
             });
         }
+
+        // Textarea değişikliklerini anlık kaydet
+        if (this.elements.selectedContainer) {
+            this.elements.selectedContainer.addEventListener('input', (e) => {
+                if (e.target.classList.contains('class-items-textarea')) {
+                    const classNum = e.target.dataset.classNum;
+                    this.classTexts[classNum] = e.target.value;
+                }
+            });
+        }
     }
 
     handleCheckboxAction(code, text, isChecked) {
@@ -613,19 +624,13 @@ class NiceClassificationManager {
     updateSelectionUI() {
         const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
         const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
-        
         groups.forEach(g => g.classList.remove('has-selection'));
 
         allCheckboxes.forEach(chk => {
             const isSelected = !!this.selectedClasses[chk.value];
             chk.checked = isSelected;
-            
             const row = chk.closest('.nice-sub-item');
-            if (row) {
-                if(isSelected) row.classList.add('selected');
-                else row.classList.remove('selected');
-            }
-
+            if (row) isSelected ? row.classList.add('selected') : row.classList.remove('selected');
             if (isSelected) {
                 const group = chk.closest('.nice-class-group');
                 if (group) group.classList.add('has-selection');
@@ -637,8 +642,7 @@ class NiceClassificationManager {
             if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
 
             if (count === 0) {
-                this.elements.selectedContainer.innerHTML = `<div class="text-center text-muted py-4"><i class="fas fa-box-open fa-2x mb-2 opacity-50"></i><p>Henüz sınıf seçilmedi.</p></div>`;
-                this.elements.selectedContainer.dispatchEvent(new Event('input', { bubbles: true }));
+                this.elements.selectedContainer.innerHTML = `<div class="text-center text-muted py-4"><p>Henüz sınıf seçilmedi.</p></div>`;
                 return;
             }
 
@@ -649,26 +653,34 @@ class NiceClassificationManager {
             });
 
             let html = '';
-            Object.keys(grouped).sort((a,b) => a-b).forEach(num => {
+            Object.keys(grouped).sort((a,b) => Number(a)-Number(b)).forEach(num => {
+                // Eğer bu sınıf için daha önce metin girilmemişse, seçili alt maddeleri birleştirip başlangıç metni yap
+                if (!this.classTexts[num]) {
+                    this.classTexts[num] = grouped[num].map(item => item.text).join('\n');
+                }
+
                 html += `
-                <div class="selected-group-card">
-                    <div class="selected-group-header">Sınıf ${num}</div>
-                    <div>
-                        ${grouped[num].map(item => `
-                            <div class="selected-item-row">
-                                <span class="selected-code-badge">${item.code}</span>
-                                <span class="selected-text">${item.text}</span>
-                                <button class="btn-remove-item" data-key="${item.code}" title="Kaldır">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        `).join('')}
+                <div class="selected-group-card mb-3 border rounded shadow-sm">
+                    <div class="selected-group-header bg-light p-2 font-weight-bold border-bottom d-flex justify-content-between">
+                        <span>Nice Sınıfı ${num}</span>
+                        <small class="text-muted">${grouped[num].length} Madde Seçili</small>
+                    </div>
+                    <div class="p-2">
+                        <label class="small text-primary font-weight-bold">Mal ve Hizmet Listesi:</label>
+                        <textarea class="form-control class-items-textarea" 
+                                data-class-num="${num}" 
+                                placeholder="Sınıf ${num} içeriğini buraya yazın veya düzenleyin..."
+                                rows="6" style="font-size: 13px; line-height: 1.4;">${this.classTexts[num]}</textarea>
+                        <div class="mt-2 text-right">
+                            <button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="window.clearClassSelection('${num}')">
+                                <i class="fas fa-trash-alt mr-1"></i>Sınıfı Kaldır
+                            </button>
+                        </div>
                     </div>
                 </div>`;
             });
 
             this.elements.selectedContainer.innerHTML = html;
-            this.elements.selectedContainer.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 
