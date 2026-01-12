@@ -201,8 +201,6 @@ export class PortfolioUpdateManager {
 
     populateFormFields() {
         const r = this.state.recordData;
-        
-        // --- Statüleri Doldur ---
         this.populateStatusDropdown(r.status);
 
         if(this.elements.appDate) this.elements.appDate.value = r.applicationDate || '';
@@ -210,15 +208,15 @@ export class PortfolioUpdateManager {
         if(this.elements.regDate) this.elements.regDate.value = r.registrationDate || '';
         if(this.elements.renewalDate) this.elements.renewalDate.value = r.renewalDate || '';
 
-        // HATA KAYNAĞI: Fonksiyonların doğru çağrılması
         this.renderBulletins();
-        // Merkezi Nice editörünü başlat (eğer kayıtlı veri varsa yükle)
+
+        // MERKEZİ DÜZELTME: Verileri merkezi Nice modülüne gönder
         if (r.goodsAndServicesByClass) {
-            const formattedClasses = r.goodsAndServicesByClass.map(g => 
-                g.items.map(item => `(${g.classNo}-1) ${item}`).join('\n')
-            ).flat();
-            setSelectedNiceClasses(formattedClasses);
-        } 
+            const formatted = r.goodsAndServicesByClass.map(g => 
+                `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
+            );
+            setSelectedNiceClasses(formatted);
+        }
     }
 
     populateStatusDropdown(currentStatus) {
@@ -278,10 +276,10 @@ export class PortfolioUpdateManager {
     renderSelectedRecordUI() { /* ... */ }
 
     removeNiceClass(classNo) {
-        if(!confirm(`Nice ${classNo} sınıfını silmek istiyor musunuz?`)) return;
-        this.state.niceClasses = this.state.niceClasses.filter(x => x !== classNo);
-        delete this.state.goodsAndServicesMap[classNo];
-        this.renderNiceEditor();
+        // Direkt merkezi temizleme fonksiyonunu çağırıyoruz
+        if (typeof window.clearClassSelection === 'function') {
+            window.clearClassSelection(classNo);
+        }
     }
 
     async openNiceModal() {
@@ -311,12 +309,17 @@ export class PortfolioUpdateManager {
     }
 
     addClassFromModal(cls) {
-        if (!this.state.niceClasses.includes(cls)) {
-            this.state.niceClasses.push(cls);
-            this.state.goodsAndServicesMap[cls] = '';
-            this.renderNiceEditor();
-            if (window.$ && window.$.fn.modal) $(this.elements.niceClassModal).modal('hide');
-            else this.elements.niceClassModal.style.display = 'none';
+        // Merkezi Nice editörüne yeni bir sınıf (boş içerikle) ekle
+        const currentData = getSelectedNiceClasses();
+        const newItem = `(${cls}-1) `;
+        setSelectedNiceClasses([...currentData, newItem]);
+
+        // Modalı kapat
+        if (window.$ && window.$.fn.modal) {
+            $(this.elements.niceClassModal).modal('hide');
+        } else {
+            this.elements.niceClassModal.style.display = 'none';
+            this.elements.niceClassModal.classList.remove('show');
         }
     }
 
@@ -346,49 +349,34 @@ export class PortfolioUpdateManager {
 
     async saveAllChanges() {
         if (!this.state.selectedRecordId) return;
-
-        // Butonu yükleniyor moduna al
         if (this.elements.btnSaveAll) {
             this.elements.btnSaveAll.disabled = true;
             this.elements.btnSaveAll.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
         }
 
         try {
-            // --- 1. Merkezi Editörden Güncel Verileri Çek ---
-            // Merkezi nice-classification.js içindeki verileri dizi olarak alıyoruz
+            // Merkezi editörden güncel metinleri çek (Senin textarea'da düzenlediğin veri buraya gelir)
             const selectedNiceData = getSelectedNiceClasses(); 
             const tempMap = {};
 
-            // --- 2. Veriyi Ayrıştır ve Grupla ---
-            // Gelen veriler şu formatta: "(1-1) Madde Metni..."
             selectedNiceData.forEach(str => {
                 const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
                 if (match) {
-                    const classNo = match[1]; // Sınıf numarası (örn: "5")
-                    const content = match[2]; // Kullanıcının girdiği metin
-                    
+                    const classNo = match[1];
+                    const content = match[2];
                     if (!tempMap[classNo]) tempMap[classNo] = [];
-                    
-                    // Metni satırlara böl, boşlukları temizle ve boş satırları filtrele
-                    const items = content.split('\n')
-                                        .map(i => i.trim())
-                                        .filter(i => i !== '');
-                    
-                    tempMap[classNo].push(...items);
+                    // Metni satırlara böl ve temizle
+                    tempMap[classNo].push(...content.split('\n').filter(i => i.trim() !== ''));
                 }
             });
 
-            // --- 3. Firestore Formatına Dönüştür ---
-            // Mal ve Hizmet Listesi (Array of Objects)
             const goodsAndServicesByClass = Object.entries(tempMap).map(([num, items]) => ({
                 classNo: Number(num),
                 items: items
             })).sort((a, b) => a.classNo - b.classNo);
 
-            // Flat Sınıf Listesi (örn: ["1", "5", "35"])
             const sortedNiceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
 
-            // --- 4. Güncelleme Paketini Hazırla ---
             const updates = {
                 status: this.elements.registryStatus ? this.elements.registryStatus.value : '',
                 applicationDate: this.elements.appDate ? this.elements.appDate.value : '',
@@ -396,27 +384,25 @@ export class PortfolioUpdateManager {
                 registrationDate: this.elements.regDate ? this.elements.regDate.value : '',
                 renewalDate: this.elements.renewalDate ? this.elements.renewalDate.value : '',
                 bulletins: this.state.bulletins,
-                niceClasses: sortedNiceClasses, // Güncellenmiş sınıf listesi
-                goodsAndServicesByClass: goodsAndServicesByClass, // Güncellenmiş detaylı liste
+                niceClasses: sortedNiceClasses,
+                goodsAndServicesByClass: goodsAndServicesByClass,
                 updatedAt: new Date().toISOString()
             };
 
-            // --- 5. Veritabanına Yaz ---
             await updateDoc(doc(db, 'ipRecords', this.state.selectedRecordId), updates);
-            
-            showNotification('Portföy bilgileri başarıyla güncellendi!', 'success');
+            showNotification('Portföy bilgileri güncellendi!', 'success');
 
         } catch (error) {
             console.error('Save Error:', error);
-            showNotification('Kaydedilirken bir hata oluştu: ' + error.message, 'error');
+            showNotification('Hata: ' + error.message, 'error');
         } finally {
-            // Butonu eski haline getir
             if (this.elements.btnSaveAll) {
                 this.elements.btnSaveAll.disabled = false;
                 this.elements.btnSaveAll.textContent = 'Tüm Değişiklikleri Kaydet';
             }
         }
     }
+
 }
 
 document.addEventListener('DOMContentLoaded', () => {
