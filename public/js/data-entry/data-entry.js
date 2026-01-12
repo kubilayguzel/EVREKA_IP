@@ -490,6 +490,27 @@ class DataEntryModule {
 
         // 1. Veriyi Topla
         const recordData = strategy.collectData(this);
+        // Eğer marka kaydıysa merkezi Nice editöründen güncel metinleri al
+        if (this.currentIpType === 'trademark') {
+            const selectedNiceData = getSelectedNiceClasses(); 
+            const tempMap = {};
+
+            selectedNiceData.forEach(str => {
+                const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
+                if (match) {
+                    const classNo = match[1];
+                    const content = match[2];
+                    if (!tempMap[classNo]) tempMap[classNo] = [];
+                    tempMap[classNo].push(...content.split('\n').filter(i => i.trim() !== ''));
+                }
+            });
+
+            recordData.goodsAndServicesByClass = Object.entries(tempMap).map(([num, items]) => ({
+                classNo: Number(num),
+                items: items
+            }));
+            recordData.niceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
+        }
 
         // 2. Validasyon
         const error = strategy.validate(recordData, this);
