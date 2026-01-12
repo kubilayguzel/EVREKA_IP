@@ -128,29 +128,32 @@ export class PortfolioUpdateManager {
         // Çünkü bu işlemler artık merkezi nice-classification.js içinde yapılıyor.
     }
 
+    // portfolio-update-manager.js içindeki handleTransactionTypeChange fonksiyonunu şu şekilde değiştirin:
+
     handleTransactionTypeChange() {
-        const selectEl = this.elements.childTransactionType;
-        if (!selectEl) return;
-        const typeValue = selectEl.value; 
-        let typeText = '';
-        if (selectEl.selectedIndex !== -1 && selectEl.options[selectEl.selectedIndex]) {
-            typeText = selectEl.options[selectEl.selectedIndex].text.toLowerCase();
-        }
+        if (!this.elements.childTransactionType || !this.elements.registryEditorSection) return;
 
-        // 45 ID'si veya metin kontrolü
-        const isRegistration = (typeValue === '45') || typeText.includes('tescil belgesi') || typeText.includes('registration certificate');
+        const selectedOption = this.elements.childTransactionType.options[this.elements.childTransactionType.selectedIndex];
+        const typeId = this.elements.childTransactionType.value;
+        const typeText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-        if (this.elements.registryEditorSection) {
-            if (isRegistration) {
-                this.elements.registryEditorSection.style.display = 'block';
-                this.initDatePickers();
-                setTimeout(() => {
-                    this.elements.registryEditorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-                showNotification('📝 Tescil ve Sınıf düzenleme alanı açıldı.', 'info');
-            } else {
-                this.elements.registryEditorSection.style.display = 'none';
+        // ID 45 veya metinde "tescil belgesi" geçiyorsa
+        const isRegistry = typeId === '45' || typeText.includes('tescil belgesi');
+
+        if (isRegistry) {
+            this.elements.registryEditorSection.style.display = 'block';
+            
+            // --- KRİTİK EKLEME: Bölüm açıldığında recordData içindeki emtiaları editöre bas ---
+            const r = this.state.recordData;
+            if (r && r.goodsAndServicesByClass) {
+                console.log("⚡ Tescil Belgesi seçildi, emtialar yükleniyor...", r.goodsAndServicesByClass);
+                const formatted = r.goodsAndServicesByClass.map(g => 
+                    `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
+                );
+                setSelectedNiceClasses(formatted);
             }
+        } else {
+            this.elements.registryEditorSection.style.display = 'none';
         }
     }
 
@@ -199,8 +202,12 @@ export class PortfolioUpdateManager {
         }
     }
 
+    // portfolio-update-manager.js içindeki populateFormFields fonksiyonunun sonuna ekleyin:
+
     populateFormFields() {
         const r = this.state.recordData;
+        if (!r) return;
+
         this.populateStatusDropdown(r.status);
 
         if(this.elements.appDate) this.elements.appDate.value = r.applicationDate || '';
@@ -210,13 +217,8 @@ export class PortfolioUpdateManager {
 
         this.renderBulletins();
 
-        // MERKEZİ DÜZELTME: Verileri merkezi Nice modülüne gönder
-        if (r.goodsAndServicesByClass) {
-            const formatted = r.goodsAndServicesByClass.map(g => 
-                `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
-            );
-            setSelectedNiceClasses(formatted);
-        }
+        // --- EKLEME: Kayıt dolunca işlem tipini kontrol et ve Nice editörünü hazırla ---
+        this.handleTransactionTypeChange(); 
     }
 
     populateStatusDropdown(currentStatus) {
