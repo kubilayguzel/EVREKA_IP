@@ -201,6 +201,6 @@ if (typeof window !== 'undefined') {
     return loading;
   };
   
-  // tp-file-transfer.js'in beklediği alias'ı (takma adı) ekleyelim:
+  // tp-file-transfer.js'in beklediği fonksiyon ismini (alias) tanımlayalım
   window.showLoadingWithCancel = window.showSimpleLoading;
 }
