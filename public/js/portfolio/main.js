@@ -95,13 +95,17 @@ class PortfolioController {
         tableBody.addEventListener('mouseover', (e) => {
             if (e.target.classList.contains('trademark-image-thumbnail')) {
                 const src = e.target.src;
-                if (src) {
+                if (src && src.length > 10) {
                     previewEl.src = src;
-                    previewEl.style.display = 'block';
                     
                     const rect = e.target.getBoundingClientRect();
-                    previewEl.style.left = (rect.right + 10) + 'px';
-                    previewEl.style.top = rect.top + 'px';
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    
+                    // Sağ tarafa yerleştir
+                    previewEl.style.left = (rect.right + 15) + 'px';
+                    previewEl.style.top = (rect.top + scrollTop - 50) + 'px';
+                    previewEl.style.display = 'block';
+                    previewEl.style.opacity = '1';
                 }
             }
         });
@@ -109,10 +113,22 @@ class PortfolioController {
         tableBody.addEventListener('mouseout', (e) => {
             if (e.target.classList.contains('trademark-image-thumbnail')) {
                 previewEl.style.display = 'none';
+                previewEl.style.opacity = '0';
+            }
+        });
+        
+        // Mouse hareket ederken pozisyonu güncelle
+        tableBody.addEventListener('mousemove', (e) => {
+            if (e.target.classList.contains('trademark-image-thumbnail') && previewEl.style.display === 'block') {
+                const rect = e.target.getBoundingClientRect();
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                previewEl.style.left = (rect.right + 15) + 'px';
+                previewEl.style.top = (rect.top + scrollTop - 50) + 'px';
             }
         });
     }
-
+    
     positionPreview(e, element) {
         const offset = 20;
         let left = e.clientX + offset;
