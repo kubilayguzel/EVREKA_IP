@@ -1,8 +1,8 @@
 // public/js/nice-classification.js - Final Professional Version (Text Format Fixed)
-
+import { showNotification } from '../utils.js';
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { showNotification } from '../utils.js';
+
 
 // --- TASARIM ENJEKSİYONU (ZORUNLU GÜNCELLEME) ---
 function injectNiceStyles() {
