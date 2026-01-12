@@ -493,7 +493,7 @@ class DataEntryModule {
         // Eğer marka kaydıysa merkezi Nice editöründen güncel metinleri al
         if (this.currentIpType === 'trademark') {
             const selectedNiceData = getSelectedNiceClasses(); 
-            const tempMap = {};
+            const tempMap = {}; 
 
             selectedNiceData.forEach(str => {
                 const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
