@@ -717,7 +717,7 @@ class NiceClassificationManager {
     clearAll() { this.selectedClasses = {}; this.updateSelectionUI(); }
 }
 
-const niceManager = new NiceClassificationManager();
+const niceManager = new NiceClassificationManager(); 
 
 export async function initializeNiceClassification() { await niceManager.init(); }
 export function getSelectedNiceClasses() { return niceManager.getSelectedData(); }
