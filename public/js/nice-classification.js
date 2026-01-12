@@ -2,6 +2,7 @@
 
 import { db } from '../firebase-config.js';
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { showNotification } from '../utils.js';
 
 // --- TASARIM ENJEKSİYONU (ZORUNLU GÜNCELLEME) ---
 function injectNiceStyles() {
@@ -699,9 +700,14 @@ class NiceClassificationManager {
 
     // --- API Methods ---
     getSelectedData() {
-        return Object.entries(this.selectedClasses).map(([k, v]) => 
-            v.classNum === '99' ? `(99) ${v.text}` : `(${k}) ${v.text}`
-        );
+        // Sadece seçili olan (this.selectedClasses içinde en az bir kaydı olan) sınıfları bul
+        const activeClasses = new Set(Object.values(this.selectedClasses).map(v => v.classNum));
+        
+        // Bu sınıfların textarea'lardaki güncel metinlerini dön
+        return Array.from(activeClasses).map(classNum => {
+            const text = this.classTexts[classNum] || "";
+            return `(${classNum}-1) ${text}`; 
+        });
     }
 
     setSelectedData(arr) {
