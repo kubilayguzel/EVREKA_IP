@@ -40,9 +40,12 @@ const prodConfig = {
   measurementId: "G-8JRJ0DLLRG"
 };
 
-// Çalışılan URL'ye göre otomatik seçim: 
-// Localhost'ta veya test URL'sindeyseniz testConfig, aksi halde prodConfig kullanılır.
-const firebaseConfig = (window.location.hostname === "localhost" || window.location.hostname.includes("ip-manager-production-aab4b"))
+const firebaseConfig = (
+    window.location.hostname === "localhost" || 
+    window.location.hostname === "127.0.0.1" || 
+    window.location.hostname.includes("ip-manager-production-aab4b") ||
+    window.location.hostname.includes("github.io") // GitHub Pages'i test ortamına dahil ettik
+)
   ? testConfig 
   : prodConfig;
 
