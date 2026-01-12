@@ -128,7 +128,6 @@ export class PortfolioUpdateManager {
         // Çünkü bu işlemler artık merkezi nice-classification.js içinde yapılıyor.
     }
 
-    // portfolio-update-manager.js içindeki handleTransactionTypeChange fonksiyonunu şu şekilde değiştirin:
 
     handleTransactionTypeChange() {
         if (!this.elements.childTransactionType || !this.elements.registryEditorSection) return;
@@ -137,20 +136,22 @@ export class PortfolioUpdateManager {
         const typeId = this.elements.childTransactionType.value;
         const typeText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-        // ID 45 veya metinde "tescil belgesi" geçiyorsa
+        // ID 45 veya "tescil belgesi" içeriyorsa bölümü göster
         const isRegistry = typeId === '45' || typeText.includes('tescil belgesi');
 
         if (isRegistry) {
             this.elements.registryEditorSection.style.display = 'block';
             
-            // --- KRİTİK EKLEME: Bölüm açıldığında recordData içindeki emtiaları editöre bas ---
+            // --- NİCE EDİTÖRÜNÜ VERİYLE DOLDUR ---
             const r = this.state.recordData;
-            if (r && r.goodsAndServicesByClass) {
-                console.log("⚡ Tescil Belgesi seçildi, emtialar yükleniyor...", r.goodsAndServicesByClass);
+            if (r && r.goodsAndServicesByClass && r.goodsAndServicesByClass.length > 0) {
                 const formatted = r.goodsAndServicesByClass.map(g => 
                     `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
                 );
-                setSelectedNiceClasses(formatted);
+                // Merkezi Nice modülüne verileri gönder
+                if (typeof setSelectedNiceClasses === 'function') {
+                    setSelectedNiceClasses(formatted);
+                }
             }
         } else {
             this.elements.registryEditorSection.style.display = 'none';
@@ -208,17 +209,17 @@ export class PortfolioUpdateManager {
         const r = this.state.recordData;
         if (!r) return;
 
-        this.populateStatusDropdown(r.status);
-
-        if(this.elements.appDate) this.elements.appDate.value = r.applicationDate || '';
-        if(this.elements.regNo) this.elements.regNo.value = r.registrationNumber || '';
-        if(this.elements.regDate) this.elements.regDate.value = r.registrationDate || '';
-        if(this.elements.renewalDate) this.elements.renewalDate.value = r.renewalDate || '';
+        // Standart alanları doldur
+        if (this.elements.registryStatus) this.populateStatusDropdown(r.status);
+        if (this.elements.appDate) this.elements.appDate.value = r.applicationDate || '';
+        if (this.elements.regNo) this.elements.regNo.value = r.registrationNumber || '';
+        if (this.elements.regDate) this.elements.regDate.value = r.registrationDate || '';
+        if (this.elements.renewalDate) this.elements.renewalDate.value = r.renewalDate || '';
 
         this.renderBulletins();
 
-        // --- EKLEME: Kayıt dolunca işlem tipini kontrol et ve Nice editörünü hazırla ---
-        this.handleTransactionTypeChange(); 
+        // İşlem tipini kontrol ederek Nice editörünü ve diğer alanları tetikle
+        this.handleTransactionTypeChange();
     }
 
     populateStatusDropdown(currentStatus) {
