@@ -200,9 +200,12 @@ if (typeof window !== 'undefined') {
     loading.show({ text, subtext, onCancel });
     return loading;
   };
+  
+  // tp-file-transfer.js'in beklediği alias'ı (takma adı) ekleyelim:
+  window.showLoadingWithCancel = window.showSimpleLoading;
 }
 
-// ES Module Default Export (Import kullanımı için - Singleton Instance)
-// Bu sayede 'import SimpleLoading from ...' dediğinizde direkt kullanılabilir bir nesne gelir.
-const instance = new SimpleLoading();
-export default instance;
+// EĞER bu dosyayı import ederek kullanmıyorsanız (html içinde script tag ile varsa) 
+// aşağıdaki 'export' satırını ve en sondaki fazladan '}' işaretini SİLİN:
+// export default instance; 
+// } <-- Bu fazladan parantezi de silin
