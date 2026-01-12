@@ -92,11 +92,10 @@ class PortfolioController {
         const tableBody = document.getElementById('portfolioTableBody');
         if (!tableBody) return;
 
-        // Önemli: Delegation için target kontrolünü güçlendirin
         tableBody.addEventListener('mouseover', (e) => {
-            const target = e.target.closest('.trademark-image-thumbnail'); // En yakın görseli bul
-            if (target && target.src) {
-                previewEl.src = target.src;
+            const targetImg = e.target.closest('.trademark-image-thumbnail'); // target yerine closest kullanın
+            if (targetImg && targetImg.src) {
+                previewEl.src = targetImg.src;
                 previewEl.style.display = 'block';
                 this.positionPreview(e, previewEl);
             }
