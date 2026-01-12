@@ -79,6 +79,22 @@ export class PortfolioDataManager {
         return this.allRecords;
     }
 
+    startListening(onDataReceived) {
+        // ipRecordsService üzerinden canlı dinleyiciyi başlat ve durdurma fonksiyonunu dön
+        return ipRecordsService.subscribeToRecords((result) => {
+            if (result.success) {
+                // Veriyi yerel değişkene işle
+                this.allRecords = result.data.map(record => ({
+                    ...record,
+                    formattedApplicantName: this._resolveApplicantName(record)
+                }));
+                this._buildWipoGroups();
+                // Arayüze haber ver
+                onDataReceived(this.allRecords);
+            }
+        });
+    }
+
     _resolveApplicantName(record) {
         if (Array.isArray(record.applicants) && record.applicants.length > 0) {
             return record.applicants.map(app => {
