@@ -76,6 +76,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: visible;
         }
 
         .trademark-image-thumbnail { 
@@ -84,9 +85,17 @@
             object-fit: contain; 
             border-radius: 4px; 
             cursor: pointer; 
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             background-color: white;
             border: 1px solid #eee;
+            position: relative;
+        }
+        
+        .trademark-image-thumbnail:hover {
+            transform: scale(1.8);
+            box-shadow: 0 8px 20px rgba(30, 60, 114, 0.4);
+            border-color: #1e3c72;
+            z-index: 100;
         }
         
         /* Floating preview stilleri (main.js ile kontrol ediliyor) */
