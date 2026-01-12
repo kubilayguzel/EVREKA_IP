@@ -635,75 +635,62 @@ class NiceClassificationManager {
     }
 
     updateSelectionUI() {
-        if (!this.elements.listContainer || !this.elements.selectedContainer) return;
-        const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
-        const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
-        groups.forEach(g => g.classList.remove('has-selection'));
+        // KORUMA: Sadece akordiyonun çizileceği yer (selectedContainer) varsa devam et
+        if (!this.elements.selectedContainer) return;
 
-        allCheckboxes.forEach(chk => {
-            const isSelected = !!this.selectedClasses[chk.value];
-            chk.checked = isSelected;
-            const row = chk.closest('.nice-sub-item');
-            if (row) isSelected ? row.classList.add('selected') : row.classList.remove('selected');
-            if (isSelected) {
-                const group = chk.closest('.nice-class-group');
-                if (group) group.classList.add('has-selection');
-            }
+        // Eğer listContainer (sol liste) varsa checkbox'ları güncelle (Yoksa hata verme, geç)
+        if (this.elements.listContainer) {
+            const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
+            allCheckboxes.forEach(chk => {
+                const isSelected = !!this.selectedClasses[chk.value];
+                chk.checked = isSelected;
+            });
+        }
+
+        const count = Object.keys(this.selectedClasses).length;
+        if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
+
+        if (count === 0) {
+            this.elements.selectedContainer.innerHTML = `<div class="text-center text-muted py-4"><p>Henüz sınıf seçilmedi.</p></div>`;
+            return;
+        }
+
+        // Seçilenleri grupla ve HTML oluştur
+        const grouped = {};
+        Object.entries(this.selectedClasses).forEach(([code, val]) => {
+            if (!grouped[val.classNum]) grouped[val.classNum] = [];
+            grouped[val.classNum].push({code, text: val.text});
         });
 
-        if (this.elements.selectedContainer) {
-            const count = Object.keys(this.selectedClasses).length;
-            if (this.elements.selectedCountBadge) this.elements.selectedCountBadge.textContent = count;
-
-            if (count === 0) {
-                this.elements.selectedContainer.innerHTML = `<div class="text-center text-muted py-4"><p>Henüz sınıf seçilmedi.</p></div>`;
-                return;
+        let html = '';
+        Object.keys(grouped).sort((a,b) => Number(a)-Number(b)).forEach(num => {
+            // Eğer bu sınıf için metin yoksa, seçili maddeleri birleştir
+            if (!this.classTexts[num]) {
+                this.classTexts[num] = grouped[num].map(item => item.text).join('\n');
             }
 
-            const grouped = {};
-            Object.entries(this.selectedClasses).forEach(([code, val]) => {
-                if (!grouped[val.classNum]) grouped[val.classNum] = [];
-                grouped[val.classNum].push({code, text: val.text});
-            });
+            html += `
+            <div class="selected-group-card mb-3 border rounded shadow-sm bg-white">
+                <div class="selected-group-header bg-light p-2 font-weight-bold border-bottom d-flex justify-content-between align-items-center">
+                    <span>Nice Sınıfı ${num}</span>
+                    <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="window.clearClassSelection('${num}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="p-2">
+                    <textarea class="form-control class-items-textarea" 
+                            data-class-num="${num}" 
+                            rows="5" style="font-size: 13px;">${this.classTexts[num]}</textarea>
+                </div>
+            </div>`;
+        });
 
-            let html = '';
-            Object.keys(grouped).sort((a,b) => Number(a)-Number(b)).forEach(num => {
-                // Eğer bu sınıf için daha önce metin girilmemişse, seçili alt maddeleri birleştirip başlangıç metni yap
-                if (!this.classTexts[num]) {
-                    this.classTexts[num] = grouped[num].map(item => item.text).join('\n');
-                }
-
-                html += `
-                <div class="selected-group-card mb-3 border rounded shadow-sm">
-                    <div class="selected-group-header bg-light p-2 font-weight-bold border-bottom d-flex justify-content-between">
-                        <span>Nice Sınıfı ${num}</span>
-                        <small class="text-muted">${grouped[num].length} Madde Seçili</small>
-                    </div>
-                    <div class="p-2">
-                        <label class="small text-primary font-weight-bold">Mal ve Hizmet Listesi:</label>
-                        <textarea class="form-control class-items-textarea" 
-                                data-class-num="${num}" 
-                                placeholder="Sınıf ${num} içeriğini buraya yazın veya düzenleyin..."
-                                rows="6" style="font-size: 13px; line-height: 1.4;">${this.classTexts[num]}</textarea>
-                        <div class="mt-2 text-right">
-                            <button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="window.clearClassSelection('${num}')">
-                                <i class="fas fa-trash-alt mr-1"></i>Sınıfı Kaldır
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
-            });
-
-            this.elements.selectedContainer.innerHTML = html;
-        }
+        this.elements.selectedContainer.innerHTML = html;
     }
 
     // --- API Methods ---
     getSelectedData() {
-        // Sadece seçili olan (this.selectedClasses içinde en az bir kaydı olan) sınıfları bul
         const activeClasses = new Set(Object.values(this.selectedClasses).map(v => v.classNum));
-        
-        // Bu sınıfların textarea'lardaki güncel metinlerini dön
         return Array.from(activeClasses).map(classNum => {
             const text = this.classTexts[classNum] || "";
             return `(${classNum}-1) ${text}`; 
@@ -734,32 +721,16 @@ export function clearAllSelectedClasses() { niceManager.clearAll(); }
 
 window.clearAllSelectedClasses = () => niceManager.clearAll();
 
-// public/js/nice-classification.js dosyasının en sonuna ekleyin
-
-/**
- * Belirli bir Nice sınıfını ve ona bağlı tüm alt seçimleri kaldırır
- * @param {string} classNum - Kaldırılacak sınıf numarası (örn: "5")
- */
 window.clearClassSelection = (classNum) => {
-    if (!confirm(`Nice ${classNum} sınıfına ait tüm seçimleri ve metni silmek istediğinize emin misiniz?`)) return;
-
-    // 1. Bu sınıfa ait tüm alt kodları (örn: 5-1, 5-2) bul ve sil
-    const codesToRemove = Object.keys(niceManager.selectedClasses).filter(code => 
-        code.split('-')[0] === String(classNum)
-    );
+    if (!confirm(`Sınıf ${classNum} silinecek. Emin misiniz?`)) return;
     
-    codesToRemove.forEach(code => {
-        delete niceManager.selectedClasses[code];
-    });
+    // niceManager nesnesi üzerinden silme yap
+    const codesToRemove = Object.keys(niceManager.selectedClasses).filter(code => code.split('-')[0] === String(classNum));
+    codesToRemove.forEach(code => delete niceManager.selectedClasses[code]);
+    if (niceManager.classTexts) delete niceManager.classTexts[classNum];
 
-    // 2. Bu sınıf için saklanan özel metni (textarea içeriği) sil
-    if (niceManager.classTexts) {
-        delete niceManager.classTexts[classNum];
-    }
-
-    // 3. Arayüzü güncelle
     niceManager.updateSelectionUI();
-    showNotification(`Nice ${classNum} sınıfı kaldırıldı.`, 'info');
+    if (typeof showNotification === 'function') showNotification(`Sınıf ${classNum} kaldırıldı.`, 'info');
 };
 
 window.clearNiceSearch = () => {
