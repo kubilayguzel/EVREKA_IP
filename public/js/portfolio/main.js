@@ -82,30 +82,24 @@ class PortfolioController {
     // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
 
     setupImageHover() {
-        console.log('🔧 setupImageHover çalıştı');
+        console.log('Setup image hover calisti');
         
         let previewEl = document.getElementById('floating-preview');
         if (!previewEl) {
-            console.log('✅ Preview elementi oluşturuluyor...');
             previewEl = document.createElement('img');
             previewEl.id = 'floating-preview';
             previewEl.className = 'floating-trademark-preview';
             document.body.appendChild(previewEl);
-        } else {
-            console.log('✅ Preview elementi zaten var');
         }
 
         const tableBody = document.getElementById('portfolioTableBody');
         if (!tableBody) {
-            console.error('❌ portfolioTableBody bulunamadı!');
+            console.error('portfolioTableBody bulunamadi');
             return;
         }
         
-        console.log('✅ Event listener'lar ekleniyor...');
-        
         tableBody.addEventListener('mouseover', (e) => {
             if (e.target.classList.contains('trademark-image-thumbnail')) {
-                console.log('🖼️ Görsel üzerine gelindi:', e.target.src);
                 const src = e.target.src;
                 if (src && src.length > 10) {
                     previewEl.src = src;
@@ -116,27 +110,22 @@ class PortfolioController {
                     const leftPos = rect.right + 15;
                     const topPos = rect.top + scrollTop - 50;
                     
-                    console.log('📍 Pozisyon:', { left: leftPos, top: topPos });
-                    
                     previewEl.style.left = leftPos + 'px';
                     previewEl.style.top = topPos + 'px';
                     previewEl.style.display = 'block';
                     previewEl.style.opacity = '1';
-                    
-                    console.log('✅ Preview gösteriliyor');
                 }
             }
         });
         
         tableBody.addEventListener('mouseout', (e) => {
             if (e.target.classList.contains('trademark-image-thumbnail')) {
-                console.log('👋 Görsel dışına çıkıldı');
                 previewEl.style.display = 'none';
                 previewEl.style.opacity = '0';
             }
         });
     }
-
+    
     positionPreview(e, element) {
         const offset = 20;
         let left = e.clientX + offset;
