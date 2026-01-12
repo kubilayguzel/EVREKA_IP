@@ -490,10 +490,10 @@ class DataEntryModule {
 
         // 1. Veriyi Topla
         const recordData = strategy.collectData(this);
-        // Eğer marka kaydıysa merkezi Nice editöründen güncel metinleri al
+        // --- NİCE VERİLERİNİ MERKEZİ EDİTÖRDEN ÇEK VE FORMATLA ---
         if (this.currentIpType === 'trademark') {
             const selectedNiceData = getSelectedNiceClasses(); 
-            const tempMap = {}; 
+            const tempMap = {};
 
             selectedNiceData.forEach(str => {
                 const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
@@ -501,14 +501,19 @@ class DataEntryModule {
                     const classNo = match[1];
                     const content = match[2];
                     if (!tempMap[classNo]) tempMap[classNo] = [];
-                    tempMap[classNo].push(...content.split('\n').filter(i => i.trim() !== ''));
+                    // Metni satırlara böl, temizle ve boş olmayanları ekle
+                    const lines = content.split('\n').map(l => l.trim()).filter(l => l !== '');
+                    tempMap[classNo].push(...lines);
                 }
             });
 
+            // Firestore formatına (classNo ve items) dönüştür
             recordData.goodsAndServicesByClass = Object.entries(tempMap).map(([num, items]) => ({
                 classNo: Number(num),
-                items: items
-            }));
+                items: [...new Set(items)] // Tekrar edenleri temizle
+            })).sort((a, b) => a.classNo - b.classNo);
+            
+            // niceClasses listesini güncelle (örn: ["1", "5", "35"])
             recordData.niceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
         }
 
