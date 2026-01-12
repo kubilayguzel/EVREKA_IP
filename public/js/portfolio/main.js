@@ -50,22 +50,24 @@ class PortfolioController {
                 }
                 // -----------------------------------------------------
 
+                // init() içindeki loadInitialData kısmını şu şekilde değiştirin:
                 try {
-                    await this.dataManager.loadInitialData();
-                    
-                    // --- YENİ: Seçili Tab'a Göre Özel Veri Yükleme ---
-                    // Normalde bu işlem "click" olayında yapılıyordu, açılışta da yapılması lazım.
-                    if (this.state.activeTab === 'litigation') {
-                        await this.dataManager.loadLitigationData();
-                    } else if (this.state.activeTab === 'objections') {
-                        await this.dataManager.loadObjectionRows();
-                    }
-                    // -------------------------------------------------
+                    // Önce sabit verileri (ülke, kişi vb.) yükle
+                    await Promise.all([
+                        this.dataManager.loadTransactionTypes(),
+                        this.dataManager.loadPersons(),
+                        this.dataManager.loadCountries()
+                    ]);
+
+                    // Canlı dinleyiciyi başlat
+                    this.unsubscribe = this.dataManager.startListening((updatedRecords) => {
+                        console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
+                        this.render(); // Her değişimde tabloyu otomatik olarak tekrar çizer
+                    });
 
                     this.setupPagination();
                     this.setupEventListeners();
-                    this.setupImageHover();
-                    this.render();
+                    // this.render(); artık dinleyici tarafından otomatik çağrılacak
                 } catch (e) {
                     console.error('Init hatası:', e);
                 } finally {
