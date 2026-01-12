@@ -567,20 +567,22 @@ class NiceClassificationManager {
         else this.removeSelection(code);
     }
 
-
     addSelection(code, classNum, text) {
+        // Sınıf bilgilerini kaydet
         this.selectedClasses[code] = { classNum: String(classNum), text };
         
-        // YENİ: Metni classTexts içine de ekle (Özellikle 99. sınıf için kritik)
-        if (!this.classTexts[classNum]) {
-            this.classTexts[classNum] = text;
-        } else if (code.startsWith('99-')) {
-            // Eğer 99. sınıf ise ve yeni bir özel tanım geliyorsa üstüne ekle veya güncelle
+        // 99. Sınıf veya yeni bir sınıf ise metni classTexts'e işle
+        if (String(classNum) === '99') {
+            // Özel tanım her zaman en güncel metni almalı
+            this.classTexts['99'] = text;
+        } else if (!this.classTexts[classNum]) {
+            // Standart sınıflar için ilk maddeyi varsayılan metin yap
             this.classTexts[classNum] = text;
         }
         
         this.updateSelectionUI();
     }
+
 
     removeSelection(code) {
         delete this.selectedClasses[code];
@@ -725,6 +727,35 @@ export function setSelectedNiceClasses(classes) { niceManager.setSelectedData(cl
 export function clearAllSelectedClasses() { niceManager.clearAll(); }
 
 window.clearAllSelectedClasses = () => niceManager.clearAll();
+
+// public/js/nice-classification.js dosyasının en sonuna ekleyin
+
+/**
+ * Belirli bir Nice sınıfını ve ona bağlı tüm alt seçimleri kaldırır
+ * @param {string} classNum - Kaldırılacak sınıf numarası (örn: "5")
+ */
+window.clearClassSelection = (classNum) => {
+    if (!confirm(`Nice ${classNum} sınıfına ait tüm seçimleri ve metni silmek istediğinize emin misiniz?`)) return;
+
+    // 1. Bu sınıfa ait tüm alt kodları (örn: 5-1, 5-2) bul ve sil
+    const codesToRemove = Object.keys(niceManager.selectedClasses).filter(code => 
+        code.split('-')[0] === String(classNum)
+    );
+    
+    codesToRemove.forEach(code => {
+        delete niceManager.selectedClasses[code];
+    });
+
+    // 2. Bu sınıf için saklanan özel metni (textarea içeriği) sil
+    if (niceManager.classTexts) {
+        delete niceManager.classTexts[classNum];
+    }
+
+    // 3. Arayüzü güncelle
+    niceManager.updateSelectionUI();
+    showNotification(`Nice ${classNum} sınıfı kaldırıldı.`, 'info');
+};
+
 window.clearNiceSearch = () => {
     const input = document.getElementById('niceClassSearch');
     if(input) { input.value = ''; input.dispatchEvent(new Event('input')); }
