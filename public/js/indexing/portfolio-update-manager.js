@@ -3,6 +3,7 @@
 import { db, ipRecordsService } from '../../firebase-config.js';
 import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { showNotification, debounce, STATUSES } from '../../utils.js';
+import { getSelectedNiceClasses, setSelectedNiceClasses } from '../nice-classification.js';
 
 export class PortfolioUpdateManager {
     constructor() {
@@ -345,18 +346,49 @@ export class PortfolioUpdateManager {
 
     async saveAllChanges() {
         if (!this.state.selectedRecordId) return;
+
+        // Butonu yükleniyor moduna al
         if (this.elements.btnSaveAll) {
             this.elements.btnSaveAll.disabled = true;
             this.elements.btnSaveAll.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
         }
 
         try {
-            const sortedClasses = [...this.state.niceClasses].sort((a, b) => Number(a) - Number(b));
-            const goodsAndServicesByClass = sortedClasses.map(classNo => ({
-                classNo: Number(classNo),
-                items: (this.state.goodsAndServicesMap[String(classNo)] || '').split('\n').filter(i => i.trim() !== '')
-            }));
+            // --- 1. Merkezi Editörden Güncel Verileri Çek ---
+            // Merkezi nice-classification.js içindeki verileri dizi olarak alıyoruz
+            const selectedNiceData = getSelectedNiceClasses(); 
+            const tempMap = {};
 
+            // --- 2. Veriyi Ayrıştır ve Grupla ---
+            // Gelen veriler şu formatta: "(1-1) Madde Metni..."
+            selectedNiceData.forEach(str => {
+                const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
+                if (match) {
+                    const classNo = match[1]; // Sınıf numarası (örn: "5")
+                    const content = match[2]; // Kullanıcının girdiği metin
+                    
+                    if (!tempMap[classNo]) tempMap[classNo] = [];
+                    
+                    // Metni satırlara böl, boşlukları temizle ve boş satırları filtrele
+                    const items = content.split('\n')
+                                        .map(i => i.trim())
+                                        .filter(i => i !== '');
+                    
+                    tempMap[classNo].push(...items);
+                }
+            });
+
+            // --- 3. Firestore Formatına Dönüştür ---
+            // Mal ve Hizmet Listesi (Array of Objects)
+            const goodsAndServicesByClass = Object.entries(tempMap).map(([num, items]) => ({
+                classNo: Number(num),
+                items: items
+            })).sort((a, b) => a.classNo - b.classNo);
+
+            // Flat Sınıf Listesi (örn: ["1", "5", "35"])
+            const sortedNiceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
+
+            // --- 4. Güncelleme Paketini Hazırla ---
             const updates = {
                 status: this.elements.registryStatus ? this.elements.registryStatus.value : '',
                 applicationDate: this.elements.appDate ? this.elements.appDate.value : '',
@@ -364,18 +396,21 @@ export class PortfolioUpdateManager {
                 registrationDate: this.elements.regDate ? this.elements.regDate.value : '',
                 renewalDate: this.elements.renewalDate ? this.elements.renewalDate.value : '',
                 bulletins: this.state.bulletins,
-                niceClasses: sortedClasses,
-                goodsAndServicesByClass: goodsAndServicesByClass,
+                niceClasses: sortedNiceClasses, // Güncellenmiş sınıf listesi
+                goodsAndServicesByClass: goodsAndServicesByClass, // Güncellenmiş detaylı liste
                 updatedAt: new Date().toISOString()
             };
 
+            // --- 5. Veritabanına Yaz ---
             await updateDoc(doc(db, 'ipRecords', this.state.selectedRecordId), updates);
-            showNotification('Portföy bilgileri güncellendi!', 'success');
+            
+            showNotification('Portföy bilgileri başarıyla güncellendi!', 'success');
 
         } catch (error) {
             console.error('Save Error:', error);
-            showNotification('Hata: ' + error.message, 'error');
+            showNotification('Kaydedilirken bir hata oluştu: ' + error.message, 'error');
         } finally {
+            // Butonu eski haline getir
             if (this.elements.btnSaveAll) {
                 this.elements.btnSaveAll.disabled = false;
                 this.elements.btnSaveAll.textContent = 'Tüm Değişiklikleri Kaydet';
