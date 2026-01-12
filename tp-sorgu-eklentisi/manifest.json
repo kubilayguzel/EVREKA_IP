@@ -25,9 +25,13 @@
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:*/*",
-      "https://ip-manager-production-aab4b.web.app/*",
-      "https://kubilayguzel.github.io/*"
+    "https://kubilayguzel.github.io/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://ip-manager-production-aab4b.web.app/*",
+    "https://ip-manager-production-aab4b.firebaseapp.com/*",
+    "https://ipgate-31bd2.web.app/*",
+    "https://ipgate-31bd2.firebaseapp.com/*"
     ]
   }
 }
