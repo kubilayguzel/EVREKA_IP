@@ -567,8 +567,18 @@ class NiceClassificationManager {
         else this.removeSelection(code);
     }
 
+
     addSelection(code, classNum, text) {
         this.selectedClasses[code] = { classNum: String(classNum), text };
+        
+        // YENİ: Metni classTexts içine de ekle (Özellikle 99. sınıf için kritik)
+        if (!this.classTexts[classNum]) {
+            this.classTexts[classNum] = text;
+        } else if (code.startsWith('99-')) {
+            // Eğer 99. sınıf ise ve yeni bir özel tanım geliyorsa üstüne ekle veya güncelle
+            this.classTexts[classNum] = text;
+        }
+        
         this.updateSelectionUI();
     }
 
@@ -622,6 +632,7 @@ class NiceClassificationManager {
     }
 
     updateSelectionUI() {
+        if (!this.elements.listContainer || !this.elements.selectedContainer) return;
         const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
         const groups = this.elements.listContainer.querySelectorAll('.nice-class-group');
         groups.forEach(g => g.classList.remove('has-selection'));
@@ -693,6 +704,7 @@ class NiceClassificationManager {
 
     setSelectedData(arr) {
         this.selectedClasses = {};
+        this.classTexts = {}; // YENİ: Önceki verileri temizle
         if (Array.isArray(arr)) {
             arr.forEach(s => {
                 const m = s.match(/^\((\d+(?:-\d+)?)\)\s*([\s\S]*)$/);
