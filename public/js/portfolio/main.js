@@ -67,6 +67,7 @@ class PortfolioController {
 
                     this.setupPagination();
                     this.setupEventListeners();
+                    this.setupImageHover();
                     // this.render(); artık dinleyici tarafından otomatik çağrılacak
                 } catch (e) {
                     console.error('Init hatası:', e);
