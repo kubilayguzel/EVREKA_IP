@@ -633,22 +633,22 @@ export const ipRecordsService = {
             console.error("Kayıt arama hatası:", error);
             return { success: false, error: error.message };
         }
-    }
+    },
 
     // ipRecordsService içindeki searchRecords fonksiyonundan sonra:
-subscribeToRecords(callback, limitCount = 500) {
-    if (!isFirebaseAvailable) return () => {};
-    let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(limitCount));
-    
-    // Canlı bağlantıyı başlatır
-    return onSnapshot(q, (snapshot) => {
-        const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        callback({ success: true, data: records });
-    }, (error) => {
-        console.error("Dinleme hatası:", error);
-        callback({ success: false, error: error.message });
-    });
-}
+    subscribeToRecords(callback, limitCount = 500) {
+        if (!isFirebaseAvailable) return () => {};
+        let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(limitCount));
+        
+        // Canlı bağlantıyı başlatır
+        return onSnapshot(q, (snapshot) => {
+            const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            callback({ success: true, data: records });
+        }, (error) => {
+            console.error("Dinleme hatası:", error);
+            callback({ success: false, error: error.message });
+        });
+    }
 };
 
 // --- YENİ EKLENDİ: Persons Service ---
