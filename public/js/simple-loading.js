@@ -204,8 +204,3 @@ if (typeof window !== 'undefined') {
   // tp-file-transfer.js'in beklediği alias'ı (takma adı) ekleyelim:
   window.showLoadingWithCancel = window.showSimpleLoading;
 }
-
-// EĞER bu dosyayı import ederek kullanmıyorsanız (html içinde script tag ile varsa) 
-// aşağıdaki 'export' satırını ve en sondaki fazladan '}' işaretini SİLİN:
-// export default instance; 
-// } <-- Bu fazladan parantezi de silin
