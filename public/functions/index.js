@@ -149,7 +149,10 @@ const corsOptions = {
         'https://kubilayguzel.github.io',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        'http://localhost:5173'
+        'http://localhost:5173',
+        'https://ip-manager-production-aab4b.web.app', // Bu satırı ekleyin
+        'https://ipgate-31bd2.web.app',               // Yeni canlı ortamı da ekleyin
+        'https://ipgate.evrekagroup.com'              // Özel domaininizi de ekleyin
     ],
     credentials: true,
     optionsSuccessStatus: 200
