@@ -7,23 +7,6 @@ function _el(id) { return document.getElementById(id); }
 function _showBlock(el) { if(!el) return; el.classList.remove('hide'); el.style.display=''; }
 function _hideBlock(el) { if(!el) return; el.classList.add('hide'); }
 
-function showToast(msg, type='info') {
-  const cls = type==='danger'?'alert-danger':(type==='success'?'alert-success':(type==='warning'?'alert-warning':'alert-info'));
-  const div = document.createElement('div');
-  div.className = `alert ${cls}`;
-  div.style.position = 'fixed';
-  div.style.top = '18px';
-  div.style.right = '18px';
-  div.style.zIndex = '9999';
-  div.style.minWidth = '260px';
-  div.innerHTML = `<div class="d-flex align-items-center justify-content-between">
-    <div>${msg}</div><button class="close ml-3" aria-label="Close"><span>&times;</span></button>
-  </div>`;
-  document.body.appendChild(div);
-  setTimeout(()=>{ div.classList.add('fade'); div.addEventListener('transitionend', ()=>div.remove()); }, 3500);
-  div.querySelector('.close')?.addEventListener('click', ()=>div.remove());
-}
-
 function fmtDateToTR(isoOrDDMMYYYY) {
   if(!isoOrDDMMYYYY) return '';
   if(/^\d{2}\.\d{2}\.\d{4}$/.test(isoOrDDMMYYYY)) return isoOrDDMMYYYY;
@@ -92,7 +75,7 @@ async function init() {
     setupRadioButtons();
   } catch (error) {
     console.error("Veri yüklenirken hata oluştu:", error);
-    showToast("Gerekli veriler yüklenemedi.", "danger");
+    showNotification("Gerekli veriler yüklenemedi.", "danger");
   }
 }
 
@@ -172,7 +155,7 @@ async function handleSaveToPortfolio() {
   const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
   
   if (checkedBoxes.length === 0) {
-    showToast('Kaydetmek için en az bir kayıt seçin.', 'warning');
+    showNotification('Kaydetmek için en az bir kayıt seçin.', 'warning');
     return;
   }
   
@@ -180,7 +163,7 @@ async function handleSaveToPortfolio() {
   const selectedRecords = selectedIndexes.map(index => currentOwnerResults[index]).filter(Boolean);
   
   if (selectedRecords.length === 0) {
-    showToast('Seçili kayıtlar bulunamadı.', 'warning');
+    showNotification('Seçili kayıtlar bulunamadı.', 'warning');
     return;
   }
   
@@ -270,16 +253,16 @@ async function handleSaveToPortfolio() {
     
     if (errorCount === 0) {
       saveLoading.showSuccess(message.trim());
-      showToast(message.trim(), 'success');
+      showNotification(message.trim(), 'success');
     } else {
       saveLoading.showError(message.trim());
-      showToast(message.trim(), 'warning');
+      showNotification(message.trim(), 'warning');
     }
     
   } catch (error) {
     console.error('Portföye kaydetme hatası:', error);
     saveLoading.showError('Kaydetme işlemi sırasında hata oluştu: ' + error.message);
-    showToast('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
+    showNotification('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
   }
 }
 // ===============================
@@ -359,11 +342,11 @@ async function handleQuery() {
     
   } else if (basvuruNo && sahipNo) {
     // İKİSİ DE DOLU
-    showToast('Lütfen sadece bir alan doldurun.', 'warning');
+    showNotification('Lütfen sadece bir alan doldurun.', 'warning');
     
   } else {
     // İKİSİ DE BOŞ
-    showToast('Başvuru numarası veya sahip numarası girin.', 'warning');
+    showNotification('Başvuru numarası veya sahip numarası girin.', 'warning');
   }
 }
 
@@ -388,21 +371,20 @@ async function queryByApplicationNumber(basvuruNo) {
         (response) => {
           const lastError = chrome.runtime.lastError;
           
-          if (lastError) {
+        // queryByApplicationNumber fonksiyonu içindeki ilgili blok:
+        if (lastError) {
             console.warn('[DEBUG] Eklenti Hatası:', lastError.message);
             
-            // SADECE eklentiye hiç ulaşılamıyorsa (bağlantı yoksa) uyarı ver
             if (lastError.message.includes("Could not establish connection")) {
-              const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı veya etkin değil. Kurulum sayfasına gitmek ister misiniz?");
-              if (confirmInstall) window.open('eklenti-kurulum.html', '_blank');
+                const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı. Kurulum sayfasına gitmek ister misiniz?");
+                if (confirmInstall) window.open('eklenti-kurulum.html', '_blank');
             } else {
-              // Başka bir teknik hata varsa sadece toast göster, eklenti yüklettirmeye çalışma
-              showNotification("Eklenti bağlantısında sorun: " + lastError.message, "warning");
+                // HATA BURADAYDI: showNotification artık import edildiği için çalışacak
+                showNotification("Eklenti bağlantısında sorun: " + lastError.message, "warning");
             }
             _hideBlock(loadingEl);
-            window.skipScrapeTrademark = false;
             return;
-          }
+        }
 
           // Yanıt geldiyse eklenti çalışıyor demektir
           if (response && (response.status === 'OK' || response.status === 'OK_WAIT')) {
@@ -508,12 +490,12 @@ function handleOptsSuccess(data) {
     renderSingleResult(record);
     _showBlock(singleResultContainer);
     
-    showToast('✅ TÜRKPATENT verisi alındı!', 'success');
+    showNotification('✅ TÜRKPATENT verisi alındı!', 'success');
     window.skipScrapeTrademark = false;
     
   } catch (error) {
     console.error('[OPTS] İşleme hatası:', error);
-    showToast('Veri işlenirken hata oluştu', 'danger');
+    showNotification('Veri işlenirken hata oluştu', 'danger');
     _hideBlock(loadingEl);
     window.skipScrapeTrademark = false;
   }
@@ -528,7 +510,7 @@ function handleOptsError(error) {
   }
   _hideBlock(loadingEl);
   
-  showToast(`Hata: ${error.message || 'Bilinmeyen hata'}`, 'danger');
+  showNotification(`Hata: ${error.message || 'Bilinmeyen hata'}`, 'danger');
   window.skipScrapeTrademark = false;
 }
 
@@ -553,7 +535,7 @@ async function queryByOwnerNumber(sahipNo) {
     const newWindow = window.open(turkPatentUrl, '_blank');
     
     if (newWindow) {
-      showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
+      showNotification('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
       
       // Timeout
       setTimeout(() => {
@@ -562,13 +544,13 @@ async function queryByOwnerNumber(sahipNo) {
       
     } else {
       _hideBlock(loadingEl);
-      showToast('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.', 'danger');
+      showNotification('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.', 'danger');
     }
 
   } catch (err) {
     _hideBlock(loadingEl);
     console.error('[DEBUG] Sahip numarası sorgulama hatası:', err);
-    showToast('İşlem hatası: ' + (err.message || err), 'danger');
+    showNotification('İşlem hatası: ' + (err.message || err), 'danger');
   }
 }
 
@@ -588,7 +570,7 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
   
   if (!allPersons?.length) {
     console.log('[DEBUG] ❌ Kişi listesi boş veya yüklenmemiş');
-    showToast('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
+    showNotification('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
     return;
   }
   
@@ -625,11 +607,11 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
       });
       
       renderSelectedRelatedParties();
-      showToast(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
+      showNotification(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
       console.log('[DEBUG] ✅ Kişi sahip listesine eklendi');
     } else {
       console.log('[DEBUG] ⚠️ Kişi zaten listede mevcut');
-      showToast(`${matchedPerson.name} zaten sahip listesinde`, 'info');
+      showNotification(`${matchedPerson.name} zaten sahip listesinde`, 'info');
     }
   } else {
     console.log('[DEBUG] ❌ Bu TPE No ile eşleşen kişi bulunamadı');
@@ -646,7 +628,7 @@ function tryAutoAddOwner(searchedTpeNo) {
   try {
     if (!Array.isArray(allPersons) || !allPersons.length) {
       console.log('[DEBUG] ❌ Kişi listesi boş veya yüklenmemiş');
-      showToast('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
+      showNotification('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
       return;
     }
     const searchTpeNo = String(searchedTpeNo || window.searchedOwnerNumber || '').trim();
@@ -664,9 +646,9 @@ function tryAutoAddOwner(searchedTpeNo) {
           tpeNo: matchedPerson.tpeNo || ''
         });
         renderSelectedRelatedParties();
-        showToast(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
+        showNotification(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
       } else {
-        showToast(`${matchedPerson.name} zaten sahip listesinde`, 'info');
+        showNotification(`${matchedPerson.name} zaten sahip listesinde`, 'info');
       }
     }
   } catch (err) {
@@ -702,7 +684,7 @@ function setupExtensionMessageListener() {
         if (window.currentLoading) {
           window.currentLoading.updateText('Sorgu çalıştırılıyor', 'Sonuçlar yükleniyor...');
         }
-        showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
+        showNotification('TÜRKPATENT sayfasında sorgu başladı...', 'info');
       }
       
       else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
@@ -737,7 +719,7 @@ function setupExtensionMessageListener() {
         renderOwnerResults(window.batchResults);
         try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('listeners refresh failed', e); }
         
-        showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
+        showNotification(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
         
         // Son batch ise complete olarak işaretle
         if (isComplete) {
@@ -765,7 +747,7 @@ function setupExtensionMessageListener() {
           window.currentLoading = null;
         }
         
-        showToast(`Tüm veriler yüklendi: ${window.batchResults.length} kayıt`, 'success');
+        showNotification(`Tüm veriler yüklendi: ${window.batchResults.length} kayıt`, 'success');
         
         // SADECE event listeners'ı güncelle, tekrar render etme
         currentOwnerResults = window.batchResults;
@@ -789,7 +771,7 @@ function setupExtensionMessageListener() {
             window.currentLoading.showError('Bu sahip numarası için sonuç bulunamadı.');
             window.currentLoading = null;
           }
-          showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+          showNotification('Bu sahip numarası için sonuç bulunamadı.', 'warning');
         } else {
           // TEK SEFER RENDER - başka render çağrısı YOK
           renderOwnerResults(data);
@@ -799,7 +781,7 @@ function setupExtensionMessageListener() {
             window.currentLoading.showSuccess(`${data.length} kayıt başarıyla alındı!`);
             window.currentLoading = null;
           }
-          showToast(`${data.length} kayıt başarıyla alındı.`, 'success');
+          showNotification(`${data.length} kayıt başarıyla alındı.`, 'success');
         }
       } 
       
@@ -811,7 +793,7 @@ function setupExtensionMessageListener() {
           window.currentLoading.showError('Eklenti hatası: ' + errorMsg);
           window.currentLoading = null;
         }
-        showToast('Eklenti hatası: ' + errorMsg, 'danger');
+        showNotification('Eklenti hatası: ' + errorMsg, 'danger');
         
         // Batch state'i temizle
         window.batchResults = [];
@@ -834,7 +816,7 @@ function setupExtensionMessageListener() {
             window.currentLoading.showError('Bu başvuru numarası için sonuç bulunamadı.');
             window.currentLoading = null;
           }
-          showToast('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
+          showNotification('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
         } else {
           // Başvuru numarası verilerini zenginleştir
           const enrichedData = data.map(item => {
@@ -875,7 +857,7 @@ function setupExtensionMessageListener() {
             window.currentLoading.showSuccess('Başvuru numarası sonucu başarıyla alındı!');
             window.currentLoading = null;
           }
-          showToast('Başvuru numarası sonucu başarıyla alındı.', 'success');
+          showNotification('Başvuru numarası sonucu başarıyla alındı.', 'success');
         }
       } 
       
@@ -888,7 +870,7 @@ function setupExtensionMessageListener() {
           window.currentLoading.showError(errorMsg);
           window.currentLoading = null;
         }
-        showToast(errorMsg, 'danger');
+        showNotification(errorMsg, 'danger');
       }
     }
   });
@@ -1078,7 +1060,7 @@ function updateSaveButton() {
 // CSV Export fonksiyonu
 function exportOwnerResultsCSV() {
   if (!currentOwnerResults?.length) {
-    showToast('Dışa aktarılacak veri yok.', 'warning');
+    showNotification('Dışa aktarılacak veri yok.', 'warning');
     return;
   }
   
@@ -1110,7 +1092,7 @@ function exportOwnerResultsCSV() {
   a.click();
   URL.revokeObjectURL(url);
   
-  showToast('CSV dosyası indirildi.', 'success');
+  showNotification('CSV dosyası indirildi.', 'success');
 }
 
 // ===============================
@@ -1143,7 +1125,7 @@ function searchPersons(searchQuery) {
 
 function addRelatedParty(person) {
   if (selectedRelatedParties.find(p => p.id === person.id)) {
-    showToast('Bu kişi zaten eklenmiş.', 'warning');
+    showNotification('Bu kişi zaten eklenmiş.', 'warning');
     return;
   }
   selectedRelatedParties.push(person);
