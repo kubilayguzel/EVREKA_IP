@@ -355,6 +355,8 @@ async function handleQuery() {
 // ===============================
 
 async function queryByApplicationNumber(basvuruNo) {
+  // 1. Fonksiyonun başında loading elementinin doğru seçildiğinden emin olalım
+  const loadingEl = _el('loading-spinner') || _el('loading-overlay'); 
   console.log('[DEBUG] Başvuru numarası sorgulanıyor:', basvuruNo);
 
   try {
@@ -366,30 +368,36 @@ async function queryByApplicationNumber(basvuruNo) {
     // Eklentiye mesaj gönder
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       chrome.runtime.sendMessage(
-        EXTENSION_ID, // Yukarıda tanımladığımız yeni ID
+        EXTENSION_ID, 
         { type: 'SORGULA', data: basvuruNo },
         (response) => {
           const lastError = chrome.runtime.lastError;
           
-        // queryByApplicationNumber fonksiyonu içindeki ilgili blok:
-        if (lastError) {
-            console.warn('[DEBUG] Eklenti Hatası:', lastError.message);
+          // EKLENTİ BAĞLANTI HATASI
+          if (lastError) {
+            console.warn('[DEBUG] Eklenti Bağlantı Hatası:', lastError.message);
+            _hideBlock(loadingEl); // Hata varsa yükleme ekranını kapat
             
             if (lastError.message.includes("Could not establish connection")) {
-                const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı. Kurulum sayfasına gitmek ister misiniz?");
+                const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı veya ID hatalı. Kurulum sayfasına gitmek ister misiniz?");
                 if (confirmInstall) window.open('eklenti-kurulum.html', '_blank');
             } else {
-                // HATA BURADAYDI: showNotification artık import edildiği için çalışacak
                 showNotification("Eklenti bağlantısında sorun: " + lastError.message, "warning");
             }
-            _hideBlock(loadingEl);
             return;
-        }
+          }
 
-          // Yanıt geldiyse eklenti çalışıyor demektir
-          if (response && (response.status === 'OK' || response.status === 'OK_WAIT')) {
-            showNotification('Eklenti başarıyla tetiklendi.', 'info');
-            startPollingForOptsResult(basvuruNo);
+          // EKLENTİDEN CEVAP GELDİ Mİ?
+          if (response && (response.status === 'OK' || response.status === 'OK_WAIT' || response.status === 'STARTED')) {
+            showNotification('Eklenti başarıyla tetiklendi, TürkPatent sorgusu yapılıyor...', 'info');
+            
+            // KRİTİK: Polling fonksiyonuna loadingEl'i de gönderiyoruz ki işlem bitince o kapatsın
+            startPollingForOptsResult(basvuruNo, loadingEl); 
+          } else {
+            // Eklenti cevap verdi ama status OK değilse
+            console.warn('[DEBUG] Eklenti reddetti veya geçersiz yanıt verdi:', response);
+            showNotification("Eklenti sorguyu başlatamadı.", "warning");
+            _hideBlock(loadingEl); 
           }
         }
       );
@@ -398,6 +406,7 @@ async function queryByApplicationNumber(basvuruNo) {
       _hideBlock(loadingEl);
     }
   } catch (err) {
+    console.error('[DEBUG] Catch Bloğu Hatası:', err);
     _hideBlock(loadingEl);
     showNotification('İşlem hatası: ' + err.message, 'danger');
   }
