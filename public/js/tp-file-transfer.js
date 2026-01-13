@@ -667,7 +667,8 @@ function setupExtensionMessageListener() {
     const allowedOrigins = [
       window.location.origin,
       'https://www.turkpatent.gov.tr',
-      'https://turkpatent.gov.tr'
+      'https://turkpatent.gov.tr',
+      'https://opts.turkpatent.gov.tr'
     ];
     
     if (!allowedOrigins.includes(event.origin)) return;
