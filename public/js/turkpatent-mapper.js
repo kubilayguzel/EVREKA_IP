@@ -321,7 +321,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
       d.setFullYear(d.getFullYear() + 10);
       calculatedRenewalDate = d.toISOString().split('T')[0];
     }
-  }
+  } 
 
   // (D) Yoksa Başvuru Tarihi + 10 Yıl
   if (!calculatedRenewalDate && applicationDate) {
