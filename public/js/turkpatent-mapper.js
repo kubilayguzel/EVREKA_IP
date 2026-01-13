@@ -506,4 +506,4 @@ export async function mapTurkpatentResultsToIPRecords(turkpatentResults, selecte
     }
   }
   return out;
-}
+} 
