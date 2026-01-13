@@ -52,6 +52,7 @@ function parseDate(dateStr) {
 import { app, personService, ipRecordsService, transactionTypeService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { mapTurkpatentResultsToIPRecords, mapTurkpatentToIPRecord} from './turkpatent-mapper.js';
+import { showNotification } from '../utils.js';
 
 // --- DOM Elements ---
 const basvuruNoInput = _el('basvuruNoInput');
