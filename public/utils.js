@@ -1,12 +1,16 @@
 // js/utils.js
 
+// js/utils.js
+
 // Bildirimleri göstermek için kullanılan fonksiyon
 export function showNotification(message, type = 'info', duration = 3000) {
-    const container = document.getElementById('notification-container');
+    // 1. Konteyneri kontrol et, yoksa dinamik olarak oluştur
+    let container = document.getElementById('notification-container');
     if (!container) {
-        console.warn('Bildirim konteyneri bulunamadı: #notification-container');
-        alert(message); // Fallback to alert if container not found
-        return;
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        document.body.appendChild(container);
+        console.info('Bildirim konteyneri dinamik olarak oluşturuldu.');
     }
 
     // Sticky: Kritik mesajları minimum 15 sn göster
@@ -34,18 +38,13 @@ export function showNotification(message, type = 'info', duration = 3000) {
     notificationItem.appendChild(closeBtn);
     container.appendChild(notificationItem);
 
-    // Fallback: Eğer eleman 2 sn içinde DOM'dan kaldırılmışsa alert göster
-    setTimeout(() => {
-        if (!document.body.contains(notificationItem)) {
-            alert(message);
-        }
-    }, 2000);
-
     // Otomatik olarak kaybolma
     if (effectiveDuration > 0) {
         setTimeout(() => {
-            notificationItem.classList.add('hide');
-            notificationItem.addEventListener('transitionend', () => notificationItem.remove());
+            if (notificationItem.parentElement) { // Eleman hala DOM'daysa kaldır
+                notificationItem.classList.add('hide');
+                notificationItem.addEventListener('transitionend', () => notificationItem.remove());
+            }
         }, effectiveDuration);
     }
 }
