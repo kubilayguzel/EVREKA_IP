@@ -893,6 +893,9 @@ async function collectOwnerResultsWithDetails() {
   
   const processedApplicationNumbers = new Set();
   const batchSize = 100; // 100'er 100'er işle
+
+  // [YENİ] Son işlenen görselin URL'ini tutacak değişken
+  let lastImageSrc = null; 
   
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
@@ -937,6 +940,27 @@ async function collectOwnerResultsWithDetails() {
       console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
       
       const detail = await openRowModalAndParse(tr, { timeout: 8000 });
+
+      // [YENİ] Görsel Çakışma Kontrolü (Stale Image Check)
+      // Detay penceresinden gelen görsel, bir önceki satırın görseliyle AYNI MI?
+      if (detail && detail.imageDataUrl) {
+        if (lastImageSrc && detail.imageDataUrl === lastImageSrc) {
+           console.warn(`⚠️ Satır ${globalIdx + 1}: Görsel bir öncekiyle aynı (Yüklenemedi veya Race Condition).`);
+           
+           // Biraz bekle (belki geç yükleniyordur)
+           await sleep(1500);
+           
+           // Güvenlik: Risk almayalım, detaydan gelen şüpheli görseli İPTAL ET.
+           // Böylece kod, yukarıda atadığımız "base.imageSrc" (listeden gelen küçük resim) ile devam eder.
+           console.log('⚠️ Şüpheli görsel yerine listedeki küçük resim (Thumbnail) kullanılacak.');
+           detail.imageDataUrl = null; 
+
+        } else {
+           // Görsel farklı, demek ki yeni görsel başarıyla yüklendi.
+           // Bunu "son görsel" olarak hafızaya al.
+           lastImageSrc = detail.imageDataUrl;
+        }
+      }
       
       if (detail) {
         base.details = detail.fields || {};
@@ -947,17 +971,13 @@ async function collectOwnerResultsWithDetails() {
           base.transactions = detail.transactions;
         }
         
-        // --- DÜZELTME BURADA YAPILDI ---
-        // Eski Kod: if (!base.imageSrc && detail.imageDataUrl) { ... }
-        // Yeni Kod: Detay görseli varsa (ki yüksek çözünürlüklüdür), satırdaki görselin üzerine yaz.
+        // Detay görseli varsa (ve yukarıdaki kontrolde null yapılmadıysa) kullan
         if (detail.imageDataUrl) {
           console.log('📸 Yüksek kaliteli detay görseli bulundu, güncelleniyor.');
           base.brandImageDataUrl = detail.imageDataUrl;
           base.brandImageUrl = detail.imageDataUrl;
-          // İsteğe bağlı: Listede de kaliteli görünsün diye imageSrc'yi de güncelle
           base.imageSrc = detail.imageDataUrl; 
         }
-        // -------------------------------
       }
 
       batchItems.push(base);
