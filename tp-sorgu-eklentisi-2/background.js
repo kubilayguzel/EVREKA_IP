@@ -17,42 +17,35 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
 
   // Başvuru No (geriye uyum): SORGULA veya SORGULA_BASVURU (opts.turkpatent.gov.tr'ye yönlendirir)
   if ((request.type === 'SORGULA' || request.type === 'SORGULA_BASVURU') && request.data) {
-    const appNo = request.data;
-    console.log('[Background] 🔍 Başvuru No sorgusu:', appNo);
-    
-    // YENİ: opts.turkpatent.gov.tr'ye yönlendir
-    const targetUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
-    
-    chrome.tabs.create({ url: targetUrl }, (newTab) => {
-      console.log('[Background] ✅ Yeni sekme oluşturuldu:', newTab.id);
+      const appNo = request.data;
+      const targetUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
       
-      const listener = (tabId, changeInfo) => {
-        if (tabId === newTab.id && changeInfo.status === 'complete') {
-          console.log('[Background] 📨 Sekme yüklendi, AUTO_FILL_OPTS gönderiliyor');
-          
-          chrome.tabs.sendMessage(tabId, { 
-            type: 'AUTO_FILL_OPTS', 
-            data: appNo 
-          }).catch(err => {
-            console.error('[Background] Mesaj gönderme hatası:', err);
-          });
-          
-          chrome.tabs.onUpdated.removeListener(listener);
+      chrome.tabs.create({ url: targetUrl }, (newTab) => {
+        // Sekme oluşturulurken bir hata oluştu mu?
+        if (chrome.runtime.lastError) {
+          console.error('[Background] Sekme açma hatası:', chrome.runtime.lastError.message);
+          return;
         }
-      };
+
+        const listener = (tabId, changeInfo) => {
+          if (tabId === newTab.id && changeInfo.status === 'complete') {
+            // Sekme hazır, kısa bir mola verip mesajı gönder
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, { 
+                type: 'AUTO_FILL_OPTS', 
+                data: appNo 
+              }).catch(err => console.warn('[Background] Content script henüz hazır değil, retry yapılacak.'));
+            }, 1000);
+            
+            chrome.tabs.onUpdated.removeListener(listener);
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+      });
       
-      chrome.tabs.onUpdated.addListener(listener);
-      
-      // 60 saniye sonra listener'ı temizle
-      setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        console.log('[Background] Listener timeout, temizlendi');
-      }, 60000);
-    });
-    
-    sendResponse({ status: 'OK', message: 'Başvuru No sekmesi açıldı.' });
-    return; // Sadece return, return true değil
-  }
+      sendResponse({ status: 'OK', message: 'İşlem başlatıldı.' });
+      return; 
+    }
 
   // Sahip No: SORGULA_KISI
   if (request.type === 'SORGULA_KISI' && request.data) {
