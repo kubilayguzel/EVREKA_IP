@@ -3,7 +3,7 @@
 import { db, ipRecordsService } from '../../firebase-config.js';
 import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { showNotification, debounce, STATUSES } from '../../utils.js';
-import { getSelectedNiceClasses, setSelectedNiceClasses } from '../nice-classification.js';
+import { getSelectedNiceClasses, setSelectedNiceClasses, initializeNiceClassification } from '../nice-classification.js';
 
 export class PortfolioUpdateManager {
     constructor() {
@@ -53,14 +53,15 @@ export class PortfolioUpdateManager {
     init() {
         this.setupEventListeners();
         this.renderInitialState();
+        
+        // Nice modülünü indeksleme sayfası için aktif hale getir
+        initializeNiceClassification();
 
         document.addEventListener('record-selected', (e) => {
             if (e.detail && e.detail.recordId) {
-                console.log('⚡ PortfolioManager: Kayıt seçimi algılandı:', e.detail.recordId);
                 this.selectRecord(e.detail.recordId);
             }
         });
-        console.log('✅ PortfolioUpdateManager initialized');
     }
 
     renderInitialState() {
@@ -140,23 +141,23 @@ export class PortfolioUpdateManager {
         const isRegistry = typeId === '45' || typeText.includes('tescil belgesi');
 
         if (isRegistry) {
-            this.elements.registryEditorSection.style.display = 'block';
-            
-            // --- NİCE EDİTÖRÜNÜ VERİYLE DOLDUR ---
-            const r = this.state.recordData;
-            if (r && r.goodsAndServicesByClass && r.goodsAndServicesByClass.length > 0) {
-                const formatted = r.goodsAndServicesByClass.map(g => 
-                    `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
-                );
-                // Merkezi Nice modülüne verileri gönder
-                if (typeof setSelectedNiceClasses === 'function') {
-                    setSelectedNiceClasses(formatted);
+                this.elements.registryEditorSection.style.display = 'block';
+                const r = this.state.recordData;
+                
+                if (r && r.goodsAndServicesByClass) {
+                    const formatted = r.goodsAndServicesByClass.map(g => 
+                        `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
+                    );
+                    
+                    // UI'ın (DOM) hazır olduğundan emin olmak için kısa bir gecikme
+                    setTimeout(() => {
+                        setSelectedNiceClasses(formatted);
+                    }, 100);
                 }
+            } else {
+                this.elements.registryEditorSection.style.display = 'none';
             }
-        } else {
-            this.elements.registryEditorSection.style.display = 'none';
         }
-    }
 
     initDatePickers() {
         if (typeof flatpickr !== 'undefined') {
