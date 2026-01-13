@@ -424,10 +424,12 @@ class NiceClassificationManager {
         this.classTexts = {};
     }
 
+    // nice-classification.js içinde init() metodunu bu haliyle değiştirin:
     async init() {
         this.elements = {
             listContainer: document.getElementById('niceClassificationList'),
-            selectedContainer: document.getElementById('selectedNiceClasses'),
+            // İndeksleme sayfasında ID 'nice-classes-accordion' olduğu için her ikisini de kontrol ediyoruz
+            selectedContainer: document.getElementById('selectedNiceClasses') || document.getElementById('nice-classes-accordion'),
             searchInput: document.getElementById('niceClassSearch'),
             selectedCountBadge: document.getElementById('selectedClassCount'),
             customInput: document.getElementById('customClassInput'),
@@ -435,22 +437,25 @@ class NiceClassificationManager {
             customCharCount: document.getElementById('customClassCharCount')
         };
 
-        if (!this.elements.listContainer) return;
-
-        this.elements.listContainer.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-secondary"></div><div class="mt-2 text-muted">Veriler yükleniyor...</div></div>`;
+        // KRİTİK DÜZELTME: Eğer ikisi de yoksa dur, ama akordiyon varsa devam et!
+        if (!this.elements.listContainer && !this.elements.selectedContainer) return;
 
         try {
             injectNiceStyles();
             const snapshot = await getDocs(collection(db, "niceClassification"));
-            this.allData = snapshot.docs.map(doc => ({ ...doc.data(), classNumber: parseInt(doc.data().classNumber) })).sort((a, b) => a.classNumber - b.classNumber);
+            this.allData = snapshot.docs.map(doc => ({ 
+                ...doc.data(), 
+                classNumber: parseInt(doc.data().classNumber) 
+            })).sort((a, b) => a.classNumber - b.classNumber);
 
-            this.renderList();
+            // Sadece liste varsa render et
+            if (this.elements.listContainer) this.renderList();
+            
             this.setupEventListeners();
             this.updateSelectionUI();
 
         } catch (error) {
             console.error("Nice error:", error);
-            this.elements.listContainer.innerHTML = `<div class="alert alert-danger m-3">Veri yükleme hatası: ${error.message}</div>`;
         }
     }
 
