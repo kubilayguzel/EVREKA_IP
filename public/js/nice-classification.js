@@ -536,9 +536,12 @@ class NiceClassificationManager {
         });
 
         if (this.elements.selectedContainer) {
-            this.elements.selectedContainer.addEventListener('click', (e) => {
-                const removeBtn = e.target.closest('.btn-remove-item');
-                if (removeBtn) this.removeSelection(removeBtn.dataset.key);
+            this.elements.selectedContainer.addEventListener('input', (e) => {
+                if (e.target.classList.contains('class-items-textarea')) {
+                    const classNum = e.target.dataset.classNum;
+                    // Kullanıcı her yazdığında merkezi nesneyi güncelle
+                    this.classTexts[classNum] = e.target.value;
+                }
             });
         }
 
@@ -556,15 +559,6 @@ class NiceClassificationManager {
             });
         }
 
-        // Textarea değişikliklerini anlık kaydet
-        if (this.elements.selectedContainer) {
-            this.elements.selectedContainer.addEventListener('input', (e) => {
-                if (e.target.classList.contains('class-items-textarea')) {
-                    const classNum = e.target.dataset.classNum;
-                    this.classTexts[classNum] = e.target.value;
-                }
-            });
-        }
     }
 
     handleCheckboxAction(code, text, isChecked) {
@@ -693,12 +687,15 @@ class NiceClassificationManager {
         this.elements.selectedContainer.innerHTML = html;
     }
 
-    // --- API Methods ---
     getSelectedData() {
-        const activeClasses = new Set(Object.values(this.selectedClasses).map(v => v.classNum));
-        return Array.from(activeClasses).map(classNum => {
-            const text = this.classTexts[classNum] || "";
-            return `(${classNum}-1) ${text}`; 
+        // Sadece seçili olan sınıfları al (this.selectedClasses anahtarlarından sınıf numaralarını çek)
+        const selectedNums = [...new Set(Object.values(this.selectedClasses).map(v => String(v.classNum)))];
+        
+        // Her sınıf için textarea'daki en güncel metni paketle
+        return selectedNums.sort((a,b) => Number(a)-Number(b)).map(num => {
+            // Eğer textarea boşsa veya hiç dokunulmadıysa classTexts'ten al, yoksa boş dön
+            const text = this.classTexts[num] || "";
+            return `(${num}-1) ${text}`; 
         });
     }
 
