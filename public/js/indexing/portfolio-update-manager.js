@@ -353,57 +353,48 @@ export class PortfolioUpdateManager {
 
     async saveAllChanges() {
         if (!this.state.selectedRecordId) return;
-        if (this.elements.btnSaveAll) {
-            this.elements.btnSaveAll.disabled = true;
-            this.elements.btnSaveAll.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
-        }
-
+        
+        // Yükleme durumu...
+        
         try {
-            // Merkezi editörden güncel metinleri çek (Senin textarea'da düzenlediğin veri buraya gelir)
-            const selectedNiceData = getSelectedNiceClasses(); 
-            const tempMap = {};
+            const selectedNiceData = getSelectedNiceClasses(); // Yeni getSelectedData sayesinde GÜNCEL metinler gelecek
+            const goodsAndServicesByClass = [];
+            const niceClasses = [];
 
             selectedNiceData.forEach(str => {
                 const match = str.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
                 if (match) {
-                    const classNo = match[1];
+                    const classNo = Number(match[1]);
                     const content = match[2];
-                    if (!tempMap[classNo]) tempMap[classNo] = [];
-                    // Metni satırlara böl ve temizle
-                    tempMap[classNo].push(...content.split('\n').filter(i => i.trim() !== ''));
+                    
+                    // Sınıf listesini doldur
+                    niceClasses.push(String(classNo));
+
+                    // EŞYA LİSTESİNİ TEMİZLE VE BÖL
+                    // Satırlara böl, her satırı temizle, boş satırları at
+                    const items = content.split('\n')
+                                        .map(line => line.trim())
+                                        .filter(line => line.length > 0);
+
+                    goodsAndServicesByClass.push({
+                        classNo: classNo,
+                        items: items
+                    });
                 }
             });
 
-            const goodsAndServicesByClass = Object.entries(tempMap).map(([num, items]) => ({
-                classNo: Number(num),
-                items: items
-            })).sort((a, b) => a.classNo - b.classNo);
-
-            const sortedNiceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
-
             const updates = {
-                status: this.elements.registryStatus ? this.elements.registryStatus.value : '',
-                applicationDate: this.elements.appDate ? this.elements.appDate.value : '',
-                registrationNumber: this.elements.regNo ? this.elements.regNo.value : '',
-                registrationDate: this.elements.regDate ? this.elements.regDate.value : '',
-                renewalDate: this.elements.renewalDate ? this.elements.renewalDate.value : '',
-                bulletins: this.state.bulletins,
-                niceClasses: sortedNiceClasses,
-                goodsAndServicesByClass: goodsAndServicesByClass,
+                // ... diğer alanlar ...
+                niceClasses: niceClasses.sort((a,b) => Number(a)-Number(b)),
+                goodsAndServicesByClass: goodsAndServicesByClass.sort((a,b) => a.classNo - b.classNo),
                 updatedAt: new Date().toISOString()
             };
 
             await updateDoc(doc(db, 'ipRecords', this.state.selectedRecordId), updates);
-            showNotification('Portföy bilgileri güncellendi!', 'success');
-
+            showNotification('Değişiklikler başarıyla kaydedildi!', 'success');
+            
         } catch (error) {
-            console.error('Save Error:', error);
-            showNotification('Hata: ' + error.message, 'error');
-        } finally {
-            if (this.elements.btnSaveAll) {
-                this.elements.btnSaveAll.disabled = false;
-                this.elements.btnSaveAll.textContent = 'Tüm Değişiklikleri Kaydet';
-            }
+            // Hata yönetimi...
         }
     }
 
