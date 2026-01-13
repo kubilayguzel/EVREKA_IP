@@ -8,7 +8,7 @@
     "*://arastirma.turkpatent.gov.tr/*",
     "*://webim.turkpatent.gov.tr/*",
     "*://www.turkpatent.gov.tr/*",
-    "https://opts.turkpatent.gov.tr/*"
+    "*://opts.turkpatent.gov.tr/*"
   ],
   "background": {
     "service_worker": "background.js"
