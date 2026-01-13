@@ -354,61 +354,52 @@ async function handleQuery() {
 // BAŞVURU NUMARASI SORGULAMA
 // ===============================
 
+// ===============================
+// BAŞVURU NUMARASI SORGULAMA (OPTS - TEKİL DOSYA)
+// ===============================
+
 async function queryByApplicationNumber(basvuruNo) {
-  // 1. Fonksiyonun başında loading elementinin doğru seçildiğinden emin olalım
-  const loadingEl = _el('loading-spinner') || _el('loading-overlay'); 
-  console.log('[DEBUG] Başvuru numarası sorgulanıyor:', basvuruNo);
+  console.log('[DEBUG] Tekil sorgu başlatılıyor (OPTS):', basvuruNo);
 
   try {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
 
-    window.skipScrapeTrademark = true;
+    // Eklentinin otomatik çalışmasını engelleyebilecek bayrakları temizle
+    window.skipScrapeTrademark = false;
 
-    // Eklentiye mesaj gönder
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage(
-        EXTENSION_ID, 
-        { type: 'SORGULA', data: basvuruNo },
-        (response) => {
-          const lastError = chrome.runtime.lastError;
-          
-          // EKLENTİ BAĞLANTI HATASI
-          if (lastError) {
-            console.warn('[DEBUG] Eklenti Bağlantı Hatası:', lastError.message);
-            _hideBlock(loadingEl); // Hata varsa yükleme ekranını kapat
-            
-            if (lastError.message.includes("Could not establish connection")) {
-                const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı veya ID hatalı. Kurulum sayfasına gitmek ister misiniz?");
-                if (confirmInstall) window.open('eklenti-kurulum.html', '_blank');
-            } else {
-                showNotification("Eklenti bağlantısında sorun: " + lastError.message, "warning");
-            }
-            return;
-          }
+    // Hedef URL (Sizin belirttiğiniz opts adresi)
+    // #bn= parametresi eklentinin dosya numarasını tanımasını sağlar
+    const targetUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(basvuruNo)}`;
 
-          // EKLENTİDEN CEVAP GELDİ Mİ?
-          if (response && (response.status === 'OK' || response.status === 'OK_WAIT' || response.status === 'STARTED')) {
-            showNotification('Eklenti başarıyla tetiklendi, TürkPatent sorgusu yapılıyor...', 'info');
-            
-            // KRİTİK: Polling fonksiyonuna loadingEl'i de gönderiyoruz ki işlem bitince o kapatsın
-            startPollingForOptsResult(basvuruNo, loadingEl); 
-          } else {
-            // Eklenti cevap verdi ama status OK değilse
-            console.warn('[DEBUG] Eklenti reddetti veya geçersiz yanıt verdi:', response);
-            showNotification("Eklenti sorguyu başlatamadı.", "warning");
-            _hideBlock(loadingEl); 
-          }
+    console.log('[DEBUG] Hedef sayfa açılıyor:', targetUrl);
+
+    // 1. Pencereyi Doğrudan Aç (Mesaj göndermeyi deneme, direkt aç)
+    const newWindow = window.open(targetUrl, '_blank');
+
+    if (newWindow) {
+      showToast('TÜRKPATENT sayfası açıldı. Veri bekleniyor...', 'info');
+      
+      // 2. Güvenlik ve Timeout Kontrolü
+      // Eklentiden 45 saniye içinde cevap gelmezse loading'i kapat
+      setTimeout(() => {
+        // Eğer sonuç alanı hala gizliyse (yani veri gelmediyse)
+        if (!singleResultContainer.style.display || singleResultContainer.classList.contains('hide')) {
+           console.warn('[TIMEOUT] Veri gelmedi veya işlem uzun sürdü.');
+           // İsterseniz burada kullanıcıya uyarı verebilirsiniz, şimdilik sessiz bırakıyoruz
+           // _hideBlock(loadingEl); 
         }
-      );
+      }, 45000);
+
     } else {
-      showNotification("Bu özellik için Chrome tarayıcısı gereklidir.", "danger");
       _hideBlock(loadingEl);
+      showToast('Pop-up engellendi. Lütfen tarayıcı izinlerini kontrol edin.', 'danger');
     }
+
   } catch (err) {
-    console.error('[DEBUG] Catch Bloğu Hatası:', err);
     _hideBlock(loadingEl);
-    showNotification('İşlem hatası: ' + err.message, 'danger');
+    console.error('[DEBUG] Sorgu hatası:', err);
+    showToast('İşlem hatası: ' + (err?.message || err), 'danger');
   }
 }
 
