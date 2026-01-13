@@ -575,16 +575,19 @@ class NiceClassificationManager {
     }
 
     addSelection(code, classNum, text) {
-        // Sınıf bilgilerini kaydet
+        // 1. Seçimi kaydet
         this.selectedClasses[code] = { classNum: String(classNum), text };
         
-        // 99. Sınıf veya yeni bir sınıf ise metni classTexts'e işle
-        if (String(classNum) === '99') {
-            // Özel tanım her zaman en güncel metni almalı
-            this.classTexts['99'] = text;
-        } else if (!this.classTexts[classNum]) {
-            // Standart sınıflar için ilk maddeyi varsayılan metin yap
+        // 2. Metin alanını güncelle
+        if (!this.classTexts[classNum]) {
+            // Sınıf ilk kez seçiliyorsa metni direkt ata
             this.classTexts[classNum] = text;
+        } else {
+            // Sınıf zaten varsa ve bu madde daha önce eklenmemişse altına ekle
+            const existingItems = this.classTexts[classNum].split('\n').map(i => i.trim());
+            if (!existingItems.includes(text.trim())) {
+                this.classTexts[classNum] += '\n' + text.trim();
+            }
         }
         
         this.updateSelectionUI();
@@ -641,15 +644,29 @@ class NiceClassificationManager {
     }
 
     updateSelectionUI() {
-        // KORUMA: Sadece akordiyonun çizileceği yer (selectedContainer) varsa devam et
         if (!this.elements.selectedContainer) return;
 
-        // Eğer listContainer (sol liste) varsa checkbox'ları güncelle (Yoksa hata verme, geç)
         if (this.elements.listContainer) {
+            // Önce tüm gruplardaki yeşil renklendirmeyi (has-selection) temizle
+            const allGroups = this.elements.listContainer.querySelectorAll('.nice-class-group');
+            allGroups.forEach(g => g.classList.remove('has-selection'));
+
+            // Checkbox'ları ve satırları güncelle
             const allCheckboxes = this.elements.listContainer.querySelectorAll('.class-checkbox');
             allCheckboxes.forEach(chk => {
                 const isSelected = !!this.selectedClasses[chk.value];
                 chk.checked = isSelected;
+                
+                const row = chk.closest('.nice-sub-item');
+                if (row) {
+                    isSelected ? row.classList.add('selected') : row.classList.remove('selected');
+                }
+
+                // EĞER SEÇİLİYSE: Bağlı olduğu ana gruba yeşil renk sınıfını ekle
+                if (isSelected) {
+                    const group = chk.closest('.nice-class-group');
+                    if (group) group.classList.add('has-selection');
+                }
             });
         }
 
@@ -661,7 +678,6 @@ class NiceClassificationManager {
             return;
         }
 
-        // Seçilenleri grupla ve HTML oluştur
         const grouped = {};
         Object.entries(this.selectedClasses).forEach(([code, val]) => {
             if (!grouped[val.classNum]) grouped[val.classNum] = [];
@@ -670,11 +686,7 @@ class NiceClassificationManager {
 
         let html = '';
         Object.keys(grouped).sort((a,b) => Number(a)-Number(b)).forEach(num => {
-            // Eğer bu sınıf için metin yoksa, seçili maddeleri birleştir
-            if (!this.classTexts[num]) {
-                this.classTexts[num] = grouped[num].map(item => item.text).join('\n');
-            }
-
+            // Not: classTexts zaten addSelection içinde güncellendiği için burada sadece render ediyoruz
             html += `
             <div class="selected-group-card mb-3 border rounded shadow-sm bg-white">
                 <div class="selected-group-header bg-light p-2 font-weight-bold border-bottom d-flex justify-content-between align-items-center">
@@ -686,7 +698,7 @@ class NiceClassificationManager {
                 <div class="p-2">
                     <textarea class="form-control class-items-textarea" 
                             data-class-num="${num}" 
-                            rows="5" style="font-size: 13px;">${this.classTexts[num]}</textarea>
+                            rows="6" style="font-size: 13px; line-height: 1.4;">${this.classTexts[num] || ''}</textarea>
                 </div>
             </div>`;
         });
