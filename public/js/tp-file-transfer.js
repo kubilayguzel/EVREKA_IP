@@ -74,7 +74,7 @@ let selectedRelatedParties = [];
 let currentOwnerResults = []; // CSV export için
 
 // --- Extension ID ---
-const EXTENSION_ID_SAHIP = 'gkhmldkbjmnipikgjabmlilibllikapk';
+const EXTENSION_ID = 'kemjjkdjhijodjmmfpmlnhhnfaojndgn';
 
 // ===============================
 // INITIALIZATION
@@ -371,132 +371,93 @@ async function handleQuery() {
 // ===============================
 
 async function queryByApplicationNumber(basvuruNo) {
-  console.log('[DEBUG] Başvuru numarası yeni eklentiye yönlendiriliyor:', basvuruNo);
+  console.log('[DEBUG] Başvuru numarası sorgulanıyor:', basvuruNo);
 
   try {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
 
-    // ÖNEMLİ: scrapeTrademark fonksiyonunu devre dışı bırak
     window.skipScrapeTrademark = true;
 
-    // Yeni eklenti ID'si
-    const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
-    
-    // DEĞİŞİKLİK 1: Fallback URL artık kurulum sayfası
-    const installPageUrl = 'eklenti-kurulum.html';
-
-    // Simple Loading ile kontrol
-    let loading = window.showLoadingWithCancel?.(
-      'Eklenti Kontrol Ediliyor',
-      'Eklenti bağlantısı kuruluyor...',
-      () => {
-        console.log('[DEBUG] Sorgu iptal edildi');
-        if (window.currentLoading) window.currentLoading = null;
-        if (window.currentPolling) clearInterval(window.currentPolling);
-        window.skipScrapeTrademark = false;
-      }
-    );
-
     // Eklentiye mesaj gönder
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
-        chrome.runtime.sendMessage(
-          EXT_ID,
-          { type: 'SORGULA', data: basvuruNo },
-          (response) => {
-            const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
-            const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT');
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage(
+        EXTENSION_ID, // Yukarıda tanımladığımız yeni ID
+        { type: 'SORGULA', data: basvuruNo },
+        (response) => {
+          const lastError = chrome.runtime.lastError;
+          
+          if (lastError) {
+            console.warn('[DEBUG] Eklenti Hatası:', lastError.message);
             
-            // Eklenti yoksa veya hata varsa KURULUM SAYFASINA YÖNLENDİR
-            if (hasErr || !ok) {
-              console.log('[DEBUG] Eklenti yanıt vermedi, kurulum sayfasına yönlendiriliyor');
-              
-              if (loading && loading.hide) loading.hide(); // Loading'i kapat
-              
-              // Kullanıcıyı bilgilendir ve yönlendir
-              const confirmInstall = confirm("Otomatik sorgulama yapabilmek için 'Evreka IP Sorgu Yardımcısı' eklentisinin yüklü olması gerekmektedir. Kurulum sayfasına gitmek ister misiniz?");
-              
-              if (confirmInstall) {
-                  window.open(installPageUrl, '_blank');
-              }
-              
-              _hideBlock(loadingEl);
-              window.skipScrapeTrademark = false;
-              
+            // SADECE eklentiye hiç ulaşılamıyorsa (bağlantı yoksa) uyarı ver
+            if (lastError.message.includes("Could not establish connection")) {
+              const confirmInstall = confirm("Evreka IP Sorgu Yardımcısı eklentisi bulunamadı veya etkin değil. Kurulum sayfasına gitmek ister misiniz?");
+              if (confirmInstall) window.open('eklenti-kurulum.html', '_blank');
             } else {
-              // Eklenti başarılı - Polling başlat
-              if (window.currentLoading) {
-                  window.currentLoading.updateText('TÜRKPATENT sorgulanıyor', 'Başvuru numarası ile kayıt araştırılıyor...');
-              }
-              showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
-              startPollingForOptsResult(basvuruNo, loading);
+              // Başka bir teknik hata varsa sadece toast göster, eklenti yüklettirmeye çalışma
+              showNotification("Eklenti bağlantısında sorun: " + lastError.message, "warning");
             }
+            _hideBlock(loadingEl);
+            window.skipScrapeTrademark = false;
+            return;
           }
-        );
-      } else {
-        // Chrome extension API yok, KURULUM SAYFASINA YÖNLENDİR
-        console.log('[DEBUG] Chrome extension API yok, kurulum sayfası açılıyor');
-        
-        if (loading && loading.hide) loading.hide();
-        
-        const confirmInstall = confirm("Bu özellik için tarayıcı eklentisi gereklidir. Eklenti kurulum sayfasına gitmek ister misiniz?");
-        
-        if (confirmInstall) {
-            window.open(installPageUrl, '_blank');
-        }
-        
-        _hideBlock(loadingEl);
-        window.skipScrapeTrademark = false;
-      }
-    } catch (e) {
-      console.warn('[DEBUG] Extension error:', e);
-      
-      // Hata durumunda da KURULUM SAYFASINA YÖNLENDİR
-      if (loading && loading.hide) loading.hide();
-      
-      window.open(installPageUrl, '_blank');
-      
-      _hideBlock(loadingEl);
-      window.skipScrapeTrademark = false;
-    }
 
+          // Yanıt geldiyse eklenti çalışıyor demektir
+          if (response && (response.status === 'OK' || response.status === 'OK_WAIT')) {
+            showNotification('Eklenti başarıyla tetiklendi.', 'info');
+            startPollingForOptsResult(basvuruNo);
+          }
+        }
+      );
+    } else {
+      showNotification("Bu özellik için Chrome tarayıcısı gereklidir.", "danger");
+      _hideBlock(loadingEl);
+    }
   } catch (err) {
     _hideBlock(loadingEl);
-    window.skipScrapeTrademark = false;
-    console.error('[DEBUG] Başvuru numarası sorgulama hatası:', err);
-    showToast('İşlem hatası: ' + (err?.message || err), 'danger');
+    showNotification('İşlem hatası: ' + err.message, 'danger');
   }
 }
 
 // Eklentiden sonuç bekle (polling)
 function startPollingForOptsResult(basvuruNo, loading) {
-  const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
   let pollCount = 0;
-  const maxPolls = 60; // 30 saniye
+  const maxPolls = 60; // 500ms * 60 = 30 saniye
   
   console.log('[Poll] Polling başlatıldı:', basvuruNo);
+  
+  // Eğer hali hazırda bir polling varsa temizle (Çakışmayı önler)
+  if (window.currentPolling) {
+    clearInterval(window.currentPolling);
+  }
   
   const pollInterval = setInterval(() => {
     pollCount++;
     
-    // Eklentiye sonuç var mı diye sor
+    // Eklentiye sonuç hazır mı diye sor
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage(
-        EXT_ID,
+        EXTENSION_ID, // Yukarıdaki merkezi ID'yi kullanır
         { type: 'GET_RESULT', applicationNumber: basvuruNo },
         (response) => {
+          // Polling sırasında eklenti meşgul olabilir, hata varsa sadece logla
           if (chrome.runtime.lastError) {
-            console.log('[Poll] Eklenti cevap vermedi');
+            console.log('[Poll] Eklenti şu an cevap vermiyor (Meşgul olabilir)');
             return;
           }
           
+          // Eklenti veriyi hazırladıysa (READY)
           if (response && response.status === 'READY' && response.data) {
-            console.log('[Poll] ✅ Sonuç alındı!', response);
+            console.log('[Poll] ✅ Sonuç başarıyla alındı!', response);
+            
             clearInterval(pollInterval);
             window.currentPolling = null;
             
-            // Veriyi işle
+            // Yükleme ekranını kapat
+            if (loading && loading.hide) loading.hide();
+            
+            // Gelen mesaj tipine göre işle (Başarı veya Hata)
             if (response.messageType === 'VERI_GELDI_OPTS') {
               handleOptsSuccess(response.data);
             } else if (response.messageType === 'HATA_OPTS') {
@@ -507,20 +468,25 @@ function startPollingForOptsResult(basvuruNo, loading) {
       );
     }
     
-    // Timeout
+    // Zaman Aşımı (Timeout) Kontrolü
     if (pollCount >= maxPolls) {
       clearInterval(pollInterval);
       window.currentPolling = null;
-      console.log('[Poll] ❌ Timeout');
+      console.log('[Poll] ❌ Zaman aşımı: Eklentiden veri gelmedi');
+      
       if (loading && loading.showError) {
-        loading.showError('Zaman aşımı');
+        loading.showError('Sorgulama zaman aşımına uğradı. Lütfen tekrar deneyin.');
+      } else {
+        // showNotification fonksiyonunu kullanıyoruz (Önceki adımda yaptığımız)
+        showNotification('Sorgulama zaman aşımına uğradı.', 'danger');
       }
+      
       _hideBlock(loadingEl);
       window.skipScrapeTrademark = false;
     }
   }, 500);
   
-  // Polling referansını global'e kaydet (iptal için)
+  // Polling referansını global'e kaydet (iptal edilebilmesi için)
   window.currentPolling = pollInterval;
 }
 
