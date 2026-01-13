@@ -353,7 +353,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     }
   }
 
-  // (C) Yoksa Tescil Tarihi + 10 Yıl
+// (C) Yoksa Tescil Tarihi + 10 Yıl
   if (!calculatedRenewalDate && registrationDate) {
     const d = new Date(registrationDate);
     if (!isNaN(d.getTime())) {
@@ -367,7 +367,9 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     const ad = new Date(formatDate(applicationDate) || applicationDate);
     if (!isNaN(ad.getTime())) {
       ad.setFullYear(ad.getFullYear() + 10);
-      calculatedRenewalDate = d.toISOString().split('T')[0];
+      
+      // HATA BURADAYDI: 'd' yerine 'ad' kullanılmalı
+      calculatedRenewalDate = ad.toISOString().split('T')[0]; 
     }
   }
 
