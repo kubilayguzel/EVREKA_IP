@@ -378,7 +378,7 @@ async function queryByApplicationNumber(basvuruNo) {
     const newWindow = window.open(targetUrl, '_blank');
 
     if (newWindow) {
-      showToast('TÜRKPATENT sayfası açıldı. Veri bekleniyor...', 'info');
+     showNotification('TÜRKPATENT sayfası açıldı. Veri bekleniyor...', 'info');
       
       // 2. Güvenlik ve Timeout Kontrolü
       // Eklentiden 45 saniye içinde cevap gelmezse loading'i kapat
@@ -393,13 +393,13 @@ async function queryByApplicationNumber(basvuruNo) {
 
     } else {
       _hideBlock(loadingEl);
-      showToast('Pop-up engellendi. Lütfen tarayıcı izinlerini kontrol edin.', 'danger');
+     showNotification('Pop-up engellendi. Lütfen tarayıcı izinlerini kontrol edin.', 'danger');
     }
 
   } catch (err) {
     _hideBlock(loadingEl);
     console.error('[DEBUG] Sorgu hatası:', err);
-    showToast('İşlem hatası: ' + (err?.message || err), 'danger');
+   showNotification('İşlem hatası: ' + (err?.message || err), 'danger');
   }
 }
 
