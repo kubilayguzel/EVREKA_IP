@@ -873,6 +873,12 @@ function setupExtensionMessageListener() {
         }
         showNotification(errorMsg, 'danger');
       }
+
+      else if (event.data.type === 'VERI_GELDI_OPTS') {
+        console.log('[DEBUG] OPTS verisi işleniyor...');
+        const data = event.data.data;
+        handleOptsSuccess(data);
+      }
     }
   });
   
