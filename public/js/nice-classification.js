@@ -497,54 +497,62 @@ class NiceClassificationManager {
     }
 
     setupEventListeners() {
-        if (!this.elements.listContainer) return;
+        // --- 1. SOL LİSTE DİNLEYİCİSİ (Sadece liste varsa çalışır) ---
+        if (this.elements.listContainer) {
+            this.elements.listContainer.addEventListener('click', (e) => {
+                const target = e.target;
 
-        this.elements.listContainer.addEventListener('click', (e) => {
-            const target = e.target;
-
-            if (target.closest('.nice-btn-select-all')) {
-                e.stopPropagation();
-                this.toggleWholeClass(parseInt(target.closest('.nice-class-group').dataset.classNum));
-                return;
-            }
-
-            if (target.closest('.nice-class-header')) {
-                const group = target.closest('.nice-class-header').parentElement;
-                const list = group.querySelector('.nice-sub-list');
-                const isOpen = list.classList.contains('open');
-                if (isOpen) { list.classList.remove('open'); group.classList.remove('open'); }
-                else { list.classList.add('open'); group.classList.add('open'); }
-                return;
-            }
-
-            const subItem = target.closest('.sub-item');
-            if (subItem) {
-                const checkbox = subItem.querySelector('.class-checkbox');
-                if(subItem.dataset.code === '35-5') {
-                    if (target.tagName === 'INPUT') target.checked = !target.checked; 
-                    this.class35Manager.open();
+                // Sınıfın tamamını seçme butonu
+                if (target.closest('.nice-btn-select-all')) {
+                    e.stopPropagation();
+                    this.toggleWholeClass(parseInt(target.closest('.nice-class-group').dataset.classNum));
                     return;
                 }
-                
-                if (target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
-                    checkbox.checked = !checkbox.checked;
-                    this.handleCheckboxAction(checkbox.value, subItem.dataset.text, checkbox.checked);
-                } else if (target.tagName === 'INPUT') {
-                    this.handleCheckboxAction(target.value, subItem.dataset.text, target.checked);
-                }
-            }
-        });
 
+                // Sınıf başlığına tıklayınca aç/kapat (Accordion)
+                if (target.closest('.nice-class-header')) {
+                    const group = target.closest('.nice-class-header').parentElement;
+                    const list = group.querySelector('.nice-sub-list');
+                    const isOpen = list.classList.contains('open');
+                    if (isOpen) { list.classList.remove('open'); group.classList.remove('open'); }
+                    else { list.classList.add('open'); group.classList.add('open'); }
+                    return;
+                }
+
+                // Alt madde (Emtia) seçimi
+                const subItem = target.closest('.sub-item');
+                if (subItem) {
+                    const checkbox = subItem.querySelector('.class-checkbox');
+                    
+                    // Özel 35. sınıf yöneticisi kontrolü
+                    if(subItem.dataset.code === '35-5') {
+                        if (target.tagName === 'INPUT') target.checked = !target.checked; 
+                        this.class35Manager.open();
+                        return;
+                    }
+                    
+                    if (target.tagName !== 'INPUT' && target.tagName !== 'LABEL') {
+                        checkbox.checked = !checkbox.checked;
+                        this.handleCheckboxAction(checkbox.value, subItem.dataset.text, checkbox.checked);
+                    } else if (target.tagName === 'INPUT') {
+                        this.handleCheckboxAction(target.value, subItem.dataset.text, target.checked);
+                    }
+                }
+            });
+        }
+
+        // --- 2. AKORDEON (TEXTAREA) DİNLEYİCİSİ (Hem İndeksleme hem Veri Girişi için kritik!) ---
         if (this.elements.selectedContainer) {
             this.elements.selectedContainer.addEventListener('input', (e) => {
                 if (e.target.classList.contains('class-items-textarea')) {
                     const classNum = e.target.dataset.classNum;
-                    // Kullanıcı her yazdığında merkezi nesneyi güncelle
+                    // Kullanıcı textarea'da ne yazarsa/silerse anlık olarak merkezi nesneye kaydet
                     this.classTexts[classNum] = e.target.value;
                 }
             });
         }
 
+        // --- 3. ARAMA VE ÖZEL TANIM DİNLEYİCİLERİ ---
         if (this.elements.searchInput) {
             this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
         }
@@ -558,7 +566,6 @@ class NiceClassificationManager {
                 }
             });
         }
-
     }
 
     handleCheckboxAction(code, text, isChecked) {
