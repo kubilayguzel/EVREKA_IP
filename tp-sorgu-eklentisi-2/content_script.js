@@ -446,9 +446,8 @@ function findDetailButton(tr) {
 
 //
 
-// DİKKAT: 'async' kelimesi kaldırıldı!
 function parseDetailsFromOpenDialog(dialogRoot) {
-  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SYNC SMART MODE v3)');
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (FINAL SMART MODE v4)');
   
   if (!dialogRoot) return {};
 
@@ -459,17 +458,40 @@ function parseDetailsFromOpenDialog(dialogRoot) {
     transactions: []
   };
 
-  // 1. HEADER ALANINDAN VERİ KURTARMA
+  // =================================================================
+  // 1. ETİKET TARAMA (DOM SCAN) - Tablo yapısından bağımsız yakalama
+  // =================================================================
+  // Bu bölüm, veriler tablo içinde olmasa bile (veya tablo yapısı bozuksa)
+  // etiket isminden (örn: "Tescil Tarihi") veriyi bulur.
   try {
-    const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
-    if (labeledAppNo) data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
-    
-    const labeledAppDate = extractByLabel(dialogRoot, 'Başvuru Tarihi');
-    if (labeledAppDate) data.fields['Başvuru Tarihi'] = labeledAppDate;
-  } catch (e) { /* ignore */ }
+    const criticalFields = [
+      { targetKey: 'Başvuru Numarası', labels: ['Başvuru Numarası', 'Başvuru No'] },
+      { targetKey: 'Başvuru Tarihi',   labels: ['Başvuru Tarihi'] },
+      { targetKey: 'Tescil Tarihi',    labels: ['Tescil Tarihi'] },
+      { targetKey: 'Tescil Numarası',  labels: ['Tescil Numarası', 'Tescil No'] },
+      { targetKey: 'Bülten Numarası',  labels: ['Bülten Numarası', 'Bülten No', 'Marka İlan Bülten No', 'Bülten'] },
+      { targetKey: 'Bülten Tarihi',    labels: ['Bülten Tarihi', 'Yayım Tarihi', 'Marka İlan Bülten Tarihi'] },
+      { targetKey: 'Koruma Tarihi',    labels: ['Koruma Tarihi'] },
+      { targetKey: 'Karar',            labels: ['Karar', 'Durumu'] }
+    ];
 
+    for (const field of criticalFields) {
+      for (const lbl of field.labels) {
+        // extractByLabel fonksiyonu dosyanın üst kısımlarında tanımlıdır
+        const val = extractByLabel(dialogRoot, lbl);
+        if (val) {
+          data.fields[field.targetKey] = normalizeAppNo(val); // normalizeAppNo sadece numara ise işler, metinse bozmz
+          // Birini bulunca diğer etiket varyasyonlarını denemeye gerek yok
+          break; 
+        }
+      }
+    }
+  } catch (e) { console.warn('DOM etiket tarama hatası:', e); }
+
+  // =================================================================
+  // 2. TABLO ANALİZİ (Tablo bazlı toplu veri çekme)
+  // =================================================================
   try {
-    // 2. TABLO ANALİZİ
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
     console.log('🔍 Modal içindeki tablo sayısı:', allTables.length);
     
@@ -478,22 +500,15 @@ function parseDetailsFromOpenDialog(dialogRoot) {
       const headers = Array.from(table.querySelectorAll('th')).map(h => h.textContent.trim());
       const headerText = headers.join(' ').toLowerCase();
       
-      // Satırları topla (tbody zorunluluğu yok, direkt tr'leri al)
+      // Satırları topla
       const rows = table.querySelectorAll('tr, .MuiTableRow-root');
       if (rows.length === 0) continue;
 
       const firstRowText = (rows[0]?.textContent || '').trim();
       const hasDateInFirstRow = /\d{2}\.\d{2}\.\d{4}/.test(firstRowText);
 
-      console.log('📋 Tablo Analizi:', { 
-        headerSummary: headerText.substring(0, 30), 
-        rowCount: rows.length, 
-        hasDate: hasDateInFirstRow 
-      });
-
       // A) MAL VE HİZMETLER TABLOSU
       if (headerText.includes('sınıf') && (headerText.includes('mal') || headerText.includes('hizmet'))) {
-        console.log('✅ Mal/Hizmet tablosu bulundu');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           if (cells.length >= 2) {
@@ -506,13 +521,12 @@ function parseDetailsFromOpenDialog(dialogRoot) {
         });
       }
       
-      // B) İŞLEM GEÇMİŞİ TABLOSU (GÜÇLENDİRİLMİŞ)
+      // B) İŞLEM GEÇMİŞİ TABLOSU
       else if (
           (headerText.includes('tarih') && (headerText.includes('işlem') || headerText.includes('hareket'))) ||
           (!headerText && hasDateInFirstRow) ||
           (hasDateInFirstRow && rows.length > 1) 
       ) {
-        console.log('✅ İşlem Geçmişi tablosu bulundu');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
@@ -536,19 +550,21 @@ function parseDetailsFromOpenDialog(dialogRoot) {
         });
       }
       
-      // C) GENEL BİLGİLER TABLOSU
+      // C) GENEL BİLGİLER TABLOSU (Key-Value Doldurma)
+      // Yukarıdaki "Etiket Tarama"nın kaçırdığı veya tabloda duran veriler için
       else {
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // 4'lü Yapı
+          // 4'lü Yapı: [Key] [Value] [Key] [Value]
           if (cells.length === 4) {
             if (texts[0]) data.fields[texts[0]] = texts[1];
             if (texts[2]) data.fields[texts[2]] = texts[3];
           } 
-          // 2'li Yapı
+          // 2'li Yapı: [Key] [Value]
           else if (cells.length === 2) {
+            // Sahip/Vekil gibi çok satırlı alanları birleştir
             if (texts[0].includes('Sahip') || texts[0].includes('Vekil')) {
                const lines = Array.from(cells[1].querySelectorAll('div, p, span'))
                                   .map(d=>d.textContent.trim())
@@ -571,7 +587,11 @@ function parseDetailsFromOpenDialog(dialogRoot) {
     data.imageDataUrl = imgEl.src;
   }
 
-  console.log(`📝 Modal Parse Bitti: ${data.transactions.length} işlem, ${data.goodsAndServices.length} sınıf.`);
+  console.log(`📝 Modal Parse Bitti: 
+    - Fields: ${Object.keys(data.fields).join(', ')}
+    - Transactions: ${data.transactions.length}
+    - Goods: ${data.goodsAndServices.length}`);
+    
   return data;
 }
 
