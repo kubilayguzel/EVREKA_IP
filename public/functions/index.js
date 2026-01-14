@@ -1882,11 +1882,18 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
     // ---------------------------------------------------------------------------------------
-    
+
     // İÇERİK OLUŞTURMA
     if (template && client) {
+      // 1. Varsayılan olarak Child şablonun konusunu al
       subject = String(template.subject || "");
-      body    = String(template.body || "");
+      
+      // 2. [YENİ] EĞER PARENT KONUSU BULDUYSAK, ONU KULLAN! (Override)
+      if (parentTemplateSubject) {
+          subject = String(parentTemplateSubject);
+      }
+
+      body = String(template.body || "");
       
       const parameters = {
         ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
