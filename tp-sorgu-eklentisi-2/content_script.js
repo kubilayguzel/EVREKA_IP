@@ -447,7 +447,7 @@ function findDetailButton(tr) {
 //
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SMART MODE)');
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SMART MODE v2)');
   
   if (!dialogRoot) return {};
 
@@ -459,7 +459,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   };
 
   // 1. HEADER ALANINDAN VERİ KURTARMA (DOM)
-  // Bazı bilgiler tablo dışında, üst kısımda etiket olarak durabilir
   try {
     const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
     if (labeledAppNo) data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
@@ -470,19 +469,25 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 
   try {
     // 2. TÜM TABLOLARI TOPLA VE ANALİZ ET
+    // Hem standart tabloları hem de olası div yapılarını tarayalım
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
     console.log('🔍 Modal içindeki tablo sayısı:', allTables.length);
     
     for (const table of allTables) {
+      // Başlıkları ve ilk satırı analiz et
       const headers = Array.from(table.querySelectorAll('th')).map(h => h.textContent.trim());
       const headerText = headers.join(' ').toLowerCase();
       const rows = table.querySelectorAll('tbody tr');
-      
-      // Tablonun ilk satırına bakarak ne tablosu olduğunu anla
       const firstRowText = (rows[0]?.textContent || '').trim();
+      
+      // Tarih tespiti (DD.MM.YYYY)
       const hasDateInFirstRow = /\d{2}\.\d{2}\.\d{4}/.test(firstRowText);
 
-      console.log('📋 Tablo Analizi:', { headerText: headerText.substring(0, 30), hasDate: hasDateInFirstRow });
+      console.log('📋 Tablo Analizi:', { 
+          headerSummary: headerText.substring(0, 30), 
+          rowCount: rows.length,
+          hasDate: hasDateInFirstRow 
+      });
 
       // ---------------------------------------------------------
       // A) MAL VE HİZMETLER TABLOSU TESPİTİ
@@ -495,6 +500,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
             const classNo = parseInt(cells[0].textContent.trim());
             const text = cells[1].textContent.trim();
             if (!isNaN(classNo) && text) {
+              // Sınıf ve metni ekle
               data.goodsAndServices.push({ classNo, items: [text] });
             }
           }
@@ -504,27 +510,26 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
       // ---------------------------------------------------------
       // B) İŞLEM GEÇMİŞİ TABLOSU TESPİTİ (Akıllı Mod)
       // ---------------------------------------------------------
-      // Başlıkta "işlem/tarih" varsa VEYA başlık yoksa ama ilk satırda tarih varsa
+      // Başlıkta "işlem/tarih" varsa VEYA başlık yoksa ama içerik tarihle başlıyorsa
       else if (
           (headerText.includes('tarih') && (headerText.includes('işlem') || headerText.includes('hareket'))) ||
           (!headerText && hasDateInFirstRow) || 
-          (hasDateInFirstRow && rows.length > 1) // Güçlü işlem geçmişi adayı
+          (hasDateInFirstRow && rows.length > 1) // Güçlü aday
       ) {
         console.log('✅ İşlem Geçmişi tablosu bulundu');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // Tarih hücresini bul (DD.MM.YYYY)
+          // Akıllı Hücre Analizi: Tarih hücresini bul, sonrakileri al
           const dateIdx = texts.findIndex(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t));
           
           if (dateIdx !== -1) {
              const dateVal = texts[dateIdx];
-             // Tarihten sonraki hücre işlemdir
-             const actionVal = texts[dateIdx + 1] || '';
-             // Ondan sonraki varsa açıklamadır
-             const noteVal = texts[dateIdx + 2] || '';
+             const actionVal = texts[dateIdx + 1] || ''; // Tarihten hemen sonraki
+             const noteVal = texts[dateIdx + 2] || '';   // Ondan sonraki
              
+             // İşlem adı boş veya "--" değilse ekle
              if (actionVal && actionVal !== '--') {
                 data.transactions.push({
                   date: dateVal,
@@ -539,22 +544,24 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
       // ---------------------------------------------------------
       // C) GENEL BİLGİLER TABLOSU (Key-Value)
       // ---------------------------------------------------------
-      // Tescil Tarihi, Bülten No vb. burada yakalanır
+      // Tescil Tarihi, Bülten No, Tescil No vb. burada yakalanır
       else {
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // 4 Hücreli: Key - Value - Key - Value
+          // 4 Hücreli Yapı: Key - Value - Key - Value
           if (cells.length === 4) {
             if (texts[0]) data.fields[texts[0]] = texts[1];
             if (texts[2]) data.fields[texts[2]] = texts[3];
           } 
-          // 2 Hücreli: Key - Value
+          // 2 Hücreli Yapı: Key - Value
           else if (cells.length === 2) {
-            // Sahip bilgisi gibi çok satırlı alanlar
+            // Sahip/Vekil gibi çok satırlı alanlar
             if (texts[0].includes('Sahip') || texts[0].includes('Vekil')) {
-               const lines = Array.from(cells[1].querySelectorAll('div')).map(d=>d.textContent.trim()).filter(Boolean);
+               const lines = Array.from(cells[1].querySelectorAll('div, p, span'))
+                                  .map(d=>d.textContent.trim())
+                                  .filter(Boolean);
                data.fields[texts[0]] = lines.join(' | ') || texts[1];
             } else {
                data.fields[texts[0]] = texts[1];
@@ -574,11 +581,11 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     data.imageDataUrl = imgEl.src;
   }
 
-  // Konsola özet dök (Debug)
+  // Konsola özet dök (Debug için kritik)
   console.log('📝 Modal Parse Sonucu:', {
-     fields: Object.keys(data.fields).length,
-     goods: data.goodsAndServices.length,
-     transactions: data.transactions.length
+     fieldsFound: Object.keys(data.fields).length,
+     goodsCount: data.goodsAndServices.length,
+     transactionsCount: data.transactions.length
   });
 
   return data;
