@@ -1851,34 +1851,58 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
+    // ✅ EKLENECEK YENİ BLOK ✅
     // ---------------------------------------------------------------------------------------
-    // [YENİ EKLENEN KISIM] PARENT TEMPLATE SUBJECT SORGUSU
-    // Eğer bir üst işlem (Parent) tespit ettiysek, onun şablonunu bulup konusunu alalım.
+    // [GÜNCELLENDİ] AKILLI KONU BELİRLEME (Smart Subject Resolution)
+    // 1. Önce mailThreads'e bak (Eski zincir var mı?)
+    // 2. Yoksa Parent'ın "Completion" taslağındaki 'mailSubject' alanına bak.
     // ---------------------------------------------------------------------------------------
     let parentTemplateSubject = null;
-    
-    // namingTargetType: Kodun yukarısında parentTxnData.type'dan veya fetchedTxnData.type'dan belirlenmişti.
-    if (namingTargetType && String(namingTargetType) !== String(templateSearchType)) {
-        try {
-            // Parent işlem için kural ara (Genellikle task_completion_epats kaynaklıdır)
-            const parentRuleSnap = await adminDb.collection("template_rules")
-                .where("subProcessType", "==", String(namingTargetType))
-                .limit(1)
-                .get();
+    let foundInThread = false;
 
-            if (!parentRuleSnap.empty) {
-                const pRule = parentRuleSnap.docs[0].data();
-                if (pRule.templateId) {
-                    const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
-                    if (pTemplateSnap.exists) {
-                        // Parent'ın konu başlığını aldık (Örn: "{{applicationNo}} - Başvuru Yapıldı")
-                        parentTemplateSubject = pTemplateSnap.data().subject;
-                        console.log(`🔗 Parent Subject Bulundu (${namingTargetType}): ${parentTemplateSubject}`);
+    // namingTargetType: Parent işlem tipi (Örn: "2") - Kodun üst kısımlarında belirlenmişti
+    if (namingTargetType && recordId) {
+        const targetTypeStr = String(namingTargetType);
+        
+        try {
+            // ADIM 1: MailThreads Kontrolü (Daha önce atılmış bir mail var mı?)
+            const threadKey = `${recordId}_${targetTypeStr}`;
+            const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
+            
+            if (threadDoc.exists && threadDoc.data()?.rootSubject) {
+                parentTemplateSubject = threadDoc.data().rootSubject;
+                foundInThread = true;
+                console.log(`🔗 Zincir Bulundu (Thread): ${parentTemplateSubject}`);
+            } 
+            
+            // ADIM 2: Zincir Yoksa -> Parent Completion Taslağına Bak
+            // (Child ile Parent aynıysa bakmaya gerek yok, kendi şablonunu kullanır)
+            if (!foundInThread && targetTypeStr !== String(templateSearchType)) {
+                // Parent işlemin "Bitiş" (Completion) kuralını buluyoruz. 
+                // Genellikle sourceType: 'task_completion_epats' olur.
+                const parentRuleSnap = await adminDb.collection("template_rules")
+                    .where("sourceType", "==", "task_completion_epats")
+                    .where("taskType", "==", targetTypeStr)
+                    .limit(1)
+                    .get();
+
+                if (!parentRuleSnap.empty) {
+                    const pRule = parentRuleSnap.docs[0].data();
+                    if (pRule.templateId) {
+                        const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
+                        if (pTemplateSnap.exists) {
+                            const ptData = pTemplateSnap.data();
+                            
+                            // 🔥 KRİTİK NOKTA: Önce 'mailSubject', yoksa 'subject'
+                            parentTemplateSubject = ptData.mailSubject || ptData.subject;
+                            
+                            console.log(`🔗 Parent Taslak Bulundu (${targetTypeStr}): ${parentTemplateSubject} (Kaynağı: ${ptData.mailSubject ? 'mailSubject' : 'subject'})`);
+                        }
                     }
                 }
             }
         } catch (err) {
-            console.warn("Parent template subject aranırken hata:", err);
+            console.warn("Konu belirleme hatası:", err);
         }
     }
     // ---------------------------------------------------------------------------------------
