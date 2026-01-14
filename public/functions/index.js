@@ -1843,22 +1843,49 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
-    // ✅ EKLENECEK YENİ BLOK ✅
-    // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ] AKILLI KONU BELİRLEME (Smart Subject Resolution)
-    // 1. Önce mailThreads'e bak (Eski zincir var mı?)
-    // 2. Yoksa Parent'ın "Completion" taslağındaki 'mailSubject' alanına bak.
+  // ---------------------------------------------------------------------------------------
+    // [GÜNCELLENDİ v3] AKILLI KONU BELİRLEME (Mapping + Thread + Parent Template)
+    // 1. Önce 'mailThreads/transactionTypeMatch' ayarına bak (Mapping var mı?)
+    // 2. Belirlenen tip (Mapped veya Original) ile 'mailThreads' zincirini kontrol et.
+    // 3. Zincir yoksa, o tipin "Completion" taslağındaki 'mailSubject' alanına bak.
     // ---------------------------------------------------------------------------------------
     let parentTemplateSubject = null;
     let foundInThread = false;
+    
+    // 1. Hedef Tipi Belirle (Mapping Öncelikli)
+    const currentSubTypeId = String(templateSearchType || after.subProcessType || "");
+    let effectiveTargetType = namingTargetType ? String(namingTargetType) : null;
 
-    // namingTargetType: Parent işlem tipi (Örn: "2") - Kodun üst kısımlarında belirlenmişti
-    if (namingTargetType && recordId) {
-        const targetTypeStr = String(namingTargetType);
-        
+    if (currentSubTypeId) {
         try {
-            // ADIM 1: MailThreads Kontrolü (Daha önce atılmış bir mail var mı?)
-            const threadKey = `${recordId}_${targetTypeStr}`;
+            const settingsDoc = await adminDb.doc("mailThreads/transactionTypeMatch").get();
+            if (settingsDoc.exists) {
+                const allRules = settingsDoc.data();
+                const rawRule = allRules[currentSubTypeId];
+                
+                if (rawRule) {
+                    // Mapping formatını çöz (String, Array veya Firestore Map olabilir)
+                    let mappedType = null;
+                    if (typeof rawRule === 'string') mappedType = rawRule;
+                    else if (Array.isArray(rawRule) && rawRule.length > 0) mappedType = rawRule[0];
+                    else if (rawRule.values && Array.isArray(rawRule.values)) mappedType = rawRule.values[0]?.stringValue;
+
+                    if (mappedType) {
+                        console.log(`🔀 Mapping Uygulandı: ${currentSubTypeId} -> ${mappedType} (Eski: ${effectiveTargetType})`);
+                        effectiveTargetType = String(mappedType);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Mapping okuma hatası:", e);
+        }
+    }
+
+    // 2. Konu Başlığını Ara
+    if (effectiveTargetType && recordId) {
+        try {
+            // ADIM A: MailThreads Kontrolü (Daha önce atılmış bir mail var mı?)
+            const threadKey = `${recordId}_${effectiveTargetType}`;
             const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
             
             if (threadDoc.exists && threadDoc.data()?.rootSubject) {
@@ -1867,14 +1894,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 console.log(`🔗 Zincir Bulundu (Thread): ${parentTemplateSubject}`);
             } 
             
-            // ADIM 2: Zincir Yoksa -> Parent Completion Taslağına Bak
-            // (Child ile Parent aynıysa bakmaya gerek yok, kendi şablonunu kullanır)
-            if (!foundInThread && targetTypeStr !== String(templateSearchType)) {
-                // Parent işlemin "Bitiş" (Completion) kuralını buluyoruz. 
-                // Genellikle sourceType: 'task_completion_epats' olur.
+            // ADIM B: Zincir Yoksa -> Hedef Tipin Completion Taslağına Bak
+            // (effectiveTargetType artık "2" olduğu için Başvuru şablonuna bakacak)
+            if (!foundInThread && effectiveTargetType !== String(templateSearchType)) {
                 const parentRuleSnap = await adminDb.collection("template_rules")
                     .where("sourceType", "==", "task_completion_epats")
-                    .where("taskType", "==", targetTypeStr)
+                    .where("taskType", "==", effectiveTargetType)
                     .limit(1)
                     .get();
 
@@ -1884,11 +1909,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
                         if (pTemplateSnap.exists) {
                             const ptData = pTemplateSnap.data();
-                            
-                            // 🔥 KRİTİK NOKTA: Önce 'mailSubject', yoksa 'subject'
+                            // ÖNCELİK: mailSubject -> YOKSA: subject
                             parentTemplateSubject = ptData.mailSubject || ptData.subject;
-                            
-                            console.log(`🔗 Parent Taslak Bulundu (${targetTypeStr}): ${parentTemplateSubject} (Kaynağı: ${ptData.mailSubject ? 'mailSubject' : 'subject'})`);
+                            console.log(`🔗 Parent Taslak Bulundu (${effectiveTargetType}): ${parentTemplateSubject}`);
                         }
                     }
                 }
