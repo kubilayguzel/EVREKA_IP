@@ -1844,23 +1844,23 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
 // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ v11 - FINAL FIX] ID NORMALİZASYONU
-    // Mantık: Veritabanından gelen Parent Type '1' ise, onu YOK SAY ve '2' YAP.
+    // [GÜNCELLENDİ v12] ID KESİN ÇÖZÜM & İÇERİK GARANTİSİ
     // ---------------------------------------------------------------------------------------
-    let parentTemplateSubject = null;
-    let foundInThread = false;
     
-    // 1. [EN ÖNEMLİ ADIM] ZORUNLU DÜZELTME (Force Fix)
-    // Veritabanındaki kayıt '1' olsa bile, biz '2' olarak işlem yapacağız.
+    // 1. ID NORMALİZASYONU (EN BAŞTA)
+    // Veritabanından veya herhangi bir yerden "1" gelirse, bunu "2" olarak eziyoruz.
     if (String(namingTargetType) === "1") {
-        console.log(`⚠️ Tespit: Veritabanından '1' geldi. '2' olarak düzeltiliyor.`);
         namingTargetType = "2";
     }
+
+    let parentTemplateSubject = null;
+    let foundInThread = false;
+    let forcedThreadId = null; // ID'yi zorlamak için yeni değişken
 
     // İşlem tipini al
     const currentSubTypeId = String(templateSearchType || after.subProcessType || after.transactionType || "").trim();
     
-    // Varsayılan hedef (Artık 1 olma şansı yok, 2 oldu)
+    // Varsayılan hedef
     let potentialTargetTypes = namingTargetType ? [String(namingTargetType)] : [];
     
     console.log(`🔍 Konu Analizi: İşlem=${currentSubTypeId}, HedefID=${namingTargetType}`);
@@ -1891,30 +1891,24 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     // 3. Konu Başlığını ve ID'yi Kesinleştir
     if (potentialTargetTypes.length > 0 && recordId) {
         try {
-            // ADIM A: MailThreads Kontrolü
             for (const targetType of potentialTargetTypes) {
-                // Güvenlik: Hedef listede "1" varsa onu da "2" olarak ara
                 const actualTarget = (targetType === "1") ? "2" : targetType;
-                
                 const threadKey = `${recordId}_${actualTarget}`;
                 const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
                 
-                if (threadDoc.exists) {
-                    const tData = threadDoc.data();
-                    if (tData?.rootSubject) {
-                        parentTemplateSubject = tData.rootSubject;
-                        foundInThread = true;
-                        namingTargetType = actualTarget; // ID'yi bulduğumuz zincire eşitle
-                        console.log(`✅ Zincir BULUNDU! ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
-                        break; 
-                    }
+                if (threadDoc.exists && threadDoc.data()?.rootSubject) {
+                    parentTemplateSubject = threadDoc.data().rootSubject;
+                    foundInThread = true;
+                    namingTargetType = actualTarget; // Global değişkeni güncelle
+                    forcedThreadId = actualTarget;   // Zorunlu ID
+                    console.log(`✅ Zincir BULUNDU! ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
+                    break; 
                 }
             }
 
-            // ADIM B: Zincir Yoksa (Sizin durumunuz)
             if (!foundInThread) {
                 let targetTypeStr = potentialTargetTypes[0];
-                if (targetTypeStr === "1") targetTypeStr = "2"; // Normalizasyon
+                if (targetTypeStr === "1") targetTypeStr = "2";
 
                 console.log(`ℹ️ Zincir bulunamadı. Hedef (${targetTypeStr}) şablonu kontrol ediliyor.`);
 
@@ -1932,58 +1926,51 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                             if (pTemplateSnap.exists) {
                                 const ptData = pTemplateSnap.data();
                                 parentTemplateSubject = ptData.mailSubject || ptData.subject;
-                                namingTargetType = targetTypeStr; // ID'yi şablon tipine eşitle
+                                namingTargetType = targetTypeStr; // Global değişkeni güncelle
+                                forcedThreadId = targetTypeStr;   // Zorunlu ID
                                 console.log(`🔗 Taslak Seçildi. ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
                             }
                         }
                     }
                 }
             }
-        } catch (err) {
-            console.error("❌ Hata:", err);
-        }
+        } catch (err) { console.error("❌ Hata:", err); }
     }
-       
+
     // ---------------------------------------------------------------------------------------
-    // İÇERİK OLUŞTURMA VE DEĞİŞKEN YERLEŞTİRME
+    // İÇERİK OLUŞTURMA (HTML GARANTİSİ)
     // ---------------------------------------------------------------------------------------
     if (template && client) {
-      // 1. Alt işlemin orijinal konusunu sakla (Şablondan gelen ham veri)
+      // 1. Alt işlemin orijinal konusunu sakla
       let childSubjectRaw = String(template.subject || "");
       
-      // 2. Mail Başlığı Belirle
-      // Eğer parentTemplateSubject bulunduysa onu kullan (Ham veya işlenmiş olabilir)
-      // Bulunmadıysa kendi şablonundaki konuyu kullan
-      subject = parentTemplateSubject ? String(parentTemplateSubject) : childSubjectRaw;
+      // 2. Mail Başlığı (Varsayılan olarak child, varsa Parent/Thread ile ezilir)
+      subject = childSubjectRaw;
+      if (parentTemplateSubject) {
+          subject = String(parentTemplateSubject);
+      }
 
-      // 3. Mail Gövdesi
-      body = String(template.body || "");
+      // 3. Mail Gövdesi (Ham hali)
+      let rawBody = String(template.body || "");
       
       const parameters = {
         ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
-
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: enrichedData.markName,
-        
         epats_evrak_no: after.turkpatentEvrakNo || after.evrakNo || "-",
         epats_konu: after.konu || "-",
-        
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
-        
         itiraz_sahibi: enrichedData.itirazSahibi, 
-        
         dava_son_tarihi: davaSonTarihi,
         dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
-        
         karar_sonucu_baslik: decisionAnalysis.resultText,
         karar_durumu_metni: decisionAnalysis.statusText,
         karar_durumu_renk: decisionAnalysis.statusColor,
         aksiyon_kutusu_bg: decisionAnalysis.boxColor,
         aksiyon_kutusu_border: decisionAnalysis.boxBorder,
         karar_ozeti_detay: decisionAnalysis.summaryText + (decisionAnalysis.isLawsuitRequired ? "<br><br>Bu karara karşı belirtilen tarihe kadar <strong>YİDK Kararının İptali davası</strong> açma hakkınız bulunmaktadır." : "<br><br>Şu an için tarafınızca yapılması gereken bir işlem bulunmamaktadır."),
-
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
         markImageUrl: enrichedData.markImageUrl,
@@ -1993,28 +1980,35 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
 
-      // 4. Değişkenleri Yerleştir (Interpolation)
+      // 4. Değişkenleri Yerleştir
       const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
 
-      // Hem ana konuyu hem de child konusunu render et
-      const finalMainSubject = replaceVars(subject);
-      const finalChildSubject = replaceVars(childSubjectRaw);
-      
-      // subject değişkenini render edilmiş haliyle güncelle (DB'ye bu gidecek)
-      subject = finalMainSubject;
-      body    = replaceVars(body);
+      subject = replaceVars(subject);
+      const childSubjectResolved = replaceVars(childSubjectRaw);
+      // Body'yi en son oluşturacağız
+      let resolvedBody = replaceVars(rawBody);
 
-      // 5. [YENİ] KONU SATIRI EKLEME MANTIĞI
-      // Sadece parent konusu kullanıldıysa VE parent konusu ile child konusu farklıysa ekle.
-      // parentTemplateSubject doluysa, bir üst konu kullanılmış demektir.
-      if (parentTemplateSubject && finalMainSubject.trim() !== finalChildSubject.trim()) {
+      // 5. [KRİTİK DÜZELTME] Konu Kutusunu Ekleme
+      // parentTemplateSubject kullanıldıysa VE konular farklıysa ekle
+      if (parentTemplateSubject && subject.trim() !== childSubjectResolved.trim()) {
           const innerSubjectHtml = `
             <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 10px; margin-bottom: 20px; font-family: Arial, sans-serif; color: #333;">
-                <strong>Konu:</strong> ${finalChildSubject}
+                <strong>Konu:</strong> ${childSubjectResolved}
             </div>
+            <br/>
           `;
-          body = innerSubjectHtml + body;
-          console.log(`➕ Mail içeriğine konu eklendi: ${finalChildSubject}`);
+          // Body'nin EN BAŞINA ekle
+          body = innerSubjectHtml + resolvedBody;
+          console.log("✅ KUTU EKLENDİ (HTML Başarılı)");
+      } else {
+          body = resolvedBody;
+      }
+      
+      // 6. [SON ÇARE ID DÜZELTME]
+      // Eğer yukarıda forcedThreadId belirlediysek, namingTargetType'ı son kez zorla.
+      if (forcedThreadId) {
+          namingTargetType = forcedThreadId;
+          console.log(`🔒 ID Kilitlendi: ${namingTargetType}`);
       }
     }
 
