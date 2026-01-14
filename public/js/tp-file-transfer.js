@@ -231,6 +231,46 @@ async function handleSaveToPortfolio() {
             console.error('❌ Transaction oluşturma hatası:', txError);
           }
         }
+        // ============================================================
+          // YENİ EKLENECEK KOD BAŞLANGICI
+          // ============================================================
+          
+          if (mappedRecord.oldTransactions && mappedRecord.oldTransactions.length > 0) {
+             console.log(`📜 ${mappedRecord.oldTransactions.length} adet geçmiş işlem kaydediliyor...`);
+             
+             // İşlemleri tarih sırasına diz (Eskiden yeniye)
+             const sortedTx = mappedRecord.oldTransactions.sort((a, b) => {
+                const dateA = new Date(a.date ? a.date.split('.').reverse().join('-') : 0);
+                const dateB = new Date(b.date ? b.date.split('.').reverse().join('-') : 0);
+                return dateA - dateB;
+             });
+
+             for (const tx of sortedTx) {
+               try {
+                 // Transaction tipi belirleme
+                 let txType = '13'; // Varsayılan: Diğer
+                 const desc = (tx.description || '').toLowerCase();
+                 
+                 if (desc.includes('tescil')) txType = '7';
+                 else if (desc.includes('yayın') || desc.includes('ilan')) txType = '4';
+                 else if (desc.includes('karar')) txType = '10';
+                 else if (desc.includes('itiraz')) txType = '11';
+
+                 // Veritabanına ekle
+                 await ipRecordsService.addTransactionToRecord(result.id, {
+                   type: txType, 
+                   description: tx.description + (tx.note ? ` (${tx.note})` : ''),
+                   timestamp: tx.date || new Date(),
+                   transactionHierarchy: 'history'
+                 });
+               } catch (txErr) {
+                 console.warn('⚠️ Geçmiş işlem kaydedilemedi:', txErr);
+               }
+             }
+          }
+          // ============================================================
+          // YENİ EKLENECEK KOD BİTİŞİ
+          // ============================================================
           successCount++;
         } else if (result.isDuplicate) {
           console.log('⚠️ Kayıt zaten mevcut:', mappedRecord.applicationNumber);
