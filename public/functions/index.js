@@ -901,13 +901,13 @@ export const sendEmailNotificationV2 = onCall(
     }
 
     // =================================================================
-    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - FIXED (CC & RFC Message-ID)
+    // 🚀 THREAD (ZİNCİRLEME) MANTIĞI - FIXED (FORCE TYPE 2)
     // =================================================================
     
-    // 1. 🔥 Yeni Mail İçin STANDART Message-ID Oluştur
+    // 1. Yeni Mail İçin STANDART Message-ID Oluştur
     const domainPart = userEmail.split('@')[1] || "evrekapatent.com";
     const uniquePart = Date.now().toString(36) + Math.random().toString(36).substr(2);
-    const newMessageId = `<${uniquePart}@${domainPart}>`; // Örn: <la4s8d9f.x9z@evrekapatent.com>
+    const newMessageId = `<${uniquePart}@${domainPart}>`; 
 
     let threadIdToUse = null;
     let inReplyToToUse = null;  
@@ -926,8 +926,15 @@ export const sendEmailNotificationV2 = onCall(
             
             if (rawRule && Array.isArray(rawRule.values)) parentContexts = rawRule.values.map(v => v.stringValue);
             else if (typeof rawRule === 'string') parentContexts = [rawRule];
+            else if (Array.isArray(rawRule)) parentContexts = rawRule.map(String); // [2, 20] gibi array gelirse
 
-            console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Aday: ${JSON.stringify(parentContexts)}`);
+            // 🔥 [DÜZELTME 1] parentContexts içindeki "1"leri "2"ye çevir
+            // Böylece arama yaparken ve kaydederken asla "1" kullanmayacak.
+            parentContexts = parentContexts.map(ctx => (ctx === "1" ? "2" : ctx));
+            // Tekrarları temizle (hem 1 hem 2 varsa sadece 2 kalsın)
+            parentContexts = [...new Set(parentContexts)];
+
+            console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Adaylar (Normalized): ${JSON.stringify(parentContexts)}`);
 
             for (const ctx of parentContexts) {
                 const threadKey = `${recordId}_${ctx}`;
@@ -952,8 +959,7 @@ export const sendEmailNotificationV2 = onCall(
                                 referencesToUse = lastMsgId;
                             }
                         }
-                                               
-                        // Logda NewID görmemiz lazım
+                                                       
                         console.log(`🔗 Zincir: ${threadIdToUse}, Reply: ${inReplyToToUse}, NewID: ${newMessageId}`);
                         break; 
                     }
@@ -962,7 +968,7 @@ export const sendEmailNotificationV2 = onCall(
 
             if (!threadIdToUse && parentContexts.length > 0) {
                 activeParentContext = parentContexts[0]; 
-                console.log(`🆕 Yeni Zincir Başlatılacak.`);
+                console.log(`🆕 Yeni Zincir Başlatılacak. Seçilen ID: ${activeParentContext}`);
             }
 
         } catch (e) { console.error("Threading hatası:", e); }
@@ -984,14 +990,13 @@ export const sendEmailNotificationV2 = onCall(
     };
 
     try {
-      // 6 parametre ile gönderiyoruz (newMessageId EKLENDİ)
       const sent = await sendViaGmailAsUser(
           userEmail, 
           mailOptions, 
           threadIdToUse, 
           inReplyToToUse, 
           referencesToUse,
-          newMessageId // 🔥 Bunu gönderdiğimizden emin olun
+          newMessageId 
       );
 
       // =================================================================
@@ -999,6 +1004,13 @@ export const sendEmailNotificationV2 = onCall(
       // =================================================================
       
       if (recordId && sent.threadId && activeParentContext) {
+          
+          // 🔥 [DÜZELTME 2] Son güvenlik önlemi: activeParentContext hala "1" ise "2" yap.
+          if (String(activeParentContext) === "1") {
+              activeParentContext = "2";
+              console.log("🛠️ DB Kaydı sırasında ID '1'den '2'ye zorla çevrildi.");
+          }
+
           const threadKey = `${recordId}_${activeParentContext}`;
           
           const updateData = {
@@ -1006,7 +1018,6 @@ export const sendEmailNotificationV2 = onCall(
               parentContext: activeParentContext,
               threadId: sent.threadId,            
               
-              // 🔥 GMAIL ID DEĞİL, STANDART ID KAYDEDİYORUZ
               lastMessageId: newMessageId, 
               
               rootSubject: finalSubject,          
@@ -1020,13 +1031,14 @@ export const sendEmailNotificationV2 = onCall(
           }
 
           await db.collection("mailThreads").doc(threadKey).set(updateData, { merge: true });
+          console.log(`✅ MailThreads güncellendi: ${threadKey}`);
       }
 
       // Processed Mail Logu
       try {
         await db.collection('processedMailThreads').add({
-            messageId: newMessageId, // Standart ID
-            gmailId: sent.id,        // Gmail ID
+            messageId: newMessageId, 
+            gmailId: sent.id,        
             threadId: sent.threadId,
             from: userEmail,
             to: toArr, cc: ccArr,
@@ -1039,7 +1051,6 @@ export const sendEmailNotificationV2 = onCall(
             status: 'sent',
             sentAt: admin.firestore.FieldValue.serverTimestamp()
         });
-        console.log("✅ 'processedMailThreads' loglandı.");
       } catch (logErr) { console.error("Log hatası:", logErr); }
 
       // Notification Durum
@@ -1048,7 +1059,7 @@ export const sendEmailNotificationV2 = onCall(
         sentBy: userEmail,
         provider: "gmail_api_dwd",
         gmailMessageId: sent?.id || null, 
-        messageId: newMessageId, // Standart ID'yi buraya da ekleyelim
+        messageId: newMessageId, 
         gmailThreadId: sent?.threadId || null,
         status: isReminder ? notificationData.status : "sent", 
         sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
