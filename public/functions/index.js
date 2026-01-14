@@ -1912,7 +1912,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       // 1. Varsayılan olarak Child şablonun konusunu al
       subject = String(template.subject || "");
       
-      // 2. [YENİ] EĞER PARENT KONUSU BULDUYSAK, ONU KULLAN! (Override)
+      // 2. [GÜNCEL] Parent veya Thread'den gelen konu varsa, ŞABLON KONUSUNU EZ!
       if (parentTemplateSubject) {
           subject = String(parentTemplateSubject);
       }
