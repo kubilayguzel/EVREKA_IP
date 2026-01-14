@@ -444,8 +444,10 @@ function findDetailButton(tr) {
   return byLabel || btns[btns.length - 1] || null;
 }
 
+//
+
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SMART MODE)');
   
   if (!dialogRoot) return {};
 
@@ -455,230 +457,130 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     goodsAndServices: [],
     transactions: []
   };
-  // --- EVREKA PATCH: Extract Application No & Date early (label-based) ---
+
+  // 1. HEADER ALANINDAN VERİ KURTARMA (DOM)
+  // Bazı bilgiler tablo dışında, üst kısımda etiket olarak durabilir
   try {
     const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
-    if (labeledAppNo) {
-      data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
-    } else {
-      const txtAll = (dialogRoot.textContent || '').replace(/\s+/g, ' ').trim(); // Düzeltildi
-      const m = txtAll.match(/\b((?:19|20)\d{2}|\d{2})\/\d{4,}\b/); // Düzeltildi
-      if (m) data.fields['Başvuru Numarası'] = normalizeAppNo(m[0]);
-    }
+    if (labeledAppNo) data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
+    
     const labeledAppDate = extractByLabel(dialogRoot, 'Başvuru Tarihi');
-    if (labeledAppDate) {
-      data.fields['Başvuru Tarihi'] = labeledAppDate;
-    }
+    if (labeledAppDate) data.fields['Başvuru Tarihi'] = labeledAppDate;
   } catch (e) { /* ignore */ }
 
-
-try {
-    // YENİ: Tüm tabloları topla - hem eski hem yeni selector'lar
-    const allTables = dialogRoot.querySelectorAll(
-      'table, .MuiTable-root, table.MuiTable-root.css-175qdh6'
-    );
-    
-    console.log('🔍 Toplam tablo sayısı:', allTables.length);
+  try {
+    // 2. TÜM TABLOLARI TOPLA VE ANALİZ ET
+    const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+    console.log('🔍 Modal içindeki tablo sayısı:', allTables.length);
     
     for (const table of allTables) {
-      // Header detection - YENİ CSS class'ları ekle
-      const headers = table.querySelectorAll(
-        'th, .MuiTableCell-head, thead .MuiTableCell-root, th.MuiTableCell-head.MuiTableCell-sizeSmall'
-      );
-      const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+      const headers = Array.from(table.querySelectorAll('th')).map(h => h.textContent.trim());
+      const headerText = headers.join(' ').toLowerCase();
+      const rows = table.querySelectorAll('tbody tr');
       
-      console.log('📋 Tablo header\'ları:', headerTexts); // Düzeltildi
-      
-      // tbody detection - YENİ CSS class'lı tbody
-      const tbody = table.querySelector(
-        'tbody, .MuiTableBody-root, tbody.MuiTableBody-root.css-y6j1my'
-      );
-      if (!tbody) {
-        console.warn('⚠️ tbody bulunamadı, sonraki tabloya geç');
-        continue;
-      }
-      
-      // tr detection - YENİ CSS class'lı tr
-      const rows = tbody.querySelectorAll(
-        'tr, .MuiTableRow-root, tr.MuiTableRow-root.css-11biftp'
-      );
-      
-      console.log('📊 Tablo satır sayısı:', rows.length);
-      
-      // ==========================================
-      // 1) MAL VE HİZMETLER TABLOSU (2 kolonlu)
-      // ==========================================
-      if (headerTexts.some(h => h.includes('Sınıf')) && 
-          headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
-        
-        console.log('✅ Mal ve Hizmetler tablosu tespit edildi');
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
-          
-          if (cells.length === 2) {
-            const classNoText = cells[0].textContent.trim();
-            const goodsText = cells[1].textContent.trim();
-            
-            // Sınıf numarası parse et
-            const classNo = parseInt(classNoText, 10);
-            
-            if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
-              // Mal/hizmet metnini satırlara ayır
-              const items = goodsText
-                .split(/\n+/) // Düzeltildi
-                .map(item => item.trim())
-                .filter(Boolean)
-                .map(item => item.replace(/\s+/g, ' ')); // Düzeltildi
-              
-              console.log(`📦 Sınıf ${classNo}: ${items.length} adet mal/hizmet bulundu`);
-              data.goodsAndServices.push({ classNo, items });
+      // Tablonun ilk satırına bakarak ne tablosu olduğunu anla
+      const firstRowText = (rows[0]?.textContent || '').trim();
+      const hasDateInFirstRow = /\d{2}\.\d{2}\.\d{4}/.test(firstRowText);
+
+      console.log('📋 Tablo Analizi:', { headerText: headerText.substring(0, 30), hasDate: hasDateInFirstRow });
+
+      // ---------------------------------------------------------
+      // A) MAL VE HİZMETLER TABLOSU TESPİTİ
+      // ---------------------------------------------------------
+      if (headerText.includes('sınıf') && (headerText.includes('mal') || headerText.includes('hizmet') || headerText.includes('emtia'))) {
+        console.log('✅ Mal/Hizmet tablosu bulundu');
+        rows.forEach(row => {
+          const cells = row.querySelectorAll('td');
+          if (cells.length >= 2) {
+            const classNo = parseInt(cells[0].textContent.trim());
+            const text = cells[1].textContent.trim();
+            if (!isNaN(classNo) && text) {
+              data.goodsAndServices.push({ classNo, items: [text] });
             }
           }
-        }
+        });
       }
       
-      // ==========================================
-      // 2) İŞLEM GEÇMİŞİ TABLOSU (4 kolonlu + başlık satırları)
-      // ==========================================
-      else if (headerTexts.some(h => h.includes('Tarih')) && 
-               headerTexts.some(h => h.includes('İşlem'))) {
-        
-        console.log('✅ İşlem geçmişi tablosu tespit edildi');
-        
-        const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/; // Düzeltildi
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
+      // ---------------------------------------------------------
+      // B) İŞLEM GEÇMİŞİ TABLOSU TESPİTİ (Akıllı Mod)
+      // ---------------------------------------------------------
+      // Başlıkta "işlem/tarih" varsa VEYA başlık yoksa ama ilk satırda tarih varsa
+      else if (
+          (headerText.includes('tarih') && (headerText.includes('işlem') || headerText.includes('hareket'))) ||
+          (!headerText && hasDateInFirstRow) || 
+          (hasDateInFirstRow && rows.length > 1) // Güçlü işlem geçmişi adayı
+      ) {
+        console.log('✅ İşlem Geçmişi tablosu bulundu');
+        rows.forEach(row => {
+          const cells = row.querySelectorAll('td');
+          const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // BAŞLIK SATIRLARI: 1 hücreli + colspan (Marka başvurusu, Marka Tescil Ücreti Ödeme gibi)
-          if (cells.length === 1) {
-            const titleText = cells[0].textContent.trim();
-            if (titleText && titleText.length > 0) {
-              console.log('📌 İşlem geçmişi başlık:', titleText);
-              // Başlık satırlarını ignore et veya özel işle
-            }
-            continue;
-          }
+          // Tarih hücresini bul (DD.MM.YYYY)
+          const dateIdx = texts.findIndex(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t));
           
-          // VERİ SATIRLARI: 4 hücreli (Tarih, Tebliğ Tarihi, İşlem, Açıklama)
-          if (cells.length === 4) {
-            const dateText = cells[0].textContent.trim();
-            const notificationDate = cells[1].textContent.trim();
-            const operationText = cells[2].textContent.trim();
-            const noteText = cells[3].textContent.trim();
-            
-            // Sadece geçerli tarih formatına sahip satırları al
-            if (dateRegex.test(dateText) && operationText && operationText !== '--') {
-              const transaction = {
-                date: dateText,
-                description: operationText,
-                note: (noteText && noteText !== '--' && noteText !== '-') ? noteText : null
-              };
-              
-              // İsteğe bağlı: Tebliğ tarihini de ekle
-              if (notificationDate && notificationDate !== '--') {
-                transaction.notificationDate = notificationDate;
-              }
-              
-              console.log('📝 Transaction eklendi:', transaction);
-              data.transactions.push(transaction);
-            }
+          if (dateIdx !== -1) {
+             const dateVal = texts[dateIdx];
+             // Tarihten sonraki hücre işlemdir
+             const actionVal = texts[dateIdx + 1] || '';
+             // Ondan sonraki varsa açıklamadır
+             const noteVal = texts[dateIdx + 2] || '';
+             
+             if (actionVal && actionVal !== '--') {
+                data.transactions.push({
+                  date: dateVal,
+                  description: actionVal,
+                  note: (noteVal && noteVal !== '--' && noteVal !== '-') ? noteVal : null
+                });
+             }
           }
-        }
+        });
       }
       
-      // ==========================================
-      // 3) ANA BİLGİLER TABLOSU (4 kolonlu Key-Value)
-      // ==========================================
+      // ---------------------------------------------------------
+      // C) GENEL BİLGİLER TABLOSU (Key-Value)
+      // ---------------------------------------------------------
+      // Tescil Tarihi, Bülten No vb. burada yakalanır
       else {
-        console.log('✅ Ana bilgiler tablosu tespit edildi');
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
+        rows.forEach(row => {
+          const cells = row.querySelectorAll('td');
+          const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // 4 KOLONLU: Key1, Value1, Key2, Value2
+          // 4 Hücreli: Key - Value - Key - Value
           if (cells.length === 4) {
-            const key1 = cells[0].textContent.trim();
-            const value1 = cells[1].textContent.trim();
-            const key2 = cells[2].textContent.trim();
-            const value2 = cells[3].textContent.trim();
-            
-            console.log('🔍 4 hücreli satır:', key1, '=', value1, '|', key2, '=', value2);
-            
-            // Value normalize - "--" ve "-" boş kabul edilir
-            const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
-            const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
-            
-            if (key1 && normalizedValue1) data.fields[key1] = normalizedValue1;
-            if (key2 && normalizedValue2) data.fields[key2] = normalizedValue2;
-          }
-          
-          // 2 KOLONLU: Key, Value (Sahip Bilgileri, Vekil Bilgileri gibi)
+            if (texts[0]) data.fields[texts[0]] = texts[1];
+            if (texts[2]) data.fields[texts[2]] = texts[3];
+          } 
+          // 2 Hücreli: Key - Value
           else if (cells.length === 2) {
-            const key = cells[0].textContent.trim();
-            const value = cells[1].textContent.trim();
-            
-            console.log('🔍 2 hücreli satır:', key, '=', value);
-            
-            const normalizedValue = (value === '--' || value === '-') ? '' : value;
-            if (key && normalizedValue) data.fields[key] = normalizedValue;
+            // Sahip bilgisi gibi çok satırlı alanlar
+            if (texts[0].includes('Sahip') || texts[0].includes('Vekil')) {
+               const lines = Array.from(cells[1].querySelectorAll('div')).map(d=>d.textContent.trim()).filter(Boolean);
+               data.fields[texts[0]] = lines.join(' | ') || texts[1];
+            } else {
+               data.fields[texts[0]] = texts[1];
+            }
           }
-        }
-      }
-    }
-    
-    // EKSTRA GÜVENLIK: Tüm tablolardaki 4 hücreli satırları da tara
-    // (Bazı bilgiler farklı tablolarda olabilir)
-    const allTableRows = dialogRoot.querySelectorAll(
-      'table tr, .MuiTable-root tr, tr.MuiTableRow-root'
-    );
-    
-    for (const row of allTableRows) {
-      const cells = row.querySelectorAll(
-        'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body'
-      );
-      
-      if (cells.length === 4) {
-        const key1 = cells[0].textContent.trim();
-        const value1 = cells[1].textContent.trim();
-        const key2 = cells[2].textContent.trim();
-        const value2 = cells[3].textContent.trim();
-        
-        // Sadece daha önce eklenmemiş bilgileri ekle
-        const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
-        const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
-        
-        if (key1 && normalizedValue1 && !data.fields[key1]) {
-          data.fields[key1] = normalizedValue1;
-        }
-        if (key2 && normalizedValue2 && !data.fields[key2]) {
-          data.fields[key2] = normalizedValue2;
-        }
+        });
       }
     }
     
   } catch (e) {
     console.error('❌ Modal parse hatası:', e);
-    console.error('❌ Hata detayı:', e.stack);
   }
-    // Görsel çıkarma
-    const imgEl = dialogRoot.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
-    if (imgEl?.src) {
-      data.imageDataUrl = imgEl.src;
-      log('🖼️ Görsel URL\'si bulundu:', data.imageDataUrl.substring(0, 50) + '...');
-    }
 
-  console.log('🔍 Final data.fields:', data.fields);
-  console.log('📦 Final data.goodsAndServices:', data.goodsAndServices.length, 'sınıf');
-  console.log('📝 Final data.transactions:', data.transactions.length, 'işlem');
-  
+  // 3. GÖRSEL ÇIKARMA
+  const imgEl = dialogRoot.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
+  if (imgEl?.src) {
+    data.imageDataUrl = imgEl.src;
+  }
+
+  // Konsola özet dök (Debug)
+  console.log('📝 Modal Parse Sonucu:', {
+     fields: Object.keys(data.fields).length,
+     goods: data.goodsAndServices.length,
+     transactions: data.transactions.length
+  });
+
   return data;
 }
 
