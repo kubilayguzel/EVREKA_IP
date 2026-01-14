@@ -1844,22 +1844,28 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
 // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ v10] AKILLI KONU & ID SENKRONİZASYONU
-    // Mantık: Hangi tipin konusunu (Subject) kullanıyorsak, 
-    // sistemin geri kalanı için işlem tipini (ID) ona dönüştür.
-    // Böylece 31 nolu işlem, 2 nolu zincirin (Thread) içine yazılır.
+    // [GÜNCELLENDİ v11 - FINAL FIX] ID NORMALİZASYONU
+    // Mantık: Veritabanından gelen Parent Type '1' ise, onu YOK SAY ve '2' YAP.
     // ---------------------------------------------------------------------------------------
     let parentTemplateSubject = null;
     let foundInThread = false;
     
+    // 1. [EN ÖNEMLİ ADIM] ZORUNLU DÜZELTME (Force Fix)
+    // Veritabanındaki kayıt '1' olsa bile, biz '2' olarak işlem yapacağız.
+    if (String(namingTargetType) === "1") {
+        console.log(`⚠️ Tespit: Veritabanından '1' geldi. '2' olarak düzeltiliyor.`);
+        namingTargetType = "2";
+    }
+
     // İşlem tipini al
     const currentSubTypeId = String(templateSearchType || after.subProcessType || after.transactionType || "").trim();
     
-    // Varsayılan hedef
+    // Varsayılan hedef (Artık 1 olma şansı yok, 2 oldu)
     let potentialTargetTypes = namingTargetType ? [String(namingTargetType)] : [];
     
-    console.log(`🔍 Konu Analizi (SYNC): İşlem=${currentSubTypeId}, Kayıt=${recordId}`);
+    console.log(`🔍 Konu Analizi: İşlem=${currentSubTypeId}, HedefID=${namingTargetType}`);
 
+    // 2. Mapping Kontrolü
     if (currentSubTypeId) {
         try {
             const settingsDoc = await adminDb.collection("mailThreads").doc("transactionTypeMatch").get();
@@ -1871,24 +1877,26 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     let mappedTypes = [];
                     if (Array.isArray(rawRule)) mappedTypes = rawRule.map(String);
                     else if (typeof rawRule === 'string') mappedTypes = [rawRule];
-                    else if (typeof rawRule === 'number') mappedTypes = [String(rawRule)];
                     else if (rawRule.values && Array.isArray(rawRule.values)) mappedTypes = rawRule.values.map(v => v.stringValue || String(v));
 
                     if (mappedTypes.length > 0) {
                         potentialTargetTypes = mappedTypes;
-                        console.log(`🔀 Mapping Okundu: ${JSON.stringify(potentialTargetTypes)}`);
+                        console.log(`🔀 Mapping Uygulandı: ${JSON.stringify(potentialTargetTypes)}`);
                     }
                 }
             }
         } catch (e) { console.warn("Mapping hatası:", e); }
     }
 
-    // 2. Konu Başlığını ve ID'yi Belirle
+    // 3. Konu Başlığını ve ID'yi Kesinleştir
     if (potentialTargetTypes.length > 0 && recordId) {
         try {
             // ADIM A: MailThreads Kontrolü
             for (const targetType of potentialTargetTypes) {
-                const threadKey = `${recordId}_${targetType}`;
+                // Güvenlik: Hedef listede "1" varsa onu da "2" olarak ara
+                const actualTarget = (targetType === "1") ? "2" : targetType;
+                
+                const threadKey = `${recordId}_${actualTarget}`;
                 const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
                 
                 if (threadDoc.exists) {
@@ -1896,24 +1904,21 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     if (tData?.rootSubject) {
                         parentTemplateSubject = tData.rootSubject;
                         foundInThread = true;
-                        
-                        // 🔥 KRİTİK GÜNCELLEME 1: ID SENKRONİZASYONU
-                        // Zincir hangi tipte bulunduysa (Örn: 2), 
-                        // bu mailin işlem tipi artık O'dur.
-                        namingTargetType = targetType; 
-                        
-                        console.log(`✅ Zincir BULUNDU! ID Güncellendi -> ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
+                        namingTargetType = actualTarget; // ID'yi bulduğumuz zincire eşitle
+                        console.log(`✅ Zincir BULUNDU! ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
                         break; 
                     }
                 }
             }
 
-            // ADIM B: Zincir Yoksa -> Taslaktan Bul
+            // ADIM B: Zincir Yoksa (Sizin durumunuz)
             if (!foundInThread) {
-                const targetTypeStr = potentialTargetTypes[0]; // İlk adayı baz al (Örn: 2)
-                console.log(`ℹ️ Zincir bulunamadı. Mapping'deki 1. hedef (${targetTypeStr}) kontrol ediliyor.`);
+                let targetTypeStr = potentialTargetTypes[0];
+                if (targetTypeStr === "1") targetTypeStr = "2"; // Normalizasyon
 
-                if (targetTypeStr && targetTypeStr !== currentSubTypeId) {
+                console.log(`ℹ️ Zincir bulunamadı. Hedef (${targetTypeStr}) şablonu kontrol ediliyor.`);
+
+                if (targetTypeStr) {
                     const parentRuleSnap = await adminDb.collection("template_rules")
                         .where("sourceType", "==", "task_completion_epats")
                         .where("taskType", "==", targetTypeStr)
@@ -1927,20 +1932,15 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                             if (pTemplateSnap.exists) {
                                 const ptData = pTemplateSnap.data();
                                 parentTemplateSubject = ptData.mailSubject || ptData.subject;
-                                
-                                // 🔥 KRİTİK GÜNCELLEME 2: ID SENKRONİZASYONU
-                                // Parent taslağını kullanmaya karar verdiysek,
-                                // bu mailin işlem tipi artık Parent'ın tipidir (Örn: 2).
-                                namingTargetType = targetTypeStr;
-
-                                console.log(`🔗 Parent Taslak Seçildi. ID Güncellendi -> ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
+                                namingTargetType = targetTypeStr; // ID'yi şablon tipine eşitle
+                                console.log(`🔗 Taslak Seçildi. ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
                             }
                         }
                     }
                 }
             }
         } catch (err) {
-            console.error("❌ Konu belirleme hatası:", err);
+            console.error("❌ Hata:", err);
         }
     }
        
