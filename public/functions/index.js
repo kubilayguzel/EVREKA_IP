@@ -1843,69 +1843,50 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
-//
-
-    // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ v6] AKILLI KONU BELİRLEME (Robust Multi-Parent & Debugging)
-    // 1. Mapping'i güvenli çek (String/Int dönüşümleri)
-    // 2. Thread kontrolünü yap
-    // 3. Fallback mantığını uygula
+// ---------------------------------------------------------------------------------------
+    // [GÜNCELLENDİ v10] AKILLI KONU & ID SENKRONİZASYONU
+    // Mantık: Hangi tipin konusunu (Subject) kullanıyorsak, 
+    // sistemin geri kalanı için işlem tipini (ID) ona dönüştür.
+    // Böylece 31 nolu işlem, 2 nolu zincirin (Thread) içine yazılır.
     // ---------------------------------------------------------------------------------------
     let parentTemplateSubject = null;
     let foundInThread = false;
     
-    // İşlem tipini güvenli string'e çevir
+    // İşlem tipini al
     const currentSubTypeId = String(templateSearchType || after.subProcessType || after.transactionType || "").trim();
     
-    // Varsayılan hedef (DB hiyerarşisinden gelen parent veya kendisi)
+    // Varsayılan hedef
     let potentialTargetTypes = namingTargetType ? [String(namingTargetType)] : [];
     
-    console.log(`🔍 Konu Analizi Başladı: İşlem=${currentSubTypeId}, Kayıt=${recordId}, VarsayılanHedef=${potentialTargetTypes.join(',')}`);
+    console.log(`🔍 Konu Analizi (SYNC): İşlem=${currentSubTypeId}, Kayıt=${recordId}`);
 
     if (currentSubTypeId) {
         try {
-            // 'mailThreads' koleksiyonundaki 'transactionTypeMatch' dokümanını çek
             const settingsDoc = await adminDb.collection("mailThreads").doc("transactionTypeMatch").get();
-            
             if (settingsDoc.exists) {
                 const allRules = settingsDoc.data();
-                // Hem string "31" hem de number 31 olarak kontrol et
                 const rawRule = allRules[currentSubTypeId] || allRules[Number(currentSubTypeId)];
                 
                 if (rawRule) {
-                    // Mapping formatını çöz (Array, String veya Firestore Map)
                     let mappedTypes = [];
-                    
-                    if (Array.isArray(rawRule)) {
-                        mappedTypes = rawRule.map(String);
-                    } else if (typeof rawRule === 'string') {
-                        mappedTypes = [rawRule];
-                    } else if (typeof rawRule === 'number') {
-                        mappedTypes = [String(rawRule)];
-                    } else if (rawRule.values && Array.isArray(rawRule.values)) {
-                        mappedTypes = rawRule.values.map(v => v.stringValue || String(v));
-                    }
+                    if (Array.isArray(rawRule)) mappedTypes = rawRule.map(String);
+                    else if (typeof rawRule === 'string') mappedTypes = [rawRule];
+                    else if (typeof rawRule === 'number') mappedTypes = [String(rawRule)];
+                    else if (rawRule.values && Array.isArray(rawRule.values)) mappedTypes = rawRule.values.map(v => v.stringValue || String(v));
 
                     if (mappedTypes.length > 0) {
                         potentialTargetTypes = mappedTypes;
-                        console.log(`🔀 Mapping Eşleşti (${currentSubTypeId}): Yeni Hedefler -> ${JSON.stringify(potentialTargetTypes)}`);
+                        console.log(`🔀 Mapping Okundu: ${JSON.stringify(potentialTargetTypes)}`);
                     }
-                } else {
-                    console.log(`ℹ️ Mapping Bulunamadı (${currentSubTypeId}): Varsayılan hedefler kullanılacak.`);
                 }
-            } else {
-                console.warn("⚠️ 'mailThreads/transactionTypeMatch' ayar dokümanı bulunamadı.");
             }
-        } catch (e) {
-            console.warn("❌ Mapping okuma hatası:", e);
-        }
+        } catch (e) { console.warn("Mapping hatası:", e); }
     }
 
-    // 2. Konu Başlığını Ara
+    // 2. Konu Başlığını ve ID'yi Belirle
     if (potentialTargetTypes.length > 0 && recordId) {
         try {
             // ADIM A: MailThreads Kontrolü
-            // Listelenen her bir hedef tip için (Örn: önce 2, sonra 20) zincir var mı diye bak.
             for (const targetType of potentialTargetTypes) {
                 const threadKey = `${recordId}_${targetType}`;
                 const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
@@ -1915,57 +1896,54 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     if (tData?.rootSubject) {
                         parentTemplateSubject = tData.rootSubject;
                         foundInThread = true;
-                        console.log(`✅ Zincir BULUNDU! (Type: ${targetType}, Key: ${threadKey}) -> Konu: "${parentTemplateSubject}"`);
-                        break; // İlk bulunanı al ve çık
+                        
+                        // 🔥 KRİTİK GÜNCELLEME 1: ID SENKRONİZASYONU
+                        // Zincir hangi tipte bulunduysa (Örn: 2), 
+                        // bu mailin işlem tipi artık O'dur.
+                        namingTargetType = targetType; 
+                        
+                        console.log(`✅ Zincir BULUNDU! ID Güncellendi -> ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
+                        break; 
                     }
-                } else {
-                    console.log(`Searching Thread: ${threadKey} -> Yok`);
                 }
             }
 
-            // ADIM B: Zincir Yoksa
+            // ADIM B: Zincir Yoksa -> Taslaktan Bul
             if (!foundInThread) {
-                const isMultiParent = potentialTargetTypes.length > 1;
-                console.log(`ℹ️ Zincir bulunamadı. Multi-Parent Durumu: ${isMultiParent}`);
+                const targetTypeStr = potentialTargetTypes[0]; // İlk adayı baz al (Örn: 2)
+                console.log(`ℹ️ Zincir bulunamadı. Mapping'deki 1. hedef (${targetTypeStr}) kontrol ediliyor.`);
 
-                if (!isMultiParent) {
-                    // SENARYO 1: Tek Parent (Örn: 27 -> 2) -> Parent Şablonunu Kullan
-                    const targetTypeStr = potentialTargetTypes[0];
-                    
-                    // Sonsuz döngü engelleme: Eğer hedef tip kendisiyse template aramaya gerek yok
-                    if (targetTypeStr !== currentSubTypeId) {
-                        const parentRuleSnap = await adminDb.collection("template_rules")
-                            .where("sourceType", "==", "task_completion_epats")
-                            .where("taskType", "==", targetTypeStr)
-                            .limit(1)
-                            .get();
+                if (targetTypeStr && targetTypeStr !== currentSubTypeId) {
+                    const parentRuleSnap = await adminDb.collection("template_rules")
+                        .where("sourceType", "==", "task_completion_epats")
+                        .where("taskType", "==", targetTypeStr)
+                        .limit(1)
+                        .get();
 
-                        if (!parentRuleSnap.empty) {
-                            const pRule = parentRuleSnap.docs[0].data();
-                            if (pRule.templateId) {
-                                const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
-                                if (pTemplateSnap.exists) {
-                                    const ptData = pTemplateSnap.data();
-                                    parentTemplateSubject = ptData.mailSubject || ptData.subject;
-                                    console.log(`🔗 Parent Taslağından Konu Alındı (${targetTypeStr}): "${parentTemplateSubject}"`);
-                                }
+                    if (!parentRuleSnap.empty) {
+                        const pRule = parentRuleSnap.docs[0].data();
+                        if (pRule.templateId) {
+                            const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
+                            if (pTemplateSnap.exists) {
+                                const ptData = pTemplateSnap.data();
+                                parentTemplateSubject = ptData.mailSubject || ptData.subject;
+                                
+                                // 🔥 KRİTİK GÜNCELLEME 2: ID SENKRONİZASYONU
+                                // Parent taslağını kullanmaya karar verdiysek,
+                                // bu mailin işlem tipi artık Parent'ın tipidir (Örn: 2).
+                                namingTargetType = targetTypeStr;
+
+                                console.log(`🔗 Parent Taslak Seçildi. ID Güncellendi -> ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
                             }
-                        } else {
-                            console.log(`⚠️ Parent (${targetTypeStr}) için template_rule bulunamadı.`);
                         }
                     }
-                } else {
-                    // SENARYO 2: Çoklu Parent (Örn: 31 -> [2, 20])
-                    // Zincir YOKSA -> Kendi şablonuna dön.
-                    console.log(`⏩ Çoklu parent var ama zincir yok -> Kendi şablonu (Child) kullanılacak.`);
-                    parentTemplateSubject = null;
                 }
             }
         } catch (err) {
-            console.error("❌ Konu belirleme kritik hata:", err);
+            console.error("❌ Konu belirleme hatası:", err);
         }
     }
-  
+       
     // ---------------------------------------------------------------------------------------
     // İÇERİK OLUŞTURMA VE DEĞİŞKEN YERLEŞTİRME
     // ---------------------------------------------------------------------------------------
