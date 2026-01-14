@@ -179,36 +179,10 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
   // Önce modal'dan gelen goodsAndServicesByClass'ı kontrol et
   if (Array.isArray(inputGSC) && inputGSC.length > 0) {
     console.log('✅ Modal\'dan gelen goodsAndServicesByClass kullanılıyor');
-    
-    // Modal'dan gelen veriyi sınıflara göre grupla
-    const groupedByClass = new Map();
-    
-    inputGSC.forEach(entry => {
-      const classNo = Number(entry.classNo);
-      const items = Array.isArray(entry.items) ? entry.items : [];
-      
-      if (!groupedByClass.has(classNo)) {
-        groupedByClass.set(classNo, []);
-      }
-      
-      // [GÜNCELLEME] Gelen maddeleri nokta (.) veya yeni satıra göre parçala
-      // Nokta işaretini ayırıcı olarak kullanır ve boşlukları temizler.
-      const splitItems = items.flatMap(item => item.split(/[\n.]/).map(s => s.trim()).filter(Boolean));
-      
-      // Bu sınıfa ait items'ları ekle
-      groupedByClass.get(classNo).push(...splitItems);
-    });
-    
-    // Map'i array'e çevir ve sırala
-    const result = Array.from(groupedByClass.entries())
-      .map(([classNo, items]) => ({
-        classNo,
-        items: [...new Set(items)] // Tekrar eden items'ları temizle
-      }))
-      .sort((a, b) => a.classNo - b.classNo);
-    
-    console.log('✅ Gruplandırılmış goodsAndServicesByClass:', result);
-    return result;
+    return inputGSC.map(x => ({
+      classNo: Number(x.classNo),
+      items: Array.isArray(x.items) ? x.items : []
+    }));
   }
 
   console.log('⚠️ Modal\'dan veri yok, alternatif kaynaklardan deneniyor...');
@@ -239,14 +213,20 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
     return niceNums.map(classNo => ({ classNo, items: [] }));
   }
 
-  // Eğer details'tan geliyorsa, sınıf bilgisi olmadan tüm sınıflara aynı items'ı vermek yerine
-  // sadece boş items ile döndür (çünkü hangi eşyanın hangi sınıfa ait olduğunu bilemiyoruz)
-  console.log('⚠️ Details\'tan gelen genel eşya metni, sınıf bazlı ayrıştırma yapılamıyor');
-  
-  return niceNums.map(classNo => ({
+  const rawItems = goodsText
+    .split(/[\n,;]+/)
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  console.log('✅ Eşya listesi oluşturuldu:', rawItems);
+
+  const result = niceNums.map(classNo => ({
     classNo,
-    items: [] // Modal'dan gelmeyen verilerde sınıf-eşya eşleştirmesi yapamıyoruz
+    items: rawItems
   }));
+
+  console.log('✅ Final goodsAndServicesByClass:', result);
+  return result;
 }
 
 /**
@@ -376,29 +356,26 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
     registrationDate: registrationDate,
-    
-    // [DÜZELTME] renewalDate artık Date objesi değil, String (YYYY-MM-DD) dönecek
     renewalDate: (() => {
       // 0) Eğer üst düzey turkpatentData içinde hazır renewalDate varsa onu kullan
       try {
         const topLevelRenewal = turkpatentData?.renewalDate || details?.['Yenileme Tarihi'] || details?.['Renewal Date'];
         if (topLevelRenewal) {
           const d = new Date(formatDate(topLevelRenewal) || topLevelRenewal);
-          // Date objesi yerine String formatında dön
-          if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]; 
+          if (!isNaN(d.getTime())) return d;
         }
       } catch (e) {
         console.warn('renewalDate (top-level) parse error:', e);
       }
 
-      // 1) Details içindeki Yenileme Tarihi doğrudan varsa
+      // 1) Details içindeki Yenileme Tarihi doğrudan varsa onu kullan
       if (details?.['Yenileme Tarihi'] || details?.['Renewal Date']) {
         const s = details['Yenileme Tarihi'] || details['Renewal Date'];
         const d = new Date(formatDate(s) || s);
-        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        if (!isNaN(d.getTime())) return d;
       }
 
-      // 2) Koruma Tarihi + 10 yıl
+      // 2) Koruma Tarihi'ni al ve üzerine 10 yıl ekle
       if (details?.['Koruma Tarihi']) {
         const korumaDateStr = details['Koruma Tarihi'];
         const dateFormatted = formatDate(korumaDateStr);
@@ -406,29 +383,30 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
           const korumaDate = new Date(dateFormatted);
           if (!isNaN(korumaDate.getTime())) {
             korumaDate.setFullYear(korumaDate.getFullYear() + 10);
-            return korumaDate.toISOString().split('T')[0];
+            return korumaDate;
           }
         }
       }
 
-      // 3) RegistrationDate + 10 yıl
+      // 3) RegistrationDate (yukarıda hesaplanan) varsa +10 yıl
       if (registrationDate) {
         const rd = new Date(registrationDate);
         if (!isNaN(rd.getTime())) {
           rd.setFullYear(rd.getFullYear() + 10);
-          return rd.toISOString().split('T')[0];
+          return rd;
         }
       }
 
-      // 4) ApplicationDate + 10 yıl
+      // 4) Gönderide gelen applicationDate varsa +10 yıl (son çare)
       if (applicationDate) {
         const ad = new Date(formatDate(applicationDate) || applicationDate);
         if (!isNaN(ad.getTime())) {
           ad.setFullYear(ad.getFullYear() + 10);
-          return ad.toISOString().split('T')[0];
+          return ad;
         }
       }
 
+      // Hiçbirini bulamazsak null
       return null;
     })(),
 
@@ -468,7 +446,7 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
 
     // Başvuru sahipleri
     applicants: Array.isArray(selectedApplicants)
-      ? selectedApplicants.map(a => ({ id: a.id, email: a.email || null }))
+      ? selectedApplicants.map(a => ({ id: a.id, name: a.name, email: a.email || null }))
       : [],
 
     // İşlem geçmişi
@@ -506,4 +484,4 @@ export async function mapTurkpatentResultsToIPRecords(turkpatentResults, selecte
     }
   }
   return out;
-} 
+}
