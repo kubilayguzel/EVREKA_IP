@@ -367,7 +367,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     const ad = new Date(formatDate(applicationDate) || applicationDate);
     if (!isNaN(ad.getTime())) {
       ad.setFullYear(ad.getFullYear() + 10);
-      calculatedRenewalDate = d.toISOString().split('T')[0];
+      calculatedRenewalDate = ad.toISOString().split('T')[0];
     }
   }
 
