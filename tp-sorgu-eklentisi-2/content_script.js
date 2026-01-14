@@ -446,8 +446,9 @@ function findDetailButton(tr) {
 
 //
 
-async function parseDetailsFromOpenDialog(dialogRoot) {
-  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SMART MODE v2)');
+// DİKKAT: 'async' kelimesi kaldırıldı!
+function parseDetailsFromOpenDialog(dialogRoot) {
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı (SYNC SMART MODE v3)');
   
   if (!dialogRoot) return {};
 
@@ -458,7 +459,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     transactions: []
   };
 
-  // 1. HEADER ALANINDAN VERİ KURTARMA (DOM)
+  // 1. HEADER ALANINDAN VERİ KURTARMA
   try {
     const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
     if (labeledAppNo) data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
@@ -468,31 +469,30 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   } catch (e) { /* ignore */ }
 
   try {
-    // 2. TÜM TABLOLARI TOPLA VE ANALİZ ET
-    // Hem standart tabloları hem de olası div yapılarını tarayalım
+    // 2. TABLO ANALİZİ
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
     console.log('🔍 Modal içindeki tablo sayısı:', allTables.length);
     
     for (const table of allTables) {
-      // Başlıkları ve ilk satırı analiz et
+      // Başlıkları topla
       const headers = Array.from(table.querySelectorAll('th')).map(h => h.textContent.trim());
       const headerText = headers.join(' ').toLowerCase();
-      const rows = table.querySelectorAll('tbody tr');
-      const firstRowText = (rows[0]?.textContent || '').trim();
       
-      // Tarih tespiti (DD.MM.YYYY)
+      // Satırları topla (tbody zorunluluğu yok, direkt tr'leri al)
+      const rows = table.querySelectorAll('tr, .MuiTableRow-root');
+      if (rows.length === 0) continue;
+
+      const firstRowText = (rows[0]?.textContent || '').trim();
       const hasDateInFirstRow = /\d{2}\.\d{2}\.\d{4}/.test(firstRowText);
 
       console.log('📋 Tablo Analizi:', { 
-          headerSummary: headerText.substring(0, 30), 
-          rowCount: rows.length,
-          hasDate: hasDateInFirstRow 
+        headerSummary: headerText.substring(0, 30), 
+        rowCount: rows.length, 
+        hasDate: hasDateInFirstRow 
       });
 
-      // ---------------------------------------------------------
-      // A) MAL VE HİZMETLER TABLOSU TESPİTİ
-      // ---------------------------------------------------------
-      if (headerText.includes('sınıf') && (headerText.includes('mal') || headerText.includes('hizmet') || headerText.includes('emtia'))) {
+      // A) MAL VE HİZMETLER TABLOSU
+      if (headerText.includes('sınıf') && (headerText.includes('mal') || headerText.includes('hizmet'))) {
         console.log('✅ Mal/Hizmet tablosu bulundu');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
@@ -500,36 +500,31 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
             const classNo = parseInt(cells[0].textContent.trim());
             const text = cells[1].textContent.trim();
             if (!isNaN(classNo) && text) {
-              // Sınıf ve metni ekle
               data.goodsAndServices.push({ classNo, items: [text] });
             }
           }
         });
       }
       
-      // ---------------------------------------------------------
-      // B) İŞLEM GEÇMİŞİ TABLOSU TESPİTİ (Akıllı Mod)
-      // ---------------------------------------------------------
-      // Başlıkta "işlem/tarih" varsa VEYA başlık yoksa ama içerik tarihle başlıyorsa
+      // B) İŞLEM GEÇMİŞİ TABLOSU (GÜÇLENDİRİLMİŞ)
       else if (
           (headerText.includes('tarih') && (headerText.includes('işlem') || headerText.includes('hareket'))) ||
-          (!headerText && hasDateInFirstRow) || 
-          (hasDateInFirstRow && rows.length > 1) // Güçlü aday
+          (!headerText && hasDateInFirstRow) ||
+          (hasDateInFirstRow && rows.length > 1) 
       ) {
         console.log('✅ İşlem Geçmişi tablosu bulundu');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // Akıllı Hücre Analizi: Tarih hücresini bul, sonrakileri al
+          // Akıllı Tarih Tespiti
           const dateIdx = texts.findIndex(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t));
           
           if (dateIdx !== -1) {
              const dateVal = texts[dateIdx];
-             const actionVal = texts[dateIdx + 1] || ''; // Tarihten hemen sonraki
-             const noteVal = texts[dateIdx + 2] || '';   // Ondan sonraki
+             const actionVal = texts[dateIdx + 1] || '';
+             const noteVal = texts[dateIdx + 2] || '';
              
-             // İşlem adı boş veya "--" değilse ekle
              if (actionVal && actionVal !== '--') {
                 data.transactions.push({
                   date: dateVal,
@@ -541,23 +536,19 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
         });
       }
       
-      // ---------------------------------------------------------
-      // C) GENEL BİLGİLER TABLOSU (Key-Value)
-      // ---------------------------------------------------------
-      // Tescil Tarihi, Bülten No, Tescil No vb. burada yakalanır
+      // C) GENEL BİLGİLER TABLOSU
       else {
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
           const texts = Array.from(cells).map(c => c.textContent.trim());
           
-          // 4 Hücreli Yapı: Key - Value - Key - Value
+          // 4'lü Yapı
           if (cells.length === 4) {
             if (texts[0]) data.fields[texts[0]] = texts[1];
             if (texts[2]) data.fields[texts[2]] = texts[3];
           } 
-          // 2 Hücreli Yapı: Key - Value
+          // 2'li Yapı
           else if (cells.length === 2) {
-            // Sahip/Vekil gibi çok satırlı alanlar
             if (texts[0].includes('Sahip') || texts[0].includes('Vekil')) {
                const lines = Array.from(cells[1].querySelectorAll('div, p, span'))
                                   .map(d=>d.textContent.trim())
@@ -570,7 +561,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
         });
       }
     }
-    
   } catch (e) {
     console.error('❌ Modal parse hatası:', e);
   }
@@ -581,13 +571,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     data.imageDataUrl = imgEl.src;
   }
 
-  // Konsola özet dök (Debug için kritik)
-  console.log('📝 Modal Parse Sonucu:', {
-     fieldsFound: Object.keys(data.fields).length,
-     goodsCount: data.goodsAndServices.length,
-     transactionsCount: data.transactions.length
-  });
-
+  console.log(`📝 Modal Parse Bitti: ${data.transactions.length} işlem, ${data.goodsAndServices.length} sınıf.`);
   return data;
 }
 
