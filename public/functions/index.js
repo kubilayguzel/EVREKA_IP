@@ -952,15 +952,7 @@ export const sendEmailNotificationV2 = onCall(
                                 referencesToUse = lastMsgId;
                             }
                         }
-                        
-                        // Konu içine bilgi ekle
-                        const originalSubjectInfo = `
-                            <div style="background-color:#f5f5f5; padding:10px; margin-bottom:15px; border-left: 4px solid #1a73e8;">
-                                <strong>KONU: ${subject}</strong>
-                            </div>
-                        `;
-                        htmlBody = originalSubjectInfo + htmlBody;
-                        
+                                               
                         // Logda NewID görmemiz lazım
                         console.log(`🔗 Zincir: ${threadIdToUse}, Reply: ${inReplyToToUse}, NewID: ${newMessageId}`);
                         break; 
@@ -1909,14 +1901,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     // İÇERİK OLUŞTURMA
     if (template && client) {
-      // 1. Varsayılan olarak Child şablonun konusunu al
-      subject = String(template.subject || "");
+      // 1. Alt işlemin orijinal konusunu sakla (Şablondan gelen ham veri)
+      let childSubjectRaw = String(template.subject || "");
       
-      // 2. [GÜNCEL] Parent veya Thread'den gelen konu varsa, ŞABLON KONUSUNU EZ!
+      // 2. Mail Başlığı (Varsayılan olarak child, varsa Parent/Thread ile ezilir)
+      subject = childSubjectRaw;
       if (parentTemplateSubject) {
           subject = String(parentTemplateSubject);
       }
 
+      // 3. Mail Gövdesi
       body = String(template.body || "");
       
       const parameters = {
@@ -1934,7 +1928,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         
         itiraz_sahibi: enrichedData.itirazSahibi, 
         
-        // --- DİNAMİK PARAMETRELER (YENİ) ---
         dava_son_tarihi: davaSonTarihi,
         dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
         
@@ -1944,7 +1937,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         aksiyon_kutusu_bg: decisionAnalysis.boxColor,
         aksiyon_kutusu_border: decisionAnalysis.boxBorder,
         karar_ozeti_detay: decisionAnalysis.summaryText + (decisionAnalysis.isLawsuitRequired ? "<br><br>Bu karara karşı belirtilen tarihe kadar <strong>YİDK Kararının İptali davası</strong> açma hakkınız bulunmaktadır." : "<br><br>Şu an için tarafınızca yapılması gereken bir işlem bulunmamaktadır."),
-        // ------------------------------------
 
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
@@ -1955,8 +1947,24 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
 
-      subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-      body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      // 4. Değişkenleri Yerleştir (Interpolation)
+      // Hem ana konu, hem gövde, hem de alt işlem konusu için değişkenleri dolduruyoruz
+      const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+
+      subject = replaceVars(subject);
+      body    = replaceVars(body);
+      const childSubjectResolved = replaceVars(childSubjectRaw);
+
+      // 5. [YENİ] Eğer Mail Başlığı ile İçerik Başlığı farklıysa (yani konu ezildiyse),
+      // mailin en üstüne "Konu: ..." bilgisini şık bir kutu içinde ekle.
+      if (parentTemplateSubject && subject !== childSubjectResolved) {
+          const innerSubjectHtml = `
+            <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 10px; margin-bottom: 20px; font-family: Arial, sans-serif; color: #333;">
+                <strong>Konu:</strong> ${childSubjectResolved}
+            </div>
+          `;
+          body = innerSubjectHtml + body;
+      }
     }
 
     const missingFields = [];
