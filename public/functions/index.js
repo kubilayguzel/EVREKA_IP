@@ -1843,11 +1843,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
-  // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ v4] AKILLI KONU BELİRLEME (Multi-Parent Desteği)
-    // 1. Mapping kontrolü (Tekli veya Çoklu Parent)
-    // 2. Varsa Thread kontrolü (Tüm adaylar için)
-    // 3. Thread yoksa: Tekli parent ise onun şablonu; Çoklu ise Kendi şablonu.
+  //
+
+    // ---------------------------------------------------------------------------------------
+    // [GÜNCELLENDİ v5] AKILLI KONU BELİRLEME (Multi-Parent & Fallback Mantığı)
     // ---------------------------------------------------------------------------------------
     let parentTemplateSubject = null;
     let foundInThread = false;
@@ -1865,13 +1864,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 const rawRule = allRules[currentSubTypeId];
                 
                 if (rawRule) {
-                    // Mapping formatını çöz (Array ise [2, 20] gibi, String ise "2" gibi)
+                    // Mapping formatını çöz (Array veya String olabilir)
                     if (Array.isArray(rawRule)) {
                         potentialTargetTypes = rawRule.map(String);
                     } else if (typeof rawRule === 'string') {
                         potentialTargetTypes = [rawRule];
                     } else if (rawRule.values && Array.isArray(rawRule.values)) {
-                        // Firestore map yapısı ihtimaline karşı
                         potentialTargetTypes = rawRule.values.map(v => v.stringValue);
                     }
                     console.log(`🔀 Mapping (${currentSubTypeId}): Hedefler -> ${JSON.stringify(potentialTargetTypes)}`);
@@ -1886,6 +1884,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     if (potentialTargetTypes.length > 0 && recordId) {
         try {
             // ADIM A: MailThreads Kontrolü (Tüm aday parentlar için zincir ara)
+            // Eğer [2, 20] ise, önce 2 için thread var mı bakar, bulursa onu kullanır.
             for (const targetType of potentialTargetTypes) {
                 const threadKey = `${recordId}_${targetType}`;
                 const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
@@ -1900,12 +1899,11 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
             // ADIM B: Zincir Yoksa
             if (!foundInThread) {
-                // KURAL: Eğer çoklu parent tanımlıysa (örn: 31 -> [2, 20]),
-                // ve zincir bulunamadıysa, PARENT şablonuna gitme. Kendi şablonunu kullan.
                 const isMultiParent = potentialTargetTypes.length > 1;
                 
                 if (!isMultiParent) {
-                    // Tek parent varsa (örn: 27 -> 2), onun şablon konusunu çek (mailSubject yoksa subject)
+                    // SENARYO 1: Tek Parent (Örn: 27 -> 2)
+                    // Zincir yoksa Parent'ın şablonundaki konuyu kullan.
                     const targetTypeStr = potentialTargetTypes[0];
                     
                     if (targetTypeStr !== String(templateSearchType)) {
@@ -1921,6 +1919,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                 const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
                                 if (pTemplateSnap.exists) {
                                     const ptData = pTemplateSnap.data();
+                                    // mailSubject yoksa subject kullan
                                     parentTemplateSubject = ptData.mailSubject || ptData.subject;
                                     console.log(`🔗 Parent Taslak Bulundu (${targetTypeStr}): ${parentTemplateSubject}`);
                                 }
@@ -1928,24 +1927,28 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         }
                     }
                 } else {
+                    // SENARYO 2: Çoklu Parent (Örn: 31 -> [2, 20])
+                    // Zincir YOKSA -> Hiçbir parent'ın konusunu alma. Kendi şablonunu kullan.
                     console.log(`ℹ️ Çoklu parent (${potentialTargetTypes.join(',')}) ve zincir yok -> Kendi şablonu kullanılacak.`);
+                    parentTemplateSubject = null; // Emin olmak için sıfırla
                 }
             }
         } catch (err) {
             console.warn("Konu belirleme hatası:", err);
         }
     }
-    
-    // İÇERİK OLUŞTURMA
+
+    // ---------------------------------------------------------------------------------------
+    // İÇERİK OLUŞTURMA VE DEĞİŞKEN YERLEŞTİRME
+    // ---------------------------------------------------------------------------------------
     if (template && client) {
       // 1. Alt işlemin orijinal konusunu sakla (Şablondan gelen ham veri)
       let childSubjectRaw = String(template.subject || "");
       
-      // 2. Mail Başlığı (Varsayılan olarak child, varsa Parent/Thread ile ezilir)
-      subject = childSubjectRaw;
-      if (parentTemplateSubject) {
-          subject = String(parentTemplateSubject);
-      }
+      // 2. Mail Başlığı Belirle
+      // Eğer parentTemplateSubject bulunduysa onu kullan (Ham veya işlenmiş olabilir)
+      // Bulunmadıysa kendi şablonundaki konuyu kullan
+      subject = parentTemplateSubject ? String(parentTemplateSubject) : childSubjectRaw;
 
       // 3. Mail Gövdesi
       body = String(template.body || "");
@@ -1965,7 +1968,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         
         itiraz_sahibi: enrichedData.itirazSahibi, 
         
-        // --- DİNAMİK PARAMETRELER (YENİ) ---
         dava_son_tarihi: davaSonTarihi,
         dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
         
@@ -1975,7 +1977,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         aksiyon_kutusu_bg: decisionAnalysis.boxColor,
         aksiyon_kutusu_border: decisionAnalysis.boxBorder,
         karar_ozeti_detay: decisionAnalysis.summaryText + (decisionAnalysis.isLawsuitRequired ? "<br><br>Bu karara karşı belirtilen tarihe kadar <strong>YİDK Kararının İptali davası</strong> açma hakkınız bulunmaktadır." : "<br><br>Şu an için tarafınızca yapılması gereken bir işlem bulunmamaktadır."),
-        // ------------------------------------
 
         applicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
         markName: enrichedData.markName,
@@ -1989,19 +1990,25 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       // 4. Değişkenleri Yerleştir (Interpolation)
       const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
 
-      subject = replaceVars(subject);
+      // Hem ana konuyu hem de child konusunu render et
+      const finalMainSubject = replaceVars(subject);
+      const finalChildSubject = replaceVars(childSubjectRaw);
+      
+      // subject değişkenini render edilmiş haliyle güncelle (DB'ye bu gidecek)
+      subject = finalMainSubject;
       body    = replaceVars(body);
-      const childSubjectResolved = replaceVars(childSubjectRaw);
 
-      // 5. [YENİ] Eğer Mail Başlığı ile İçerik Başlığı farklıysa (yani konu ezildiyse),
-      // mailin en üstüne "Konu: ..." bilgisini şık bir kutu içinde ekle.
-      if (parentTemplateSubject && subject !== childSubjectResolved) {
+      // 5. [YENİ] KONU SATIRI EKLEME MANTIĞI
+      // Sadece parent konusu kullanıldıysa VE parent konusu ile child konusu farklıysa ekle.
+      // parentTemplateSubject doluysa, bir üst konu kullanılmış demektir.
+      if (parentTemplateSubject && finalMainSubject.trim() !== finalChildSubject.trim()) {
           const innerSubjectHtml = `
             <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 10px; margin-bottom: 20px; font-family: Arial, sans-serif; color: #333;">
-                <strong>Konu:</strong> ${childSubjectResolved}
+                <strong>Konu:</strong> ${finalChildSubject}
             </div>
           `;
           body = innerSubjectHtml + body;
+          console.log(`➕ Mail içeriğine konu eklendi: ${finalChildSubject}`);
       }
     }
 
