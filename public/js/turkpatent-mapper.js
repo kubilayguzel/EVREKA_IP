@@ -430,7 +430,13 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
       : [],
 
     // İşlem geçmişi (Düzeltildi: transactions kaynağı birleştirildi)
-    oldTransactions: createOldTransactions(transactions),
+    oldTransactions: (() => {
+        console.log('[MAPPER] İşlem geçmişi dönüştürülüyor. Gelen veri:', transactions);
+        const mappedTx = createOldTransactions(transactions);
+        console.log('[MAPPER] Dönüştürülen işlemler:', mappedTx);
+        return mappedTx;
+    })(),
+
 
     // Diğer
     consentRequest: null,
