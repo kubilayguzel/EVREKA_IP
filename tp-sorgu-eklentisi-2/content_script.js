@@ -1521,17 +1521,17 @@ window.addEventListener('load', () => {
 // ============================================
 // OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
 // ============================================
+//
+
 function scrapeOptsTableResults(rows, appNo) {
-  log('[OPTS] 📊 Scraping başlatıldı, appNo:', appNo);
+  // DEBUG BAŞLANGICI
+  console.log('%c[OPTS-DEBUG] 🚀 SCRAPING BAŞLADI', 'background: #222; color: #bada55; font-size: 14px');
+  console.log('[OPTS-DEBUG] Hedef Başvuru No:', appNo);
   
   const results = [];
-  
-  // Marka Görselini doğrudan en üst seviye div'den çekelim
   const imageContainer = document.querySelector('.MuiBox-root img[alt="Marka Görseli"]');
   const imgUrl = imageContainer ? imageContainer.src : null;
   
-  log('[OPTS] 🖼️ Görsel URL:', imgUrl ? 'Bulundu' : 'Bulunamadı');
-
   const item = {
     applicationNumber: appNo,
     brandName: '',
@@ -1544,193 +1544,159 @@ function scrapeOptsTableResults(rows, appNo) {
     brandImageUrl: imgUrl,
     brandImageDataUrl: imgUrl,
     fields: {},
-    details: {}
+    details: {},
+    goodsAndServicesByClass: [],
+    transactions: [] 
   };
 
-  // ✅ İLK TABLO: Marka Bilgileri (4 kolonlu Key-Value-Key-Value yapısı)
-  const firstTableBody = document.querySelector('tbody.MuiTableBody-root');
-  
-  if (!firstTableBody) {
-    err('[OPTS] ❌ tbody.MuiTableBody-root bulunamadı!');
-    sendToOpener('HATA_OPTS', { message: 'Tablo yapısı bulunamadı' });
-    return;
-  }
-  
-  log('[OPTS] ✅ İlk tablo tbody bulundu');
-  
-  const dataRows = firstTableBody.querySelectorAll('tr.MuiTableRow-root');
-  log('[OPTS] 📊 Toplam satır sayısı:', dataRows.length);
-  
-  dataRows.forEach((dataRow, rowIndex) => {
-    const rowCells = dataRow.querySelectorAll('td.MuiTableCell-root, td.MuiTableCell-body');
-    const cellTexts = Array.from(rowCells).map(c => (c.textContent || '').trim());
-    
-    // Debug: İlk 3 satırı logla
-    if (rowIndex < 3) {
-      log(`[OPTS] Satır ${rowIndex + 1}: ${rowCells.length} hücre -`, cellTexts);
-    }
+  // 1. TABLOLARI BUL
+  const allTables = document.querySelectorAll('table.MuiTable-root');
+  console.log(`[OPTS-DEBUG] Sayfada toplam ${allTables.length} adet tablo bulundu.`);
 
-    // 4 HÜCRELİ: Key1, Value1, Key2, Value2
-    if (rowCells.length === 4) {
-      const key1 = cellTexts[0];
-      let value1 = cellTexts[1];
-      const key2 = cellTexts[2];
-      let value2 = cellTexts[3];
-
-      // '--' değerlerini boş string yap
-      if (value1 === '--' || value1 === '-') value1 = '';
-      if (value2 === '--' || value2 === '-') value2 = '';
-
-      if (key1 && value1) {
-        item.fields[key1] = value1;
-        item.details[key1] = value1;
-      }
-      if (key2 && value2) {
-        item.fields[key2] = value2;
-        item.details[key2] = value2;
-      }
+  // Tabloları tek tek analiz et
+  allTables.forEach((tbl, index) => {
+      const headerText = (tbl.querySelector('thead') || tbl).textContent.trim().replace(/\s+/g, ' ');
+      const firstRowText = (tbl.querySelector('tbody tr')?.textContent || '').trim().replace(/\s+/g, ' ');
       
-      if (rowIndex < 3) {
-        log(`[OPTS]   ✅ 4 hücreli: ${key1}="${value1}", ${key2}="${value2}"`);
-      }
-    } 
-    // COLSPAN DURUMU (Sahip/Vekil Bilgileri)
-    else if (rowCells.length === 2) {
-      const key = cellTexts[0];
-      const valueCell = rowCells[1];
-      const colspanVal = valueCell.getAttribute('colspan');
-      
-      if (colspanVal === '3') {
-        // Sahip/Vekil Bilgileri özel işleme
-        if (key.includes('Sahip Bilgileri') || key.includes('Vekil Bilgileri')) {
-          const lines = Array.from(valueCell.querySelectorAll('div'))
-            .map(d => d.textContent.trim())
-            .filter(Boolean);
-          
-          const joinedValue = lines.join(' | ');
-          item.fields[key] = joinedValue;
-          item.details[key] = joinedValue;
-          
-          // Sahip adını özel olarak çıkar
-          if (key.includes('Sahip Bilgileri') && lines.length > 1) {
-            item.ownerName = lines[1];
-          }
-          
-          log(`[OPTS]   ✅ Colspan (${key}): ${lines.length} satır birleştirildi`);
-        } else {
-          let val = valueCell.textContent.trim();
-          if (val === '--' || val === '-') val = '';
-          if (key && val) {
-            item.fields[key] = val;
-            item.details[key] = val;
-          }
-        }
-      } else {
-        // Normal 2 hücreli
-        let val = cellTexts[1];
-        if (val === '--' || val === '-') val = '';
-        if (key && val) {
-          item.fields[key] = val;
-          item.details[key] = val;
-        }
-      }
-    }
+      console.log(`[OPTS-DEBUG] 🔎 TABLO ${index + 1} ANALİZİ:`);
+      console.log(`   - Header İçeriği: "${headerText.substring(0, 50)}..."`);
+      console.log(`   - İlk Satır Örneği: "${firstRowText.substring(0, 50)}..."`);
   });
 
-  // ✅ İKİNCİ TABLO: Mal ve Hizmetler (varsa)
-  const allTables = document.querySelectorAll('table.MuiTable-root');
-  log('[OPTS] 📋 Toplam tablo sayısı:', allTables.length);
-  
-  if (allTables.length > 1) {
-    const secondTable = allTables[1];
-    const headers = secondTable.querySelectorAll('th');
-    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+  // --- TABLO 1: Marka Bilgileri ---
+  if (allTables.length > 0) {
+    console.log('[OPTS-DEBUG] 🟢 Tablo 1 (Marka Bilgileri) işleniyor...');
+    const infoTable = allTables[0];
+    const infoRows = infoTable.querySelectorAll('tbody tr');
     
-    log('[OPTS] 📋 2. tablo header\'ları:', headerTexts);
-    
-    if (headerTexts.some(h => h.includes('Sınıf'))) {
-      const goodsRows = secondTable.querySelectorAll('tbody tr');
-      const goodsAndServices = [];
-      
-      goodsRows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length === 2) {
-          const classNo = parseInt(cells[0].textContent.trim());
-          const description = cells[1].textContent.trim();
-          
-          if (!isNaN(classNo) && description) {
-            goodsAndServices.push({
-              classNo: classNo,
-              items: [description]
-            });
-          }
-        }
-      });
-      
-      if (goodsAndServices.length > 0) {
-        item.goodsAndServicesByClass = goodsAndServices;
-        log('[OPTS] ✅ Mal ve Hizmetler:', goodsAndServices.length, 'sınıf bulundu');
+    infoRows.forEach((dataRow) => {
+      const rowCells = dataRow.querySelectorAll('td');
+      const cellTexts = Array.from(rowCells).map(c => (c.textContent || '').trim());
+
+      if (rowCells.length === 4) {
+        const k1 = cellTexts[0], v1 = cellTexts[1];
+        const k2 = cellTexts[2], v2 = cellTexts[3];
+        if(k1) { item.fields[k1] = v1; item.details[k1] = v1; }
+        if(k2) { item.fields[k2] = v2; item.details[k2] = v2; }
       }
+      else if (rowCells.length === 2) {
+        const key = cellTexts[0];
+        if (key.includes('Sahip Bilgileri')) {
+           const lines = Array.from(rowCells[1].querySelectorAll('div')).map(d=>d.textContent.trim()).filter(Boolean);
+           if(lines.length > 1) item.ownerName = lines[1];
+           item.fields[key] = lines.join(' | ');
+        } else {
+           item.fields[key] = cellTexts[1];
+        }
+        item.details[key] = item.fields[key];
+      }
+    });
+  }
+
+  // --- TABLO ANALİZİ (Mal/Hizmet vs İşlem Geçmişi) ---
+  let goodsTable = null;
+  let transactionsTable = null;
+
+  for (let i = 1; i < allTables.length; i++) {
+    const tbl = allTables[i];
+    const headerText = (tbl.querySelector('thead') || tbl).textContent.toLowerCase();
+    const firstRowText = (tbl.querySelector('tbody tr') || tbl).textContent.trim();
+
+    if (headerText.includes('sınıf') && (headerText.includes('mal') || headerText.includes('hizmet'))) {
+      goodsTable = tbl;
+      console.log(`[OPTS-DEBUG] ✅ Tablo ${i + 1}: Mal/Hizmet Tablosu olarak belirlendi.`);
+    } 
+    else if (
+        headerText.includes('işlem') || 
+        headerText.includes('hareket') || 
+        headerText.includes('tarih') || 
+        /\d{2}\.\d{2}\.\d{4}/.test(firstRowText)
+    ) {
+      transactionsTable = tbl;
+      console.log(`[OPTS-DEBUG] ✅ Tablo ${i + 1}: İŞLEM GEÇMİŞİ Tablosu olarak belirlendi.`);
+    } else {
+      console.log(`[OPTS-DEBUG] ⚠️ Tablo ${i + 1}: Tanımlanamadı.`);
     }
   }
 
-  // Ana alanlara mapping
+  // Mal Hizmetleri İşle
+  if (goodsTable) {
+    const rows = goodsTable.querySelectorAll('tbody tr');
+    rows.forEach(r => {
+      const cells = r.querySelectorAll('td');
+      if (cells.length >= 2) {
+        const cls = parseInt(cells[0].textContent.trim());
+        const txt = cells[1].textContent.trim();
+        if (!isNaN(cls)) {
+          item.goodsAndServicesByClass.push({ classNo: cls, items: [txt] });
+        }
+      }
+    });
+  }
+
+  // --- KRİTİK BÖLÜM: İŞLEM GEÇMİŞİ ---
+  if (transactionsTable) {
+    console.log('[OPTS-DEBUG] ⏳ İşlem geçmişi satırları okunuyor...');
+    const tRows = transactionsTable.querySelectorAll('tbody tr');
+    
+    tRows.forEach((row, idx) => {
+      const cells = row.querySelectorAll('td');
+      const texts = Array.from(cells).map(c => c.textContent.trim());
+      
+      console.log(`[OPTS-DEBUG]    👉 İşlem Satırı ${idx+1}:`, texts);
+
+      if (cells.length >= 2) {
+        // Tarih formatı bulucu
+        const dateIdx = texts.findIndex(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t));
+        
+        if (dateIdx !== -1) {
+          const dateVal = texts[dateIdx];
+          const actionVal = texts[dateIdx + 1] || '';
+          const descVal = texts[dateIdx + 2] || '';
+          
+          item.transactions.push({
+            date: dateVal,
+            description: actionVal,
+            note: descVal,
+            action: actionVal
+          });
+          console.log(`[OPTS-DEBUG]       ✅ Eklendi: ${dateVal} - ${actionVal}`);
+        } else {
+          console.warn(`[OPTS-DEBUG]       ⚠️ Tarih formatı bulunamadı, atlandı.`);
+        }
+      }
+    });
+    console.log(`[OPTS-DEBUG] ✅ Toplam ${item.transactions.length} işlem yakalandı.`);
+  } else {
+    console.error('[OPTS-DEBUG] ❌ İŞLEM GEÇMİŞİ TABLOSU BULUNAMADI!');
+  }
+
+  // Final Mapping
   item.applicationDate = item.fields['Başvuru Tarihi'] || '';
   item.registrationNumber = item.fields['Tescil Numarası'] || '';
   item.niceClasses = item.fields['Nice Sınıfları'] || '';
   item.status = item.fields['Durumu'] || item.fields['Karar'] || '';
   item.brandName = item.fields['Marka Adı'] || '';
   
-  // Başvuru numarasını normalize et
   const finalAppNo = normalizeAppNo(item.fields['Başvuru Numarası'] || item.applicationNumber);
   item.applicationNumber = finalAppNo;
 
-  log('[OPTS] 📝 Final değerler:', {
-    appNo: finalAppNo,
-    brandName: item.brandName,
-    ownerName: item.ownerName,
-    status: item.status,
-    fieldsCount: Object.keys(item.fields).length
-  });
+  if (finalAppNo) results.push(item);
 
-  if (finalAppNo) {
-    log(`[OPTS] ✅ Başarıyla tamamlandı: ${finalAppNo}`);
-    results.push(item);
-  } else {
-    err('[OPTS] ❌ Başvuru numarası çıkarılamadı');
-  }
-  
-  // Sonuçları gönder
+  // Sonuçları Gönder
+  console.log('[OPTS-DEBUG] 📤 Uygulamaya gönderilecek veri:', results);
+
   if (results.length > 0) {
     const firstAppNo = results[0].applicationNumber;
-    
-    // Duplicate kontrolü - Her başvuru için sadece 1 kez gönder
-    if (__EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
-      log('[OPTS] ⚠️ Duplicate VERI_GELDI_OPTS engellendi:', firstAppNo);
-      return; // Mesaj gönderme, direkt çık
+    if (!__EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
+        __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
+        sendToOpener('VERI_GELDI_OPTS', results);
     }
-    
-    __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
-    log('[OPTS] 📤 VERI_GELDI_OPTS gönderiliyor:', results);
-    sendToOpener('VERI_GELDI_OPTS', results);
-    
-    // Başarılı scrape sonrası sekme kapatma
-    setTimeout(() => {
-      log('[OPTS] 🚪 Sekme kapatılıyor...');
-      window.close();
-    }, 2000); // 3 saniye -> 2 saniye
   } else {
-    err('[OPTS] ❌ Sonuç listesi boş');
-    
-    // Hata mesajını da sadece 1 kez gönder
-    const errorKey = `ERROR_${optsCurrentAppNo || 'unknown'}`;
-    if (!__EVREKA_SENT_ERR_MAP__[errorKey]) {
-      __EVREKA_SENT_ERR_MAP__[errorKey] = true;
-      sendToOpener('HATA_OPTS', { message: 'Scrape sonrası sonuç listesi boş kaldı.' });
-    }
+    console.error('[OPTS-DEBUG] ❌ Sonuç listesi boş oluştu.');
+    // Hata yönetimi...
   }
 }
-
 
 // Sonuçları bekle ve scrape et
 async function waitForOptsResultsAndScrape(appNo) {
