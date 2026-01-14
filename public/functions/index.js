@@ -1851,6 +1851,38 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         }
     }
 
+    // ---------------------------------------------------------------------------------------
+    // [YENİ EKLENEN KISIM] PARENT TEMPLATE SUBJECT SORGUSU
+    // Eğer bir üst işlem (Parent) tespit ettiysek, onun şablonunu bulup konusunu alalım.
+    // ---------------------------------------------------------------------------------------
+    let parentTemplateSubject = null;
+    
+    // namingTargetType: Kodun yukarısında parentTxnData.type'dan veya fetchedTxnData.type'dan belirlenmişti.
+    if (namingTargetType && String(namingTargetType) !== String(templateSearchType)) {
+        try {
+            // Parent işlem için kural ara (Genellikle task_completion_epats kaynaklıdır)
+            const parentRuleSnap = await adminDb.collection("template_rules")
+                .where("subProcessType", "==", String(namingTargetType))
+                .limit(1)
+                .get();
+
+            if (!parentRuleSnap.empty) {
+                const pRule = parentRuleSnap.docs[0].data();
+                if (pRule.templateId) {
+                    const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
+                    if (pTemplateSnap.exists) {
+                        // Parent'ın konu başlığını aldık (Örn: "{{applicationNo}} - Başvuru Yapıldı")
+                        parentTemplateSubject = pTemplateSnap.data().subject;
+                        console.log(`🔗 Parent Subject Bulundu (${namingTargetType}): ${parentTemplateSubject}`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Parent template subject aranırken hata:", err);
+        }
+    }
+    // ---------------------------------------------------------------------------------------
+    
     // İÇERİK OLUŞTURMA
     if (template && client) {
       subject = String(template.subject || "");
