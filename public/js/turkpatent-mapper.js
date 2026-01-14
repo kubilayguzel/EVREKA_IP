@@ -463,5 +463,5 @@ export async function mapTurkpatentResultsToIPRecords(turkpatentResults, selecte
       console.error(`Kayıt ${i} mapping hatası:`, e);
     }
   }
-  return out;
+  return out; 
 }
