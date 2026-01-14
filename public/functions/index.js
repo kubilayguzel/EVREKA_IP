@@ -1948,8 +1948,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (err) { console.error("❌ Hata:", err); }
     }
 
-    // ---------------------------------------------------------------------------------------
-    // İÇERİK OLUŞTURMA (HTML GARANTİSİ)
+  // ---------------------------------------------------------------------------------------
+    // [GÜNCELLENDİ v13] İÇERİK OLUŞTURMA & AKILLI HTML ENJEKSİYONU
     // ---------------------------------------------------------------------------------------
     if (template && client) {
       // 1. Alt işlemin orijinal konusunu sakla
@@ -1996,30 +1996,39 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
       subject = replaceVars(subject);
       const childSubjectResolved = replaceVars(childSubjectRaw);
-      // Body'yi en son oluşturacağız
       let resolvedBody = replaceVars(rawBody);
 
-      // 5. [KRİTİK DÜZELTME] Konu Kutusunu Ekleme
+      // 5. [AKILLI ENJEKSİYON] Konu Kutusunu Ekleme
       // parentTemplateSubject kullanıldıysa VE konular farklıysa ekle
       if (parentTemplateSubject && subject.trim() !== childSubjectResolved.trim()) {
+          
           const innerSubjectHtml = `
-            <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 10px; margin-bottom: 20px; font-family: Arial, sans-serif; color: #333;">
-                <strong>Konu:</strong> ${childSubjectResolved}
+            <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
+                <strong style="color: #1a73e8;">KONU:</strong> ${childSubjectResolved}
             </div>
-            <br/>
           `;
-          // Body'nin EN BAŞINA ekle
-          body = innerSubjectHtml + resolvedBody;
-          console.log("✅ KUTU EKLENDİ (HTML Başarılı)");
+
+          // EĞER HTML BODY VARSA: Kutuyu <body> etiketinin hemen içine yerleştir.
+          // Böylece sendEmailNotificationV2 içindeki stripBody fonksiyonu bunu silmez.
+          if (resolvedBody.toLowerCase().includes("<body")) {
+              body = resolvedBody.replace(/<body[^>]*>/i, (match) => {
+                  return match + innerSubjectHtml;
+              });
+              console.log("✅ Kutu BODY etiketinin içine enjekte edildi.");
+          } 
+          // EĞER SADECE METİN veya P ETİKETLERİ VARSA: En başa ekle.
+          else {
+              body = innerSubjectHtml + resolvedBody;
+              console.log("✅ Kutu içeriğin en başına eklendi.");
+          }
+
       } else {
           body = resolvedBody;
       }
       
       // 6. [SON ÇARE ID DÜZELTME]
-      // Eğer yukarıda forcedThreadId belirlediysek, namingTargetType'ı son kez zorla.
-      if (forcedThreadId) {
+      if (typeof forcedThreadId !== 'undefined' && forcedThreadId) {
           namingTargetType = forcedThreadId;
-          console.log(`🔒 ID Kilitlendi: ${namingTargetType}`);
       }
     }
 
