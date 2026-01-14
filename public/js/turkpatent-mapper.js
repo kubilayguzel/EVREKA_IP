@@ -179,10 +179,36 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
   // Önce modal'dan gelen goodsAndServicesByClass'ı kontrol et
   if (Array.isArray(inputGSC) && inputGSC.length > 0) {
     console.log('✅ Modal\'dan gelen goodsAndServicesByClass kullanılıyor');
-    return inputGSC.map(x => ({
-      classNo: Number(x.classNo),
-      items: Array.isArray(x.items) ? x.items : []
-    }));
+    
+    // Modal'dan gelen veriyi sınıflara göre grupla
+    const groupedByClass = new Map();
+    
+    inputGSC.forEach(entry => {
+      const classNo = Number(entry.classNo);
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      
+      if (!groupedByClass.has(classNo)) {
+        groupedByClass.set(classNo, []);
+      }
+      
+      // [GÜNCELLEME] Gelen maddeleri nokta (.) veya yeni satıra göre parçala
+      // Nokta işaretini ayırıcı olarak kullanır ve boşlukları temizler.
+      const splitItems = items.flatMap(item => item.split(/[\n.]/).map(s => s.trim()).filter(Boolean));
+      
+      // Bu sınıfa ait items'ları ekle
+      groupedByClass.get(classNo).push(...splitItems);
+    });
+    
+    // Map'i array'e çevir ve sırala
+    const result = Array.from(groupedByClass.entries())
+      .map(([classNo, items]) => ({
+        classNo,
+        items: [...new Set(items)] // Tekrar eden items'ları temizle
+      }))
+      .sort((a, b) => a.classNo - b.classNo);
+    
+    console.log('✅ Gruplandırılmış goodsAndServicesByClass:', result);
+    return result;
   }
 
   console.log('⚠️ Modal\'dan veri yok, alternatif kaynaklardan deneniyor...');
@@ -213,20 +239,14 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
     return niceNums.map(classNo => ({ classNo, items: [] }));
   }
 
-  const rawItems = goodsText
-    .split(/[\n,;]+/)
-    .map(t => t.trim())
-    .filter(Boolean);
-
-  console.log('✅ Eşya listesi oluşturuldu:', rawItems);
-
-  const result = niceNums.map(classNo => ({
+  // Eğer details'tan geliyorsa, sınıf bilgisi olmadan tüm sınıflara aynı items'ı vermek yerine
+  // sadece boş items ile döndür (çünkü hangi eşyanın hangi sınıfa ait olduğunu bilemiyoruz)
+  console.log('⚠️ Details\'tan gelen genel eşya metni, sınıf bazlı ayrıştırma yapılamıyor');
+  
+  return niceNums.map(classNo => ({
     classNo,
-    items: rawItems
+    items: [] // Modal'dan gelmeyen verilerde sınıf-eşya eşleştirmesi yapamıyoruz
   }));
-
-  console.log('✅ Final goodsAndServicesByClass:', result);
-  return result;
 }
 
 /**
@@ -267,6 +287,9 @@ function createOldTransactions(transactions) {
  * @param {Array} selectedApplicants - Arayüzden seçilen sahip bilgileri
  * @returns {Object} IPRecord formatında veri
  */
+/**
+ * TÜRKPATENT'ten gelen sahip numarası sorgu verilerini IPRecord formatına dönüştürür
+ */
 export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
   const {
     order,
@@ -280,20 +303,20 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     brandImageDataUrl,
     imageSrc,
     details = {},
-    goodsAndServicesByClass, // Modal
-    transactions // Modal
+    goodsAndServicesByClass,
+    transactions
   } = turkpatentData || {};
 
   const brandImageUrl = await uploadBrandImage(applicationNumber, brandImageDataUrl, imageSrc);
 
-  // 1) REGISTRATION DATE - Details'tan veya transactions'tan çek
+  // ---------------------------------------------------------
+  // ADIM 1: TESCİL TARİHİNİ BUL
+  // ---------------------------------------------------------
   let registrationDate = null;
-  
   // Önce details'tan dene
   if (details?.['Tescil Tarihi']) {
     registrationDate = formatDate(details['Tescil Tarihi']);
   }
-  
   // Details'ta yoksa transactions'tan "TESCİL EDİLDİ" işleminin tarihini al
   if (!registrationDate && Array.isArray(transactions)) {
     const registrationTx = transactions.find(tx => 
@@ -304,35 +327,98 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     }
   }
 
-// 2) STATUS - TÜRKPATENT statusunu utils'deki mapper ile dönüştür
+  // ---------------------------------------------------------
+  // ADIM 2: YENİLEME TARİHİNİ HESAPLA (Statüden ÖNCE yapılmalı)
+  // ---------------------------------------------------------
+  let calculatedRenewalDate = null;
+  
+  // (A) Doğrudan veri varsa
+  try {
+    const topLevelRenewal = turkpatentData?.renewalDate || details?.['Yenileme Tarihi'] || details?.['Renewal Date'];
+    if (topLevelRenewal) {
+      const d = new Date(formatDate(topLevelRenewal) || topLevelRenewal);
+      if (!isNaN(d.getTime())) calculatedRenewalDate = d.toISOString().split('T')[0];
+    }
+  } catch (e) { console.warn('renewalDate parse error:', e); }
 
-let turkpatentStatus = details?.['Durumu'] || details?.['Status'] || details?.['Durum'] || status;
-
-// Eğer details'ta durum yoksa, transactions'tan çıkar
-if (!turkpatentStatus && Array.isArray(transactions)) {
-  // Son transaction'da "GEÇERSİZ" varsa rejected
-  const lastTransaction = transactions[transactions.length - 1];
-  if (lastTransaction?.description) {
-    const desc = lastTransaction.description.toUpperCase();
-    if (desc.includes('BAŞVURU/TESCİL GEÇERSİZ') || desc.includes('GEÇERSİZ')) {
-      turkpatentStatus = 'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ';
+  // (B) Yoksa Koruma Tarihi + 10 Yıl
+  if (!calculatedRenewalDate && details?.['Koruma Tarihi']) {
+    const kd = formatDate(details['Koruma Tarihi']);
+    if (kd) {
+      const d = new Date(kd);
+      if (!isNaN(d.getTime())) {
+        d.setFullYear(d.getFullYear() + 10);
+        calculatedRenewalDate = d.toISOString().split('T')[0];
+      }
     }
   }
-}
 
-console.log('🔍 Status kaynakları:');
-console.log('  - details.Durumu:', details?.['Durumu']);
-console.log('  - details.Status:', details?.['Status']);  
-console.log('  - details.Durum:', details?.['Durum']);
-console.log('  - status parametresi:', status);
-console.log('  - transactions son kayıt:', transactions?.[transactions.length - 1]?.description);
-console.log('  - Seçilen turkpatentStatus:', turkpatentStatus);
+  // (C) Yoksa Tescil Tarihi + 10 Yıl
+  if (!calculatedRenewalDate && registrationDate) {
+    const d = new Date(registrationDate);
+    if (!isNaN(d.getTime())) {
+      d.setFullYear(d.getFullYear() + 10);
+      calculatedRenewalDate = d.toISOString().split('T')[0];
+    }
+  }
 
-const mappedStatus = mapStatusToUtils(turkpatentStatus);
+  // (D) Yoksa Başvuru Tarihi + 10 Yıl
+  if (!calculatedRenewalDate && applicationDate) {
+    const ad = new Date(formatDate(applicationDate) || applicationDate);
+    if (!isNaN(ad.getTime())) {
+      ad.setFullYear(ad.getFullYear() + 10);
+      calculatedRenewalDate = d.toISOString().split('T')[0];
+    }
+  }
+
+  // ---------------------------------------------------------
+  // ADIM 3: STATÜ BELİRLEME (YENİ MANTIK)
+  // ---------------------------------------------------------
+  let turkpatentStatusText = details?.['Durumu'] || details?.['Status'] || details?.['Durum'] || status;
+
+  // Eğer metin yoksa son işlemden tahmin et
+  if (!turkpatentStatusText && Array.isArray(transactions)) {
+    const lastTransaction = transactions[transactions.length - 1];
+    if (lastTransaction?.description) {
+      const desc = lastTransaction.description.toUpperCase();
+      if (desc.includes('BAŞVURU/TESCİL GEÇERSİZ') || desc.includes('GEÇERSİZ')) {
+        turkpatentStatusText = 'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ';
+      }
+    }
+  }
+
+  // A) Önce GEÇERSİZ (rejected) kontrolü
+  let finalStatus = mapStatusToUtils(turkpatentStatusText); // Bu fonksiyon "Geçersiz" veya "rejected" döner
+
+  // B) Eğer geçersiz değilse TESCİLLİ (registered) kontrolü
+  if (!finalStatus && registrationDate && calculatedRenewalDate) {
+    const renewalDateObj = new Date(calculatedRenewalDate);
+    
+    // Yenileme tarihine 6 ay ekle (Koruma süresi sonu + 6 ay ek süre)
+    const gracePeriodEnd = new Date(renewalDateObj);
+    gracePeriodEnd.setMonth(gracePeriodEnd.getMonth() + 6); 
+    
+    const today = new Date();
+    
+    // Bugün tarihi, ek sürenin bitiminden önceyse "Tescilli"dir
+    if (today < gracePeriodEnd) {
+      finalStatus = 'registered'; 
+    }
+  }
+
+  // C) Hiçbiri değilse BAŞVURU (filed)
+  if (!finalStatus) {
+    finalStatus = 'filed';
+  }
+
+  console.log(`[STATUS LOGIC] App: ${applicationNumber}, Final Status: ${finalStatus}`);
+
+  // ---------------------------------------------------------
+  // ADIM 4: KAYIT OBJESİNİ OLUŞTUR
+  // ---------------------------------------------------------
   
-  // 3) BULLETINS - Bülten bilgilerini details'tan al
+  // Bültenler
   const bulletins = [];
-  
   if (details?.['Marka İlan Bülten No'] || details?.['Marka İlan Bülten Tarihi']) {
     bulletins.push({
       bulletinNo: details['Marka İlan Bülten No'] || null,
@@ -347,8 +433,8 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     portfoyStatus: 'active',
     origin: 'TÜRKPATENT',
 
-    // Durum
-    status: mappedStatus,
+    // Durum (Yeni hesaplanan statü)
+    status: finalStatus,
     recordOwnerType: 'self',
 
     // Başvuru/Tescil
@@ -356,59 +442,9 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
     registrationDate: registrationDate,
-    renewalDate: (() => {
-      // 0) Eğer üst düzey turkpatentData içinde hazır renewalDate varsa onu kullan
-      try {
-        const topLevelRenewal = turkpatentData?.renewalDate || details?.['Yenileme Tarihi'] || details?.['Renewal Date'];
-        if (topLevelRenewal) {
-          const d = new Date(formatDate(topLevelRenewal) || topLevelRenewal);
-          if (!isNaN(d.getTime())) return d;
-        }
-      } catch (e) {
-        console.warn('renewalDate (top-level) parse error:', e);
-      }
-
-      // 1) Details içindeki Yenileme Tarihi doğrudan varsa onu kullan
-      if (details?.['Yenileme Tarihi'] || details?.['Renewal Date']) {
-        const s = details['Yenileme Tarihi'] || details['Renewal Date'];
-        const d = new Date(formatDate(s) || s);
-        if (!isNaN(d.getTime())) return d;
-      }
-
-      // 2) Koruma Tarihi'ni al ve üzerine 10 yıl ekle
-      if (details?.['Koruma Tarihi']) {
-        const korumaDateStr = details['Koruma Tarihi'];
-        const dateFormatted = formatDate(korumaDateStr);
-        if (dateFormatted) {
-          const korumaDate = new Date(dateFormatted);
-          if (!isNaN(korumaDate.getTime())) {
-            korumaDate.setFullYear(korumaDate.getFullYear() + 10);
-            return korumaDate;
-          }
-        }
-      }
-
-      // 3) RegistrationDate (yukarıda hesaplanan) varsa +10 yıl
-      if (registrationDate) {
-        const rd = new Date(registrationDate);
-        if (!isNaN(rd.getTime())) {
-          rd.setFullYear(rd.getFullYear() + 10);
-          return rd;
-        }
-      }
-
-      // 4) Gönderide gelen applicationDate varsa +10 yıl (son çare)
-      if (applicationDate) {
-        const ad = new Date(formatDate(applicationDate) || applicationDate);
-        if (!isNaN(ad.getTime())) {
-          ad.setFullYear(ad.getFullYear() + 10);
-          return ad;
-        }
-      }
-
-      // Hiçbirini bulamazsak null
-      return null;
-    })(),
+    
+    // Yenileme Tarihi (Yukarıda hesapladığımız değer)
+    renewalDate: calculatedRenewalDate,
 
     // Marka bilgileri
     brandText: brandName || '',
@@ -446,7 +482,7 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
 
     // Başvuru sahipleri
     applicants: Array.isArray(selectedApplicants)
-      ? selectedApplicants.map(a => ({ id: a.id, name: a.name, email: a.email || null }))
+      ? selectedApplicants.map(a => ({ id: a.id, email: a.email || null }))
       : [],
 
     // İşlem geçmişi
