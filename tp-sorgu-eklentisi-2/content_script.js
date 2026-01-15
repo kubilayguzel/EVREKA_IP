@@ -133,6 +133,36 @@ function normalizeAppNo(appNo) {
     return `${yy}/${rest}`;
   } catch { return String(appNo || '').trim(); }
 }
+
+// --- 4.2 helpers: detail appNo çıkar + güvenli karşılaştır ---
+function getDetailAppNo(detailObj) {
+  if (!detailObj) return null;
+
+  // 1) parseDetailsFromOpenDialog çıktısında applicationNumber alanı varsa
+  if (detailObj.applicationNumber) return normalizeAppNo(detailObj.applicationNumber);
+
+  // 2) send ettiğin yapıda fields map’i var (sende bu var)
+  const f = detailObj.fields || detailObj.data || null;
+  if (f) {
+    const cand =
+      f['Başvuru Numarası'] ||
+      f['Başvuru No'] ||
+      f['Basvuru Numarasi'] ||
+      f['Application Number'] ||
+      null;
+
+    return cand ? normalizeAppNo(cand) : null;
+  }
+
+  return null;
+}
+
+function numbersMatch(a, b) {
+  const aa = String(a || '').replace(/\D/g, '');
+  const bb = String(b || '').replace(/\D/g, '');
+  return aa && bb && aa === bb;
+}
+
 function extractByLabel(root, label) {
   try {
     const tds = Array.from(root.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body'));
