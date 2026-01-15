@@ -885,109 +885,136 @@ function parseOwnerRowBase(tr, idx) {
   };
 }
 
+// ============================================================
+// HIZLANDIRILMIŞ VE AKILLI KONTROL FONKSİYONU
+// ============================================================
+
 async function collectOwnerResultsWithDetails() {
-  console.log('🔍 collectOwnerResultsWithDetails başladı');
-  
+  console.log('🚀 collectOwnerResultsWithDetails başladı (SMART & FAST MODE)');
+
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
-  
+
   const processedApplicationNumbers = new Set();
-  const batchSize = 100; // 100'er 100'er işle
-  
+  const batchSize = 100; 
+
+  async function resetModalState() {
+    try {
+      closeAnyOpenDialog();
+      // Bekleme süresini azalttık (8sn -> 2sn yeterli genelde)
+      await waitForNoDialog(2000); 
+    } catch (e) {}
+  }
+
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
     const currentBatch = rows.slice(batchStart, batchEnd);
-    
-    console.log(`🔄 Batch ${Math.floor(batchStart/batchSize) + 1}: ${batchStart + 1}-${batchEnd} satırları işleniyor...`);
-    
+
+    console.log(`📦 Batch ${Math.floor(batchStart / batchSize) + 1} işleniyor...`);
     const batchItems = [];
-    
+
     for (const [localIdx, tr] of currentBatch.entries()) {
+      tr.scrollIntoView({ block: 'center' });
+      // Satır arası bekleme makul seviyede (500ms)
+      await sleep(500); 
+
       const globalIdx = batchStart + localIdx;
-      console.log(`🔍 Satır ${globalIdx + 1}/${rows.length} işleniyor...`);
-      
       const base = parseOwnerRowBase(tr, globalIdx);
 
+      // --- 1) Listeden AppNo Bulunamazsa ---
       if (!base.applicationNumber) {
-        console.log(`ℹ️ Satır ${globalIdx + 1} için modal üzerinden appNo deneniyor...`);
-        const detailForAppNo = await openRowModalAndParse(tr, { timeout: 9000 });
-        if (detailForAppNo && detailForAppNo.fields) {
-          const cand = detailForAppNo.fields['Başvuru Numarası'];
-          if (cand) base.applicationNumber = normalizeAppNo(cand);
-        }
-        if (!base.applicationNumber) {
-          console.log(`⚠️ Başvuru numarası bulunamadı: satır ${globalIdx + 1} (modal fallback da başarısız)`);
-          continue;
-        }
+        // AppNo yoksa bu satırı pas geçiyoruz, modal açmaya çalışıp vakit kaybetmesin
+        console.warn(`⚠️ Satır ${globalIdx}: Başvuru No bulunamadı, atlanıyor.`);
+        continue;
       }
 
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
+      
+      // Hedef Numara (Sadece rakamlar): örn 2025092737
+      const targetNoClean = base.applicationNumber.replace(/[^0-9]/g, '');
+
+      // --- 2) Duplicate Kontrolü ---
       if (processedApplicationNumbers.has(base.applicationNumber)) {
-        console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
         continue;
       }
-      processedApplicationNumbers.add(normalizeAppNo(base.applicationNumber));
+      processedApplicationNumbers.add(base.applicationNumber);
+      
+      base.thumbnailSrc = base.imageSrc || null;
 
-      // Başlangıçta satırdan gelen görseli (thumbnail) ata
-      if (base.imageSrc) {
-        base.brandImageDataUrl = base.imageSrc;
-        base.brandImageUrl = base.imageSrc;
+      // --- 3) Detay ve Görsel Çekme ---
+      await resetModalState();
+      
+      // Timeout süresini 8 saniyeye çektik, 20 saniye beklemeye gerek yok
+      let detail = await withModalLock(() => openRowModalAndParse(tr, { timeout: 8000 }));
+
+      // --- 4) AKILLI DOĞRULAMA (YENİ KISIM) ---
+      let isVerified = false;
+
+      if (detail) {
+        // A) Önce standart parse edilen numaraya bak
+        const dNo = getDetailAppNo(detail);
+        if (dNo && numbersMatch(base.applicationNumber, dNo)) {
+             isVerified = true;
+        } 
+        
+        // B) Eğer standart parse "YOK" dediyse, HAM METNE BAK (Kurtarıcı Hamle)
+        if (!isVerified) {
+             // O an açık olan dialogu bul
+             const openDialog = document.querySelector('[role="dialog"], .MuiDialog-root');
+             if (openDialog) {
+                 const rawText = (openDialog.textContent || '').replace(/[^0-9]/g, '');
+                 if (rawText.includes(targetNoClean)) {
+                     console.log(`✅ [${base.applicationNumber}] Ham metin içinde bulundu. Onaylandı.`);
+                     isVerified = true;
+                     // Detay objesine numarayı zorla ekle ki eksik kalmasın
+                     if (!detail.fields) detail.fields = {};
+                     detail.fields['Başvuru Numarası'] = base.applicationNumber;
+                 }
+             }
+        }
+
+        // Eğer hala eşleşmediyse (Gerçekten yanlış açıldıysa)
+        if (!isVerified) {
+          console.warn(`⚠️ [${base.applicationNumber}] Veri eşleşmedi. Liste verisiyle devam ediliyor.`);
+          // Retry yapıp 30 saniye harcamıyoruz! Liste verisiyle devam ediyoruz.
+          // Çünkü muhtemelen modal yapısı farklı veya veri henüz yok.
+        }
       }
 
-      console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
-      
-      const detail = await openRowModalAndParse(tr, { timeout: 8000 });
-      
-      if (detail) {
+      // --- 5) Veriyi Yaz ---
+      // Eşleşme sağlandıysa (isVerified) detayları al, yoksa sadece liste verisi kalır.
+      if (detail && isVerified) {
         base.details = detail.fields || {};
-        if (Array.isArray(detail.goodsAndServices)) {
-          base.goodsAndServicesByClass = detail.goodsAndServices;
-        }
-        if (Array.isArray(detail.transactions)) {
-          base.transactions = detail.transactions;
-        }
-        
-        // --- DÜZELTME BURADA YAPILDI ---
-        // Eski Kod: if (!base.imageSrc && detail.imageDataUrl) { ... }
-        // Yeni Kod: Detay görseli varsa (ki yüksek çözünürlüklüdür), satırdaki görselin üzerine yaz.
+        if (Array.isArray(detail.goodsAndServices)) base.goodsAndServicesByClass = detail.goodsAndServices;
+        if (Array.isArray(detail.transactions)) base.transactions = detail.transactions;
+
+        // Görseli al
         if (detail.imageDataUrl) {
-          console.log('📸 Yüksek kaliteli detay görseli bulundu, güncelleniyor.');
           base.brandImageDataUrl = detail.imageDataUrl;
           base.brandImageUrl = detail.imageDataUrl;
-          // İsteğe bağlı: Listede de kaliteli görünsün diye imageSrc'yi de güncelle
-          base.imageSrc = detail.imageDataUrl; 
+          base.imageSrc = detail.imageDataUrl;
         }
-        // -------------------------------
       }
 
       batchItems.push(base);
-      console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
+      
+      // Bir sonraki işleme hızlı geç (1 saniye)
+      await sleep(1000); 
     }
 
-    // Batch tamamlandı - arayüze gönder
     if (batchItems.length > 0) {
-      console.log(`📤 Batch ${Math.floor(batchStart/batchSize) + 1} gönderiliyor: ${batchItems.length} kayıt`);
-      
-      // Progressive data gönderimi
       sendToOpener('BATCH_VERI_GELDI_KISI', {
         batch: batchItems,
-        batchNumber: Math.floor(batchStart/batchSize) + 1,
+        batchNumber: Math.floor(batchStart / batchSize) + 1,
         totalBatches: Math.ceil(rows.length / batchSize),
         processedCount: batchEnd,
         totalCount: rows.length,
         isComplete: batchEnd >= rows.length
       });
-      
-      // Batch'ler arası kısa molası (DOM'un nefes alması için)
-      if (batchEnd < rows.length) {
-        await sleep(1000);
-      }
+      await sleep(1000);
     }
   }
 
-  // Final mesaj - tüm process tamamlandı
-  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: Toplam ${processedApplicationNumbers.size} kayıt işlendi`);
-  
   sendToOpener('VERI_GELDI_KISI_COMPLETE', {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
