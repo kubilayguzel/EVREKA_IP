@@ -799,16 +799,13 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 async function collectOwnerResultsWithDetails() {
-  console.log('🔍 collectOwnerResultsWithDetails başladı (STRICT CHANGE DETECTION MODE)');
+  console.log('🔍 collectOwnerResultsWithDetails başladı (DATA VALIDATION MODE)');
   
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
   
   const processedApplicationNumbers = new Set();
   const batchSize = 100;
-
-  // ÖNEMLİ: Son başarılı görseli hafızada tutuyoruz
-  let lastSuccessFullImageSrc = null;
 
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
@@ -821,6 +818,7 @@ async function collectOwnerResultsWithDetails() {
     for (const [localIdx, tr] of currentBatch.entries()) {
       const globalIdx = batchStart + localIdx;
       
+      // 1. Satırdan temel veriyi al (Beklenen Başvuru No burada var)
       const base = parseOwnerRowBase(tr, globalIdx);
 
       if (!base.applicationNumber) {
@@ -829,6 +827,8 @@ async function collectOwnerResultsWithDetails() {
       }
 
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
+      
+      // Duplicate kontrolü
       if (processedApplicationNumbers.has(base.applicationNumber)) {
         continue; 
       }
@@ -836,23 +836,24 @@ async function collectOwnerResultsWithDetails() {
 
       console.log(`🔄 Satır ${globalIdx + 1} (${base.applicationNumber}) işleniyor...`);
 
-      // Varsayılan olarak thumbnail'i "garanti görsel" olarak ata
+      // Varsayılan olarak küçük resmi ata (fallback)
       if (base.imageSrc) {
           base.brandImageDataUrl = base.imageSrc;
           base.brandImageUrl = base.imageSrc;
       }
 
       try {
+        // Önceki modalların kapandığından emin ol
         closeAnyOpenDialog();
-        await sleep(50); 
+        await sleep(100); 
 
         const btn = findDetailButton(tr);
         if (btn) {
           click(btn);
           
           let dialog = null;
-          // Modalı bul
-          for (let attempt = 0; attempt < 10; attempt++) {
+          // Modalı bulma döngüsü
+          for (let attempt = 0; attempt < 15; attempt++) { // 15 deneme
              await sleep(200); 
              const highZElements = Array.from(document.querySelectorAll('div[role="dialog"], .MuiDialog-root, div'))
                 .filter(el => parseInt(getComputedStyle(el).zIndex) > 1000 && (el.querySelector('fieldset') || el.querySelector('table')));
@@ -865,63 +866,65 @@ async function collectOwnerResultsWithDetails() {
 
           if (dialog) {
             // ============================================================
-            // KRİTİK BÖLÜM: RESİM DEĞİŞİKLİĞİNİ BEKLEME DÖNGÜSÜ
+            // 🛡️ GÜVENLİK KONTROLÜ: DOĞRU MODAL MI AÇILDI?
             // ============================================================
-            
-            let capturedImageSrc = null;
+            let isCorrectDataLoaded = false;
             let capturedDetail = null;
-            
-            // Maksimum 2.5 saniye bekle (25 x 100ms)
-            for (let imgAttempt = 0; imgAttempt < 25; imgAttempt++) {
-                const imgEl = dialog.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
-                
-                // Kontrol 1: Element var mı?
-                // Kontrol 2: Src dolu mu?
-                // Kontrol 3: (EN ÖNEMLİSİ) Src bir öncekiyle FARKLI mı? (veya ilk kayıt mı?)
-                
-                if (imgEl && imgEl.src && imgEl.src.length > 100) {
-                    const currentSrc = imgEl.src;
+            let capturedImageSrc = null;
 
-                    // Eğer ilk kayıtsa VEYA resim bir önceki başarılı resimden farklıysa KABUL ET
-                    if (!lastSuccessFullImageSrc || currentSrc !== lastSuccessFullImageSrc) {
-                        capturedImageSrc = currentSrc;
-                        // Yeni başarılı görseli hafızaya al
-                        lastSuccessFullImageSrc = currentSrc;
-                        // Döngüyü kır, doğru görseli bulduk
-                        break;
-                    } else {
-                        // Resim var ama ESKİSİYLE AYNI. Beklemeye devam et...
-                        // (React henüz DOM'u güncellemedi)
+            // Beklenen numara (Listeden aldığımız)
+            const expectedAppNo = base.applicationNumber; 
+
+            // Modalın içeriğinin güncellenmesini bekle (Maks 3 saniye)
+            for (let waitAtt = 0; waitAtt < 30; waitAtt++) {
+                // Modaldaki veriyi oku
+                const tempDetail = parseDetailsFromOpenDialog(dialog);
+                
+                // Modaldan okunan başvuru numarasını normalize et
+                const modalAppNo = normalizeAppNo(tempDetail.fields['Başvuru Numarası'] || '');
+
+                // EŞLEŞME KONTROLÜ
+                // Eğer modaldaki numara, listedeki numarayla aynıysa veriler güncellenmiş demektir.
+                if (modalAppNo === expectedAppNo) {
+                    isCorrectDataLoaded = true;
+                    capturedDetail = tempDetail;
+                    
+                    // Görseli kontrol et (Yüksek çözünürlüklü olanı)
+                    const imgEl = dialog.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
+                    if (imgEl && imgEl.src && imgEl.src.length > 100) {
+                        capturedImageSrc = imgEl.src;
                     }
+                    
+                    // Doğru veriyi bulduk, döngüyü kır
+                    break; 
                 }
                 
-                // 100ms bekle ve tekrar kontrol et
+                // Eşleşmediyse (eski modal verisi duruyorsa) bekle
                 await sleep(100);
             }
 
-            // Metin detaylarını al
-            capturedDetail = parseDetailsFromOpenDialog(dialog);
-            
-            // Görsel Kararı
-            if (capturedImageSrc) {
-               console.log('✅ Yeni görsel doğrulandı ve alındı.');
-               base.brandImageDataUrl = capturedImageSrc;
-               base.brandImageUrl = capturedImageSrc;
-               base.imageSrc = capturedImageSrc; 
-            } else {
-               // Süre doldu, görsel ya yok ya da eskisiyle aynı kaldı.
-               // RİSK ALMA: Listeden gelen küçük resmi (thumbnail) kullan.
-               console.warn('⚠️ Görsel güncellenmedi (Stale Image), güvenli olarak thumbnail kullanılıyor.');
-            }
-            
-            if (capturedDetail) {
+            // Verileri işle
+            if (isCorrectDataLoaded && capturedDetail) {
+               console.log('✅ Veri doğrulandı (List == Modal).');
+               
                base.details = capturedDetail.fields || {};
                if (Array.isArray(capturedDetail.goodsAndServices)) base.goodsAndServicesByClass = capturedDetail.goodsAndServices;
                if (Array.isArray(capturedDetail.transactions)) base.transactions = capturedDetail.transactions;
+
+               // Görseli güncelle
+               if (capturedImageSrc) {
+                   base.brandImageDataUrl = capturedImageSrc;
+                   base.brandImageUrl = capturedImageSrc;
+                   base.imageSrc = capturedImageSrc; 
+               }
+            } else {
+               console.warn(`⚠️ Veri eşleşmedi veya zaman aşımı! Beklenen: ${expectedAppNo}, Modal yüklü değil.`);
+               // Risk almamak için sadece listeden gelen verilerle devam et
             }
 
+            // İşimiz bitti, modalı kapat
             closeAnyOpenDialog();
-            await sleep(50); 
+            await sleep(100); // DOM'un temizlenmesi için kısa bekleme
 
           } else {
             console.error('❌ Modal açılamadı.');
