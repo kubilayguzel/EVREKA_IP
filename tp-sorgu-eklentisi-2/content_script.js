@@ -1087,7 +1087,7 @@ async function collectOwnerResultsWithDetails() {
         console.warn('ℹ️ Detail alınamadı / iptal edildi. Thumbnail ile devam:', base.applicationNumber);
       }
 
-      await sleep(500);
+      await sleep(1500);
       batchItems.push(base);
       console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
     }
