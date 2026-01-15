@@ -1035,7 +1035,7 @@ async function collectOwnerResultsWithDetails() {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
   });
-}
+} 
 
 async function waitAndSendOwnerResults() {
   // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
