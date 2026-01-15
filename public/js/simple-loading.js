@@ -192,18 +192,22 @@ class SimpleLoading {
   }
 }
 
-// Global exportlar (Script tag kullanımı için)
+// Global exportlar (Hem Script tag hem Module desteği için)
 if (typeof window !== 'undefined') {
+  // 1. Sınıfın kendisi (new SimpleLoading() yapmak isteyenler için)
   window.SimpleLoading = SimpleLoading;
+
+  // 2. TEKİL ÖRNEK (Singleton) - trademark-similarity-search.js bunu kullanacak
+  // Böylece import etmeden direkt window üzerinden erişebileceğiz.
+  window.SimpleLoadingController = new SimpleLoading();
+
+  // 3. Yardımcı Fonksiyon (Her çağrıda yeni instance) - tp-file-transfer.js için
   window.showSimpleLoading = (text, subtext, onCancel) => {
     const loading = new SimpleLoading();
     loading.show({ text, subtext, onCancel });
     return loading;
   };
   
-  // tp-file-transfer.js'in beklediği fonksiyon ismini (alias) tanımlayalım
+  // 4. Alias (tp-file-transfer.js'in beklediği isim)
   window.showLoadingWithCancel = window.showSimpleLoading;
 }
-
-const simpleLoadingInstance = new SimpleLoading();
-export default simpleLoadingInstance;
