@@ -133,36 +133,6 @@ function normalizeAppNo(appNo) {
     return `${yy}/${rest}`;
   } catch { return String(appNo || '').trim(); }
 }
-
-// --- 4.2 helpers: detail appNo çıkar + güvenli karşılaştır ---
-function getDetailAppNo(detailObj) {
-  if (!detailObj) return null;
-
-  // 1) parseDetailsFromOpenDialog çıktısında applicationNumber alanı varsa
-  if (detailObj.applicationNumber) return normalizeAppNo(detailObj.applicationNumber);
-
-  // 2) send ettiğin yapıda fields map’i var (sende bu var)
-  const f = detailObj.fields || detailObj.data || null;
-  if (f) {
-    const cand =
-      f['Başvuru Numarası'] ||
-      f['Başvuru No'] ||
-      f['Basvuru Numarasi'] ||
-      f['Application Number'] ||
-      null;
-
-    return cand ? normalizeAppNo(cand) : null;
-  }
-
-  return null;
-}
-
-function numbersMatch(a, b) {
-  const aa = String(a || '').replace(/\D/g, '');
-  const bb = String(b || '').replace(/\D/g, '');
-  return aa && bb && aa === bb;
-}
-
 function extractByLabel(root, label) {
   try {
     const tds = Array.from(root.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body'));
@@ -250,32 +220,6 @@ function closeAnyOpenDialog() {
     if (closeBtn) click(closeBtn);
   }
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-}
-
-// ✅ Modal mutex: aynı anda tek modal işlemi
-let __modalQueue = Promise.resolve();
-function withModalLock(fn) {
-  const run = __modalQueue.then(fn, fn);
-  __modalQueue = run.catch(() => {});
-  return run;
-}
-
-// ✅ Modal tamamen kapandı mı? (DOM'dan gerçekten kalkmasını bekle)
-async function waitForNoDialog(timeout = 12000) {
-  const t0 = Date.now();
-  let consecutiveEmpty = 0; // Üst üste 5 kez boş görüldüğünde onaylansın
-  
-  while (Date.now() - t0 < timeout) {
-    const any = document.querySelector('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal');
-    if (!any) {
-      consecutiveEmpty++;
-      if (consecutiveEmpty >= 5) return true; // 500ms boyunca boş = gerçekten kapandı
-    } else {
-      consecutiveEmpty = 0;
-    }
-    await sleep(100);
-  }
-  return false;
 }
 
 // --------- Sonsuz Liste & Scroll Yardımcıları ---------
@@ -491,33 +435,14 @@ async function infiniteScrollAllRowsSTRICT(expectedTotal, { overallTimeoutMs = 3
 
 // --------- MODAL PARSE: Detay'ı aç ve görsel + alanları topla ---------
 function findDetailButton(tr) {
-  const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
-
-  // 1) aria-label güvenilir
-  const byAria = btns.find(b => {
-    const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
-    return a.includes('detay') || a.includes('detail') || a.includes('incele');
-  });
-  if (byAria) return byAria;
-
-  // 2) görünen metin
-  const byText = btns.find(b => {
-    const t = (b.textContent || '').toLowerCase().trim();
-    return t.includes('detay') || t.includes('incele') || t.includes('detail');
-  });
-  if (byText) return byText;
-
-  // 3) title gibi attribute’lar
-  const byTitle = btns.find(b => {
-    const t = (b.getAttribute?.('title') || '').toLowerCase();
-    return t.includes('detay') || t.includes('incele') || t.includes('detail');
-  });
-  if (byTitle) return byTitle;
-
-  // ❌ fallback yok: bulamazsa null dön
-  return null;
+  const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
+  const byLabel = btns.find(b => {
+    const t = (b.textContent || '').toLowerCase();
+    const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
+    return /detay|detail|incele/.test(t) || /detay|detail|incele/.test(a);
+  });
+  return byLabel || btns[btns.length - 1] || null;
 }
-
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
   console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
@@ -757,94 +682,89 @@ try {
   return data;
 }
 
-async function openRowModalAndParse(tr, { timeout = 20000 } = {}) { // Timeout süresini artırdık
-  try {
-    // 1️⃣ TEMİZLİK: Önceki modalların kapandığından emin ol
-    closeAnyOpenDialog();
-    await waitForNoDialog(8000);
-    
-    // 🛑 FREN 1: Önceki işlemden sonra tarayıcının "soğuması" için bekle
-    await sleep(1000); 
+async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
+  try {
+    console.log('🔍 openRowModalAndParse başladı');
+    
+    // Önceki modal'ı hızla kapat
+    closeAnyOpenDialog();
+    await sleep(100); // Azaltıldı
 
-    // 2️⃣ BUTON BULMA
-    const btn = findDetailButton(tr);
-    if (!btn) return null;
+    const btn = findDetailButton(tr);
+    if (!btn) {
+      console.warn('❌ Detail butonu bulunamadı');
+      return null;
+    }
+    
+    console.log('✅ Detail butonu bulundu, tıklanıyor');
+    click(btn);
+    
+    // Tıklama sonrası kısa bekleme
+    await sleep(300); // Azaltıldı
 
-    // Tıklamadan önce mevcut dialogları kaydet (Referans noktası)
-    const existingDialogs = new Set(
-      Array.from(document.querySelectorAll('[role="dialog"], .MuiDialog-root'))
-    );
+    console.log('🔍 Modal aranıyor...');
+    
+    // Hızlı modal arama - sadece yüksek z-index stratejisi
+    let dialog = null;
+    const maxAttempts = 5; // Azaltıldı
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const highZElements = Array.from(document.querySelectorAll('div'))
+        .filter(el => {
+          const zIndex = parseInt(getComputedStyle(el).zIndex) || 0;
+          return zIndex > 1000;
+        })
+        .sort((a, b) => {
+          const aZ = parseInt(getComputedStyle(a).zIndex) || 0;
+          const bZ = parseInt(getComputedStyle(b).zIndex) || 0;
+          return bZ - aZ;
+        });
 
-    // 3️⃣ TIKLAMA VE BEKLEME
-    // Butonu görünür yap
-    btn.scrollIntoView({ behavior: 'auto', block: 'center' });
-    await sleep(500); // Scroll sonrası bekle
-    
-    click(btn);
+      // Fieldset veya tablo içeren ilk element'i bul
+      for (const el of highZElements.slice(0, 2)) { // Sadece ilk 2'sini kontrol et
+        if (el.querySelector('fieldset, table')) {
+          dialog = el;
+          console.log(`✅ Modal bulundu (attempt ${attempt + 1})`);
+          break;
+        }
+      }
+      
+      if (dialog) break;
+      
+      // Kısa bekleme
+      await sleep(200); // Azaltıldı
+    }
 
-    // 🛑 FREN 2: Tıkladıktan sonra modalın animasyonu ve sunucu isteği için KÖR BEKLEME.
-    // Bu süre modalların "flaş gibi" geçmesini engeller.
-    await sleep(2500); 
+    if (!dialog) {
+      console.error('❌ Modal bulunamadı');
+      return null;
+    }
 
-    // 4️⃣ YENİ DIALOGU YAKALA
-    let dialog = null;
-    const start = Date.now();
+    console.log('✅ Dialog bulundu, hızlı stabilizasyon...');
 
-    while (Date.now() - start < timeout) {
-      const dialogs = Array.from(
-        document.querySelectorAll('[role="dialog"], .MuiDialog-root')
-      );
-      // Sadece yeni açılanı bul
-      dialog = dialogs.find(d => !existingDialogs.has(d));
-      if (dialog) break;
-      await sleep(100);
-    }
+    // Hızlı stabilizasyon - sadece fieldset bekle
+    try {
+      await waitFor('fieldset', { root: dialog, timeout: 2000 }); // Azaltıldı
+      console.log('✅ Fieldset bulundu');
+    } catch (e) {
+      console.log('⚠️ Fieldset bekleme timeout, devam ediliyor');
+    }
 
-    if (!dialog) return null;
+    // Minimal ek bekleme
+    await sleep(500); // Azaltıldı
 
-    // 5️⃣ İÇERİK BEKLEME (Metin gelene kadar)
-    const contentStart = Date.now();
-    let contentFound = false;
-    while (Date.now() - contentStart < timeout) {
-      const txt = dialog.textContent || '';
-      // Başvuru numarası formatı veya anahtar kelimeler geldi mi?
-      if (
-        txt.includes('Başvuru Numarası') ||
-        txt.includes('Başvuru No') ||
-        /\d{4}\/\d{5,}/.test(txt)
-      ) {
-        contentFound = true;
-        break;
-      }
-      await sleep(150);
-    }
+    console.log('🔄 Parse işlemi başlatılıyor...');
+    const parsed = await parseDetailsFromOpenDialog(dialog);
 
-    if (!contentFound) return null;
+    console.log('🔄 Dialog kapatılıyor...');
+    closeAnyOpenDialog();
 
-    // 🛑 FREN 3: RESİM YÜKLENME PAYI (En Kritik Yer)
-    // Metin gelse bile resim (img src) internet hızına bağlı olarak 1-2 saniye geç gelebilir.
-    // Burada bekleyerek "eski resmi" alma riskini sıfırlarız.
-    await sleep(2000); 
-
-    // 6️⃣ PARSE ET
-    // Artık hem metin hem resim yüklenmiş olmalı.
-    const parsed = await parseDetailsFromOpenDialog(dialog);
-
-    // 7️⃣ KAPATMA
-    closeAnyOpenDialog();
-    await waitForNoDialog(8000);
-    
-    // 🛑 FREN 4: Kapattıktan sonra bekle (DOM temizlensin)
-    await sleep(1000);
-
-    return parsed;
-  } catch (e) {
-    try {
-      closeAnyOpenDialog();
-      await waitForNoDialog(4000);
-    } catch (_) {}
-    return null;
-  }
+    console.log('✅ openRowModalAndParse tamamlandı');
+    return parsed;
+  } catch (e) {
+    console.error('❌ openRowModalAndParse hata:', (e && e.message) || e);
+    return null;
+  }
 }
 
 // --------- Sonuç Toplama ---------
@@ -966,147 +886,108 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 async function collectOwnerResultsWithDetails() {
-  console.log('🐢 collectOwnerResultsWithDetails başladı (GÜVENLİ & YAVAŞ MOD)');
-
+  console.log('🔍 collectOwnerResultsWithDetails başladı');
+  
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
-
+  
   const processedApplicationNumbers = new Set();
-  const batchSize = 100; 
-
-  // Modal reset yardımcısı
-  async function resetModalState() {
-    try {
-      closeAnyOpenDialog();
-      await waitForNoDialog(8000);
-      await sleep(500);
-    } catch (e) {}
-  }
-
+  const batchSize = 100; // 100'er 100'er işle
+  
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
     const currentBatch = rows.slice(batchStart, batchEnd);
-
-    console.log(`📦 Batch ${Math.floor(batchStart / batchSize) + 1} işleniyor...`);
+    
+    console.log(`🔄 Batch ${Math.floor(batchStart/batchSize) + 1}: ${batchStart + 1}-${batchEnd} satırları işleniyor...`);
+    
     const batchItems = [];
-
+    
     for (const [localIdx, tr] of currentBatch.entries()) {
       const globalIdx = batchStart + localIdx;
+      console.log(`🔍 Satır ${globalIdx + 1}/${rows.length} işleniyor...`);
       
-      // Satırı görünür yap
-      tr.scrollIntoView({ block: 'center' });
-      
-      // 🛑 FREN: Satırlar arası geçiş beklemesi
-      await sleep(1500); 
-
-      // Satırdan temel veriyi al (Bu bizim referansımız)
       const base = parseOwnerRowBase(tr, globalIdx);
-      
-      // Listede Başvuru Numarası yoksa, modalı açıp bulmayı dene
+
       if (!base.applicationNumber) {
-        console.log(`ℹ️ Liste bilgisinde numara yok, modal deneniyor... [Satır: ${globalIdx+1}]`);
-        await resetModalState();
-        // Hızlı bir deneme yap
-        const detailForAppNo = await withModalLock(() => openRowModalAndParse(tr, { timeout: 15000 }));
+        console.log(`ℹ️ Satır ${globalIdx + 1} için modal üzerinden appNo deneniyor...`);
+        const detailForAppNo = await openRowModalAndParse(tr, { timeout: 9000 });
         if (detailForAppNo && detailForAppNo.fields) {
-          const cand = detailForAppNo.fields['Başvuru Numarası'] || detailForAppNo.fields['Başvuru No'];
+          const cand = detailForAppNo.fields['Başvuru Numarası'];
           if (cand) base.applicationNumber = normalizeAppNo(cand);
         }
-        // Hala yoksa atla
         if (!base.applicationNumber) {
-             console.warn(`⚠️ Satır ${globalIdx+1} atlandı (Numara bulunamadı).`);
-             continue;
+          console.log(`⚠️ Başvuru numarası bulunamadı: satır ${globalIdx + 1} (modal fallback da başarısız)`);
+          continue;
         }
       }
 
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
-
-      // Duplicate Kontrolü
       if (processedApplicationNumbers.has(base.applicationNumber)) {
-        console.log(`⏭️ Tekrar eden kayıt atlandı: ${base.applicationNumber}`);
+        console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
         continue;
       }
-      processedApplicationNumbers.add(base.applicationNumber);
+      processedApplicationNumbers.add(normalizeAppNo(base.applicationNumber));
 
-      // Thumbnail'i yedekle (Eğer modal açılmazsa bu kullanılır)
-      base.thumbnailSrc = base.imageSrc || null;
-
-      console.log(`⏳ İşleniyor: ${base.applicationNumber}`);
-
-      // --- DETAY VE GÖRSEL ÇEKME (DOĞRULAMALI) ---
-      await resetModalState();
-      
-      // 1. Deneme
-      let detail = await withModalLock(() => openRowModalAndParse(tr, { timeout: 20000 }));
-      
-      // DOĞRULAMA: Listeden okunan numara ile modaldan gelen numara aynı mı?
-      let dNo = getDetailAppNo(detail);
-      let isMatch = detail && dNo && numbersMatch(base.applicationNumber, dNo);
-
-      // Eşleşmediyse RETRY (Yeniden Dene)
-      if (!isMatch) {
-          console.warn(`⚠️ Veri uyuşmazlığı veya boş veri! Beklenen: ${base.applicationNumber}, Gelen: ${dNo || 'YOK'}. Tekrar deneniyor...`);
-          
-          // 3 saniye ceza beklemesi (Sunucu veya DOM kendine gelsin)
-          await sleep(3000); 
-          await resetModalState();
-          
-          // 2. Deneme (Daha uzun süre tanı)
-          detail = await withModalLock(() => openRowModalAndParse(tr, { timeout: 25000 }));
-          dNo = getDetailAppNo(detail);
-          isMatch = detail && dNo && numbersMatch(base.applicationNumber, dNo);
+      // Başlangıçta satırdan gelen görseli (thumbnail) ata
+      if (base.imageSrc) {
+        base.brandImageDataUrl = base.imageSrc;
+        base.brandImageUrl = base.imageSrc;
       }
 
-      // KAYIT: Sadece eşleşme varsa kaydet
-      if (isMatch) {
-          base.details = detail.fields || {};
-          if (Array.isArray(detail.goodsAndServices)) base.goodsAndServicesByClass = detail.goodsAndServices;
-          if (Array.isArray(detail.transactions)) base.transactions = detail.transactions;
-
-          // Görseli al - SADECE EŞLEŞME VARSA
-          if (detail.imageDataUrl && detail.imageDataUrl.length > 200) {
-              // ✅ Doğrulama: Görsel gerçekten bu kayda mı ait?
-              const imageAppNo = getDetailAppNo(detail);
-              const isImageMatch = imageAppNo && numbersMatch(base.applicationNumber, imageAppNo);
-              
-              if (isImageMatch) {
-                  base.brandImageDataUrl = detail.imageDataUrl;
-                  base.brandImageUrl = detail.imageDataUrl;
-                  base.imageSrc = detail.imageDataUrl;
-                  console.log(`✅ [${base.applicationNumber}] Görsel DOĞRULANDI ve kaydedildi.`);
-              } else {
-                  console.warn(`⚠️ [${base.applicationNumber}] Görsel başka kayıttan! Atlandı. (Gelen: ${imageAppNo})`);
-              }
-          } else {
-              console.log(`⚠️ [${base.applicationNumber}] Veri tamam, Görsel yok.`);
-          }
-      } else {
-          // Eşleşme yoksa, yanlış görsel kaydetmektense HİÇBİR ŞEY kaydetme (Sadece listeden gelenler kalır)
-          console.error(`❌ [${base.applicationNumber}] Detay verisi EŞLEŞMEDİ. Liste verisiyle devam ediliyor.`);
+      console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
+      
+      const detail = await openRowModalAndParse(tr, { timeout: 8000 });
+      
+      if (detail) {
+        base.details = detail.fields || {};
+        if (Array.isArray(detail.goodsAndServices)) {
+          base.goodsAndServicesByClass = detail.goodsAndServices;
+        }
+        if (Array.isArray(detail.transactions)) {
+          base.transactions = detail.transactions;
+        }
+        
+        // --- DÜZELTME BURADA YAPILDI ---
+        // Eski Kod: if (!base.imageSrc && detail.imageDataUrl) { ... }
+        // Yeni Kod: Detay görseli varsa (ki yüksek çözünürlüklüdür), satırdaki görselin üzerine yaz.
+        if (detail.imageDataUrl) {
+          console.log('📸 Yüksek kaliteli detay görseli bulundu, güncelleniyor.');
+          base.brandImageDataUrl = detail.imageDataUrl;
+          base.brandImageUrl = detail.imageDataUrl;
+          // İsteğe bağlı: Listede de kaliteli görünsün diye imageSrc'yi de güncelle
+          base.imageSrc = detail.imageDataUrl; 
+        }
+        // -------------------------------
       }
 
       batchItems.push(base);
-      
-      // 🛑 SATIR SONU UZUN MOLA
-      // Modalların birbirine girmesini engellemek için.
-      await sleep(2000); 
+      console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
     }
 
-    // Batch Gönderimi
+    // Batch tamamlandı - arayüze gönder
     if (batchItems.length > 0) {
+      console.log(`📤 Batch ${Math.floor(batchStart/batchSize) + 1} gönderiliyor: ${batchItems.length} kayıt`);
+      
+      // Progressive data gönderimi
       sendToOpener('BATCH_VERI_GELDI_KISI', {
         batch: batchItems,
-        batchNumber: Math.floor(batchStart / batchSize) + 1,
+        batchNumber: Math.floor(batchStart/batchSize) + 1,
         totalBatches: Math.ceil(rows.length / batchSize),
         processedCount: batchEnd,
         totalCount: rows.length,
         isComplete: batchEnd >= rows.length
       });
-      // Batch arası ekstra dinlenme
-      await sleep(3000);
+      
+      // Batch'ler arası kısa molası (DOM'un nefes alması için)
+      if (batchEnd < rows.length) {
+        await sleep(1000);
+      }
     }
   }
 
+  // Final mesaj - tüm process tamamlandı
+  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: Toplam ${processedApplicationNumbers.size} kayıt işlendi`);
+  
   sendToOpener('VERI_GELDI_KISI_COMPLETE', {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
