@@ -799,17 +799,23 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 // ============================================================
-// GÜVENLİ TRANSFER AKIŞI v6 (RETRY & STRICT MATCH)
+// GÜVENLİ TRANSFER AKIŞI v7 (AKILLI YAVAŞLATMA & UZUN BEKLEME)
 // ============================================================
 
-// Yardımcı: Sadece rakamları ve '/' işaretini bırakır (Boşluk sorunu için)
+// Yardımcı: Sadece rakamları ve '/' işaretini bırakır
 function cleanAppNo(str) {
   return (str || '').replace(/[^0-9/]/g, '');
 }
 
+// Yardımcı: Rastgele bekleme (İnsan taklidi)
+async function sleepRandom(min, max) {
+  const ms = Math.floor(Math.random() * (max - min + 1) + min);
+  return new Promise(r => setTimeout(r, ms));
+}
+
 // Yardımcı: Modalın tamamen kapanmasını bekle
 async function waitForModalClose() {
-  for (let i = 0; i < 20; i++) { // Max 2 saniye
+  for (let i = 0; i < 30; i++) { // Max 3 saniye
     const dialogs = document.querySelectorAll('div[role="dialog"], .MuiDialog-root');
     const visible = Array.from(dialogs).some(d => {
         const style = window.getComputedStyle(d);
@@ -823,7 +829,7 @@ async function waitForModalClose() {
 
 // Yardımcı: Modalın açılmasını bekle
 async function waitForModalOpen() {
-  for (let i = 0; i < 40; i++) { // Max 4 saniye
+  for (let i = 0; i < 60; i++) { // Max 6 saniye
     const dialogs = Array.from(document.querySelectorAll('div[role="dialog"], .MuiDialog-root'));
     const visibleDialog = dialogs.find(d => {
         const style = window.getComputedStyle(d);
@@ -836,13 +842,13 @@ async function waitForModalOpen() {
 }
 
 async function collectOwnerResultsWithDetails() {
-  console.log('🛡️ collectOwnerResultsWithDetails başladı (RETRY MODE)');
+  console.log('🐢 collectOwnerResultsWithDetails başladı (SLOW & PATIENT MODE)');
   
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
   
   const processedApplicationNumbers = new Set();
-  const batchSize = 100;
+  const batchSize = 50; // Batch boyutunu düşürdük (Tarayıcıyı rahatlatmak için)
 
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
@@ -851,114 +857,115 @@ async function collectOwnerResultsWithDetails() {
     console.log(`📦 Batch ${Math.floor(batchStart/batchSize) + 1} işleniyor...`);
     
     const batchItems = [];
+    let consecutiveErrors = 0; // Arka arkaya hata sayacı
     
     for (const [localIdx, tr] of currentBatch.entries()) {
       const globalIdx = batchStart + localIdx;
       
-      // 1. Listeden Temel Veriyi Al
       const base = parseOwnerRowBase(tr, globalIdx);
       if (!base.applicationNumber) continue;
 
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
       
-      // Duplicate kontrolü
       if (processedApplicationNumbers.has(base.applicationNumber)) continue; 
       processedApplicationNumbers.add(base.applicationNumber);
 
-      // Konsol kirliliğini azalt
-      // if (localIdx % 5 === 0) console.log(`⏳ İşleniyor: ${base.applicationNumber}`);
+      // Konsola bilgi bas
+      console.log(`⏳ [${localIdx+1}/${currentBatch.length}] İşleniyor: ${base.applicationNumber}`);
 
-      // Varsayılan görsel (thumbnail)
       if (base.imageSrc) {
           base.brandImageDataUrl = base.imageSrc;
           base.brandImageUrl = base.imageSrc;
       }
 
       // ============================================================
-      // 🔄 RETRY MEKANİZMASI (Doğru Veriyi Zorla)
+      // 🔄 RETRY & WAIT MEKANİZMASI
       // ============================================================
       let success = false;
       const targetNoClean = cleanAppNo(base.applicationNumber);
 
-      // Maksimum 2 kere dene (Hata alırsa kapatıp tekrar açacak)
-      for (let retry = 0; retry < 2; retry++) {
+      // Hata aldıysak sunucu bizi bloklamış olabilir, uzun mola ver
+      if (consecutiveErrors > 2) {
+          console.warn('⚠️ Çok fazla hata alındı, sunucu soğuması için 5 saniye bekleniyor...');
+          await sleep(5000);
+          consecutiveErrors = 0;
+      }
+
+      // Her işlemden önce "İnsan gibi" bekle (1.5 - 2.5 saniye)
+      // Bu, sunucunun istekleri reddetmesini engeller.
+      await sleepRandom(1500, 2500);
+
+      // Maksimum 3 kere dene (Hata alırsa kapatıp tekrar açacak)
+      for (let retry = 0; retry < 3; retry++) {
           if (success) break;
           
           try {
-            // A) Temizlik
             closeAnyOpenDialog();
             await waitForModalClose();
-            await sleep(200); // DOM nefes alsın
+            await sleep(300); 
 
-            // B) Butonu Bul ve Tıkla
             const btn = findDetailButton(tr);
             if (btn) {
               btn.scrollIntoView({ behavior: 'auto', block: 'center' });
-              await sleep(100); 
+              await sleep(300); // Scroll sonrası bekle
               click(btn);
               
-              // C) Modalın Açılmasını Bekle
               const dialog = await waitForModalOpen();
 
               if (dialog) {
-                // D) İçerik Kontrolü (Polling)
-                // Modal açıldı ama içeriği hemen yüklenmeyebilir. 
-                // 3 saniye boyunca içeriğin "hedef numara" ile eşleşmesini bekle.
-                for (let poll = 0; poll < 30; poll++) {
-                    // Modal içindeki TÜM metni al ve temizle
+                // Modal açıldı, içeriğin yüklenmesini bekle (POLLING)
+                // SÜRE ARTIRILDI: 10 Saniye (100 x 100ms)
+                for (let poll = 0; poll < 100; poll++) {
                     const dialogTextClean = cleanAppNo(dialog.textContent);
                     
-                    // Eğer modalın içinde bizim numaramız geçiyorsa (örn: 2025083044)
                     if (dialogTextClean.includes(targetNoClean)) {
-                        // Detaylı parse yap
                         const tempDetail = parseDetailsFromOpenDialog(dialog);
                         const modalAppNoClean = cleanAppNo(tempDetail.fields['Başvuru Numarası'] || '');
 
-                        // Çifte Kontrol: Parsed numara da eşleşiyor mu?
                         if (modalAppNoClean === targetNoClean) {
-                            // BINGO! Doğru veri.
+                            // BINGO!
                             base.details = tempDetail.fields || {};
                             if (Array.isArray(tempDetail.goodsAndServices)) base.goodsAndServicesByClass = tempDetail.goodsAndServices;
                             if (Array.isArray(tempDetail.transactions)) base.transactions = tempDetail.transactions;
 
-                            // Görseli al (Varsa)
                             if (tempDetail.imageDataUrl && tempDetail.imageDataUrl.length > 200) {
                                 base.brandImageDataUrl = tempDetail.imageDataUrl;
                                 base.brandImageUrl = tempDetail.imageDataUrl;
                                 base.imageSrc = tempDetail.imageDataUrl;
                             }
-                            
                             success = true;
-                            break; // Polling döngüsünü kır
+                            consecutiveErrors = 0; // Hata sayacını sıfırla
+                            break; 
                         }
                     }
-                    await sleep(100); // 100ms sonra tekrar kontrol et
+                    await sleep(100);
                 }
               }
             }
-          } catch (e) { console.error('Retry hatası:', e); }
+          } catch (e) { console.error('Hata:', e); }
 
           if (!success) {
-              console.warn(`⚠️ Deneme ${retry+1} başarısız: ${base.applicationNumber}. Tekrar deneniyor...`);
-              // Modal takılı kaldıysa kapatıp tekrar denemesi için loop devam eder
+              // Deneme başarısız olduysa artan sürelerle bekle (Exponential Backoff)
+              const waitTime = (retry + 1) * 2000; 
+              console.warn(`⚠️ Deneme ${retry+1} başarısız: ${base.applicationNumber}. ${waitTime}ms bekleniyor...`);
+              closeAnyOpenDialog();
+              await sleep(waitTime);
           }
-      } // Retry Loop Sonu
+      }
 
       if (!success) {
-          console.error(`❌ BAŞARISIZ: ${base.applicationNumber} için detay verisi alınamadı (Liste verisi kullanılıyor).`);
+          consecutiveErrors++; // Hata sayacını artır
+          console.error(`❌ BAŞARISIZ: ${base.applicationNumber} (Liste verisi kullanılıyor).`);
       } else {
           console.log(`✅ BAŞARILI: ${base.applicationNumber}`);
       }
 
-      // Her işlemden sonra modalı kesin kapat
       closeAnyOpenDialog();
       await waitForModalClose();
-      await sleep(200); // Satırlar arası güvenli bekleme
-
+      
       batchItems.push(base);
     }
 
-    // Batch Gönderimi
     if (batchItems.length > 0) {
       sendToOpener('BATCH_VERI_GELDI_KISI', {
         batch: batchItems,
@@ -968,11 +975,12 @@ async function collectOwnerResultsWithDetails() {
         totalCount: rows.length,
         isComplete: batchEnd >= rows.length
       });
-      await sleep(1000); // Batch arası mola
+      // Batch arası uzun dinlenme
+      await sleep(3000); 
     }
   }
 
-  console.log(`🎉 Tüm işlemler tamamlandı.`);
+  console.log(`🎉 İşlem tamamlandı.`);
   sendToOpener('VERI_GELDI_KISI_COMPLETE', {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
