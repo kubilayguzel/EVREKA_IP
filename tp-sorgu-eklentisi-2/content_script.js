@@ -841,7 +841,7 @@ async function collectOwnerResultsWithDetails() {
 
       try {
         closeAnyOpenDialog();
-        await sleep(750); // DOM dinlensin diye biraz artırdık
+        await sleep(500); // DOM dinlensin diye biraz artırdık
 
         const btn = findDetailButton(tr);
         if (btn) {
@@ -923,7 +923,7 @@ async function collectOwnerResultsWithDetails() {
             }
 
             closeAnyOpenDialog();
-            await sleep(500); 
+            await sleep(750); 
 
           } else {
             console.error('❌ Modal DOM elementi bulunamadı.');
