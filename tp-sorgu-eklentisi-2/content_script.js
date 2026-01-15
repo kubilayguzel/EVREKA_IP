@@ -885,90 +885,159 @@ function parseOwnerRowBase(tr, idx) {
   };
 }
 
+// ============================================================
+// YAVAŞLATILMIŞ VE GÖRSEL ODAKLI AKIŞ (SLOW MOTION MODE)
+// ============================================================
+
 async function collectOwnerResultsWithDetails() {
-  console.log('🔍 collectOwnerResultsWithDetails başladı');
+  console.log('🐢 collectOwnerResultsWithDetails başladı (SLOW MOTION MODE)');
   
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
   
   const processedApplicationNumbers = new Set();
-  const batchSize = 100; // 100'er 100'er işle
-  
+  const batchSize = 100; // Batch boyutunu değiştirmedik ama işlem yavaşlayacak
+
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
     const currentBatch = rows.slice(batchStart, batchEnd);
     
-    console.log(`🔄 Batch ${Math.floor(batchStart/batchSize) + 1}: ${batchStart + 1}-${batchEnd} satırları işleniyor...`);
+    console.log(`📦 Batch ${Math.floor(batchStart/batchSize) + 1} işleniyor...`);
     
     const batchItems = [];
     
     for (const [localIdx, tr] of currentBatch.entries()) {
       const globalIdx = batchStart + localIdx;
-      console.log(`🔍 Satır ${globalIdx + 1}/${rows.length} işleniyor...`);
       
       const base = parseOwnerRowBase(tr, globalIdx);
 
-      if (!base.applicationNumber) {
-        console.log(`ℹ️ Satır ${globalIdx + 1} için modal üzerinden appNo deneniyor...`);
-        const detailForAppNo = await openRowModalAndParse(tr, { timeout: 9000 });
-        if (detailForAppNo && detailForAppNo.fields) {
-          const cand = detailForAppNo.fields['Başvuru Numarası'];
-          if (cand) base.applicationNumber = normalizeAppNo(cand);
-        }
-        if (!base.applicationNumber) {
-          console.log(`⚠️ Başvuru numarası bulunamadı: satır ${globalIdx + 1} (modal fallback da başarısız)`);
-          continue;
-        }
-      }
-
+      if (!base.applicationNumber) continue;
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
-      if (processedApplicationNumbers.has(base.applicationNumber)) {
-        console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
-        continue;
-      }
-      processedApplicationNumbers.add(normalizeAppNo(base.applicationNumber));
+      
+      if (processedApplicationNumbers.has(base.applicationNumber)) continue; 
+      processedApplicationNumbers.add(base.applicationNumber);
 
-      // Başlangıçta satırdan gelen görseli (thumbnail) ata
+      const targetNo = base.applicationNumber; // Örn: 2023/12345
+      const targetNoClean = (targetNo || '').replace(/[^0-9]/g, '');
+
+      // Varsayılan thumbnail
       if (base.imageSrc) {
-        base.brandImageDataUrl = base.imageSrc;
-        base.brandImageUrl = base.imageSrc;
+          base.brandImageDataUrl = base.imageSrc;
+          base.brandImageUrl = base.imageSrc;
       }
 
-      console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
-      
-      const detail = await openRowModalAndParse(tr, { timeout: 8000 });
-      
-      if (detail) {
-        base.details = detail.fields || {};
-        if (Array.isArray(detail.goodsAndServices)) {
-          base.goodsAndServicesByClass = detail.goodsAndServices;
+      // ---------------------------------------------------------
+      // 🟢 ADIM 1: GÜVENLİ TEMİZLİK VE BEKLEME
+      // ---------------------------------------------------------
+      try {
+        closeAnyOpenDialog();
+        // Önceki işlemin bitmesi ve DOM'un rahatlaması için 1 saniye net bekleme
+        await sleep(1000); 
+
+        const btn = findDetailButton(tr);
+        if (btn) {
+          // Butonu ekrana getir
+          btn.scrollIntoView({ behavior: 'auto', block: 'center' });
+          await sleep(500); // Scroll sonrası bekle
+          
+          click(btn);
+          
+          // ---------------------------------------------------------
+          // 🟢 ADIM 2: MODALIN AÇILMASINI VE YÜKLENMESİNİ BEKLE
+          // ---------------------------------------------------------
+          
+          // Tıkladıktan sonra modalın animasyonunun bitmesi ve
+          // içeriğin (resmin) sunucudan gelmesi için 2 saniye "kör" bekleme.
+          // Bu süre modalların "hızlı geçmesini" engeller.
+          await sleep(2000); 
+
+          let dialog = null;
+          // Şimdi dialogu ara
+          const visibleDialogs = Array.from(document.querySelectorAll('div[role="dialog"], .MuiDialog-root, div'))
+              .filter(el => {
+                  const style = window.getComputedStyle(el);
+                  return style.display !== 'none' && parseInt(style.zIndex) > 1000 && (el.querySelector('fieldset') || el.querySelector('table'));
+              });
+           
+          if (visibleDialogs.length > 0) {
+            dialog = visibleDialogs[0];
+          }
+
+          if (dialog) {
+            // ---------------------------------------------------------
+            // 🟢 ADIM 3: İÇERİK DOĞRULAMA (Resim Garantisi)
+            // ---------------------------------------------------------
+            let capturedDetail = null;
+            let isVerified = false;
+
+            // 5 saniyelik bir kontrol döngüsü (Veri geç gelirse diye)
+            for (let checkLoop = 0; checkLoop < 50; checkLoop++) {
+                
+                // A) Numarayı Kontrol Et (Kesin Eşleşme)
+                const dialogTextClean = (dialog.textContent || '').replace(/[^0-9]/g, '');
+                
+                if (dialogTextClean.includes(targetNoClean)) {
+                    // Veri doğru, ama resim yüklendi mi?
+                    const imgEl = dialog.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
+                    
+                    // Resim varsa veya en azından metin doğrulandıysa al
+                    if (imgEl && imgEl.src && imgEl.src.length > 200) {
+                        // Resim de gelmiş, harika!
+                        isVerified = true;
+                    } else {
+                        // Resim henüz yok, biraz daha bekleyelim (Döngü devam etsin)
+                        // Ama metin doğru olduğu için "Verified" diyebiliriz, sadece resmi bekliyoruz.
+                        // Son tura kadar resim gelmezse metni alıp çıkacağız.
+                        if (checkLoop > 40) isVerified = true; // Sonlara geldik, artık alalım
+                    }
+                }
+
+                if (isVerified) {
+                    // Son bir kez daha bekle (Görselin tam render olması için)
+                    await sleep(200);
+                    
+                    capturedDetail = parseDetailsFromOpenDialog(dialog);
+                    
+                    // Verileri Kaydet
+                    base.details = capturedDetail.fields || {};
+                    if (Array.isArray(capturedDetail.goodsAndServices)) base.goodsAndServicesByClass = capturedDetail.goodsAndServices;
+                    if (Array.isArray(capturedDetail.transactions)) base.transactions = capturedDetail.transactions;
+
+                    if (capturedDetail.imageDataUrl && capturedDetail.imageDataUrl.length > 200) {
+                        base.brandImageDataUrl = capturedDetail.imageDataUrl;
+                        base.brandImageUrl = capturedDetail.imageDataUrl;
+                        base.imageSrc = capturedDetail.imageDataUrl;
+                        console.log(`✅ [${targetNo}] Görsel ve Veri Alındı.`);
+                    } else {
+                        console.log(`⚠️ [${targetNo}] Veri alındı, Görsel yok/küçük.`);
+                    }
+                    
+                    break; // Döngüden çık
+                }
+                
+                await sleep(100); // 100ms bekle ve tekrar kontrol et
+            }
+          } else {
+            console.error(`❌ Modal açılamadı: ${targetNo}`);
+          }
         }
-        if (Array.isArray(detail.transactions)) {
-          base.transactions = detail.transactions;
-        }
-        
-        // --- DÜZELTME BURADA YAPILDI ---
-        // Eski Kod: if (!base.imageSrc && detail.imageDataUrl) { ... }
-        // Yeni Kod: Detay görseli varsa (ki yüksek çözünürlüklüdür), satırdaki görselin üzerine yaz.
-        if (detail.imageDataUrl) {
-          console.log('📸 Yüksek kaliteli detay görseli bulundu, güncelleniyor.');
-          base.brandImageDataUrl = detail.imageDataUrl;
-          base.brandImageUrl = detail.imageDataUrl;
-          // İsteğe bağlı: Listede de kaliteli görünsün diye imageSrc'yi de güncelle
-          base.imageSrc = detail.imageDataUrl; 
-        }
-        // -------------------------------
+      } catch (e) {
+        console.error('İşlem hatası:', e);
       }
+
+      // ---------------------------------------------------------
+      // 🟢 ADIM 4: KAPAT VE DİNLEN
+      // ---------------------------------------------------------
+      closeAnyOpenDialog();
+      // Bir sonraki satıra geçmeden önce 1 saniye dinlen.
+      // Bu, tarayıcının donmasını engeller ve modalların karışmasını önler.
+      await sleep(1000); 
 
       batchItems.push(base);
-      console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
     }
 
-    // Batch tamamlandı - arayüze gönder
+    // Batch Gönderimi
     if (batchItems.length > 0) {
-      console.log(`📤 Batch ${Math.floor(batchStart/batchSize) + 1} gönderiliyor: ${batchItems.length} kayıt`);
-      
-      // Progressive data gönderimi
       sendToOpener('BATCH_VERI_GELDI_KISI', {
         batch: batchItems,
         batchNumber: Math.floor(batchStart/batchSize) + 1,
@@ -977,17 +1046,12 @@ async function collectOwnerResultsWithDetails() {
         totalCount: rows.length,
         isComplete: batchEnd >= rows.length
       });
-      
-      // Batch'ler arası kısa molası (DOM'un nefes alması için)
-      if (batchEnd < rows.length) {
-        await sleep(1000);
-      }
+      // Batch arası ekstra mola
+      await sleep(1000);
     }
   }
 
-  // Final mesaj - tüm process tamamlandı
-  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: Toplam ${processedApplicationNumbers.size} kayıt işlendi`);
-  
+  console.log(`🎉 İşlem tamamlandı.`);
   sendToOpener('VERI_GELDI_KISI_COMPLETE', {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
