@@ -751,130 +751,73 @@ try {
   return data;
 }
 
-async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
+async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
   try {
-    console.log('🔍 openRowModalAndParse başladı');
-
-    // ✅ Önceki modal kapanmadan yenisine geçme
+    // 1️⃣ Önce açık modal varsa kapat
     closeAnyOpenDialog();
     await waitForNoDialog(8000);
-    await sleep(200); // UI settle
+    await sleep(200);
 
+    // 2️⃣ Detay butonunu bul
     const btn = findDetailButton(tr);
-    if (!btn) {
-      console.warn('❌ Detail butonu bulunamadı');
-      return null;
-    }
+    if (!btn) return null;
 
-    console.log('✅ Detail butonu bulundu, tıklanıyor');
+    // 3️⃣ Tıklamadan ÖNCE mevcut dialogları kaydet
+    const existingDialogs = new Set(
+      Array.from(document.querySelectorAll('[role="dialog"], .MuiDialog-root'))
+    );
+
+    // 4️⃣ Butona tıkla
     click(btn);
 
-    // Tıklama sonrası kısa bekleme (DOM'a girsin)
-    await sleep(200);
-
-    // ✅ Modal içeriği hazır olana kadar bekle (Başvuru Numarası gibi)
-    async function waitForDialogContent(dialog, timeoutMs = timeout) {
-      const t0 = Date.now();
-      while (Date.now() - t0 < timeoutMs) {
-        const txt = (dialog?.textContent || '');
-        if (
-          txt.includes('Başvuru Numarası') ||
-          txt.includes('Başvuru No') ||
-          /\d{4}\/\d{5,}/.test(txt)
-        ) {
-          return true;
-        }
-        await sleep(120);
-      }
-      return false;
-    }
-
-    console.log('🔍 Modal aranıyor...');
-
-    // ✅ Önce daha deterministik selector’lar dene
+    // 5️⃣ SADECE YENİ AÇILAN dialog’u yakala
     let dialog = null;
-    const maxAttempts = 12;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      // 1) role="dialog" / MUI dialog kökleri
-      const candidates1 = Array.from(
-        document.querySelectorAll('[role="dialog"], .MuiDialog-root, .MuiModal-root')
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+      const dialogs = Array.from(
+        document.querySelectorAll('[role="dialog"], .MuiDialog-root')
       );
 
-      // 2) senin eski high z-index stratejin (fallback)
-      const candidates2 = Array.from(document.querySelectorAll('div'))
-        .filter(el => {
-          const zIndex = parseInt(getComputedStyle(el).zIndex, 10) || 0;
-          return zIndex > 1000;
-        });
+      dialog = dialogs.find(d => !existingDialogs.has(d));
+      if (dialog) break;
 
-      const candidates = [...candidates1, ...candidates2];
-
-      // Z-index’e göre sırala (en üstteki önce)
-      const sorted = candidates
-        .filter(Boolean)
-        .map(el => {
-          const z = parseInt(getComputedStyle(el).zIndex, 10) || 0;
-          return { el, z };
-        })
-        .sort((a, b) => b.z - a.z)
-        .map(x => x.el);
-
-      // İçinde fieldset/table olanı seç (senin kriterin)
-      dialog = sorted.find(el => el && el.querySelector && el.querySelector('fieldset, table'));
-
-      if (dialog) {
-        console.log(`✅ Modal bulundu (attempt ${attempt + 1})`);
-        break;
-      }
-
-      await sleep(150);
+      await sleep(100);
     }
 
-    if (!dialog) {
-      console.error('❌ Modal bulunamadı');
-      return null;
+    if (!dialog) return null;
+
+    // 6️⃣ Modal içeriği GELENE KADAR BEKLE
+    const contentStart = Date.now();
+    while (Date.now() - contentStart < timeout) {
+      const txt = dialog.textContent || '';
+      if (
+        txt.includes('Başvuru Numarası') ||
+        txt.includes('Başvuru No') ||
+        /\d{4}\/\d{5,}/.test(txt)
+      ) break;
+
+      await sleep(120);
     }
 
-    console.log('✅ Dialog bulundu, içerik bekleniyor...');
-
-    // ✅ İşte kritik satır: içerik gelmeden parse ETME
-    const contentOk = await waitForDialogContent(dialog, timeout);
-    if (!contentOk) {
-      console.warn('⚠️ Dialog içeriği timeout oldu ama parse denenecek (riskli)');
-    }
-
-    // Ek: fieldset gelirse daha iyi
-    try {
-      await waitFor('fieldset', { root: dialog, timeout: 2500 });
-    } catch (e) {
-      // sessiz geç
-    }
-
-    // Minimal ek bekleme (render settle)
-    await sleep(200);
-
-    console.log('🔄 Parse işlemi başlatılıyor...');
+    // 7️⃣ Parse et
     const parsed = await parseDetailsFromOpenDialog(dialog);
 
-    console.log('🔄 Dialog kapatılıyor...');
+    // 8️⃣ Kapat ve tamamen kapanmasını bekle
     closeAnyOpenDialog();
     await waitForNoDialog(8000);
     await sleep(150);
 
-    console.log('✅ openRowModalAndParse tamamlandı');
     return parsed;
   } catch (e) {
-    console.error('❌ openRowModalAndParse hata:', (e && e.message) || e);
-
-    // Hata durumunda bile modal açık kalmasın
     try {
       closeAnyOpenDialog();
       await waitForNoDialog(4000);
     } catch (_) {}
-
     return null;
   }
 }
+
 
 // --------- Sonuç Toplama ---------
 
@@ -1022,7 +965,12 @@ async function collectOwnerResultsWithDetails() {
 
     const batchItems = [];
 
-    for (const [localIdx, tr] of currentBatch.entries()) {
+  for (const [localIdx] of currentBatch.entries()) {
+    const tr = document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr')[batchStart + localIdx];
+    if (!tr) continue;
+
+    tr.scrollIntoView({ block: 'center' });
+    await sleep(120);
       const globalIdx = batchStart + localIdx;
       console.log(`🔍 Satır ${globalIdx + 1}/${rows.length} işleniyor...`);
 
