@@ -1005,10 +1005,7 @@ async function collectOwnerResultsWithDetails() {
       processedApplicationNumbers.add(base.applicationNumber);
 
       // Thumbnail sadece başlangıç görselidir, kilitlenir
-      if (base.imageSrc && !base.brandImageDataUrl) {
-        base.brandImageDataUrl = base.imageSrc;
-        base.brandImageUrl = base.imageSrc;
-      }
+      base.thumbnailSrc = base.imageSrc || null;
 
 
       console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
