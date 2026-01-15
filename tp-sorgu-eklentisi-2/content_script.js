@@ -22,6 +22,43 @@ const getHashParam = (name) => {
   return m ? decodeURIComponent(m[1]) : null;
 };
 
+// ============================================================
+// GLOBAL YARDIMCI FONKSİYONLAR VE DEĞİŞKENLER
+// (Bunu dosyanın en en tepesine yapıştırın)
+// ============================================================
+
+// Global kilit değişkeni (Aynı anda iki modal açılmasın diye)
+let _isModalLocked = false;
+
+// Modern Sleep Fonksiyonu
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Kilit Mekanizması: Sıraya sokar ve çakışmayı önler
+async function withModalLock(action) {
+  // Eğer kilitliyse, kilit açılana kadar bekle
+  while (_isModalLocked) {
+    await sleep(100);
+  }
+  
+  // Kilitle
+  _isModalLocked = true;
+  
+  try {
+    // İşlemi yap
+    return await action();
+  } catch (e) {
+    console.error('Lock içi işlem hatası:', e);
+    throw e;
+  } finally {
+    // İşlem bitince veya hata olsa bile kilidi mutlaka aç
+    _isModalLocked = false;
+  }
+}
+
+// ============================================================
+// MODAL PARSE VE İŞLEME KODLARI AŞAĞIDA DEVAM EDER...
+// ============================================================
+
 async function waitAndScrapeResultFromDom(appNo, timeout = 25000) {
   const root = document.body;
   let resolved = false;
