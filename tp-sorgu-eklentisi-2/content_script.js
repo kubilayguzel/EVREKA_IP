@@ -372,7 +372,6 @@ async function waitForTotalMetaAndParse(timeout = 45000) {
 }
 
 // ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" (beklenen sayıya ulaşana dek) ----
-function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr').length;
 const isLoading = () =>
   !!document.querySelector('.MuiCircularProgress-root, [role="progressbar"], .MuiBackdrop-root[aria-hidden="false"]');
