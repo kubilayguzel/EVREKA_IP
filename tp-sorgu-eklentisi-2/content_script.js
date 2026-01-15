@@ -923,7 +923,7 @@ async function collectOwnerResultsWithDetails() {
             }
 
             closeAnyOpenDialog();
-            await sleep(150); 
+            await sleep(500); 
 
           } else {
             console.error('❌ Modal DOM elementi bulunamadı.');
