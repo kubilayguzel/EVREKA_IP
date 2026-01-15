@@ -8,7 +8,7 @@ import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
 import { showNotification } from '../utils.js';
 import { getStorage, ref, getDownloadURL, uploadBytes } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
-import SimpleLoading from './simple-loading.js';
+const SimpleLoading = window.SimpleLoadingController;
 
 console.log("### trademark-similarity-search.js yüklendi (Stable Hover) ###");
 
