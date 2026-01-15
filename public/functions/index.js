@@ -292,40 +292,42 @@ export const etebsProxyV2 = onRequest(
                     }
 
                     // ETEBS'ten İndir
-                    const downloadApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
-                    const downloadResponse = await fetch(downloadApiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        // DÜZELTME BURADA: Parametre adı "DOCUMENT NO" (boşluklu) olmalı [cite: 110, 116]
-                        body: JSON.stringify({ 
-                            "TOKEN": token, 
-                            "DOCUMENT NO": docNo 
-                        }),
-                        timeout: 45000 // Timeout süresi biraz artırıldı
-                    });
+                    const downloadApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs'; 
+                        const downloadResponse = await fetch(downloadApiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            // DÜZELTME: Dokümandaki tabloya uyarak ALT ÇİZGİ kullanıyoruz
+                            body: JSON.stringify({ 
+                                "TOKEN": token, 
+                                "DOCUMENT_NO": docNo  // <-- "DOCUMENT NO" yerine "DOCUMENT_NO"
+                            }),
+                            timeout: 45000 
+                        });
 
-                    const downloadRawData = await downloadResponse.json();
+                        const downloadRawData = await downloadResponse.json();
 
-                    // API HATA KONTROLÜ
-                    // Dokümandaki hata kodlarını kontrol ediyoruz 
-                    if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
-                        console.error(`❌ ETEBS Hata (${docNo}):`, downloadRawData.IslemSonucAck);
-                        
-                        // Eğer "005 - Daha Önce İndirilmiş Evrak" hatası alırsanız, bu evrak yanmış demektir.
-                        // Manuel işlem gerekebilir.
-                        throw new Error(`ETEBS API Hatası: ${downloadRawData.IslemSonucAck} (Kod: ${downloadRawData.IslemSonucKod})`);
-                    }
+                        // API HATA KONTROLÜ
+                        if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
+                            console.error(`❌ ETEBS Hata (${docNo}):`, downloadRawData.IslemSonucAck);
+                            // "Daha Önce İndirilmiş Evrak" hatası alırsanız bu loga düşecektir.
+                            downloadFailures.push({ 
+                                docNo, 
+                                reason: `API Hatası: ${downloadRawData.IslemSonucAck}`, 
+                                code: downloadRawData.IslemSonucKod,
+                                notification 
+                            });
+                            return; // Bu evrak için işlemi durdur, diğerine geç
+                        }
 
-                    const resultNode = downloadRawData?.DownloadDocumentResult || downloadRawData;
-                    // Dönen veri dizi olabilir, ilk elemanı alıyoruz [cite: 119]
-                    const dataObj = Array.isArray(resultNode) ? resultNode[0] : resultNode;
-                    const base64Data = dataObj?.BASE64;
+                        const resultNode = downloadRawData?.DownloadDocumentResult || downloadRawData;
+                        const dataObj = Array.isArray(resultNode) ? resultNode[0] : resultNode;
+                        const base64Data = dataObj?.BASE64;
 
-                    if (!base64Data) {
-                        console.error(`❌ [${docNo}] BASE64 veri bulunamadı. Tam Yanıt:`, JSON.stringify(downloadRawData));
-                        downloadFailures.push({ docNo, reason: 'BASE64 veri yok', notification });
-                        return;
-                    }
+                        if (!base64Data) {
+                            console.error(`❌ [${docNo}] BASE64 veri bulunamadı.`);
+                            downloadFailures.push({ docNo, reason: 'BASE64 veri yok', notification });
+                            return;
+                        }
 
                     // Storage'a Kaydet (Kodunuzun geri kalanı doğru görünüyor)
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
