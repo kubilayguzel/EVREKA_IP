@@ -278,7 +278,6 @@ async function waitForNoDialog(timeout = 12000) {
   return false;
 }
 
-
 // --------- Sonsuz Liste & Scroll Yardımcıları ---------
 function elementHasText(el, text) {
   return !!el && (el.textContent || '').toLowerCase().includes((text || '').toLowerCase());
