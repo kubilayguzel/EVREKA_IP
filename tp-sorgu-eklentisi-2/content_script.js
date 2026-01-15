@@ -759,6 +759,7 @@ async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
     await sleep(200);
 
     // 2️⃣ Detay butonunu bul
+    await sleep(300);
     const btn = findDetailButton(tr);
     if (!btn) return null;
 
@@ -806,7 +807,7 @@ async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
     // 8️⃣ Kapat ve tamamen kapanmasını bekle
     closeAnyOpenDialog();
     await waitForNoDialog(8000);
-    await sleep(150);
+    await sleep(600);
 
     return parsed;
   } catch (e) {
@@ -1003,11 +1004,12 @@ async function collectOwnerResultsWithDetails() {
       }
       processedApplicationNumbers.add(base.applicationNumber);
 
-      // --- 3) Başlangıçta satırdan gelen thumbnail'i ata ---
-      if (base.imageSrc) {
+      // Thumbnail sadece başlangıç görselidir, kilitlenir
+      if (base.imageSrc && !base.brandImageDataUrl) {
         base.brandImageDataUrl = base.imageSrc;
         base.brandImageUrl = base.imageSrc;
       }
+
 
       console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
 
@@ -1060,17 +1062,32 @@ async function collectOwnerResultsWithDetails() {
         }
 
         // ✅ Görseli sadece eşleşme OK ise yaz (detail artık mismatch filtrelendi)
-        if (detail.imageDataUrl) {
-          console.log('📸 Detay görseli bulundu (eşleşme OK), güncelleniyor.');
+        const detailAppNo = getDetailAppNo(detail);
+
+        // 🔒 SADECE NUMARA %100 EŞLEŞİYORSA GÖRSELİ YAZ
+        if (
+          detail &&
+          detail.imageDataUrl &&
+          detailAppNo &&
+          numbersMatch(base.applicationNumber, detailAppNo)
+        ) {
+          console.log('📸 Görsel eşleşti, yazılıyor:', base.applicationNumber);
           base.brandImageDataUrl = detail.imageDataUrl;
           base.brandImageUrl = detail.imageDataUrl;
           base.imageSrc = detail.imageDataUrl;
+        } else if (detail && detail.imageDataUrl) {
+          console.warn(
+            '🛑 Görsel eşleşmedi, YAZILMADI',
+            'Beklenen:', base.applicationNumber,
+            'Gelen:', detailAppNo
+          );
         }
+
       } else {
         console.warn('ℹ️ Detail alınamadı / iptal edildi. Thumbnail ile devam:', base.applicationNumber);
       }
 
-      await sleep(150);
+      await sleep(500);
       batchItems.push(base);
       console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
     }
