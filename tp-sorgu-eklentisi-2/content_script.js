@@ -55,6 +55,21 @@ async function withModalLock(action) {
   }
 }
 
+// Detay objesinden Başvuru Numarasını çeker
+function getDetailAppNo(detail) {
+  if (!detail || !detail.fields) return null;
+  // Hem "Başvuru Numarası" hem "Başvuru No" alanlarına bakar
+  return normalizeAppNo(detail.fields['Başvuru Numarası'] || detail.fields['Başvuru No']);
+}
+
+// İki numarayı (boşluksuz ve sadece rakam olarak) karşılaştırır
+function numbersMatch(no1, no2) {
+  const n1 = (no1 || '').replace(/[^0-9]/g, '');
+  const n2 = (no2 || '').replace(/[^0-9]/g, '');
+  // İkisi de doluysa ve eşleşiyorsa true döner
+  return n1 && n2 && n1 === n2;
+}
+
 // ============================================================
 // MODAL PARSE VE İŞLEME KODLARI AŞAĞIDA DEVAM EDER...
 // ============================================================
