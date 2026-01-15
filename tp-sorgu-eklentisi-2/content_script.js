@@ -261,11 +261,18 @@ function withModalLock(fn) {
 }
 
 // ✅ Modal tamamen kapandı mı? (DOM'dan gerçekten kalkmasını bekle)
-async function waitForNoDialog(timeout = 8000) {
+async function waitForNoDialog(timeout = 12000) {
   const t0 = Date.now();
+  let consecutiveEmpty = 0; // Üst üste 5 kez boş görüldüğünde onaylansın
+  
   while (Date.now() - t0 < timeout) {
     const any = document.querySelector('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal');
-    if (!any) return true;
+    if (!any) {
+      consecutiveEmpty++;
+      if (consecutiveEmpty >= 5) return true; // 500ms boyunca boş = gerçekten kapandı
+    } else {
+      consecutiveEmpty = 0;
+    }
     await sleep(100);
   }
   return false;
@@ -1057,12 +1064,20 @@ async function collectOwnerResultsWithDetails() {
           if (Array.isArray(detail.goodsAndServices)) base.goodsAndServicesByClass = detail.goodsAndServices;
           if (Array.isArray(detail.transactions)) base.transactions = detail.transactions;
 
-          // Görseli al
+          // Görseli al - SADECE EŞLEŞME VARSA
           if (detail.imageDataUrl && detail.imageDataUrl.length > 200) {
-              base.brandImageDataUrl = detail.imageDataUrl;
-              base.brandImageUrl = detail.imageDataUrl;
-              base.imageSrc = detail.imageDataUrl;
-              console.log(`✅ [${base.applicationNumber}] Görsel ve Veri Başarılı.`);
+              // ✅ Doğrulama: Görsel gerçekten bu kayda mı ait?
+              const imageAppNo = getDetailAppNo(detail);
+              const isImageMatch = imageAppNo && numbersMatch(base.applicationNumber, imageAppNo);
+              
+              if (isImageMatch) {
+                  base.brandImageDataUrl = detail.imageDataUrl;
+                  base.brandImageUrl = detail.imageDataUrl;
+                  base.imageSrc = detail.imageDataUrl;
+                  console.log(`✅ [${base.applicationNumber}] Görsel DOĞRULANDI ve kaydedildi.`);
+              } else {
+                  console.warn(`⚠️ [${base.applicationNumber}] Görsel başka kayıttan! Atlandı. (Gelen: ${imageAppNo})`);
+              }
           } else {
               console.log(`⚠️ [${base.applicationNumber}] Veri tamam, Görsel yok.`);
           }
