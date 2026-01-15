@@ -296,20 +296,38 @@ export const etebsProxyV2 = onRequest(
                     const downloadResponse = await fetch(downloadApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ TOKEN: token, DOCUMENT_NO: docNo }),
-                        timeout: 30000
+                        // DÜZELTME BURADA: Parametre adı "DOCUMENT NO" (boşluklu) olmalı [cite: 110, 116]
+                        body: JSON.stringify({ 
+                            "TOKEN": token, 
+                            "DOCUMENT NO": docNo 
+                        }),
+                        timeout: 45000 // Timeout süresi biraz artırıldı
                     });
 
                     const downloadRawData = await downloadResponse.json();
+
+                    // API HATA KONTROLÜ
+                    // Dokümandaki hata kodlarını kontrol ediyoruz 
+                    if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
+                        console.error(`❌ ETEBS Hata (${docNo}):`, downloadRawData.IslemSonucAck);
+                        
+                        // Eğer "005 - Daha Önce İndirilmiş Evrak" hatası alırsanız, bu evrak yanmış demektir.
+                        // Manuel işlem gerekebilir.
+                        throw new Error(`ETEBS API Hatası: ${downloadRawData.IslemSonucAck} (Kod: ${downloadRawData.IslemSonucKod})`);
+                    }
+
                     const resultNode = downloadRawData?.DownloadDocumentResult || downloadRawData;
-                    const base64Data = resultNode?.BASE64 || (Array.isArray(resultNode) ? resultNode[0]?.BASE64 : null);
+                    // Dönen veri dizi olabilir, ilk elemanı alıyoruz [cite: 119]
+                    const dataObj = Array.isArray(resultNode) ? resultNode[0] : resultNode;
+                    const base64Data = dataObj?.BASE64;
 
                     if (!base64Data) {
+                        console.error(`❌ [${docNo}] BASE64 veri bulunamadı. Tam Yanıt:`, JSON.stringify(downloadRawData));
                         downloadFailures.push({ docNo, reason: 'BASE64 veri yok', notification });
                         return;
                     }
 
-                    // Storage'a Kaydet
+                    // Storage'a Kaydet (Kodunuzun geri kalanı doğru görünüyor)
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
