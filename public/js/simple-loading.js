@@ -204,3 +204,6 @@ if (typeof window !== 'undefined') {
   // tp-file-transfer.js'in beklediği fonksiyon ismini (alias) tanımlayalım
   window.showLoadingWithCancel = window.showSimpleLoading;
 }
+
+const simpleLoadingInstance = new SimpleLoading();
+export default simpleLoadingInstance;
