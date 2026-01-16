@@ -56,6 +56,15 @@
             overflow: hidden; 
             text-overflow: ellipsis; 
         }
+
+        /* Checkbox / aç-kapa kolonlarında "..." (ellipsis) görünmesin */
+        .portfolio-table th:first-child,
+        .portfolio-table td:first-child,
+        .portfolio-table th:nth-child(2),
+        .portfolio-table td:nth-child(2) {
+        overflow: visible;
+        text-overflow: unset;
+        }
         
         .portfolio-table th { 
             background: #f8f9fa; 
