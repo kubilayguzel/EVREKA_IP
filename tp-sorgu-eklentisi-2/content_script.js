@@ -643,90 +643,87 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 }
 
 // ============================================================
-// TEMİZLİK GARANTİLİ MODAL AÇICI (Hayalet Modalları Önler)
+// HEDEF ODAKLI MODAL AÇICI (Doğru Veriyi Bekler)
 // ============================================================
-async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
+async function openRowModalAndParse(tr, expectedAppNo, { timeout = 15000 } = {}) {
   try {
-    // 1. ADIM: SAHA TEMİZLİĞİ
+    // 1. Temizlik
     closeAnyOpenDialog();
-    // Ekranda hiç dialog kalmayana kadar bekle (Kritik nokta burası)
-    await waitForNoDialog(2000); 
-    await sleep(50); // Ekstra güvenlik payı
+    if (typeof waitForNoDialog === 'function') {
+        await waitForNoDialog(2000);
+    } else {
+        await sleep(1000);
+    }
 
     const btn = findDetailButton(tr);
-    if (!btn) {
-        console.warn('Detay butonu bulunamadı');
-        return null;
-    }
+    if (!btn) return null;
     
-    // Tıklamadan önce butonun gerçekten tıklanabilir olduğundan emin ol
     btn.scrollIntoView({ block: 'center' });
     await sleep(50);
     click(btn);
-    
-    // Tıkladıktan sonra YENİ modalın gelmesi için makul bir süre tanı
-    await sleep(200); 
+    await sleep(250); 
 
-    // 2. ADIM: YENİ MODALI BUL
+    // 2. Modalı Bul
     let dialog = null;
     const searchStart = Date.now();
     
-    // Modalın DOM'a düşmesini bekle
-    while (Date.now() - searchStart < 3000) {
+    while (Date.now() - searchStart < 4000) {
       const highZElements = Array.from(document.querySelectorAll('div'))
         .filter(el => {
             const s = window.getComputedStyle(el);
-            // Sadece görünür ve yeni açılmış (animasyonu bitmiş veya süren) elemanlar
             return s.display !== 'none' && parseInt(s.zIndex) > 1000;
         });
 
       for (const el of highZElements) { 
-        if (el.querySelector('fieldset, table')) { 
-            dialog = el; 
-            break; 
-        }
+        if (el.querySelector('fieldset, table')) { dialog = el; break; }
       }
-      
       if (dialog) break;
       await sleep(100); 
     }
 
-    if (!dialog) {
-        console.error('❌ Modal açılmadı (Timeout).');
-        return null;
-    }
+    if (!dialog) return null;
 
-    // 3. ADIM: İÇERİK DOLUMUNU BEKLE (Stabilizasyon)
+    // 3. DOĞRU VERİYİ BEKLE (Kritik Nokta)
     const contentStart = Date.now();
     let prevRowCount = -1;
     let stableCount = 0;
+    
+    // Hedef numarayı temizle (sadece rakamlar)
+    const targetClean = (expectedAppNo || '').replace(/[^0-9]/g, '');
 
-    while (Date.now() - contentStart < 6000) { // Max 6 sn
+    while (Date.now() - contentStart < timeout) {
         const txt = (dialog.textContent || '').trim();
+        const txtClean = txt.replace(/[^0-9]/g, '');
         const currentRows = dialog.querySelectorAll('tr').length;
         
-        const hasBasicText = txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt));
+        // Temel kontrol: Modal dolu mu?
+        const hasContent = txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt));
 
-        if (hasBasicText) {
+        if (hasContent) {
+            // EĞER hedef numara verilmişse ve ekranda YOKSA -> Beklemeye devam et (Eski veri var demektir)
+            if (targetClean && !txtClean.includes(targetClean)) {
+                // Sadece log kirliliği olmasın diye her döngüde yazmıyoruz
+                if ((Date.now() - contentStart) % 1000 < 150) {
+                   // console.log(`⏳ Beklenen numara (${expectedAppNo}) henüz gelmedi, eski veri olabilir...`);
+                }
+                await sleep(200);
+                continue; 
+            }
+
+            // Stabilizasyon Kontrolü (Tablolar tam yüklensin)
             if (currentRows === prevRowCount) stableCount++;
             else stableCount = 0;
-            
             prevRowCount = currentRows;
 
-            // Satır sayısı 3 döngü boyunca değişmediyse ve tablo boş değilse tamamdır
             if (stableCount >= 4 && currentRows > 0) {
-                break; 
+                break; // Hem doğru numara geldi, hem de yükleme durdu -> TAMAMDIR
             }
         }
         await sleep(100);
     }
 
-    // Parse et
     const parsed = await parseDetailsFromOpenDialog(dialog);
-
-    // İşlem bitince kapat
     closeAnyOpenDialog();
-    
     return parsed;
 
   } catch (e) {
@@ -899,7 +896,8 @@ async function resetModalState() {
 
       // --- İLK DENEME (HIZLI) ---
       await resetModalState();
-      let detail = await withModalLock(() => openRowModalAndParse(tr, { timeout: 4000 }));
+      // base.applicationNumber parametresini ekledik 👇
+      let detail = await withModalLock(() => openRowModalAndParse(tr, base.applicationNumber, { timeout: 6000 }));
       let isVerified = false;
 
       // Doğrulama Fonksiyonu
@@ -928,8 +926,9 @@ async function resetModalState() {
           await sleep(1000); // Biraz nefes al
           await resetModalState();
           
-          // Bu sefer daha uzun süre tanı (Timeout: 8sn)
-          detail = await withModalLock(() => openRowModalAndParse(tr, { timeout: 8000 }));
+          // Bu sefer daha uzun süre tanı (Timeout: 15sn)
+          // base.applicationNumber parametresini ekledik 👇
+          detail = await withModalLock(() => openRowModalAndParse(tr, base.applicationNumber, { timeout: 15000 }));
           isVerified = verifyDetail(detail);
           
           if (isVerified) {
