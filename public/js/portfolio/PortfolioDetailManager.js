@@ -30,18 +30,29 @@ export class PortfolioDetailManager {
     }
 
     async init() {
+        // 1. Önce layout yükle
         await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-        const user = await waitForAuthUser();
-        if (!user) return redirectOnLogout();
 
+        // 2. Oturumu bekle. requireAuth: true sayesinde oturum yoksa 
+        // otomatik olarak index.html'e gönderir.
+        const user = await waitForAuthUser({ requireAuth: true });
+        
+        // Eğer user null ise (yönlendirme başladı demektir), işlemi durdur
+        if (!user) return; 
+
+        // 3. ID kontrolü
         if (!this.recordId) {
             this.showError('Kayıt ID parametresi eksik.');
             return;
         }
 
+        // 4. Verileri yükle
         await this.loadLookups();
         await this.loadRecord();
         this.setupEventListeners();
+        
+        // Opsiyonel: Oturum açıkken biri logout olursa yönlendirmesi için dinleyiciyi buraya ekleyin
+        redirectOnLogout(); 
     }
 
     async loadLookups() {
