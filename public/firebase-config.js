@@ -2314,12 +2314,21 @@ export function waitForAuthUser(options = {}) {
     });
 }
 
-/**
- * Oturum açıkken logout olursa otomatik olarak login sayfasına döndürür.
- */
+
 export function redirectOnLogout(redirectTo = 'index.html') {
+    let initialCheckDone = false;
+
     onAuthStateChanged(auth, (user) => {
+        // Sayfa ilk yüklendiğinde Firebase'in hazır olmasını bekle
+        if (!initialCheckDone) {
+            initialCheckDone = true;
+            return; 
+        }
+
+        // Eğer gerçekten bir çıkış işlemi yapıldıysa (user nesnesi gittiyse) yönlendir
         if (!user) {
+            console.warn("Oturum sonlandırıldı, ana sayfaya yönlendiriliyor...");
+            localStorage.removeItem('currentUser'); // Yerel veriyi temizle
             window.location.href = redirectTo;
         }
     });
