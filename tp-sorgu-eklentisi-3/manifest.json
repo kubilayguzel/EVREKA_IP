@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "TP EPATS Otomasyon - V3",
+  "version": "3.0.0",
+  "description": "EPATS üzerinden belgelerim alanına otomatik erişim ve evrak açma.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://epats.turkpatent.gov.tr/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://epats.turkpatent.gov.tr/*"],
+      "js": ["content_script.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
