@@ -2295,32 +2295,22 @@ export const firebaseServices = {
 
 let authUserReadyPromise = null;
 
-/**
- * Uygulama genelinde "auth hazır + kullanıcı ne" bilgisini döner.
- * 
- * options:
- *  - requireAuth: true => kullanıcı yoksa redirect et
- *  - redirectTo: yönlenecek sayfa (default: 'index.html')
- */
 export function waitForAuthUser(options = {}) {
     const { requireAuth = false, redirectTo = 'index.html' } = options;
 
-    if (!authUserReadyPromise) {
-        authUserReadyPromise = new Promise((resolve) => {
-            // onAuthStateChanged ilk kez tetiklenince kullanıcı bilgisini alıyoruz
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
-                unsubscribe();
+    return new Promise((resolve) => {
+        // onAuthStateChanged dinleyicisi Firebase hazır olduğunda tetiklenir
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe(); // İlk cevabı aldıktan sonra dinlemeyi bırak
+            
+            if (requireAuth && !user) {
+                console.warn("Oturum bulunamadı, yönlendiriliyor...");
+                window.location.href = redirectTo;
+                resolve(null);
+            } else {
                 resolve(user || null);
-            });
+            }
         });
-    }
-
-    return authUserReadyPromise.then(user => {
-        if (requireAuth && !user) {
-            window.location.href = redirectTo;
-            return null;
-        }
-        return user;
     });
 }
 
