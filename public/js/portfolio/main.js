@@ -27,11 +27,11 @@ class PortfolioController {
 
     async init() {
         // 1) İlk auth durumunu stabil şekilde bekle (kısa süreli null dalgalanmasında zıplamasın)
-        const user = await waitForAuthUser({ requireAuth: true, redirectTo: 'index.html' });
+        const user = await waitForAuthUser({ requireAuth: true, redirectTo: 'index.html', graceMs: 1200 });
         if (!user) return; // redirect başladıysa çık
 
         // 2) Sonraki gerçek logout durumlarında yönlendir
-        redirectOnLogout('index.html');
+        redirectOnLogout('index.html', 1200);
 
         await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
         this.renderer.showLoading(true);
