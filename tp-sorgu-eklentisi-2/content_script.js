@@ -643,27 +643,31 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 }
 
 // ============================================================
-// HEDEF ODAKLI MODAL AÇICI (Doğru Veriyi Bekler)
+// HEDEF ODAKLI MODAL AÇICI (Doğru Numarayı Bekler)
 // ============================================================
 async function openRowModalAndParse(tr, expectedAppNo, { timeout = 15000 } = {}) {
   try {
-    // 1. Temizlik
+    // 1. ADIM: SAHA TEMİZLİĞİ (Bir önceki kapansın)
     closeAnyOpenDialog();
     if (typeof waitForNoDialog === 'function') {
-        await waitForNoDialog(2000);
+        await waitForNoDialog(2000); // Kapanmayı bekle
     } else {
         await sleep(1000);
     }
 
     const btn = findDetailButton(tr);
-    if (!btn) return null;
+    if (!btn) {
+        console.warn('Detay butonu bulunamadı');
+        return null;
+    }
     
+    // Butona git ve tıkla
     btn.scrollIntoView({ block: 'center' });
     await sleep(50);
     click(btn);
     await sleep(250); 
 
-    // 2. Modalı Bul
+    // 2. ADIM: MODAL KUTUSUNU BUL
     let dialog = null;
     const searchStart = Date.now();
     
@@ -683,47 +687,51 @@ async function openRowModalAndParse(tr, expectedAppNo, { timeout = 15000 } = {})
 
     if (!dialog) return null;
 
-    // 3. DOĞRU VERİYİ BEKLE (Kritik Nokta)
+    // 3. ADIM: DOĞRU VERİYİ VE YÜKLEMEYİ BEKLE (En Kritik Yer)
     const contentStart = Date.now();
     let prevRowCount = -1;
     let stableCount = 0;
     
-    // Hedef numarayı temizle (sadece rakamlar)
+    // Beklediğimiz numarayı temizle (Sadece rakam: 2024034166)
     const targetClean = (expectedAppNo || '').replace(/[^0-9]/g, '');
 
     while (Date.now() - contentStart < timeout) {
         const txt = (dialog.textContent || '').trim();
-        const txtClean = txt.replace(/[^0-9]/g, '');
+        const txtClean = txt.replace(/[^0-9]/g, ''); // Sayfadaki tüm rakamlar
         const currentRows = dialog.querySelectorAll('tr').length;
         
-        // Temel kontrol: Modal dolu mu?
+        // Modal dolu mu? (En azından 'Başvuru' yazısı var mı?)
         const hasContent = txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt));
 
         if (hasContent) {
-            // EĞER hedef numara verilmişse ve ekranda YOKSA -> Beklemeye devam et (Eski veri var demektir)
+            // EĞER hedef numara verilmişse ve ekranda YOKSA -> Bekle (Eski veri var demektir)
             if (targetClean && !txtClean.includes(targetClean)) {
-                // Sadece log kirliliği olmasın diye her döngüde yazmıyoruz
-                if ((Date.now() - contentStart) % 1000 < 150) {
-                   // console.log(`⏳ Beklenen numara (${expectedAppNo}) henüz gelmedi, eski veri olabilir...`);
-                }
-                await sleep(200);
+                // Beklenen numara henüz ekrana düşmedi, döngüye devam et
+                await sleep(100);
                 continue; 
             }
 
-            // Stabilizasyon Kontrolü (Tablolar tam yüklensin)
+            // Buraya geldiysek doğru numara ekranda demektir.
+            // Şimdi de tablonun tam yüklenmesini (satır sayısının durmasını) bekleyelim.
             if (currentRows === prevRowCount) stableCount++;
             else stableCount = 0;
+            
             prevRowCount = currentRows;
 
+            // Satır sayısı 4 döngü (400ms) boyunca değişmediyse ve tablo boş değilse TAMAMDIR
             if (stableCount >= 4 && currentRows > 0) {
-                break; // Hem doğru numara geldi, hem de yükleme durdu -> TAMAMDIR
+                break; 
             }
         }
         await sleep(100);
     }
 
+    // Parse et
     const parsed = await parseDetailsFromOpenDialog(dialog);
+
+    // İşlem bitince kapat
     closeAnyOpenDialog();
+    
     return parsed;
 
   } catch (e) {
@@ -851,24 +859,22 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 // ============================================================
-// HATA TOLERANSLI SERİ TOPLAYICI
+// DOĞRULAMALI SERİ TOPLAYICI
 // ============================================================
 async function collectOwnerResultsWithDetails() {
-  console.log('🚀 collectOwnerResultsWithDetails başladı (RETRY MODE)');
+  console.log('🚀 collectOwnerResultsWithDetails başladı (TARGET CHECK MODE)');
 
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   const processedApplicationNumbers = new Set();
   const batchSize = 100; 
 
-async function resetModalState() {
+  async function resetModalState() {
     try { 
       closeAnyOpenDialog(); 
-      // Artık waitForNoDialog tanımlı olduğu için burası gerçekten bekleyecek
-      await waitForNoDialog(1500); 
-    } catch (e) {
-      console.warn('Reset modal hatası:', e);
-    }
-}
+      if (typeof waitForNoDialog === 'function') await waitForNoDialog(1500);
+      else await sleep(1000);
+    } catch (e) {}
+  }
 
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
@@ -887,53 +893,41 @@ async function resetModalState() {
       if (!base.applicationNumber) continue;
 
       base.applicationNumber = normalizeAppNo(base.applicationNumber);
-      const targetNoClean = base.applicationNumber.replace(/[^0-9]/g, '');
-
+      
+      // Duplicate kontrolü
       if (processedApplicationNumbers.has(base.applicationNumber)) continue;
       processedApplicationNumbers.add(base.applicationNumber);
       
       base.thumbnailSrc = base.imageSrc || null;
 
-      // --- İLK DENEME (HIZLI) ---
+      // --- İLK DENEME ---
       await resetModalState();
-      // base.applicationNumber parametresini ekledik 👇
+      
+      // YENİLİK BURADA: base.applicationNumber'ı parametre olarak gönderiyoruz 👇
       let detail = await withModalLock(() => openRowModalAndParse(tr, base.applicationNumber, { timeout: 6000 }));
+      
       let isVerified = false;
 
-      // Doğrulama Fonksiyonu
+      // Basit Doğrulama (Zaten fonksiyon doğru numarayı beklediği için burası genelde true döner)
       const verifyDetail = (d) => {
           if (!d) return false;
           const dNo = getDetailAppNo(d);
-          if (dNo && numbersMatch(base.applicationNumber, dNo)) return true;
-          // Ham metin kontrolü
-          const openDialog = document.querySelector('[role="dialog"], .MuiDialog-root');
-          if (openDialog) {
-              const rawText = (openDialog.textContent || '').replace(/[^0-9]/g, '');
-              if (rawText.includes(targetNoClean)) {
-                  if (!d.fields) d.fields = {};
-                  d.fields['Başvuru Numarası'] = base.applicationNumber;
-                  return true;
-              }
-          }
-          return false;
+          return dNo && numbersMatch(base.applicationNumber, dNo);
       };
 
       isVerified = verifyDetail(detail);
 
-      // --- İKİNCİ DENEME (RETRY - Eğer ilkinde hata varsa) ---
+      // --- İKİNCİ DENEME (Eğer ilkinde hata/timeout olduysa) ---
       if (!isVerified) {
-          console.warn(`⚠️ [${base.applicationNumber}] İlk deneme başarısız. Yavaşça tekrar deneniyor...`);
-          await sleep(1000); // Biraz nefes al
+          console.warn(`⚠️ [${base.applicationNumber}] İlk deneme başarısız. Tekrar deneniyor...`);
+          await sleep(1000); 
           await resetModalState();
           
-          // Bu sefer daha uzun süre tanı (Timeout: 15sn)
-          // base.applicationNumber parametresini ekledik 👇
+          // İkinci denemede süreyi uzatıyoruz (15 sn) ve yine numarayı gönderiyoruz 👇
           detail = await withModalLock(() => openRowModalAndParse(tr, base.applicationNumber, { timeout: 15000 }));
           isVerified = verifyDetail(detail);
           
-          if (isVerified) {
-              console.log(`✅ [${base.applicationNumber}] İkinci denemede kurtarıldı!`);
-          } else {
+          if (!isVerified) {
               console.error(`❌ [${base.applicationNumber}] İkinci deneme de başarısız. Liste verisi kullanılacak.`);
           }
       }
@@ -971,7 +965,7 @@ async function resetModalState() {
     totalProcessed: processedApplicationNumbers.size,
     totalRows: rows.length
   });
-} 
+}
 
 async function waitAndSendOwnerResults() {
   // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
