@@ -1,8 +1,7 @@
 // public/js/portfolio/main.js
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
-import { auth, monitoringService } from '../../firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
+import { auth, monitoringService, waitForAuthUser, redirectOnLogout } from '../../firebase-config.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
 import Pagination from '../pagination.js';
@@ -27,58 +26,54 @@ class PortfolioController {
 
 
     async init() {
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-                this.renderer.showLoading(true);
-                
-                // --- YENİ: URL'den Tab Bilgisini Okuma ve Ayarlama ---
-                const urlParams = new URLSearchParams(window.location.search);
-                const tabParam = urlParams.get('activeTab');
-                
-                // Eğer geçerli bir tab parametresi varsa state'i güncelle
-                if (tabParam && ['all', 'trademark', 'patent', 'design', 'litigation', 'objections'].includes(tabParam)) {
-                    this.state.activeTab = tabParam;
-                    
-                    // HTML'deki butonların 'active' sınıfını güncelle
-                    const tabButtons = document.querySelectorAll('.tab-button');
-                    if (tabButtons.length > 0) {
-                        tabButtons.forEach(btn => btn.classList.remove('active'));
-                        const activeBtn = document.querySelector(`.tab-button[data-type="${tabParam}"]`);
-                        if (activeBtn) activeBtn.classList.add('active');
-                    }
-                }
-                // -----------------------------------------------------
+        // 1) İlk auth durumunu stabil şekilde bekle (kısa süreli null dalgalanmasında zıplamasın)
+        const user = await waitForAuthUser({ requireAuth: true, redirectTo: 'index.html' });
+        if (!user) return; // redirect başladıysa çık
 
-                // init() içindeki loadInitialData kısmını şu şekilde değiştirin:
-                try {
-                    // Önce sabit verileri (ülke, kişi vb.) yükle
-                    await Promise.all([
-                        this.dataManager.loadTransactionTypes(),
-                        this.dataManager.loadPersons(),
-                        this.dataManager.loadCountries()
-                    ]);
+        // 2) Sonraki gerçek logout durumlarında yönlendir
+        redirectOnLogout('index.html');
 
-                    // Canlı dinleyiciyi başlat
-                    this.unsubscribe = this.dataManager.startListening((updatedRecords) => {
-                        console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
-                        this.render(); // Her değişimde tabloyu otomatik olarak tekrar çizer
-                    });
+        await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
+        this.renderer.showLoading(true);
 
-                    this.setupPagination();
-                    this.setupEventListeners();
-                    this.setupImageHover();
-                    // this.render(); artık dinleyici tarafından otomatik çağrılacak
-                } catch (e) {
-                    console.error('Init hatası:', e);
-                } finally {
-                    this.renderer.showLoading(false);
-                }
-            } else {
-                window.location.href = 'index.html';
+        // --- YENİ: URL'den Tab Bilgisini Okuma ve Ayarlama ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('activeTab');
+
+        if (tabParam && ['all', 'trademark', 'patent', 'design', 'litigation', 'objections'].includes(tabParam)) {
+            this.state.activeTab = tabParam;
+
+            const tabButtons = document.querySelectorAll('.tab-button');
+            if (tabButtons.length > 0) {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                const activeBtn = document.querySelector(`.tab-button[data-type="${tabParam}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
             }
-        });
+        }
+        // -----------------------------------------------------
+
+        try {
+            await Promise.all([
+                this.dataManager.loadTransactionTypes(),
+                this.dataManager.loadPersons(),
+                this.dataManager.loadCountries()
+            ]);
+
+            this.unsubscribe = this.dataManager.startListening(() => {
+                console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
+                this.render();
+            });
+
+            this.setupPagination();
+            this.setupEventListeners();
+            this.setupImageHover();
+        } catch (e) {
+            console.error('Init hatası:', e);
+        } finally {
+            this.renderer.showLoading(false);
+        }
     }
+
 
     // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
 
@@ -244,7 +239,7 @@ class PortfolioController {
                 const id = btn.dataset.id;
                 if (btn.classList.contains('view-btn')) {
                     if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
-                    else window.open(`portfolio-detail.html?id=${id}`, '_blank');
+                    else window.open(`portfolio-detail.html?id=${id}`, '_blank', 'noopener');
                 } else if (btn.classList.contains('delete-btn')) {
                     this.handleDelete(id);
                 } else if (btn.classList.contains('edit-btn')) {
