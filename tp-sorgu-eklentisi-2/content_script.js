@@ -495,250 +495,136 @@ function findDetailButton(tr) {
   return byLabel || btns[btns.length - 1] || null;
 }
 
+// ============================================================
+// GÜÇLENDİRİLMİŞ PARSE FONKSİYONU (Yedekli Okuma)
+// ============================================================
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
-  
-  if (!dialogRoot) return {};
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
+  
+  if (!dialogRoot) return {};
 
-  const data = {
-    imageDataUrl: null,
-    fields: {},
-    goodsAndServices: [],
-    transactions: []
-  };
-  // --- EVREKA PATCH: Extract Application No & Date early (label-based) ---
-  try {
-    const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
-    if (labeledAppNo) {
-      data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
-    } else {
-      const txtAll = (dialogRoot.textContent || '').replace(/\s+/g, ' ').trim(); // Düzeltildi
-      const m = txtAll.match(/\b((?:19|20)\d{2}|\d{2})\/\d{4,}\b/); // Düzeltildi
-      if (m) data.fields['Başvuru Numarası'] = normalizeAppNo(m[0]);
-    }
-    const labeledAppDate = extractByLabel(dialogRoot, 'Başvuru Tarihi');
-    if (labeledAppDate) {
-      data.fields['Başvuru Tarihi'] = labeledAppDate;
-    }
-  } catch (e) { /* ignore */ }
+  const data = {
+    imageDataUrl: null,
+    fields: {},
+    goodsAndServices: [],
+    transactions: []
+  };
 
+  // --- 1. ETAP: Başvuru No/Tarih (Hızlı Çekim) ---
+  try {
+    const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
+    if (labeledAppNo) {
+      data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
+    } else {
+      const txtAll = (dialogRoot.textContent || '').replace(/\s+/g, ' ').trim();
+      const m = txtAll.match(/\b((?:19|20)\d{2}|\d{2})\/\d{4,}\b/);
+      if (m) data.fields['Başvuru Numarası'] = normalizeAppNo(m[0]);
+    }
+    const labeledAppDate = extractByLabel(dialogRoot, 'Başvuru Tarihi');
+    if (labeledAppDate) data.fields['Başvuru Tarihi'] = labeledAppDate;
+  } catch (e) { /* ignore */ }
 
-try {
-    // YENİ: Tüm tabloları topla - hem eski hem yeni selector'lar
-    const allTables = dialogRoot.querySelectorAll(
-      'table, .MuiTable-root, table.MuiTable-root.css-175qdh6'
-    );
-    
-    console.log('🔍 Toplam tablo sayısı:', allTables.length);
-    
-    for (const table of allTables) {
-      // Header detection - YENİ CSS class'ları ekle
-      const headers = table.querySelectorAll(
-        'th, .MuiTableCell-head, thead .MuiTableCell-root, th.MuiTableCell-head.MuiTableCell-sizeSmall'
-      );
-      const headerTexts = Array.from(headers).map(h => h.textContent.trim());
-      
-      console.log('📋 Tablo header\'ları:', headerTexts); // Düzeltildi
-      
-      // tbody detection - YENİ CSS class'lı tbody
-      const tbody = table.querySelector(
-        'tbody, .MuiTableBody-root, tbody.MuiTableBody-root.css-y6j1my'
-      );
-      if (!tbody) {
-        console.warn('⚠️ tbody bulunamadı, sonraki tabloya geç');
-        continue;
-      }
-      
-      // tr detection - YENİ CSS class'lı tr
-      const rows = tbody.querySelectorAll(
-        'tr, .MuiTableRow-root, tr.MuiTableRow-root.css-11biftp'
-      );
-      
-      console.log('📊 Tablo satır sayısı:', rows.length);
-      
-      // ==========================================
-      // 1) MAL VE HİZMETLER TABLOSU (2 kolonlu)
-      // ==========================================
-      if (headerTexts.some(h => h.includes('Sınıf')) && 
-          headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
-        
-        console.log('✅ Mal ve Hizmetler tablosu tespit edildi');
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
-          
-          if (cells.length === 2) {
-            const classNoText = cells[0].textContent.trim();
-            const goodsText = cells[1].textContent.trim();
-            
-            // Sınıf numarası parse et
-            const classNo = parseInt(classNoText, 10);
-            
-            if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
-              // Mal/hizmet metnini satırlara ayır
-              const items = goodsText
-                .split(/\n+/) // Düzeltildi
-                .map(item => item.trim())
-                .filter(Boolean)
-                .map(item => item.replace(/\s+/g, ' ')); // Düzeltildi
-              
-              console.log(`📦 Sınıf ${classNo}: ${items.length} adet mal/hizmet bulundu`);
-              data.goodsAndServices.push({ classNo, items });
-            }
-          }
-        }
-      }
-      
-      // ==========================================
-      // 2) İŞLEM GEÇMİŞİ TABLOSU (4 kolonlu + başlık satırları)
-      // ==========================================
-      else if (headerTexts.some(h => h.includes('Tarih')) && 
-               headerTexts.some(h => h.includes('İşlem'))) {
-        
-        console.log('✅ İşlem geçmişi tablosu tespit edildi');
-        
-        const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/; // Düzeltildi
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
-          
-          // BAŞLIK SATIRLARI: 1 hücreli + colspan (Marka başvurusu, Marka Tescil Ücreti Ödeme gibi)
-          if (cells.length === 1) {
-            const titleText = cells[0].textContent.trim();
-            if (titleText && titleText.length > 0) {
-              console.log('📌 İşlem geçmişi başlık:', titleText);
-              // Başlık satırlarını ignore et veya özel işle
-            }
-            continue;
-          }
-          
-          // VERİ SATIRLARI: 4 hücreli (Tarih, Tebliğ Tarihi, İşlem, Açıklama)
-          if (cells.length === 4) {
-            const dateText = cells[0].textContent.trim();
-            const notificationDate = cells[1].textContent.trim();
-            const operationText = cells[2].textContent.trim();
-            const noteText = cells[3].textContent.trim();
-            
-            // Sadece geçerli tarih formatına sahip satırları al
-            if (dateRegex.test(dateText) && operationText && operationText !== '--') {
-              const transaction = {
-                date: dateText,
-                description: operationText,
-                note: (noteText && noteText !== '--' && noteText !== '-') ? noteText : null
-              };
-              
-              // İsteğe bağlı: Tebliğ tarihini de ekle
-              if (notificationDate && notificationDate !== '--') {
-                transaction.notificationDate = notificationDate;
-              }
-              
-              console.log('📝 Transaction eklendi:', transaction);
-              data.transactions.push(transaction);
-            }
-          }
-        }
-      }
-      
-      // ==========================================
-      // 3) ANA BİLGİLER TABLOSU (4 kolonlu Key-Value)
-      // ==========================================
-      else {
-        console.log('✅ Ana bilgiler tablosu tespit edildi');
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll(
-            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
-          );
-          
-          // 4 KOLONLU: Key1, Value1, Key2, Value2
-          if (cells.length === 4) {
-            const key1 = cells[0].textContent.trim();
-            const value1 = cells[1].textContent.trim();
-            const key2 = cells[2].textContent.trim();
-            const value2 = cells[3].textContent.trim();
-            
-            console.log('🔍 4 hücreli satır:', key1, '=', value1, '|', key2, '=', value2);
-            
-            // Value normalize - "--" ve "-" boş kabul edilir
-            const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
-            const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
-            
-            if (key1 && normalizedValue1) data.fields[key1] = normalizedValue1;
-            if (key2 && normalizedValue2) data.fields[key2] = normalizedValue2;
-          }
-          
-          // 2 KOLONLU: Key, Value (Sahip Bilgileri, Vekil Bilgileri gibi)
-          else if (cells.length === 2) {
-            const key = cells[0].textContent.trim();
-            const value = cells[1].textContent.trim();
-            
-            console.log('🔍 2 hücreli satır:', key, '=', value);
-            
-            const normalizedValue = (value === '--' || value === '-') ? '' : value;
-            if (key && normalizedValue) data.fields[key] = normalizedValue;
-          }
-        }
-      }
-    }
-    
-    // EKSTRA GÜVENLIK: Tüm tablolardaki 4 hücreli satırları da tara
-    // (Bazı bilgiler farklı tablolarda olabilir)
-    const allTableRows = dialogRoot.querySelectorAll(
-      'table tr, .MuiTable-root tr, tr.MuiTableRow-root'
-    );
-    
-    for (const row of allTableRows) {
-      const cells = row.querySelectorAll(
-        'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body'
-      );
-      
-      if (cells.length === 4) {
-        const key1 = cells[0].textContent.trim();
-        const value1 = cells[1].textContent.trim();
-        const key2 = cells[2].textContent.trim();
-        const value2 = cells[3].textContent.trim();
-        
-        // Sadece daha önce eklenmemiş bilgileri ekle
-        const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
-        const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
-        
-        if (key1 && normalizedValue1 && !data.fields[key1]) {
-          data.fields[key1] = normalizedValue1;
-        }
-        if (key2 && normalizedValue2 && !data.fields[key2]) {
-          data.fields[key2] = normalizedValue2;
-        }
-      }
-    }
-    
-  } catch (e) {
-    console.error('❌ Modal parse hatası:', e);
-    console.error('❌ Hata detayı:', e.stack);
-  }
-    // Görsel çıkarma
-    const imgEl = dialogRoot.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
-    if (imgEl?.src) {
-      data.imageDataUrl = imgEl.src;
-      log('🖼️ Görsel URL\'si bulundu:', data.imageDataUrl.substring(0, 50) + '...');
-    }
+  try {
+    // --- 2. ETAP: Tablo Taraması ---
+    const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+    console.log('🔍 Toplam tablo sayısı:', allTables.length);
+    
+    for (const table of allTables) {
+      const headers = table.querySelectorAll('th, .MuiTableCell-head');
+      const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+      const tbody = table.querySelector('tbody, .MuiTableBody-root');
+      if (!tbody) continue;
+      const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
 
-  console.log('🔍 Final data.fields:', data.fields);
-  console.log('📦 Final data.goodsAndServices:', data.goodsAndServices.length, 'sınıf');
-  console.log('📝 Final data.transactions:', data.transactions.length, 'işlem');
-  
-  return data;
+      // A) MAL VE HİZMETLER TABLOSU
+      if (headerTexts.some(h => h.includes('Sınıf')) && 
+          headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet') || h.includes('Emtia'))) {
+        
+        console.log('✅ Mal ve Hizmetler tablosu bulundu');
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          if (cells.length >= 2) {
+            const classNoText = cells[0].textContent.trim();
+            const goodsText = cells[1].textContent.trim();
+            const classNo = parseInt(classNoText, 10);
+            
+            if (!isNaN(classNo) && goodsText.length > 0) {
+              // Alt alta yazılan maddeleri temizle
+              const items = goodsText.split(/\n+/).map(i => i.trim()).filter(Boolean).map(i => i.replace(/\s+/g, ' '));
+              data.goodsAndServices.push({ classNo, items });
+            }
+          }
+        }
+      }
+      // B) İŞLEM GEÇMİŞİ
+      else if (headerTexts.some(h => h.includes('Tarih')) && headerTexts.some(h => h.includes('İşlem'))) {
+         for (const row of rows) {
+             const cells = row.querySelectorAll('td');
+             if (cells.length >= 3) { // En az 3 hücre gerekli
+                 const dateT = cells[0].textContent.trim();
+                 const opT = cells[2].textContent.trim();
+                 // Tarih formatı kontrolü
+                 if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateT)) {
+                     data.transactions.push({ date: dateT, description: opT });
+                 }
+             }
+         }
+      }
+      // C) ANA BİLGİLER (Key-Value)
+      else {
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          // 4 Hücreli (Key-Val-Key-Val)
+          if (cells.length === 4) {
+             const k1 = cells[0].textContent.trim(); const v1 = cells[1].textContent.trim();
+             const k2 = cells[2].textContent.trim(); const v2 = cells[3].textContent.trim();
+             if(k1 && v1 && v1 !== '--') data.fields[k1] = v1;
+             if(k2 && v2 && v2 !== '--') data.fields[k2] = v2;
+          }
+          // 2 Hücreli (Key-Val)
+          else if (cells.length === 2) {
+             const k = cells[0].textContent.trim(); const v = cells[1].textContent.trim();
+             if(k && v && v !== '--') data.fields[k] = v;
+          }
+        }
+      }
+    }
+
+    // --- 3. ETAP: KURTARMA OPERASYONU (Fallback) ---
+    const fullText = dialogRoot.textContent || '';
+
+    // Tescil Tarihi Kurtarma
+    if (!data.fields['Tescil Tarihi']) {
+        // Örn: "Tescil Tarihi : 12.05.2023"
+        const tescilMatch = fullText.match(/Tescil\s*Tarihi\s*[:]?\s*(\d{2}\.\d{2}\.\d{4})/i);
+        if (tescilMatch) {
+            console.log('⚠️ Tescil Tarihi metinden kurtarıldı:', tescilMatch[1]);
+            data.fields['Tescil Tarihi'] = tescilMatch[1];
+        }
+    }
+    
+    // Tescil Numarası Kurtarma
+    if (!data.fields['Tescil Numarası']) {
+         const tescilNoMatch = fullText.match(/Tescil\s*Numarası\s*[:]?\s*(\d+)/i);
+         if (tescilNoMatch) data.fields['Tescil Numarası'] = tescilNoMatch[1];
+    }
+
+  } catch (e) {
+    console.error('❌ Parse hatası:', e);
+  }
+
+  // Görsel
+  const imgEl = dialogRoot.querySelector('img[src*="data:image"], img[src*="MarkaGorseli"]');
+  if (imgEl?.src) data.imageDataUrl = imgEl.src;
+
+  return data;
 }
 
 // ============================================================
-// İÇERİK GARANTİLİ HIZLI MODAL AÇICI
+// AKILLI VE TAM YÜKLEME BEKLEYEN MODAL AÇICI
 // ============================================================
 async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
   try {
-    // Temizlik
     closeAnyOpenDialog();
     await sleep(20); 
 
@@ -746,25 +632,21 @@ async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
     if (!btn) return null;
     
     click(btn);
-    // Tıklama sonrası animasyon için minik bekleme
+    // Animasyon başlaması için minik bekleme
     await sleep(150); 
 
-    // 1. AŞAMA: MODAL KUTUSUNU BUL
+    // 1. MODAL KUTUSUNU BUL
     let dialog = null;
-    const maxAttempts = 20; 
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // 20 deneme x 100ms = Max 2 saniye modal arama
+    for (let attempt = 0; attempt < 20; attempt++) {
       const highZElements = Array.from(document.querySelectorAll('div'))
         .filter(el => {
-          const style = window.getComputedStyle(el);
-          return style.display !== 'none' && parseInt(style.zIndex) > 1000;
+            const s = window.getComputedStyle(el);
+            return s.display !== 'none' && parseInt(s.zIndex) > 1000;
         });
-
+      // İçinde tablo veya fieldset olanı tercih et
       for (const el of highZElements) { 
-        if (el.querySelector('fieldset, table')) {
-          dialog = el;
-          break;
-        }
+        if (el.querySelector('fieldset, table')) { dialog = el; break; }
       }
       if (dialog) break;
       await sleep(100); 
@@ -772,23 +654,38 @@ async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
 
     if (!dialog) return null;
 
-    // 2. AŞAMA: İÇERİĞİN DOLMASINI BEKLE (KRİTİK KISIM)
-    // Modal kutusu var ama içi boş olabilir. "Başvuru Numarası" yazısı gelene kadar bekle.
-    const contentStart = Date.now();
-    let isContentReady = false;
+    // 2. İÇERİK STABİLİZASYONU (KRİTİK GÜNCELLEME)
+    // Sadece "Başvuru No" yetmez, tablodaki satır sayısının sabitlenmesini bekle.
     
-    while (Date.now() - contentStart < 4000) { // Max 4 sn içerik bekle
-        const txt = (dialog.textContent || '').trim();
-        // Eğer içerikte "Başvuru" kelimesi veya herhangi bir sayısal veri varsa dolmuş demektir
-        if (txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt))) {
-            isContentReady = true;
-            break;
-        }
-        await sleep(100);
-    }
+    const contentStart = Date.now();
+    let prevRowCount = -1;
+    let stableCount = 0; // Kaç döngüdür satır sayısı değişmedi?
 
-    if (!isContentReady) {
-        console.warn('⚠️ Modal açıldı ama içerik yüklenmedi (Timeout).');
+    while (Date.now() - contentStart < 5000) { // Max 5 sn içerik bekle
+        const txt = (dialog.textContent || '').trim();
+        const currentRows = dialog.querySelectorAll('tr').length;
+        
+        // Temel metin (Başvuru No) geldi mi?
+        const hasBasicText = txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt));
+
+        if (hasBasicText) {
+            // Eğer satır sayısı değişiyorsa (tablolar yükleniyorsa) bekle
+            if (currentRows === prevRowCount) {
+                stableCount++;
+            } else {
+                stableCount = 0; // Değişim var, sayacı sıfırla
+            }
+            
+            prevRowCount = currentRows;
+
+            // Eğer 3 döngü (yaklaşık 300ms) boyunca satır sayısı hiç değişmediyse
+            // VE en azından birkaç satır geldiyse (tablolar dolduysa) ÇIK.
+            if (stableCount >= 3 && currentRows > 2) {
+                break; // Yükleme bitti
+            }
+        }
+        
+        await sleep(100);
     }
 
     // Parse et
