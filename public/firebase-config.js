@@ -635,20 +635,28 @@ export const ipRecordsService = {
         }
     },
 
-    // ipRecordsService içindeki searchRecords fonksiyonundan sonra:
     subscribeToRecords(callback, limitCount = 500) {
         if (!isFirebaseAvailable) return () => {};
         let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(limitCount));
         
-        // Canlı bağlantıyı başlatır
         return onSnapshot(q, (snapshot) => {
             const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             callback({ success: true, data: records });
         }, (error) => {
-            console.error("Dinleme hatası:", error);
+            // Hata durumunu analiz et
+            console.error("Firestore Dinleme Hatası:", error.code, error.message);
+            
+            // Eğer hata geçici bir yetki hatasıysa (kod: 'permission-denied'), 
+            // sayfayı hemen kırma, sadece logla. 
+            if (error.code === 'permission-denied') {
+                console.warn("Yeni sekme açılışı nedeniyle geçici yetki kaybı yaşandı, dinleyici hayatta tutuluyor.");
+                return;
+            }
+
             callback({ success: false, error: error.message });
         });
     }
+
 };
 
 // --- YENİ EKLENDİ: Persons Service ---
