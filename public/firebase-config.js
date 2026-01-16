@@ -2304,41 +2304,66 @@ export const firebaseServices = {
 let authUserReadyPromise = null;
 
 export function waitForAuthUser(options = {}) {
-    const { requireAuth = false, redirectTo = 'index.html' } = options;
+    const { requireAuth = false, redirectTo = 'index.html', graceMs = 800 } = options;
 
     return new Promise((resolve) => {
-        // onAuthStateChanged dinleyicisi Firebase hazır olduğunda tetiklenir
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            unsubscribe(); // İlk cevabı aldıktan sonra dinlemeyi bırak
-            
-            if (requireAuth && !user) {
-                console.warn("Oturum bulunamadı, yönlendiriliyor...");
+            unsubscribe(); // ilk sonucu al ve bırak
+
+            // Auth varsa direkt çöz
+            if (user) {
+                resolve(user);
+                return;
+            }
+
+            // Auth gerekmiyorsa null dön
+            if (!requireAuth) {
+                resolve(null);
+                return;
+            }
+
+            // --- GRACE PERIOD: null geldiyse hemen redirect etme ---
+            // localStorage'da kullanıcı var gibi görünüyorsa veya çok sekmeli gecikme oluyorsa,
+            // kısa süre bekleyip tekrar kontrol et.
+            const localUser = localStorage.getItem('currentUser');
+
+            setTimeout(() => {
+                const stableUser = auth.currentUser;
+
+                if (stableUser) {
+                    resolve(stableUser);
+                    return;
+                }
+
+                // Hala yoksa o zaman gerçekten oturum yok kabul et
+                console.warn("Oturum bulunamadı (stabil), yönlendiriliyor...");
+                if (localUser) localStorage.removeItem('currentUser');
                 window.location.href = redirectTo;
                 resolve(null);
-            } else {
-                resolve(user || null);
-            }
+            }, graceMs);
         });
     });
 }
 
-
-export function redirectOnLogout(redirectTo = 'index.html') {
+export function redirectOnLogout(redirectTo = 'index.html', graceMs = 800) {
     let initialCheckDone = false;
 
     onAuthStateChanged(auth, (user) => {
-        // Sayfa ilk yüklendiğinde Firebase'in hazır olmasını bekle
         if (!initialCheckDone) {
             initialCheckDone = true;
-            return; 
+            return;
         }
 
-        // Eğer gerçekten bir çıkış işlemi yapıldıysa (user nesnesi gittiyse) yönlendir
-        if (!user) {
-            console.warn("Oturum sonlandırıldı, ana sayfaya yönlendiriliyor...");
-            localStorage.removeItem('currentUser'); // Yerel veriyi temizle
+        if (user) return;
+
+        // GRACE: bir anlık null için hemen redirect etme
+        setTimeout(() => {
+            if (auth.currentUser) return;
+
+            console.warn("Oturum sonlandırıldı (stabil), ana sayfaya yönlendiriliyor...");
+            localStorage.removeItem('currentUser');
             window.location.href = redirectTo;
-        }
+        }, graceMs);
     });
 }
 
