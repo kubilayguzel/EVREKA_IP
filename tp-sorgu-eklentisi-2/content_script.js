@@ -70,6 +70,28 @@ function numbersMatch(no1, no2) {
   return n1 && n2 && n1 === n2;
 }
 
+// ✅ EKSİK OLAN BEKLEME FONKSİYONU (Dosyanın en tepesine ekleyin)
+function waitForNoDialog(timeout = 3000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      // Ekranda görünür olan dialog var mı?
+      const visibleDialogs = Array.from(document.querySelectorAll('div[role="dialog"], .MuiDialog-root'))
+        .filter(el => window.getComputedStyle(el).display !== 'none' && el.offsetParent !== null);
+      
+      if (visibleDialogs.length === 0) {
+        resolve(true); // Temiz
+      } else if (Date.now() - start > timeout) {
+        console.warn('⚠️ Modal kapanma zaman aşımı, devam ediliyor.');
+        resolve(false); // Zorla devam et
+      } else {
+        requestAnimationFrame(check); // Tekrar kontrol et
+      }
+    };
+    check();
+  });
+}
+
 // ============================================================
 // MODAL PARSE VE İŞLEME KODLARI AŞAĞIDA DEVAM EDER...
 // ============================================================
@@ -621,82 +643,94 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 }
 
 // ============================================================
-// AKILLI VE TAM YÜKLEME BEKLEYEN MODAL AÇICI
+// TEMİZLİK GARANTİLİ MODAL AÇICI (Hayalet Modalları Önler)
 // ============================================================
 async function openRowModalAndParse(tr, { timeout = 12000 } = {}) {
   try {
+    // 1. ADIM: SAHA TEMİZLİĞİ
     closeAnyOpenDialog();
-    await sleep(20); 
+    // Ekranda hiç dialog kalmayana kadar bekle (Kritik nokta burası)
+    await waitForNoDialog(2000); 
+    await sleep(50); // Ekstra güvenlik payı
 
     const btn = findDetailButton(tr);
-    if (!btn) return null;
+    if (!btn) {
+        console.warn('Detay butonu bulunamadı');
+        return null;
+    }
     
+    // Tıklamadan önce butonun gerçekten tıklanabilir olduğundan emin ol
+    btn.scrollIntoView({ block: 'center' });
+    await sleep(50);
     click(btn);
-    // Animasyon başlaması için minik bekleme
-    await sleep(150); 
+    
+    // Tıkladıktan sonra YENİ modalın gelmesi için makul bir süre tanı
+    await sleep(200); 
 
-    // 1. MODAL KUTUSUNU BUL
+    // 2. ADIM: YENİ MODALI BUL
     let dialog = null;
-    // 20 deneme x 100ms = Max 2 saniye modal arama
-    for (let attempt = 0; attempt < 20; attempt++) {
+    const searchStart = Date.now();
+    
+    // Modalın DOM'a düşmesini bekle
+    while (Date.now() - searchStart < 3000) {
       const highZElements = Array.from(document.querySelectorAll('div'))
         .filter(el => {
             const s = window.getComputedStyle(el);
+            // Sadece görünür ve yeni açılmış (animasyonu bitmiş veya süren) elemanlar
             return s.display !== 'none' && parseInt(s.zIndex) > 1000;
         });
-      // İçinde tablo veya fieldset olanı tercih et
+
       for (const el of highZElements) { 
-        if (el.querySelector('fieldset, table')) { dialog = el; break; }
+        if (el.querySelector('fieldset, table')) { 
+            dialog = el; 
+            break; 
+        }
       }
+      
       if (dialog) break;
       await sleep(100); 
     }
 
-    if (!dialog) return null;
+    if (!dialog) {
+        console.error('❌ Modal açılmadı (Timeout).');
+        return null;
+    }
 
-    // 2. İÇERİK STABİLİZASYONU (KRİTİK GÜNCELLEME)
-    // Sadece "Başvuru No" yetmez, tablodaki satır sayısının sabitlenmesini bekle.
-    
+    // 3. ADIM: İÇERİK DOLUMUNU BEKLE (Stabilizasyon)
     const contentStart = Date.now();
     let prevRowCount = -1;
-    let stableCount = 0; // Kaç döngüdür satır sayısı değişmedi?
+    let stableCount = 0;
 
-    while (Date.now() - contentStart < 5000) { // Max 5 sn içerik bekle
+    while (Date.now() - contentStart < 6000) { // Max 6 sn
         const txt = (dialog.textContent || '').trim();
         const currentRows = dialog.querySelectorAll('tr').length;
         
-        // Temel metin (Başvuru No) geldi mi?
         const hasBasicText = txt.length > 50 && (txt.includes('Başvuru') || /\d{4}\/\d+/.test(txt));
 
         if (hasBasicText) {
-            // Eğer satır sayısı değişiyorsa (tablolar yükleniyorsa) bekle
-            if (currentRows === prevRowCount) {
-                stableCount++;
-            } else {
-                stableCount = 0; // Değişim var, sayacı sıfırla
-            }
+            if (currentRows === prevRowCount) stableCount++;
+            else stableCount = 0;
             
             prevRowCount = currentRows;
 
-            // Eğer 3 döngü (yaklaşık 300ms) boyunca satır sayısı hiç değişmediyse
-            // VE en azından birkaç satır geldiyse (tablolar dolduysa) ÇIK.
-            if (stableCount >= 3 && currentRows > 2) {
-                break; // Yükleme bitti
+            // Satır sayısı 3 döngü boyunca değişmediyse ve tablo boş değilse tamamdır
+            if (stableCount >= 4 && currentRows > 0) {
+                break; 
             }
         }
-        
         await sleep(100);
     }
 
     // Parse et
     const parsed = await parseDetailsFromOpenDialog(dialog);
 
-    // Kapat
+    // İşlem bitince kapat
     closeAnyOpenDialog();
+    
     return parsed;
 
   } catch (e) {
-    console.error('Hızlı parse hatası:', e);
+    console.error('Modal işlem hatası:', e);
     return null;
   }
 }
@@ -829,9 +863,15 @@ async function collectOwnerResultsWithDetails() {
   const processedApplicationNumbers = new Set();
   const batchSize = 100; 
 
-  async function resetModalState() {
-    try { closeAnyOpenDialog(); await waitForNoDialog(1000); } catch (e) {}
-  }
+async function resetModalState() {
+    try { 
+      closeAnyOpenDialog(); 
+      // Artık waitForNoDialog tanımlı olduğu için burası gerçekten bekleyecek
+      await waitForNoDialog(1500); 
+    } catch (e) {
+      console.warn('Reset modal hatası:', e);
+    }
+}
 
   for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
     const batchEnd = Math.min(batchStart + batchSize, rows.length);
