@@ -13,7 +13,7 @@ class PortfolioController {
         this.pagination = null;
         
         this.state = {
-            activeTab: 'all',
+            activeTab: 'trademark',
             searchQuery: '',
             columnFilters: {},
             sort: { column: 'applicationDate', direction: 'desc' },
