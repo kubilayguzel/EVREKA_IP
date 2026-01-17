@@ -1541,6 +1541,9 @@
                                 ETEBS Tebligatları
                                 <span class="tab-badge" id="totalBadge">0</span>
                             </button>
+                            <button type="button" class="tab-btn" data-tab="epats-indexing-pane">
+                                EPATS Evrak Yükleme
+                            </button>
                         </div>
                         
                         <div class="tab-content-container">
@@ -1732,7 +1735,59 @@
                                     </div>
                                 </div>
                             </div>
+                            <div id="epats-indexing-pane" class="tab-pane">
+                                <div class="form-section">
+                                    <h2 class="section-title"><span>1.</span> Filtreleme ve Kayıt Seçimi</h2>
+                                    <div class="input-group-inline" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: flex-end;">
+                                        <div class="form-group">
+                                            <label class="form-label">Müvekkil (Sahip)</label>
+                                            <select id="epatsClientSelect" class="form-select">
+                                                <option value="">Yükleniyor...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">IP Türü</label>
+                                            <select id="epatsIpTypeSelect" class="form-select">
+                                                <option value="trademark" selected>Marka</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Belge Türü</label>
+                                            <select id="epatsDocTypeSelect" class="form-select">
+                                                <option value="tescil_belgesi" selected>Tescil Belgesi</option>
+                                                <option value="marka_basvuru_belgesi">Marka Başvurusu Belgesi</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top: 20px; display: flex; gap: 10px;">
+                                        <button id="btnFetchMissingDocs" class="btn btn-primary" type="button">
+                                            🔍 Eksik Belgeleri Listele
+                                        </button>
+                                        <button id="btnStartEpatsTransfer" class="btn btn-success" type="button" disabled>
+                                            🚀 Belge Transferine Başla (<span id="selectedEpatsCount">0</span>)
+                                        </button>
+                                    </div>
+                                </div>
 
+                                <div class="form-section" id="epatsResultsSection" style="display: none;">
+                                    <h2 class="section-title"><span>2.</span> İşlem Bekleyen Kayıtlar</h2>
+                                    <div class="table-responsive">
+                                        <table class="form-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                                            <thead>
+                                                <tr style="background: #1e3c72; color: white; text-align: left;">
+                                                    <th style="padding: 12px;"><input type="checkbox" id="selectAllEpats"></th>
+                                                    <th style="padding: 12px;">Başvuru No</th>
+                                                    <th style="padding: 12px;">Marka Adı</th>
+                                                    <th style="padding: 12px;">Mevcut Durum</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="epatsResultsBody">
+                                                </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="epatsPagination" class="pagination-container" style="margin-top: 15px; display: flex; justify-content: center;"></div>
+                                </div>
+                            </div>
                 </form>
             </div>
         </main>
@@ -1742,6 +1797,7 @@
     import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
     import { loadSharedLayout } from './js/layout-loader.js';
     import { ETEBSManager } from './js/etebs-module.js';
+    import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
 
     document.addEventListener('DOMContentLoaded', () => {
         // Bulk Indexing başlat
@@ -1752,6 +1808,7 @@
 
         // ETEBSManager'ı window'a koy
         window.etebsManager = new ETEBSManager();
+        window.epatsUiManager = new EpatsUiManager();
 
         // Butona tıklayınca init et
         const fetchBtn = document.getElementById('fetchEtebsNotificationsBtn');
