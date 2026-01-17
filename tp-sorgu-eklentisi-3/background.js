@@ -35,11 +35,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'loading' && tab.url) {
         // PDF mi veya Belge Görüntüleme URL'i mi?
         // Genelde: /run/TP/EDEVLET/pdf?id=... veya .pdf uzantısı
-        if (
-            (tab.url.includes('/run/TP/') && tab.url.includes('pdf')) || 
-            tab.url.endsWith('.pdf') ||
-            tab.url.includes('blob:') // Bazen blob olarak açılır
-        ) {
+            if (
+            tab.url.includes('/project/downloadfile/') ||   // ✅ EPATS gerçek download endpoint
+            (tab.url.includes('/run/TP/') && tab.url.includes('pdf')) ||
+            tab.url.endsWith('.pdf')
+            // blob: istersen kalsın ama bu senaryoda gereksiz
+            ) {
             console.log("[BG] PDF Sekmesi Yakalandı:", tab.url);
 
             // Ana sekmeye (Content Script'e) URL'i gönder
