@@ -44,12 +44,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             console.log("[BG] PDF Sekmesi Yakalandı:", tab.url);
 
             // Ana sekmeye (Content Script'e) URL'i gönder
-            chrome.tabs.sendMessage(activeJobTabId, {
-                action: "PDF_URL_CAPTURED",
-                url: tab.url
-            }).catch(() => {
-                // Hata olursa (örn: ana sekme kapalıysa) yoksay
-            });
+            chrome.tabs.sendMessage(
+            activeJobTabId,
+            { action: "PDF_URL_CAPTURED", url: tab.url },
+            () => {
+                if (chrome.runtime.lastError) {
+                console.warn("[BG] sendMessage FAIL:", chrome.runtime.lastError.message);
+                } else {
+                console.log("[BG] sendMessage OK -> content_script");
+                }
+            }
+            );
 
             // PDF sekmesini kapat (Ekran kirliliğini önle)
             // Biraz bekleyip kapatalım ki çakışma olmasın
