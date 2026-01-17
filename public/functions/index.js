@@ -7121,127 +7121,136 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
 export const saveEpatsDocument = onCall(
   {
     region: 'europe-west1',
-    timeoutSeconds: 300, // Dosya yazma işlemi zaman alabilir
-    memory: '1GiB'       // PDF işleme için bellek
+    timeoutSeconds: 300,
+    memory: '1GiB'
   },
   async (request) => {
-    // 1. Parametre Kontrolü
-    const { ipRecordId, fileBase64, fileName, appNo, docType } = request.data || {};
+    // 1. Parametreleri Al
+    const { ipRecordId, fileBase64, fileName, appNo, docDate } = request.data || {};
     
     if (!ipRecordId || !fileBase64) {
       throw new HttpsError('invalid-argument', 'Eksik parametre: ipRecordId ve fileBase64 zorunludur.');
     }
 
-    // Kullanıcı bilgisi (Sistemi kimin çalıştırdığı)
+    // Kullanıcı Bilgileri
     const userId = request.auth?.uid || 'system_automation';
     const userEmail = request.auth?.token?.email || 'system@evrekapatent.com';
+    let userName = request.auth?.token?.name || 'Sistem Otomasyonu';
 
-    // Güvenli dosya adı oluştur
-    const safeAppNo = (appNo || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
-    const timestamp = Date.now();
-    const finalFileName = fileName 
-        ? fileName.replace(/[^a-zA-Z0-9._-]/g, '_') 
-        : `tescil_belgesi_${safeAppNo}_${timestamp}.pdf`;
+    // Kullanıcı adını veritabanından teyit etmeye çalış (Opsiyonel, auth token'da yoksa)
+    try {
+        if (userId !== 'system_automation') {
+            const userSnap = await adminDb.collection('users').doc(userId).get();
+            if (userSnap.exists) userName = userSnap.data().displayName || userName;
+        }
+    } catch(e) {}
 
-    const targetType = docType || 'tescil_belgesi'; // Varsayılan: Tescil Belgesi
+    // Dosya Adı ve Yolu
+    const safeName = (fileName || `tescil_belgesi_${appNo}.pdf`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `ipRecords/${ipRecordId}/documents/${Date.now()}_${safeName}`;
+    const fileId = adminDb.collection('_').doc().id; // Rastgele ID üretimi
 
-    console.log(`📥 EPATS Belge Transferi Başladı: ${safeAppNo} -> ${ipRecordId}`);
+    console.log(`📥 EPATS Belge Kaydı Başladı: ${appNo} -> ${ipRecordId}`);
 
     try {
-      // 2. Dosyayı Storage'a Kaydet
+      // 2. Storage'a Kaydet
       const bucket = admin.storage().bucket();
       const buffer = Buffer.from(fileBase64, 'base64');
-      const storagePath = `ipRecords/${ipRecordId}/documents/${finalFileName}`;
       const file = bucket.file(storagePath);
 
       await file.save(buffer, {
         contentType: 'application/pdf',
         metadata: {
           metadata: {
-            originalName: fileName || 'belge.pdf',
-            source: 'epats_chrome_extension',
+            originalName: fileName,
+            source: 'epats_automation',
             applicationNumber: appNo,
             uploadedBy: userId
           }
         }
       });
 
-      // İmzalı URL oluştur (Frontend'de görüntülemek için)
-      // Not: Public yapmak yerine Signed URL kullanmak daha güvenlidir. 
-      // Ancak transaction kaydında kalıcı erişim için uzun süreli bir signed URL üretiyoruz.
-      const [signedUrl] = await file.getSignedUrl({
+      // İmzalı URL (Uzun ömürlü)
+      const [downloadURL] = await file.getSignedUrl({
         action: 'read',
-        expires: '01-01-2099' 
+        expires: '01-01-2099'
       });
 
-      // 3. Parent Transaction'ı Bul (Hiyerarşi Bağlantısı)
-      // Hedef: 'trademark_application' (Başvuru) tipindeki ana işlemi bulmak.
+      // 3. Parent Transaction Bul (Başvuru)
       const transactionsRef = adminDb.collection('ipRecords').doc(ipRecordId).collection('transactions');
       
-      const parentSnapshot = await transactionsRef
+      // Hiyerarşisi 'parent' olan ve tipi başvuru olan işlemi bulmaya çalış
+      // Not: Sizin sistemde Başvuru genelde "trademark_application" veya "2" olabilir.
+      // Garanti olsun diye hierarchy='parent' olan en eski kaydı alabiliriz veya spesifik tip arayabiliriz.
+      const parentQuery = await transactionsRef
         .where('hierarchy', '==', 'parent')
-        // Ana işlem tipleri (Gerekirse 'patent_application' vb. eklenebilir)
-        .where('type', 'in', ['trademark_application', '2', 'marka_basvuru']) 
+        .orderBy('timestamp', 'asc') // En eski parent (muhtemelen başvuru)
         .limit(1)
         .get();
 
       let parentId = null;
-      let parentDescription = 'Ana işlem';
-
-      if (!parentSnapshot.empty) {
-        const parentDoc = parentSnapshot.docs[0];
-        parentId = parentDoc.id;
-        parentDescription = parentDoc.data().description || parentDescription;
-        console.log(`🔗 Parent Transaction Bulundu: ${parentId} (${parentDescription})`);
+      if (!parentQuery.empty) {
+        parentId = parentQuery.docs[0].id;
       } else {
-        console.warn(`⚠️ Parent Transaction bulunamadı! Belge 'root' seviyesine yakın eklenecek.`);
-        // Fallback: Herhangi bir parent işlem bulmaya çalış
-        const anyParent = await transactionsRef.where('hierarchy', '==', 'parent').limit(1).get();
-        if (!anyParent.empty) parentId = anyParent.docs[0].id;
+        console.warn(`⚠️ Parent işlem bulunamadı, belge orphan olarak eklenecek.`);
       }
 
-      // 4. Yeni Transaction (Alt İşlem) Oluştur
-      const newTransactionData = {
-        type: targetType, // 'tescil_belgesi'
-        description: 'Tescil Belgesi (EPATS Otomasyonu ile eklendi)',
-        designation: 'Tescil Belgesi', // UI'da görünen ad
+      // Tarih Ayarları
+      const now = new Date();
+      const timestamp = now.toISOString();
+      // Belge tarihi (docDate) gelmediyse bugünü baz al, saati sıfırla
+      let recordDateStr = timestamp;
+      if (docDate) {
+          // Gelen tarih formatını ISO'ya çevir veya olduğu gibi kullan
+          // Örn: 2026-01-02
+          recordDateStr = new Date(docDate).toISOString(); 
+      } else {
+          const todayZero = new Date(now);
+          todayZero.setHours(0,0,0,0);
+          recordDateStr = todayZero.toISOString();
+      }
+
+      // 4. Transaction Verisini Hazırla (İstenen Format)
+      const transactionData = {
+        date: recordDateStr,
+        description: "Tescil Belgesi",
+        type: "45", // İstenen özel tip
+        transactionHierarchy: "child",
+        parentId: parentId,
         
-        hierarchy: 'child',
-        parentId: parentId, // Parent ID (Varsa)
-        
-        storagePath: storagePath,
-        fileUrl: signedUrl,     // Görüntüleme linki
-        downloadURL: signedUrl, // İndirme linki (bazı yapılar bunu kullanıyor olabilir)
-        fileName: finalFileName,
-        
-        timestamp: new Date().toISOString(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        
+        timestamp: timestamp,
         userId: userId,
+        userName: userName,
         userEmail: userEmail,
-        source: 'epats_extension_transfer'
+
+        documents: [
+            {
+                id: fileId,
+                name: safeName,
+                type: "application/pdf",
+                documentDesignation: "Resmi Yazı", // İstenen designation
+                downloadURL: downloadURL,
+                uploadedAt: timestamp
+            }
+        ]
       };
 
-      const docRef = await transactionsRef.add(newTransactionData);
-      console.log(`✅ Transaction Eklendi: ${docRef.id}`);
-
-      // 5. Ana Kaydı Güncelle (Flagging)
-      // Bu, "Eksik Belgeleri Getir" sorgusunu ileride hızlandırmak için (Yöntem 2 hazırlığı)
+      // 5. Kaydet
+      const docRef = await transactionsRef.add(transactionData);
+      
+      // Ana kaydı güncelle (filtreleme için flag)
       await adminDb.collection('ipRecords').doc(ipRecordId).update({
         hasRegistrationCert: true,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      return { 
-        success: true, 
-        message: 'Belge transferi başarılı.', 
-        transactionId: docRef.id,
-        storagePath 
-      };
+      console.log(`✅ Transaction Oluşturuldu: ${docRef.id}`);
+
+      return { success: true, message: 'Belge başarıyla işlendi.', transactionId: docRef.id };
 
     } catch (error) {
       console.error('❌ saveEpatsDocument Hatası:', error);
-      throw new HttpsError('internal', `Belge kaydedilemedi: ${error.message}`);
+      throw new HttpsError('internal', error.message);
     }
   }
 );
