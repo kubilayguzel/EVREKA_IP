@@ -104,6 +104,29 @@
         .match-status { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
         .match-status.matched { background: #dcfce7; color: #155724; }
         .match-status.unmatched { background: #f8d7da; color: #721c24; }
+        /* PDF aksiyon butonları (aynı tasarım dili) */
+        .pdf-actions { display: flex; gap: 8px; align-items: center; }
+
+        .pdf-action-btn{
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid #e1e8ed;
+        background: #fff;
+        color: #1e3c72;
+        padding: 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+        }
+
+        .pdf-action-btn:hover{
+        background: #f8f9fa;
+        transform: translateY(-1px);
+        }
+
+        .pdf-action-danger { color: #dc3545; }
 
         /* TAB PANE YÖNETİMİ */
         .tab-pane { display: none; }
@@ -123,12 +146,17 @@
             border-radius: 0 0 10px 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
             z-index: 1000; max-height: 300px; overflow-y: auto;
         }
+        /* Üstteki mod butonları (Token ile / Manuel Yükleme) */
+        .mode-btn{
+        flex: 0 0 auto;         /* içerik kadar genişlesin */
+        white-space: nowrap;    /* satır kırma olmasın */
+        }
+
     </style>
 </head>
 <body>
     <div id="layout-placeholder"></div>
-    <div class="notification-container"></div>
-
+    <div id="notification-container" class="notification-container"></div>
     <div class="page-wrapper">
         <div id="left-sidebar-container"></div>
         <div id="top-bar-container"></div>
