@@ -4,6 +4,8 @@
   let isActionInProgress = false; 
   let searchPassCount = 0; // Tarama tur sayısı
 
+  console.log("[TP-AUTO] content_script loaded on:", location.href);
+
   // Background'dan PDF URL yakalandı mesajı gelince işle
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
