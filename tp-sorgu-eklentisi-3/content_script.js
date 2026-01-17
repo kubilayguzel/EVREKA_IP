@@ -7,17 +7,18 @@
   // Background'dan PDF URL yakalandı mesajı gelince işle
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-      console.log(TAG, "📥 BG'den PDF URL geldi:", request.url);
+      (async () => {
+        console.log(TAG, "📥 BG PDF URL:", request.url);
 
-      // Aynı iş içinde iki kez tetiklenmeyi önle
-      chrome.storage.local.get(["tp_download_clicked"]).then(async ({ tp_download_clicked }) => {
+        // Aynı işte iki kez tetiklenmeyi önle (çok önemli)
+        const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
         if (tp_download_clicked) return;
 
         await chrome.storage.local.set({ tp_download_clicked: true });
 
-        // URL geldiyse backend'e gönder
+        // PDF'i indir + backend'e gönder (processDocument zaten advanceQueue yapıyor)
         await processDocument(request.url, null);
-      });
+      })().catch(err => console.error(TAG, "PDF_URL_CAPTURED handler error:", err));
     }
   });
 
@@ -112,7 +113,7 @@
 
      try {
         // 1. PDF'i blob olarak çek (EPATS Cookie'leri ile)
-        const response = await fetch(downloadUrl);
+        const response = await fetch(downloadUrl, { credentials: "include" });
         const blob = await response.blob();
         
         // 2. Base64'e çevir
