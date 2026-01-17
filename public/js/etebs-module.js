@@ -330,8 +330,8 @@ switchMode(mode) {
         });
 
         // Show/hide content
-        const etebsMode = document.getElementById('etebs-mode');
-        const uploadMode = document.getElementById('upload-mode');
+        const etebsMode = document.getElementById('etebs-content');
+        const uploadMode = document.getElementById('upload-content');
         
         if (etebsMode && uploadMode) {
             etebsMode.style.display = mode === 'etebs' ? 'block' : 'none';
