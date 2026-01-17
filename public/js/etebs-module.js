@@ -360,11 +360,7 @@ activateUploadMode() {
             const bulkFilesInput = document.getElementById('bulkFiles');
             const bulkFilesButton = document.getElementById('bulkFilesButton');
             const bulkFilesInfo = document.getElementById('bulkFilesInfo');
-            
-            if (bulkFilesInput) {
-                bulkFilesInput.style.display = 'block';
-            }
-            
+                        
             if (bulkFilesButton) {
                 bulkFilesButton.style.display = 'block';
                 // Event listener'ı yeniden bağla
