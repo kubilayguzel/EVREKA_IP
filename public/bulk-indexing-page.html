@@ -15,17 +15,27 @@
     <style>
         /* --- DÜZELTMELER VE ÖZEL STİLLER --- */
         
-        /* 1. Bildirim Kapsayıcısı (Layout Kaymasını Önler) */
+        /* 1. LAYOUT & SCROLL FIX */
+        body {
+            overflow-x: hidden; /* Sağ taraftaki beyaz kolonu engeller */
+        }
+
+        /* 2. BİLDİRİM KAPSAYICISI (Sabit Pozisyon) */
         .notification-container {
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 10000;
+            z-index: 99999; /* En üstte */
             width: auto;
-            max-width: 400px;
+            max-width: 350px;
+            pointer-events: none; /* Tıklamaları engelleme */
+        }
+        /* Bildirim içeriğinin tıklanabilir olması için */
+        .notification-container > * {
+            pointer-events: auto;
         }
 
-        /* 2. Tab Navigasyonu */
+        /* 3. ANA TAB NAVİGASYONU */
         .tab-navigation {
             display: flex; gap: 15px; margin-bottom: 25px; padding: 0 5px;
         }
@@ -43,7 +53,7 @@
             box-shadow: 0 4px 12px rgba(30, 60, 114, 0.2);
         }
 
-        /* 3. Dosya Yükleme Alanı (Sadeleştirilmiş) */
+        /* 4. DOSYA YÜKLEME ALANI (Temizlendi) */
         .file-upload-area {
             border: 2px dashed #cbd5e1;
             padding: 40px;
@@ -52,58 +62,67 @@
             cursor: pointer;
             transition: all 0.3s ease;
             background: #fdfdfd;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         .file-upload-area:hover {
             border-color: #1e3c72 !important;
             background: #f0f7ff !important;
         }
-        /* Dosya Listesi Elemanları */
+        /* İçindeki ikon ve yazı stili */
+        .file-upload-area i { color: #a0aec0; margin-bottom: 10px; }
+        .file-upload-area span { font-weight: 600; color: #4a5568; }
+
+        /* 5. ETEBS FİLTRE TABLARI (Görünürlük Fix) */
+        .filter-tabs {
+            display: flex; gap: 8px; margin-bottom: 20px; background: #f8f9fa; 
+            padding: 8px; border-radius: 10px; border: 1px solid #e9ecef;
+            width: 100%; /* Genişlik sorunu için */
+        }
+        .filter-btn {
+            padding: 8px 16px; border-radius: 8px; border: none; background: transparent;
+            color: #64748b; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            flex: 1; text-align: center;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+        }
+        .filter-btn.active { background: #fff; color: #1e3c72; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .filter-btn.active .badge { background: #1e3c72; color: white; }
+
+        /* 6. DOSYA KARTLARI */
         .file-item, .pdf-list-item {
             display: flex; align-items: center; justify-content: space-between;
             padding: 15px; border: 1px solid #e1e8ed; border-radius: 12px;
             background: white; margin-bottom: 10px; transition: transform 0.2s;
         }
-        .file-item-name, .pdf-name { margin-bottom: 0; font-weight: 600; color: #333; }
-        .file-item-controls button {
-            background: #fee2e2; color: #ef4444; border: none;
-            width: 30px; height: 30px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-        }
-
-        /* 4. Tablo ve Liste Durumları */
+        .file-item-name, .pdf-name { margin-bottom: 0; font-weight: 600; color: #333; font-size: 0.95rem; }
         .pdf-list-item.matched { border-left: 5px solid #2ecc71; background: #f0fdf4; }
         .pdf-list-item.unmatched { border-left: 5px solid #ef4444; background: #fef2f2; }
         
+        .pdf-icon { font-size: 1.5rem; margin-right: 15px; color: #e74c3c; }
+        .match-status { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+        .match-status.matched { background: #dcfce7; color: #155724; }
+        .match-status.unmatched { background: #f8d7da; color: #721c24; }
+
+        /* TAB PANE YÖNETİMİ */
         .tab-pane { display: none; }
         .tab-pane.active { display: block; animation: fadeIn 0.3s ease-out; }
         
-        /* ÖNEMLİ: Tab İçerik Çakışmasını Önleyen Kural */
+        /* İç Tablar (Files & Notifications) */
         .file-tab-pane, .notification-tab-pane { display: none !important; }
         .file-tab-pane.active, .notification-tab-pane.active { display: block !important; animation: fadeIn 0.3s ease; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* Badge & Search Results */
+        .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
         .search-results-wrapper {
             position: absolute; top: 100%; left: 0; right: 0;
             background: white; border: 1px solid #e1e8ed; border-top: none;
             border-radius: 0 0 10px 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
             z-index: 1000; max-height: 300px; overflow-y: auto;
         }
-        
-        .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
-
-        /* Filtre Butonları */
-        .filter-tabs {
-            display: flex; gap: 8px; margin-bottom: 20px; background: #f8f9fa; padding: 5px; border-radius: 10px; border: 1px solid #e9ecef;
-        }
-        .filter-btn {
-            padding: 8px 16px; border-radius: 8px; border: none; background: transparent;
-            color: #64748b; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.2s;
-            flex: 1; text-align: center;
-        }
-        .filter-btn.active { background: #fff; color: #1e3c72; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .filter-btn.active .badge { background: #1e3c72; color: white; }
     </style>
 </head>
 <body>
@@ -177,8 +196,8 @@
                                 <h3 class="section-title">Belgeler & Dosyalar</h3>
                                 
                                 <div class="file-upload-area" id="filesManualButton">
-                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
-                                    <div class="text-muted font-weight-bold">PDF Dosyalarını Buraya Sürükleyin</div>
+                                    <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                                    <span>PDF Dosyalarını Buraya Sürükleyin</span>
                                 </div>
                                 <input type="file" id="filesManual" multiple style="display:none;">
                                 
@@ -224,8 +243,8 @@
 
                         <div id="upload-content" style="display: none;">
                             <div class="file-upload-area" id="bulkFilesButton">
-                                <i class="fas fa-file-pdf fa-3x mb-2" style="color: #e74c3c;"></i>
-                                <div class="text-muted font-weight-bold">PDF Dosyalarını Sürükleyin</div>
+                                <i class="fas fa-file-pdf fa-3x" style="color: #e74c3c;"></i>
+                                <span>PDF Dosyalarını Sürükleyin</span>
                             </div>
                             <input type="file" id="bulkFiles" multiple style="display:none;" accept=".pdf">
                             
@@ -368,7 +387,7 @@
                 if(window.indexingModule && window.indexingModule.activateTab) {
                     window.indexingModule.activateTab('manual-indexing-pane');
                 }
-            }, 800); // Biraz daha uzun bekleme süresi
+            }, 800); 
 
             // 1. Ana Tab Geçişleri
             const navBtns = document.querySelectorAll('.nav-btn');
