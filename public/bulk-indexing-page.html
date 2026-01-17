@@ -13,38 +13,85 @@
     <link rel="stylesheet" href="css/task-update.css">
 
     <style>
-        /* Navigasyon Butonları */
-        .tab-navigation { display: flex; gap: 15px; margin-bottom: 30px; padding: 0 5px; }
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.6); border: 1px solid #e1e8ed;
-            padding: 15px 25px; border-radius: 12px; color: #64748b;
-            font-weight: 600; cursor: pointer; transition: all 0.3s ease;
-            display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        }
-        .nav-btn:hover { background: #fff; transform: translateY(-2px); color: #1e3c72; }
-        .nav-btn.active { background: #1e3c72; color: #fff; border-color: #1e3c72; box-shadow: 0 8px 20px rgba(30, 60, 114, 0.25); }
+        /* --- TASK UPDATE TASARIM KÖPRÜSÜ --- */
         
-        /* Tab İçerik Animasyonu */
+        /* 1. Tab Navigasyonu (Modern ve Temiz) */
+        .tab-navigation {
+            display: flex; gap: 15px; margin-bottom: 25px; padding: 0 5px;
+        }
+        .nav-btn {
+            background: #fff; border: 1px solid #e1e8ed;
+            padding: 12px 20px; border-radius: 12px; color: #64748b;
+            font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            flex: 1; justify-content: center;
+        }
+        .nav-btn:hover { background: #f8f9fa; transform: translateY(-2px); color: #1e3c72; }
+        .nav-btn.active {
+            background: #1e3c72; color: #fff; border-color: #1e3c72;
+            box-shadow: 0 4px 12px rgba(30, 60, 114, 0.2);
+        }
+
+        /* 2. Dosya Listesi Uyumluluğu (JS Çıktısını Task Update'e Benzetme) */
+        
+        /* Manuel İşlem Dosya Listesi (.file-item) */
+        .file-item, .pdf-list-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px; border: 1px solid #e1e8ed; border-radius: 12px;
+            background: white; margin-bottom: 10px; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .file-item:hover, .pdf-list-item:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border-color: #b0c4de;
+        }
+        
+        /* İkon ve Metinler */
+        .file-item-name, .pdf-name {
+            font-weight: 600; color: #333; font-size: 0.95rem;
+        }
+        .file-item-controls button {
+            background: #fee2e2; color: #ef4444; border: none;
+            width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .file-item-controls button:hover { background: #ef4444; color: white; }
+
+        /* PDF Listesi Özel Durumlar */
+        .pdf-list-item.matched { border-left: 5px solid #2ecc71; background: #f0fdf4; }
+        .pdf-list-item.unmatched { border-left: 5px solid #ef4444; background: #fef2f2; }
+        
+        .pdf-icon { font-size: 1.5rem; margin-right: 15px; }
+        .pdf-details { flex-grow: 1; }
+        .pdf-meta { font-size: 0.85rem; color: #64748b; margin-top: 2px; }
+        .match-status { font-size: 0.8rem; font-weight: 700; margin-top: 4px; display: inline-block; padding: 2px 8px; border-radius: 4px; }
+        .match-status.matched { background: #dcfce7; color: #166534; }
+        .match-status.unmatched { background: #fee2e2; color: #991b1b; }
+
+        .pdf-actions button {
+            padding: 6px 12px; border-radius: 6px; border: none; font-size: 0.9rem; margin-left: 5px; cursor: pointer;
+        }
+        .view-btn { background: #e0f2fe; color: #0284c7; }
+        .view-btn:hover { background: #0284c7; color: white; }
+        .danger-btn { background: #fee2e2; color: #dc2626; }
+        .danger-btn:hover { background: #dc2626; color: white; }
+        .complete-btn { background: #dcfce7; color: #166534; }
+        .complete-btn:hover { background: #166534; color: white; }
+
+        /* 3. Genel Düzenlemeler */
         .tab-pane { display: none; animation: fadeIn 0.4s ease-out; }
         .tab-pane.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Dosya ve Bildirim Listeleri */
-        .file-tab-pane, .notification-tab-pane { display: none; }
-        .file-tab-pane.active, .notification-tab-pane.active { display: block; }
-
-        /* Arama Sonuçları */
         .search-results-wrapper {
             position: absolute; top: 100%; left: 0; right: 0;
             background: white; border: 1px solid #e1e8ed; border-top: none;
             border-radius: 0 0 10px 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
             z-index: 1000; max-height: 300px; overflow-y: auto;
         }
-
-        /* Badge Stilleri */
+        
         .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
-        .badge-success-custom { background: #2ecc71; color: white; }
-        .badge-warning-custom { background: #f1c40f; color: #333; }
     </style>
 </head>
 <body>
@@ -115,17 +162,21 @@
 
                         <div class="col-lg-4">
                             <div class="section-card">
-                                <h3 class="section-title">Dosya Yükle</h3>
+                                <h3 class="section-title">
+                                    <span>Belgeler & Dosyalar</span>
+                                </h3>
+                                
                                 <div class="file-upload-area" id="filesManualButton">
                                     <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                                    <div class="upload-text">Dosya Seçin</div>
-                                    <div class="upload-subtext">veya sürükleyip bırakın</div>
+                                    <div class="upload-text">Dosya Yüklemek İçin Tıklayın</div>
+                                    <div class="upload-subtext">veya dosyaları buraya sürükleyin</div>
                                     <input type="file" id="filesManual" multiple style="display:none;">
                                 </div>
+                                
                                 <div id="filesManualInfo" class="text-center text-muted mt-2 small"></div>
                                 <div id="fileListManual" class="file-list-container mt-3"></div>
                                 
-                                <button id="saveManualTransactionBtn" class="btn btn-primary btn-block mt-4 py-3" disabled>
+                                <button id="saveManualTransactionBtn" class="btn btn-primary btn-block mt-4 py-3 font-weight-bold" disabled>
                                     <i class="fas fa-save mr-2"></i>İşlemi Kaydet
                                 </button>
                             </div>
@@ -158,33 +209,11 @@
                                 </div>
                                 <div id="tokenStatus" class="mt-2"></div>
                             </div>
-
-                            <div id="notificationsSection" style="display: none; margin-top: 30px;">
-                                <div class="d-flex justify-content-center mb-3">
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-success notification-tab-btn active" data-target="matched-notifications-tab">
-                                            Eşleşenler <span class="badge badge-success-custom ml-1" id="matchedTabBadge">0</span>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger notification-tab-btn" data-target="unmatched-notifications-tab">
-                                            Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedTabBadge">0</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="tab-content">
-                                    <div id="matched-notifications-tab" class="notification-tab-pane active">
-                                        <div id="matchedNotificationsList"></div>
-                                    </div>
-                                    <div id="unmatched-notifications-tab" class="notification-tab-pane">
-                                        <div id="unmatchedNotificationsList"></div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         <div id="upload-content" style="display: none;">
                             <div class="file-upload-area" id="bulkFilesButton">
-                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                <i class="fas fa-file-pdf upload-icon" style="color: #e74c3c;"></i>
                                 <div class="upload-text">PDF Dosyalarını Seçin</div>
                                 <div class="upload-subtext">Çoklu seçim yapabilirsiniz</div>
                                 <input type="file" id="bulkFiles" multiple style="display:none;" accept=".pdf">
@@ -192,7 +221,7 @@
                             <div id="bulkFilesInfo" class="text-center text-muted mt-2 small"></div>
 
                             <div id="fileListSection" class="mt-4" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
                                     <div class="btn-group">
                                         <button class="btn btn-sm btn-outline-primary active file-tab-btn" data-target="all-files-pane">
                                             Eşleşenler <span class="badge badge-primary ml-1" id="allCount">0</span>
@@ -201,7 +230,7 @@
                                             Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedCount">0</span>
                                         </button>
                                         <button class="btn btn-sm btn-outline-success file-tab-btn" data-target="indexed-files-pane">
-                                            İndekslenenler <span class="badge badge-success-custom ml-1" id="indexedCount">0</span>
+                                            İndekslenenler <span class="badge badge-success ml-1" id="indexedCount">0</span>
                                         </button>
                                     </div>
                                     <button class="btn btn-sm btn-info" onclick="window.indexingModule.reprocessMatching()">
@@ -222,7 +251,31 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div id="notificationsSection" style="display: none;">
+                        <div class="section-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h3 class="section-title mb-0">Sorgu Sonuçları</h3>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-success notification-tab-btn active" data-target="matched-notifications-tab">
+                                        Eşleşenler <span class="badge badge-success ml-1" id="matchedTabBadge">0</span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger notification-tab-btn" data-target="unmatched-notifications-tab">
+                                        Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedTabBadge">0</span>
+                                    </button>
+                                </div>
+                            </div>
 
+                            <div class="tab-content">
+                                <div id="matched-notifications-tab" class="notification-tab-pane active">
+                                    <div id="matchedNotificationsList"></div>
+                                </div>
+                                <div id="unmatched-notifications-tab" class="notification-tab-pane">
+                                    <div id="unmatchedNotificationsList"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -320,14 +373,17 @@
             const modeBtns = document.querySelectorAll('.mode-btn');
             const etebsContent = document.getElementById('etebs-content');
             const uploadContent = document.getElementById('upload-content');
+            
             modeBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     modeBtns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     const mode = btn.getAttribute('data-mode');
+                    
                     if (mode === 'etebs') {
                         etebsContent.style.display = 'block';
                         uploadContent.style.display = 'none';
+                        document.getElementById('notificationsSection').style.display = 'none'; // Sonuçları sıfırla
                     } else {
                         etebsContent.style.display = 'none';
                         uploadContent.style.display = 'block';
