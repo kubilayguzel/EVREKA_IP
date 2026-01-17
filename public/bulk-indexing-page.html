@@ -5,1819 +5,323 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IPGATE - Belge Yükleme ve Yönetimi</title>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
-    <script type="module" src="js/layout-loader.js"></script>
     <style>
-        /* Genel CSS stilleri */
-        /* Bu kısım güncellendi */
+        :root {
+            --primary-blue: #1e3c72;
+            --light-bg: #f8fafc;
+            --border-color: #e2e8f0;
+        }
+
         .page-wrapper {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-          min-height: 100vh;
-          padding-top: 80px; /* Topbar kapatmasın diye */
-        }
-        /* .page-wrapper, .page-header-section'dan önce tanımlanmalı */ 
-
-        /* .main-container'ın padding-top'u kaldırılarak .page-wrapper'a taşındı */
-        .main-container { width: 100%; padding: 30px; padding-top: 120px; }
-        
-        .page-header-section { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); text-align: center; margin-bottom: 30px; }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .page-subtitle { color: #666; font-size: 1.1em; }
-        .form-container { background: rgba(255, 255, 255, 0.95); padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .form-section { border-bottom: 1px solid #e1e8ed; padding-bottom: 25px; margin-bottom: 25px; }
-        .form-section:last-child { border-bottom: none; }
-        .section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        .form-input, .form-select { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .form-actions { display: flex; gap: 15px; margin-top: 40px; padding-top: 30px; border-top: 2px solid #e1e8ed; justify-content: flex-end; }
-        .btn { padding: 15px 30px; border-radius: 10px; font-size: 1.1em; font-weight: 600; }
-
-        /* Tab sistemi */
-        .tabs-container { display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 1rem; }
-        .tab-btn { padding: 0.75rem 1.25rem; border: none; background: none; cursor: pointer; font-size: 1rem; font-weight: 500; color: #6c757d; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-        .tab-btn.active { color: #1e3c72; border-color: #1e3c72; }
-        .tab-pane { display: none; }
-        .tab-pane.active { display: block; }
-
-        /* Arama bileşeni stilleri */
-        .search-wrapper { 
-            position: relative; 
+            padding-top: 80px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
         }
 
-        .search-results-container {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            width: 100%;
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid #e1e8ed;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
-            background-color: white;
-            z-index: 100;
-            display: none;
-        }
-
-        .record-search-item { 
-            display: flex; 
-            align-items: center; 
-            padding: 10px 15px; 
-            border-bottom: 1px dashed #e1e8ed; 
-            cursor: pointer; 
-        }
-
-        .record-search-item:hover { 
-            background-color: #f0f4f8; 
-        }
-
-        .record-search-item:last-child { 
-            border-bottom: none; 
-        }
-
-        .record-search-item.selected { 
-            background-color: #e6f2ff; 
-        }
-
-        /* File upload wrapper */
-        .file-upload-wrapper {
-            position: relative;
-            border: 2px dashed #e1e8ed;
-            border-radius: 10px;
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
             padding: 20px;
-            text-align: center;
-            transition: border-color 0.3s ease;
-            cursor: pointer;
         }
 
-        .file-upload-wrapper:hover {
-            border-color: #1e3c72;
-        }
-
-        .file-upload-wrapper input[type="file"] {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-
-        .file-upload-button {
-            color: #1e3c72;
-            font-weight: 500;
-            cursor: pointer;
-            padding: 10px;
-        }
-
-        .file-upload-info {
-            margin-top: 10px;
-            font-size: 0.9em;
-            color: #666;
-        }
-
-        /* Dosya listesi stilleri */
-        .file-list { 
-            margin-top: 15px; 
-        }
-
-        .file-item { 
-            display: flex; 
-            flex-direction: column; 
-            padding: 10px; 
-            background: #f8f9fa; 
-            border-radius: 8px; 
-            margin-bottom: 10px; 
-        }
-
-        .file-item-controls { 
-            display: flex; 
-            align-items: flex-start; 
-            gap: 10px; 
-            flex-wrap: wrap; 
-            width: 100%; 
-            margin-top: 5px; 
-        }
-
-        .file-item-select { 
-            flex-grow: 1; 
-            min-width: 150px; 
-            padding: 5px 8px; 
-            border: 1px solid #ccc; 
-            border-radius: 5px; 
-            font-size: 0.85em; 
-        }
-
-        .remove-file { 
-            background: #ff6b6b; 
-            color: white; 
-            border: none; 
-            border-radius: 50%; 
-            width: 25px; 
-            height: 25px; 
-            cursor: pointer; 
-            flex-shrink: 0; 
-            align-self: center; 
-        }
-
-        /* İşlem listesi stilleri */
-        .transaction-list-container { 
-            max-height: 200px; 
-            overflow-y: auto; 
-            border: 1px solid #e1e8ed; 
-            border-radius: 8px; 
-            padding: 5px; 
-        }
-
-        .transaction-list-item { 
-            padding: 10px; 
-            cursor: pointer; 
-            border-radius: 6px; 
-        }
-
-        .transaction-list-item:hover { 
-            background-color: #f0f4f8; 
-        }
-
-        .transaction-list-item.selected { 
-            background-color: #e6f2ff; 
-            color: #1e3c72; 
-            font-weight: bold; 
-        }
-
-        /* Alt işlem giriş alanları */
-        .child-transaction-inputs {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #1e3c72;
-        }
-
-        /* PDF liste stilleri */
-        .pdf-list-item {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            border: 1px solid #e1e8ed;
-            border-radius: 10px;
-            margin-bottom: 12px;
+        /* Başlık Bölümü */
+        .page-header {
             background: white;
-            transition: all 0.3s ease;
-        }
-
-        .pdf-list-item:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .pdf-list-item.matched {
-            border-color: #28a745;
-            background-color: #f8fff9;
-        }
-
-        .pdf-list-item.unmatched {
-            border-color: #dc3545;
-            background-color: #fff8f8;
-        }
-
-        .pdf-icon {
-            font-size: 2rem;
-            margin-right: 15px;
-            color: #dc2626;
-        }
-
-        .pdf-details {
-            flex: 1;
-        }
-
-        .pdf-name {
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 5px;
-        }
-
-        .pdf-meta {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin-bottom: 5px;
-        }
-
-        .match-status {
-            font-size: 0.9rem;
-            padding: 4px 8px;
+            padding: 25px;
             border-radius: 15px;
-            font-weight: 500;
-        }
-
-        .match-status.matched {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .match-status.unmatched {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .pdf-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        
-        .file-status .status-text {
-            padding: 4px 8px;
-            border-radius: 15px;
-            font-weight: 500;
-            color: white;
-        }
-        .file-status .status-pending { background-color: #ffc107; color: #343a40; }
-        .file-status .status-indexed { background-color: #28a745; }
-        .file-status .status-removed { background-color: #6c757d; }
-
-        /* Empty state */
-        .empty-message {
-            text-align: center;
-            padding: 40px 20px;
-            color: #6c757d;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-
-        .empty-icon {
-            font-size: 3rem;
-            margin-bottom: 15px;
-        }
-
-        /* Action buttons */
-        .action-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.2s ease;
-        }
-
-        .view-btn {
-            background: #17a2b8;
-            color: white;
-        }
-
-        .view-btn:hover {
-            background: #138496;
-        }
-
-        .complete-btn {
-            background: #28a745;
-            color: white;
-        }
-
-        .complete-btn:hover {
-            background: #218838;
-        }
-
-        .complete-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-
-        .danger-btn {
-            background: #dc3545;
-            color: white;
-        }
-
-        .danger-btn:hover {
-            background: #c82333;
-        }
-
-        /* Badge styles */
-        .badge {
-            background: #17a2b8;
-            color: white;
-            font-size: 0.75rem;
-            padding: 2px 6px;
-            border-radius: 50%;
-            margin-left: 5px;
-        }
-
-        /* Tab badge */
-        .tab-btn {
-            position: relative;
-        }
-
-        .tab-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #dc3545;
-            color: white;
-            font-size: 0.7rem;
-            padding: 2px 6px;
-            border-radius: 50%;
-            min-width: 18px;
-            text-align: center;
-        }
-
-        .tab-badge.success {
-            background: #28a745;
-        }
-
-        /* Genel yardımcı sınıflar */
-        .text-muted { 
-            color: #6c757d; 
-        }
-
-        .p-2 { 
-            padding: 0.5rem; 
-        }
-
-        .no-results-message {
-            font-style: italic;
-            color: #666;
-        }
-
-        /* ===== ETEBS SPECIFIC STYLES ===== */
-
-        /* Mode Selection */
-        .mode-selection-container {
-            background: rgba(248, 249, 250, 0.8);
-            border-radius: 12px;
-            padding: 6px;
-            display: inline-flex;
-            gap: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             margin-bottom: 25px;
+            text-align: center;
         }
 
-        .mode-buttons {
+        /* Ana Kart Yapısı */
+        .content-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        /* Sekme Tasarımı */
+        .main-tabs {
             display: flex;
-            gap: 4px;
+            background: #f1f5f9;
+            padding: 10px 10px 0 10px;
+            border-bottom: 1px solid var(--border-color);
         }
 
-        .mode-btn {
-            padding: 12px 20px;
+        .tab-trigger {
+            padding: 12px 24px;
             border: none;
             background: transparent;
-            border-radius: 8px;
+            font-weight: 600;
+            color: #64748b;
             cursor: pointer;
-            font-size: 0.95rem;
-            color: #7f8c8d;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-        }
-
-        .mode-btn.active {
-            background: #1e3c72;
-            color: white;
-            box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
-        }
-
-        .mode-btn:hover:not(.active) {
-            background: white;
-            color: #2c3e50;
-        }
-
-        /* Input Group Inline */
-        .input-group-inline {
-            display: flex;
-            gap: 15px;
-            align-items: end;
-        }
-
-        /* Status Indicator */
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 15px;
-            padding: 12px 15px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        .status-success {
-            background: rgba(39, 174, 96, 0.1);
-            color: #27ae60;
-            border: 1px solid rgba(39, 174, 96, 0.2);
-        }
-
-        .status-error {
-            background: rgba(231, 76, 60, 0.1);
-            color: #e74c3c;
-            border: 1px solid rgba(231, 76, 60, 0.2);
-        }
-
-        .status-loading {
-            background: rgba(52, 152, 219, 0.1);
-            color: #3498db;
-            border: 1px solid rgba(52, 152, 219, 0.2);
-        }
-
-        /* Notifications Section */
-        .notifications-section {
-            margin-top: 30px;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #e1e8ed;
-        }
-
-        .section-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        /* Statistics */
-        .notification-stats {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-            justify-content: center;
-        }
-
-        .stat-item {
-            background: white;
-            border-radius: 10px;
-            padding: 15px 20px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border: 1px solid #e1e8ed;
-            min-width: 80px;
-        }
-
-        .stat-number {
-            display: block;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .stat-label {
-            display: block;
-            font-size: 0.8rem;
-            color: #7f8c8d;
-            margin-top: 4px;
-        }
-
-        .stat-matched .stat-number {
-            color: #27ae60;
-        }
-
-        .stat-unmatched .stat-number {
-            color: #e74c3c;
-        }
-
-        /* Notifications Grid */
-        .notifications-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-        }
-
-        .notification-column {
-            background: rgba(248, 249, 250, 0.3);
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid #e1e8ed;
-        }
-
-        .column-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #e1e8ed;
-        }
-
-        .column-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex: 1;
-        }
-
-        .matched-column .column-title {
-            color: #27ae60;
-        }
-
-        .unmatched-column .column-title {
-            color: #e74c3c;
-        }
-
-        .notification-count {
-            background: #3498db;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            min-width: 24px;
-            text-align: center;
-        }
-
-        .matched-column .notification-count {
-            background: #27ae60;
-        }
-
-        .unmatched-column .notification-count {
-            background: #e74c3c;
-        }
-
-        /* Notifications List */
-        .notifications-list {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #7f8c8d;
-        }
-
-        .empty-state span {
-            font-size: 2rem;
-            display: block;
-            margin-bottom: 10px;
-            opacity: 0.5;
-        }
-
-        /* Notification Item */
-        .notification-item {
-            background: white;
-            border: 1px solid #e1e8ed;
-            border-radius: 10px;
-            padding: 18px;
-            margin-bottom: 12px;
-            transition: all 0.3s ease;
+            border-radius: 10px 10px 0 0;
+            transition: all 0.2s;
             position: relative;
         }
 
-        .notification-item:hover {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            transform: translateY(-2px);
+        .tab-trigger.active {
+            background: white;
+            color: var(--primary-blue);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
         }
 
-        .matched-column .notification-item {
-            border-left: 4px solid #27ae60;
+        .tab-trigger.active::after {
+            content: "";
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: white;
         }
 
-        .unmatched-column .notification-item {
-            border-left: 4px solid #e74c3c;
+        .tab-content {
+            padding: 30px;
         }
 
-        .notification-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 12px;
+        /* Grid Form Düzeni */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
         }
 
-        .evrak-number {
+        /* EPATS Tablo Stilleri */
+        .data-table-wrapper {
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: #f8fafc;
+            padding: 15px;
+            text-align: left;
             font-weight: 600;
-            color: #1e3c72;
-            font-size: 0.95rem;
+            border-bottom: 2px solid var(--border-color);
         }
 
-        .notification-status {
-            padding: 4px 8px;
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Sürükle Bırak Alanı */
+        .upload-zone {
+            border: 2px dashed var(--border-color);
             border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
         }
 
-        .status-matched {
-            background: rgba(39, 174, 96, 0.1);
-            color: #27ae60;
+        .upload-zone:hover {
+            border-color: var(--primary-blue);
+            background: #f0f7ff;
         }
 
-        .status-unmatched {
-            background: rgba(231, 76, 60, 0.1);
-            color: #e74c3c;
+        .badge-count {
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+            vertical-align: middle;
         }
-
-        .notification-details {
-            margin-bottom: 12px;
-        }
-
-        .detail-row {
-            display: flex;
-            margin-bottom: 6px;
-            font-size: 0.85rem;
-        }
-
-        .detail-label {
-            font-weight: 600;
-            color: #7f8c8d;
-            min-width: 90px;
-        }
-
-        .detail-value {
-            color: #2c3e50;
-        }
-
-        .notification-description {
-            background: rgba(30, 60, 114, 0.05);
-            padding: 10px;
-            border-radius: 6px;
-            margin: 12px 0;
-            color: #2c3e50;
-            font-size: 0.9rem;
-            line-height: 1.4;
-        }
-
-        .matched-record {
-            background: rgba(39, 174, 96, 0.08);
-            padding: 10px;
-            border-radius: 6px;
-            margin: 12px 0;
-            color: #27ae60;
-            font-size: 0.85rem;
-            border-left: 3px solid #27ae60;
-        }
-
-        .notification-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-            justify-content: flex-end;
-        }
-
-        /* Loading States */
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .pdf-list-item {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .pdf-actions {
-                margin-top: 15px;
-                width: 100%;
-                justify-content: flex-end;
-            }
-
-            .notifications-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .input-group-inline {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .section-header {
-                flex-direction: column;
-                gap: 15px;
-                align-items: stretch;
-            }
-            
-            .notification-stats {
-                justify-content: space-between;
-            }
-            
-            .notification-header {
-                flex-direction: column;
-                gap: 8px;
-            }
-            
-            .notification-actions {
-                flex-wrap: wrap;
-            }
-        }
-        /* İyileştirilmiş ETEBS UI Stilleri - bulk-indexing-page.html'e ekleyin */
-
-/* Statistics iyileştirmesi */
-.notification-stats {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 30px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.stat-item {
-    background: white;
-    border-radius: 12px;
-    padding: 20px 25px;
-    text-align: center;
-    box-shadow: 0 3px 15px rgba(0,0,0,0.08);
-    border: 1px solid #e1e8ed;
-    min-width: 100px;
-    transition: transform 0.2s ease;
-}
-
-.stat-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(0,0,0,0.12);
-}
-
-.stat-number {
-    display: block;
-    font-size: 2rem;
-    font-weight: bold;
-    color: #2c3e50;
-    margin-bottom: 5px;
-}
-
-.stat-label {
-    display: block;
-    font-size: 0.9rem;
-    color: #7f8c8d;
-    font-weight: 500;
-}
-
-.stat-matched .stat-number {
-    color: #27ae60;
-}
-
-.stat-unmatched .stat-number {
-    color: #e74c3c;
-}
-
-/* Notifications Grid iyileştirmesi */
-.notifications-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-    margin-top: 25px;
-}
-
-.notification-column {
-    background: #f8f9fa;
-    border-radius: 15px;
-    padding: 25px;
-    border: 1px solid #e1e8ed;
-    min-height: 400px;
-}
-
-.column-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #e1e8ed;
-}
-
-.column-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-}
-
-.matched-column .column-title {
-    color: #27ae60;
-}
-
-.unmatched-column .column-title {
-    color: #e74c3c;
-}
-
-.notification-count {
-    background: #3498db;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 15px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    min-width: 30px;
-    text-align: center;
-}
-
-.matched-column .notification-count {
-    background: #27ae60;
-}
-
-.unmatched-column .notification-count {
-    background: #e74c3c;
-}
-
-/* Notifications List iyileştirmesi */
-.notifications-list {
-    max-height: 600px;
-    overflow-y: auto;
-    padding-right: 5px;
-}
-
-/* Custom scrollbar */
-.notifications-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.notifications-list::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.notifications-list::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-.notifications-list::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-
-/* Notification Item Card Design */
-.notification-item {
-    background: white;
-    border: 1px solid #e1e8ed;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 15px;
-    transition: all 0.3s ease;
-    position: relative;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.notification-item:hover {
-    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-    transform: translateY(-3px);
-}
-
-.matched-column .notification-item {
-    border-left: 4px solid #27ae60;
-}
-
-.unmatched-column .notification-item {
-    border-left: 4px solid #e74c3c;
-}
-
-.notification-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.evrak-number {
-    font-weight: 700;
-    color: #1e3c72;
-    font-size: 1rem;
-    letter-spacing: 0.5px;
-}
-
-.notification-status {
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.status-matched {
-    background: rgba(39, 174, 96, 0.15);
-    color: #27ae60;
-    border: 1px solid rgba(39, 174, 96, 0.3);
-}
-
-.status-unmatched {
-    background: rgba(231, 76, 60, 0.15);
-    color: #e74c3c;
-    border: 1px solid rgba(231, 76, 60, 0.3);
-}
-
-.notification-details {
-    margin-bottom: 15px;
-}
-
-.detail-row {
-    display: flex;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-    align-items: flex-start;
-}
-
-.detail-label {
-    font-weight: 600;
-    color: #5a6c7d;
-    min-width: 100px;
-    flex-shrink: 0;
-}
-
-.detail-value {
-    color: #2c3e50;
-    font-weight: 500;
-}
-
-.notification-description {
-    background: rgba(30, 60, 114, 0.08);
-    padding: 12px;
-    border-radius: 8px;
-    margin: 15px 0;
-    color: #2c3e50;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    border-left: 3px solid #1e3c72;
-}
-
-.matched-record {
-    background: rgba(39, 174, 96, 0.1);
-    padding: 12px;
-    border-radius: 8px;
-    margin: 15px 0;
-    color: #27ae60;
-    font-size: 0.9rem;
-    border-left: 3px solid #27ae60;
-    line-height: 1.4;
-}
-
-.notification-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 15px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
-
-.notification-actions .btn {
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    border-radius: 8px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-.notification-actions .btn:hover {
-    transform: translateY(-1px);
-}
-
-/* Empty State iyileştirmesi */
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: #95a5a6;
-}
-
-.empty-state span {
-    font-size: 3rem;
-    display: block;
-    margin-bottom: 15px;
-    opacity: 0.6;
-}
-
-.empty-state p {
-    font-size: 1rem;
-    font-weight: 500;
-    margin: 0;
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-    .notifications-grid {
-        grid-template-columns: 1fr;
-        gap: 20px;
-    }
-    
-    .notification-stats {
-        gap: 15px;
-    }
-    
-    .stat-item {
-        min-width: 80px;
-        padding: 15px 20px;
-    }
-}
-
-@media (max-width: 768px) {
-    .notification-column {
-        padding: 20px;
-    }
-    
-    .notification-item {
-        padding: 15px;
-    }
-    
-    .notification-header {
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-start;
-    }
-    
-    .notification-actions {
-        justify-content: flex-start;
-    }
-    
-    .detail-row {
-        flex-direction: column;
-        gap: 2px;
-    }
-    
-    .detail-label {
-        min-width: auto;
-        margin-bottom: 2px;
-    }
-}
-
-    /* Loading Animation */
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
-
-    .notification-item.loading {
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    /* Success Animation */
-    @keyframes slideInFromRight {
-        from {
-            opacity: 0;
-            transform: translateX(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    .notification-item {
-        animation: slideInFromRight 0.3s ease-out;
-    }
-
-    /* Icon improvements */
-    .column-title span:first-child {
-        font-size: 1.3rem;
-        margin-right: 5px;
-    }
-
-    /* Better button styles in notifications */
-    .btn-success {
-        background: linear-gradient(135deg, #27ae60, #2ecc71);
-        border: none;
-        color: white;
-    }
-
-    .btn-success:hover {
-        background: linear-gradient(135deg, #229954, #27ae60);
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #3498db, #5dade2);
-        border: none;
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background: linear-gradient(135deg, #2980b9, #3498db);
-    }
-
-    .btn-secondary {
-        background: linear-gradient(135deg, #95a5a6, #bdc3c7);
-        border: none;
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background: linear-gradient(135deg, #7f8c8d, #95a5a6);
-    }
-/* Tab Based Notifications CSS - bulk-indexing-page.html'e ekleyin */
-
-/* Tab Container */
-.notifications-tabs-container {
-    margin-top: 25px;
-}
-
-/* Tab Headers */
-.notifications-tabs-header {
-    display: flex;
-    background: #f8f9fa;
-    border-radius: 12px 12px 0 0;
-    padding: 8px;
-    gap: 8px;
-    border-bottom: 2px solid #e1e8ed;
-}
-
-.notifications-tab-btn {
-    flex: 1;
-    padding: 15px 20px;
-    border: none;
-    background: transparent;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #7f8c8d;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    position: relative;
-}
-
-.notifications-tab-btn:hover {
-    background: rgba(255, 255, 255, 0.7);
-    color: #2c3e50;
-    transform: translateY(-1px);
-}
-
-.notifications-tab-btn.active {
-    background: white;
-    color: #1e3c72;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transform: translateY(-2px);
-}
-
-.notifications-tab-btn span:first-child {
-    font-size: 1.2rem;
-}
-
-.tab-badge-count {
-    background: #3498db;
-    color: white;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    min-width: 25px;
-    text-align: center;
-}
-
-.notifications-tab-btn.active .tab-badge-count {
-    background: #1e3c72;
-}
-
-.notifications-tab-btn:hover .tab-badge-count {
-    transform: scale(1.1);
-}
-
-/* Tab Content */
-.notifications-tab-content {
-    background: white;
-    border-radius: 0 0 12px 12px;
-    min-height: 500px;
-    border: 1px solid #e1e8ed;
-    border-top: none;
-}
-
-.notifications-tab-pane {
-    display: none;
-    padding: 25px;
-}
-
-.notifications-tab-pane.active {
-    display: block;
-    animation: fadeInUp 0.3s ease-out;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* List Container */
-.notifications-list-container {
-    width: 100%;
-}
-
-.notifications-list-full {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 20px;
-    max-height: 600px;
-    overflow-y: auto;
-    padding-right: 10px;
-}
-
-/* Notification Item - Full Width için düzenleme */
-.notifications-list-full .notification-item {
-    background: white;
-    border: 1px solid #e1e8ed;
-    border-radius: 12px;
-    padding: 20px;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    border-left: 4px solid #ddd;
-}
-
-.notifications-list-full .notification-item:hover {
-    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-    transform: translateY(-3px);
-}
-
-/* Matched items */
-.notifications-list-full[data-type="matched"] .notification-item {
-    border-left-color: #27ae60;
-}
-
-/* Unmatched items */
-.notifications-list-full[data-type="unmatched"] .notification-item {
-    border-left-color: #e74c3c;
-}
-
-/* Grid responsive */
-@media (max-width: 1200px) {
-    .notifications-list-full {
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    }
-}
-
-@media (max-width: 900px) {
-    .notifications-list-full {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .notifications-tabs-header {
-        flex-direction: column;
-        gap: 5px;
-    }
-    
-    .notifications-tab-btn {
-        justify-content: space-between;
-        padding: 12px 15px;
-    }
-    
-    .notifications-tab-pane {
-        padding: 15px;
-    }
-}
-
-/* Custom Scrollbar for Tab Content */
-.notifications-list-full::-webkit-scrollbar {
-    width: 8px;
-}
-
-.notifications-list-full::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.notifications-list-full::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-}
-
-.notifications-list-full::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-
-/* Empty State için Tab içinde */
-.notifications-tab-pane .empty-state {
-    text-align: center;
-    padding: 80px 20px;
-    color: #95a5a6;
-}
-
-.notifications-tab-pane .empty-state span {
-    font-size: 4rem;
-    display: block;
-    margin-bottom: 20px;
-    opacity: 0.5;
-}
-
-.notifications-tab-pane .empty-state p {
-    font-size: 1.1rem;
-    font-weight: 500;
-    margin: 0;
-}
-
-/* Badge Colors */
-.notifications-tab-btn[data-notifications-tab="matched"] .tab-badge-count {
-    background: #27ae60;
-}
-
-.notifications-tab-btn[data-notifications-tab="unmatched"] .tab-badge-count {
-    background: #e74c3c;
-}
-
-.notifications-tab-btn[data-notifications-tab="matched"].active .tab-badge-count {
-    background: #229954;
-}
-
-.notifications-tab-btn[data-notifications-tab="unmatched"].active .tab-badge-count {
-    background: #c0392b;
-}
-.notification-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 15px;
-    margin: 10px;
-    background: #fff;
-    width: 320px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    display: inline-block;
-    vertical-align: top;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-.evrak-no {
-    font-size: 1.1em;
-}
-
-.status {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-.status-matched {
-    background: #d4edda;
-    color: #155724;
-}
-.status-unmatched {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.card-body {
-    margin-bottom: 10px;
-    font-size: 0.95em;
-}
-.card-body div {
-    margin: 4px 0;
-}
-
-.card-footer {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.notification-list-row {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid #ddd;
-    font-size: 0.95em;
-}
-
-.notification-list-row:hover {
-    background: #f9f9f9;
-}
-
-.notification-list-row .list-col {
-    padding: 0 8px;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.notification-list-row .list-col.evrak-no {
-    flex: 0 0 90px;
-    font-weight: bold;
-}
-
-.notification-list-row .list-col.durum {
-    flex: 0 0 100px;
-    text-align: center;
-}
-
-.notification-list-row .list-col.actions {
-    flex: 0 0 180px;
-    text-align: right;
-    display: flex;
-    gap: 6px;
-}
-
-.status-matched {
-    background: #d4edda;
-    color: #155724;
-    padding: 3px 6px;
-    border-radius: 4px;
-    font-size: 0.85em;
-}
-
-.status-unmatched {
-    background: #f8d7da;
-    color: #721c24;
-    padding: 3px 6px;
-    border-radius: 4px;
-    font-size: 0.85em;
-}
-.notification-block {
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 12px;
-    margin: 10px 0;
-    background: #fff;
-    font-size: 0.95em;
-}
-
-.notification-block div {
-    margin: 4px 0;
-}
-
-.notification-block .status-matched {
-    background: #d4edda;
-    color: #155724;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-.notification-block .status-unmatched {
-    background: #f8d7da;
-    color: #721c24;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-.notification-block .actions {
-    margin-top: 8px;
-    display: flex;
-    gap: 6px;
-}
-
     </style>
 </head>
 <body>
-    <div class="notification-container"></div>
     <div id="layout-placeholder"></div>
+
     <div class="page-wrapper">
         <main class="main-container">
-            <div class="page-header-section">
-                <h1 class="page-title">Belge Yükleme ve Yönetimi</h1>
-                <p class="page-subtitle">Yüklenecek belgeleri yönetin ve indeksleme için hazırlayın.</p>
-            </div>
+            <header class="page-header">
+                <h1 style="color: var(--primary-blue); margin-bottom: 5px;">Belge Yükleme ve Yönetimi</h1>
+                <p style="color: #64748b;">Merkezi evrak yönetim sistemi ve EPATS entegrasyonu</p>
+            </header>
 
-            <div class="form-container">
-                <form id="indexingForm" onsubmit="return false;">
-                    <div class="form-section document-upload-section">
-                        <h2 class="section-title"><span>1.</span>Belgeleri Yükleyin ve İndeksleyin</h2> 
-                        
-                        <div class="tabs-container">
-                            <button type="button" class="tab-btn" data-tab="manual-indexing-pane">Manuel İşlem Oluştur</button>
-                            <button type="button" class="tab-btn" data-tab="bulk-indexing-pane">
-                                ETEBS Tebligatları
-                                <span class="tab-badge" id="totalBadge">0</span>
-                            </button>
-                            <button type="button" class="tab-btn" data-tab="epats-indexing-pane">
-                                EPATS Evrak Yükleme
-                            </button>
+            <div class="content-card">
+                <nav class="main-tabs">
+                    <button class="tab-trigger active" data-tab="manual-pane">
+                        <i class="fas fa-edit mr-2"></i> Manuel İşlem
+                    </button>
+                    <button class="tab-trigger" data-tab="etebs-pane">
+                        <i class="fas fa-envelope-open-text mr-2"></i> ETEBS Tebligatları
+                        <span class="badge-count" id="totalBadge">0</span>
+                    </button>
+                    <button class="tab-trigger" data-tab="epats-pane">
+                        <i class="fas fa-cloud-download-alt mr-2"></i> EPATS Evrak Yükleme
+                    </button>
+                </nav>
+
+                <div class="tab-content">
+                    
+                    <div id="manual-pane" class="tab-pane active">
+                        <section class="mb-5">
+                            <h3 class="section-title"><i class="fas fa-search"></i> 1. Kayıt Seçimi</h3>
+                            <div class="search-wrapper position-relative">
+                                <input type="text" id="recordSearchInputManual" class="form-control" placeholder="Başvuru No veya Marka Adı ile ara...">
+                                <div id="searchResultsContainerManual" class="search-results-dropdown" style="display:none;"></div>
+                            </div>
+                            <div class="mt-3">
+                                <label class="form-label">Seçili Kayıt:</label>
+                                <input type="text" id="selectedRecordDisplayManual" class="form-control bg-light" readonly placeholder="Henüz bir kayıt seçilmedi.">
+                            </div>
+                        </section>
+
+                        <section class="mb-5">
+                            <h3 class="section-title"><i class="fas fa-info-circle"></i> 2. İşlem Detayları</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">İşlem Türü *</label>
+                                    <select id="specificManualTransactionType" class="form-select"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Tebliğ Tarihi</label>
+                                    <input type="date" id="manualTransactionDeliveryDate" class="form-control">
+                                </div>
+                            </div>
+                            <div class="form-group mt-3">
+                                <label class="form-label">Notlar</label>
+                                <textarea id="manualTransactionNotes" class="form-control" rows="3"></textarea>
+                            </div>
+                        </section>
+
+                        <section>
+                            <h3 class="section-title"><i class="fas fa-file-upload"></i> 3. Belge Yükle</h3>
+                            <div class="upload-zone" id="filesManualButton">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3" style="color: #cbd5e1;"></i>
+                                <p>Dosyaları sürükleyin veya <strong>seçmek için tıklayın</strong></p>
+                                <span class="text-muted small">PDF, DOCX, JPG (Maks. 10MB)</span>
+                            </div>
+                            <input type="file" id="filesManual" multiple style="display:none;">
+                            <div id="fileListManual" class="mt-3"></div>
+                            
+                            <div class="d-flex justify-content-end mt-4">
+                                <button type="button" id="saveManualTransactionBtn" class="btn btn-primary px-5" disabled>
+                                    <i class="fas fa-save mr-2"></i> İşlemi Kaydet
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="etebs-pane" class="tab-pane d-none">
+                        <div class="mode-selector mb-4">
+                            <button class="btn btn-outline-primary active" data-mode="etebs">ETEBS Token</button>
+                            <button class="btn btn-outline-primary" data-mode="upload">Manuel PDF</button>
                         </div>
-                        
-                        <div class="tab-content-container">
-                            <div id="manual-indexing-pane" class="tab-pane">
-                                <div class="form-section record-search-section">
-                                    <h2 class="section-title"><span>1.1</span>Kayıt Seçin</h2>
-                                    <div class="form-group search-wrapper">
-                                        <label class="form-label" for="recordSearchInputManual">Başvuru Numarası veya Başlık ile Ara</label>
-                                        <input type="text" id="recordSearchInputManual" class="form-input" placeholder="Örn: TR2024/123, Proje X..." autocomplete="off">
-                                        <div class="form-group" style="margin-top:10px;">
-                                        <label class="form-label" for="selectedRecordDisplayManual">Seçili Kayıt</label>
-                                        <input type="text"
-                                                id="selectedRecordDisplayManual"
-                                                class="form-input"
-                                                readonly
-                                                placeholder="Henüz kayıt seçilmedi. Yukarıdan arayıp seçin.">
-                                        </div>
-                                        <div class="search-results-container" id="searchResultsContainerManual">
-                                            <p class="no-results-message p-2">Arama yapmak için yukarıya yazın.</p>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div class="form-section manual-transaction-section">
-                                    <h2 class="section-title"><span>1.2</span>Yeni İşlem Detayları</h2>
-                                    
-                                    <div class="form-group">
-                                        <label class="form-label" for="specificManualTransactionType">İşlem Türü <span style="color: red;">*</span></label>
-                                        <select id="specificManualTransactionType" class="form-select">
-                                            <option value="" disabled selected>İşlem türü seçin...</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="form-label" for="manualTransactionDeliveryDate">Tebliğ Tarihi</label>
-                                        <input type="date" id="manualTransactionDeliveryDate" class="form-input">
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="form-label" for="manualTransactionNotes">Notlar</label>
-                                        <textarea id="manualTransactionNotes" class="form-input" rows="3" placeholder="İşlemle ilgili notlarınızı buraya yazabilirsiniz..."></textarea>
-                                    </div>
-                                </div>
-
-                                <div class="form-section file-upload-section">
-                                    <h2 class="section-title"><span>1.3</span>Dosya Seçin (Opsiyonel)</h2>
-                                    <div class="form-group">
-                                        <label class="form-label" for="filesManual">Dosyalar</label>
-                                        <div class="file-upload-area" id="filesManualButton">
-                                            <div class="upload-icon">📁</div>
-                                            <p>Dosyalarınızı buraya sürükleyin veya <strong>dosya seçmek için tıklayın</strong></p>
-                                            <p class="text-muted">PDF, DOC, DOCX, JPG, PNG (Maks. 10MB)</p>
-                                        </div>
-                                        <input type="file" id="filesManual" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display: none;">
-                                        <div class="file-info" id="filesManualInfo">Henüz dosya seçilmedi.</div>
-                                        <div class="file-list" id="fileListManual"></div>
-                                    </div>
-                                    
-                                    <div class="info-message" style="margin-top: 10px; padding: 10px; background-color: #f0f8ff; border-left: 4px solid #007bff; border-radius: 4px;">
-                                        <small style="color: #0056b3;">
-                                            💡 <strong>Bilgi:</strong> Manuel işlem oluştururken dosya yüklemek zorunlu değildir. 
-                                            İşlem oluşturduktan sonra da dosya ekleyebilirsiniz.
-                                        </small>
-                                    </div>
-                                </div>
-
-                                <div class="form-section" style="margin-top: 30px;">
-                                    <button type="button" id="saveManualTransactionBtn" class="btn btn-primary" disabled>
-                                        💾 Manuel İşlemi Kaydet
-                                    </button>
-                                </div>
-                            </div> 
-                            <div id="bulk-indexing-pane" class="tab-pane">
-                                <div class="mode-selection-container">
-                                    <div class="mode-buttons">
-                                        <button class="mode-btn active" data-mode="etebs" type="button">
-                                            <span>🔐</span>
-                                            <span>ETEBS Token ile Çek</span>
-                                        </button>
-                                        <button class="mode-btn" data-mode="upload" type="button">
-                                            <span>📁</span>
-                                            <span>Manuel PDF Yükle</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                            <div id="etebs-mode" class="mode-content">
-                                <div class="form-section">
-                                    <h2 class="section-title">
-                                        <span>🔐</span>
-                                        ETEBS Token Yönetimi
-                                    </h2>
-                                    <div class="form-group">
-                                        <label class="form-label">ETEBS Token (GUID)</label>
-                                        <div class="input-group-inline">
-                                            <input type="text" id="etebsTokenInput" class="form-input" 
-                                                placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-                                                style="flex: 1;">
-                                            <button id="fetchNotificationsBtn" class="btn btn-primary" type="button">
-                                                <span>📥</span>
-                                                <span>Tebligatları Çek</span>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div id="tokenStatus" class="status-indicator" style="display: none;">
-                                        </div>
-                                </div>
-                                <div id="notificationsSection" class="notifications-section" style="display: none;">
-                                    <div class="notifications-tabs-container">
-                                        <div class="notifications-tabs-header">
-                                            <button class="notifications-tab-btn active" data-notifications-tab="matched">
-                                                <span>✅</span>
-                                                <span>Eşleşen Tebligatlar</span>
-                                                <span class="tab-badge-count" id="matchedTabBadge">0</span>
-                                            </button>
-                                            <button class="notifications-tab-btn" data-notifications-tab="unmatched">
-                                                <span>❓</span>
-                                                <span>Eşleşmeyen Tebligatlar</span>
-                                                <span class="tab-badge-count" id="unmatchedTabBadge">0</span>
-                                            </button>
-                                        </div>
-
-                                        <div class="notifications-tab-content">
-                                            <div id="matched-notifications-tab" class="notifications-tab-pane active">
-                                                <div class="notifications-list-container">
-                                                    <div id="matchedNotificationsList" class="notifications-list-full">
-                                                        <div class="empty-state">
-                                                            <span>📋</span>
-                                                            <p>Henüz eşleşen tebligat yok</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div id="unmatched-notifications-tab" class="notifications-tab-pane">
-                                                <div class="notifications-list-container">
-                                                    <div id="unmatchedNotificationsList" class="notifications-list-full">
-                                                        <div class="empty-state">
-                                                            <span>📋</span>
-                                                            <p>Henüz eşleşmeyen tebligat yok</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
+                        <div id="etebs-mode-content">
+                            <div class="form-group">
+                                <label class="form-label">ETEBS Token (GUID)</label>
+                                <div class="input-group">
+                                    <input type="text" id="etebsTokenInput" class="form-control" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
+                                    <button id="fetchNotificationsBtn" class="btn btn-primary">Tebligatları Çek</button>
                                 </div>
                             </div>
-                            <div id="upload-mode" class="mode-content" style="display: none;">
-                                <div class="form-section">
-                                    <h2 class="section-title"><span>📁</span> PDF Dosyalarını Yükleyin</h2>
-                                    <div class="form-group">
-                                        <label class="form-label" for="bulkFiles">
-                                            PDF Dosyalarını Seçin <span style="color: red;">*</span>
-                                        </label>
-                                        <div class="file-upload-wrapper">
-                                            <input type="file" id="bulkFiles" multiple accept=".pdf" name="bulkFiles">
-                                            <div class="file-upload-button" id="bulkFilesButton">
-                                                📎 PDF dosyalarını sürükleyip bırakın veya seçmek için tıklayın
-                                            </div>
-                                        </div>
-                                        <div class="file-upload-info" id="bulkFilesInfo">
-                                            Henüz PDF dosyası seçilmedi. Birden fazla PDF dosyası seçebilirsiniz.
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-section" id="fileListSection">
-                                    <h2 class="section-title"><span>📄</span> Yüklenen PDF Dosyaları</h2>
-                                    <div class="tabs-container">
-                                        <button class="tab-btn active" data-tab="all-files-pane">Eşleşen Dosyalar <span class="badge" id="allCount">0</span></button>
-                                        <button class="tab-btn" data-tab="unmatched-files-pane">Eşleşmeyen Dosyalar <span class="badge" id="unmatchedCount">0</span></button>
-                                        <button class="tab-btn" data-tab="indexed-files-pane">İndekslenenler <span class="badge" id="indexedCount">0</span></button>
-                                        <button class="tab-btn" onclick="window.indexingModule.reprocessMatching()" style="margin-left: auto; background: #28a745; color: white;">
-                                            🔄 Yeniden Eşleştir
-                                        </button>
-                                    </div>
-                                    <div class="tab-content-container">
-                                        <div id="all-files-pane" class="tab-pane active">
-                                            <div id="allFilesList" class="pdf-list"></div>
-                                        </div>
-                                        <div id="unmatched-files-pane" class="tab-pane">
-                                            <div id="unmatchedFilesList" class="pdf-list"></div>
-                                        </div>
-                                        <div id="indexed-files-pane" class="tab-pane">
-                                            <div id="indexedFilesList" class="pdf-list"></div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-                            <div id="epats-indexing-pane" class="tab-pane">
-                                <div class="form-section">
-                                    <h2 class="section-title"><span>1.</span> Filtreleme ve Kayıt Seçimi</h2>
-                                    <div class="input-group-inline" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: flex-end;">
-                                        <div class="form-group">
-                                            <label class="form-label">Müvekkil (Sahip)</label>
-                                            <select id="epatsClientSelect" class="form-select">
-                                                <option value="">Yükleniyor...</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">IP Türü</label>
-                                            <select id="epatsIpTypeSelect" class="form-select">
-                                                <option value="trademark" selected>Marka</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">Belge Türü</label>
-                                            <select id="epatsDocTypeSelect" class="form-select">
-                                                <option value="tescil_belgesi" selected>Tescil Belgesi</option>
-                                                <option value="marka_basvuru_belgesi">Marka Başvurusu Belgesi</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div style="margin-top: 20px; display: flex; gap: 10px;">
-                                        <button id="btnFetchMissingDocs" class="btn btn-primary" type="button">
-                                            🔍 Eksik Belgeleri Listele
-                                        </button>
-                                        <button id="btnStartEpatsTransfer" class="btn btn-success" type="button" disabled>
-                                            🚀 Belge Transferine Başla (<span id="selectedEpatsCount">0</span>)
-                                        </button>
-                                    </div>
-                                </div>
+                    </div>
 
-                                <div class="form-section" id="epatsResultsSection" style="display: none;">
-                                    <h2 class="section-title"><span>2.</span> İşlem Bekleyen Kayıtlar</h2>
-                                    <div class="table-responsive">
-                                        <table class="form-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-                                            <thead>
-                                                <tr style="background: #1e3c72; color: white; text-align: left;">
-                                                    <th style="padding: 12px;"><input type="checkbox" id="selectAllEpats"></th>
-                                                    <th style="padding: 12px;">Başvuru No</th>
-                                                    <th style="padding: 12px;">Marka Adı</th>
-                                                    <th style="padding: 12px;">Mevcut Durum</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="epatsResultsBody">
-                                                </tbody>
-                                        </table>
-                                    </div>
-                                    <div id="epatsPagination" class="pagination-container" style="margin-top: 15px; display: flex; justify-content: center;"></div>
+                    <div id="epats-pane" class="tab-pane d-none">
+                        <section class="filter-section p-4 bg-light rounded-3 mb-4">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Müvekkil (Sahip)</label>
+                                    <select id="epatsClientSelect" class="form-select"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">IP Türü</label>
+                                    <select id="epatsIpTypeSelect" class="form-select">
+                                        <option value="trademark">Marka</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Belge Türü</label>
+                                    <select id="epatsDocTypeSelect" class="form-select">
+                                        <option value="tescil_belgesi">Tescil Belgesi</option>
+                                        <option value="marka_basvuru_belgesi">Başvuru Belgesi</option>
+                                    </select>
                                 </div>
                             </div>
-                </form>
+                            <div class="mt-3 d-flex gap-2">
+                                <button id="btnFetchMissingDocs" class="btn btn-primary">
+                                    <i class="fas fa-filter mr-2"></i> Eksik Belgeleri Listele
+                                </button>
+                                <button id="btnStartEpatsTransfer" class="btn btn-success" disabled>
+                                    <i class="fas fa-play mr-2"></i> Transferi Başlat (<span id="selectedEpatsCount">0</span>)
+                                </button>
+                            </div>
+                        </section>
+
+                        <div id="epatsResultsSection" style="display:none;">
+                            <div class="data-table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="selectAllEpats"></th>
+                                            <th>Başvuru No</th>
+                                            <th>Marka Adı</th>
+                                            <th>Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="epatsResultsBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="epatsPagination" class="mt-4 d-flex justify-content-center"></div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </main>
     </div>
 
-<script type="module">
-    import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
-    import { loadSharedLayout } from './js/layout-loader.js';
-    import { ETEBSManager } from './js/etebs-module.js';
-    import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
+    <script type="module" src="js/layout-loader.js"></script>
+    <script type="module">
+        import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
+        import { ETEBSManager } from './js/etebs-module.js';
+        import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
 
-    document.addEventListener('DOMContentLoaded', () => {
-        // Bulk Indexing başlat
-        window.indexingModule = new BulkIndexingModule();
+        document.addEventListener('DOMContentLoaded', () => {
+            // Başlatıcılar
+            window.indexingModule = new BulkIndexingModule();
+            window.etebsManager = new ETEBSManager();
+            window.epatsUiManager = new EpatsUiManager();
 
-        // Shared Layout yükle
-        loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
+            // Sekme Yönetimi (Refactored)
+            const tabTriggers = document.querySelectorAll('.tab-trigger');
+            const tabPanes = document.querySelectorAll('.tab-pane');
 
-        // ETEBSManager'ı window'a koy
-        window.etebsManager = new ETEBSManager();
-        window.epatsUiManager = new EpatsUiManager();
+            tabTriggers.forEach(trigger => {
+                trigger.addEventListener('click', () => {
+                    const target = trigger.dataset.tab;
+                    
+                    tabTriggers.forEach(t => t.classList.remove('active'));
+                    tabPanes.forEach(p => p.classList.add('d-none'));
+                    tabPanes.forEach(p => p.classList.remove('active'));
 
-        // Butona tıklayınca init et
-        const fetchBtn = document.getElementById('fetchEtebsNotificationsBtn');
-        if (fetchBtn) {
-            fetchBtn.addEventListener('click', () => {
-                window.etebsManager.init();
+                    trigger.classList.add('active');
+                    const activePane = document.getElementById(target);
+                    activePane.classList.remove('d-none');
+                    activePane.classList.add('active');
+                });
             });
-        }
-    });
-</script>
+        });
+    </script>
 </body>
 </html>
