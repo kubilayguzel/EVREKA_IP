@@ -7,28 +7,27 @@
   console.log("[TP-AUTO] content_script loaded on:", location.href);
 
   // Background'dan PDF URL yakalandı mesajı gelince işle
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-      console.log(TAG, "📥 BG PDF URL:", request.url);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
+    console.log(TAG, "📥 BG PDF URL:", request.url);
+    sendResponse({ ok: true });
 
-      // ✅ Background'a hemen cevap ver (port kapanmasın)
-      sendResponse({ ok: true });
+    (async () => {
+      const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
+      if (tp_download_clicked) return; // sadece ikinci kez gelirse engelle
 
-      (async () => {
-        // Çifte tetiklemeyi önle
-        const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
-        if (tp_download_clicked) return;
+      // ✅ URL GELDİ, artık "clicked" sayabiliriz
+      await chrome.storage.local.set({
+        tp_download_clicked: true,
+        tp_waiting_pdf_url: false
+      });
 
-        await chrome.storage.local.set({ tp_download_clicked: true });
+      await processDocument(request.url, null);
+    })().catch(err => console.error(TAG, "PDF_URL_CAPTURED handler error:", err));
 
-        // Upload + advanceQueue processDocument içinde
-        await processDocument(request.url, null);
-      })().catch(err => console.error(TAG, "PDF_URL_CAPTURED handler error:", err));
-
-      // ✅ async işlem yaptığımız için portu açık tut
-      return true;
-    }
-  });
+    return true;
+  }
+});
 
 
   if (window.top !== window) return; // Sadece ana frame çalışsın
@@ -420,25 +419,28 @@
             if (targetIcon) {
                 // İndirme (İşleme) bulundu
                 console.log(TAG, `✅ BULUNDU: ${terim}`);
-                await chrome.storage.local.set({ tp_download_clicked: true });
-                
+                await chrome.storage.local.set({ tp_waiting_pdf_url: true });
+               
                 // Burada PDF'i kendimiz indirmeye çalışmıyoruz.
                 // İkona tıklıyoruz, PDF yeni sekmede açılıyor,
                 // background.js URL'yi yakalayıp buraya gönderecek.
+                await chrome.storage.local.set({ tp_waiting_pdf_url: true });
                 superClick(targetIcon);
+
 
                 // PDF yakalama bekleniyor; sakın advanceQueue çağırma.
                 await sleep(800);
 
                 // Güvenlik: eğer background yakalayamazsa 10 sn sonra failover
                 setTimeout(async () => {
-                  const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
-                  if (!tp_download_clicked) {
+                  const { tp_waiting_pdf_url, tp_download_clicked } =
+                    await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
+
+                  if (tp_waiting_pdf_url && !tp_download_clicked) {
                     console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
                     await advanceQueue();
                   }
-                }, 10000);
-
+                }, 12000);
                 return true;
 
             }
