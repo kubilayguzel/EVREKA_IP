@@ -4,6 +4,24 @@
   let isActionInProgress = false; 
   let searchPassCount = 0; // Tarama tur sayısı
 
+  // Background'dan PDF URL yakalandı mesajı gelince işle
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
+      console.log(TAG, "📥 BG'den PDF URL geldi:", request.url);
+
+      // Aynı iş içinde iki kez tetiklenmeyi önle
+      chrome.storage.local.get(["tp_download_clicked"]).then(async ({ tp_download_clicked }) => {
+        if (tp_download_clicked) return;
+
+        await chrome.storage.local.set({ tp_download_clicked: true });
+
+        // URL geldiyse backend'e gönder
+        await processDocument(request.url, null);
+      });
+    }
+  });
+
+
   if (window.top !== window) return; // Sadece ana frame çalışsın
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -395,35 +413,25 @@
                 console.log(TAG, `✅ BULUNDU: ${terim}`);
                 await chrome.storage.local.set({ tp_download_clicked: true });
                 
-                // İkonun onclick eventinden URL'yi çıkarmak zor olabilir
-                // Genelde ng-click="download(...)" şeklindedir.
-                // Basitçe tıklama simülasyonu indirmeyi başlatır.
-                // Ancak biz indirme URL'sini yakalayıp backend'e atmalıyız.
-                
-                // EPATS'ta PDF genelde yeni sekmede açılır veya direkt iner.
-                // Bu durumda 'chrome.downloads' API'sini kullanmak veya
-                // Network request'ini yakalamak gerekebilir.
-                
-                // Şimdilik Basit Yöntem: Tıkla ve geç (Kuyruğu ilerlet)
-                // Backend entegrasyonu tam yapılana kadar sadece kuyruğu test etmek için:
-                
-                // superClick(targetIcon); 
-                // await sleep(2000); 
-                // await advanceQueue(); 
-                
-                // EĞER URL'yi alabiliyorsak (href attribute varsa):
-                const link = targetIcon.closest('a');
-                if(link && link.href) {
-                    await processDocument(link.href, targetIcon);
-                } else {
-                    // Butonsa ve ng-click varsa, tıklayınca iniyorsa...
-                    // Şimdilik sadece kuyruğu ilerletiyoruz
-                    superClick(targetIcon);
-                    await sleep(3000); // İndirme başlasın
+                // Burada PDF'i kendimiz indirmeye çalışmıyoruz.
+                // İkona tıklıyoruz, PDF yeni sekmede açılıyor,
+                // background.js URL'yi yakalayıp buraya gönderecek.
+                superClick(targetIcon);
+
+                // PDF yakalama bekleniyor; sakın advanceQueue çağırma.
+                await sleep(800);
+
+                // Güvenlik: eğer background yakalayamazsa 10 sn sonra failover
+                setTimeout(async () => {
+                  const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
+                  if (!tp_download_clicked) {
+                    console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
                     await advanceQueue();
-                }
-                
+                  }
+                }, 10000);
+
                 return true;
+
             }
         }
         
