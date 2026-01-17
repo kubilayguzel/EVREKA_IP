@@ -1,78 +1,192 @@
-const TAG = '[TP-V3]';
+const TAG = '[TP-V5.0]';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+function superClick(el) {
+  if (!el) return false;
+  try {
+    el.scrollIntoView({ block: 'center', inline: 'center' });
+    const opts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
+    ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t =>
+      el.dispatchEvent(new MouseEvent(t, opts))
+    );
+    console.log(TAG, 'Clicked:', (el.innerText || el.textContent || '').trim());
+    return true;
+  } catch (e) {
+    console.error(TAG, 'Click error:', e);
+    try { el.click(); return true; } catch {}
+    return false;
+  }
+}
+
+// Same-origin iframe’lerin document’larını da topla
+function getAllDocs() {
+  const docs = [document];
+  const iframes = Array.from(document.querySelectorAll('iframe'));
+  for (const fr of iframes) {
+    try {
+      const d = fr.contentDocument;
+      if (d) docs.push(d);
+    } catch (e) {
+      // cross-origin ise erişemeyiz (e-devlet tarafında olabilir)
+    }
+  }
+  return docs;
+}
+
+function qAll(selector) {
+  const docs = getAllDocs();
+  for (const d of docs) {
+    const el = d.querySelector(selector);
+    if (el) return el;
+  }
+  return null;
+}
+
+function qAllMany(selector) {
+  const docs = getAllDocs();
+  let out = [];
+  for (const d of docs) out = out.concat(Array.from(d.querySelectorAll(selector)));
+  return out;
+}
+
+// Angular için daha sağlam doldurma
+function angularFill(input, value) {
+  if (!input) return false;
+  input.focus();
+
+  // Native value setter (Angular/React benzeri framework’ler için)
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (setter) setter.call(input, value);
+  else input.value = value;
+
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  input.blur();
+  return true;
+}
+
 async function runAutomation() {
-  const data = await chrome.storage.local.get(["tp_app_no", "tp_step"]);
-  if (!data.tp_app_no) return;
+  const { tp_app_no, tp_step } = await chrome.storage.local.get(["tp_app_no", "tp_step"]);
+  if (!tp_app_no) return;
 
-  const url = window.location.href;
+  const url = location.href;
 
-  // ADIM 1: Giriş Sayfası
+  // 1) /EDEVLET/giris sayfasında "GİRİŞ" tıkla
   if (url.includes("/EDEVLET/giris")) {
-    // Paylaştığın img içeren linki hedef alıyoruz
-    const loginBtn = document.querySelector('a[href*="turkiye.gov.tr"], a > img[src*="EPATS_GIRIS"]')?.parentElement || 
-                     document.querySelector('a[href*="check_login"]');
-    
+    const loginBtn = qAll('#text66 a, a[href*="turkiye.gov.tr"], a:has(img[alt*="turkiye"])');
     if (loginBtn) {
-      console.log(TAG, "Giriş butonuna basılıyor...");
-      loginBtn.click();
+      console.log(TAG, "Step1: Login button found.");
+      superClick(loginBtn);
+      return;
     }
-    return;
   }
 
-  // ADIM 2: Belgelerim Butonuna Tıklama (Görsel 2)
-  // Paylaştığın DIV yapısına göre tüm butonları ve divleri tarıyoruz
-  const allElements = Array.from(document.querySelectorAll('div.btn, a, span, .nav-link'));
-  const belgelerimBtn = allElements.find(el => el.textContent.trim() === 'Belgelerim');
+  // 2) E-devlet sonrası açılan ekranda sol menü "Belgelerim" tıkla
+  // Not: sayfa /belgelerim değilse, menüden geçiş yapacağız
+  if (!url.includes("/belgelerim")) {
+    // Birden fazla olasılık: metne göre bul (en sağlamı)
+    const menuCandidates = qAllMany('a, button, div, span')
+      .filter(el => (el.innerText || el.textContent || '').trim().toLowerCase() === 'belgelerim');
 
-  // Eğer zaten belgelerim sayfasındaysak bu adımı geç
-  if (belgelerimBtn && !url.includes("/belgelerim")) {
-    console.log(TAG, "Belgelerim div'ine tıklanıyor...");
-    belgelerimBtn.click();
-    return;
+    if (menuCandidates.length) {
+      console.log(TAG, "Step2: Belgelerim menu found by text.");
+      superClick(menuCandidates[0]);
+      return;
+    }
+
+    // Sizin eski id denemesi de kalsın (varsa hızlı yakalar)
+    const legacy = qAll('#button528, #button528 *');
+    if (legacy) {
+      console.log(TAG, "Step2: Belgelerim found by #button528.");
+      superClick(legacy);
+      return;
+    }
   }
 
-  // ADIM 3 & 4: Form Doldurma
+  // 3) /belgelerim sayfasında: Dosya Türü=Marka, Başvuru No=tp_app_no, Ara
   if (url.includes("/belgelerim")) {
-    // Dosya Türü Seçimi (Marka)
-    // Angular (ng-click) yapısı olduğu için direkt click tetiklemek gerekebilir
-    const dropdowns = Array.from(document.querySelectorAll('div, select'));
-    const markaSecenek = dropdowns.find(el => el.textContent.trim() === 'Marka');
-    
-    // Başvuru Numarası Input
-    const inputField = document.querySelector('input[ng-model*="basvuruNo"], input[placeholder*="Numarası"]');
-    
-    if (inputField && inputField.value !== data.tp_app_no) {
-      inputField.value = data.tp_app_no;
-      inputField.dispatchEvent(new Event('input', { bubbles: true }));
-      inputField.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log(TAG, "Numara yazıldı.");
+    // 3.1 Dosya Türü (ui-select container)
+    const selectContainer = qAll('#selectbox550, [id*="selectbox"][id*="dosya"], .ui-select-container');
+    if (selectContainer) {
+      const matchTextEl =
+        selectContainer.querySelector('.ui-select-match-text') ||
+        selectContainer.querySelector('.ui-select-match');
+
+      const current = (matchTextEl?.textContent || '').trim().toLowerCase();
+
+      if (!current.includes('marka')) {
+        console.log(TAG, "Step3: Opening Dosya Turu dropdown...");
+        const toggle =
+          selectContainer.querySelector('.ui-select-toggle') ||
+          selectContainer.querySelector('button') ||
+          selectContainer;
+
+        superClick(toggle);
+        await sleep(600);
+
+        // ui-select seçenekleri bazen body’ye basılır, o yüzden tüm doc’larda ara
+        const choices = qAllMany('.ui-select-choices-row, .ui-select-choices-row-inner, li[role="option"], [role="option"]');
+        const marka = choices.find(el => (el.textContent || '').trim().toLowerCase().includes('marka'));
+
+        if (marka) {
+          console.log(TAG, "Step3: Selecting 'Marka'...");
+          superClick(marka);
+          await sleep(600);
+        } else {
+          console.log(TAG, "Step3: 'Marka' option not found yet.");
+          return;
+        }
+      }
     }
 
-    // Ara Butonu
-    const araBtn = Array.from(document.querySelectorAll('div.btn, button')).find(el => el.textContent.includes('Ara'));
-    if (araBtn) {
-      await sleep(500);
-      araBtn.click();
-      await chrome.storage.local.set({ "tp_step": "SEARCH_CLICKED" });
+    // 3.2 Başvuru Numarası
+    const inputField =
+      qAll('#textbox551 input') ||
+      qAll('input[name*="basvuru"], input[placeholder*="Başvuru"], input');
+
+    if (inputField && inputField.value !== tp_app_no) {
+      console.log(TAG, "Step3: Filling application no...");
+      angularFill(inputField, tp_app_no);
+      await sleep(400);
+    }
+
+    // 3.3 Ara butonu
+    const araBtn =
+      qAll('#button549, #button549 *') ||
+      qAll('button:has(i.fa-search), button:has(span:contains("Ara")), button');
+
+    // Doğrulama: marka seçili + numara dolu
+    const isMarkaOk =
+      (qAll('#selectbox550 .ui-select-match-text')?.textContent || '').toLowerCase().includes('marka') ||
+      (qAll('.ui-select-match-text')?.textContent || '').toLowerCase().includes('marka');
+
+    const isNoOk = inputField && (inputField.value || '').trim().length >= tp_app_no.length;
+
+    if (araBtn && isMarkaOk && isNoOk && tp_step !== "SEARCHED") {
+      console.log(TAG, "Step3: Clicking Ara...");
+      superClick(araBtn);
+      await chrome.storage.local.set({ tp_step: "SEARCHED" });
+      return;
     }
   }
 
-  // ADIM 5 & 6: Akordeon (+) Açma
-  const statusData = await chrome.storage.local.get("tp_step");
-  if (statusData.tp_step === "SEARCH_CLICKED") {
+  // (Opsiyonel) Arama sonrası sonuç açma (sizde vardı)
+  const st = await chrome.storage.local.get("tp_step");
+  if (st.tp_step === "SEARCHED") {
     await sleep(2000);
-    // Angular tabanlı tablolarda + işareti genelde bir div veya i etiketidir
-    const plusBtn = document.querySelector('.ui-row-toggler, .fa-plus, [class*="plus"]');
-    if (plusBtn) {
-      plusBtn.click();
-      chrome.storage.local.remove(["tp_step"]);
-      console.log(TAG, "Süreç tamamlandı.");
+    const plus =
+      qAll('.ui-row-toggler') ||
+      qAll('.fa-plus') ||
+      qAll('i.fa-search-plus');
+
+    if (plus) {
+      console.log(TAG, "Step5: Expanding accordion...");
+      superClick(plus);
+      await chrome.storage.local.remove(["tp_step"]);
     }
   }
 }
 
-// Hata almamak için periyodik kontrol
-setInterval(() => {
-  runAutomation().catch(err => console.debug("Bekleniyor..."));
-}, 3000);
+// Daha sık ve ilk yüklemede de çalıştır
+runAutomation().catch(()=>{});
+setInterval(() => runAutomation().catch(()=>{}), 1200);
