@@ -9,18 +9,24 @@
   // Background'dan PDF URL yakalandı mesajı gelince işle
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-      (async () => {
-        console.log(TAG, "📥 BG PDF URL:", request.url);
+      console.log(TAG, "📥 BG PDF URL:", request.url);
 
-        // Aynı işte iki kez tetiklenmeyi önle (çok önemli)
+      // ✅ Background'a hemen cevap ver (port kapanmasın)
+      sendResponse({ ok: true });
+
+      (async () => {
+        // Çifte tetiklemeyi önle
         const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
         if (tp_download_clicked) return;
 
         await chrome.storage.local.set({ tp_download_clicked: true });
 
-        // PDF'i indir + backend'e gönder (processDocument zaten advanceQueue yapıyor)
+        // Upload + advanceQueue processDocument içinde
         await processDocument(request.url, null);
       })().catch(err => console.error(TAG, "PDF_URL_CAPTURED handler error:", err));
+
+      // ✅ async işlem yaptığımız için portu açık tut
+      return true;
     }
   });
 
