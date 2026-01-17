@@ -32,7 +32,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (!activeJobTabId) return;
 
     // URL değiştiyse veya sayfa yüklendiyse kontrol et
-    if (changeInfo.status === 'loading' && tab.url) {
+    if (changeInfo.status === 'complete' && tab.url) {
         // PDF mi veya Belge Görüntüleme URL'i mi?
         // Genelde: /run/TP/EDEVLET/pdf?id=... veya .pdf uzantısı
             if (
