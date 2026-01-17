@@ -637,15 +637,25 @@ export class BulkIndexingModule {
                         <div class="pdf-meta">
                             ${file.extractedAppNumber ? `No: ${file.extractedAppNumber}` : 'No Bulunamadı'}
                         </div>
-                        <div class="match-status ${file.matchedRecordId ? 'matched' : 'unmatched'}">
-                            ${file.matchedRecordId ? '✅ Eşleşti' : '❌ Eşleşmedi'}
-                        </div>
                     </div>
                 </div>
                 <div class="pdf-actions">
-                    <button class="view-btn" onclick="window.open('${file.fileUrl}', '_blank')"><i class="fas fa-eye"></i></button>
-                    ${file.status === 'pending' ? `<button class="complete-btn" onclick="window.location.href='indexing-detail.html?pdfId=${file.id}'"><i class="fas fa-check"></i></button>` : ''}
-                    <button class="danger-btn" onclick="window.indexingModule.deleteFilePermanently('${file.id}')"><i class="fas fa-trash"></i></button>
+                <button class="btn btn-light btn-sm pdf-action-btn" title="Görüntüle"
+                        onclick="window.open('${file.fileUrl}', '_blank')">
+                    <i class="fas fa-eye"></i>
+                </button>
+
+                ${file.status === 'pending' ? `
+                    <button class="btn btn-light btn-sm pdf-action-btn" title="İndeksle"
+                            onclick="window.location.href='indexing-detail.html?pdfId=${file.id}'">
+                    <i class="fas fa-check"></i>
+                    </button>
+                ` : ''}
+
+                <button class="btn btn-light btn-sm pdf-action-btn pdf-action-danger" title="Sil"
+                        onclick="window.indexingModule.deleteFilePermanently('${file.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
                 </div>
             </div>
         `).join('');
