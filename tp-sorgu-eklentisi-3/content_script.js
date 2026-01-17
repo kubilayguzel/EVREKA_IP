@@ -10,7 +10,7 @@
 
   // --- AYARLAR ---
   // Cloud Function URL'nizi buraya yazın (Firebase Functions Console'dan alabilirsiniz)
-  const UPLOAD_ENDPOINT = "https://us-central1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
 
   // ---------- KUYRUK VE RESET MANTIĞI ----------
   
