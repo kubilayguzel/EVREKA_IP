@@ -1,31 +1,154 @@
-// content_script.js
+// content_script.js (Final + Queue + Backend Upload)
 (() => {
   const TAG = "[TP-AUTO]";
-  let isActionInProgress = false; // Aynı anda birden fazla işlemin çalışmasını engeller
-  if (window.top !== window) return;
+  let isActionInProgress = false; 
+  let searchPassCount = 0; // Tarama tur sayısı
+
+  if (window.top !== window) return; // Sadece ana frame çalışsın
+  
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // ---------- RESET: page console'dan tetiklemek için ----------
-  // Sayfa console'undan çalıştır:
-  // document.dispatchEvent(new CustomEvent("TP_RESET"))
+  // --- AYARLAR ---
+  // Cloud Function URL'nizi buraya yazın (Firebase Functions Console'dan alabilirsiniz)
+  const UPLOAD_ENDPOINT = "https://us-central1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+
+  // ---------- KUYRUK VE RESET MANTIĞI ----------
+  
   document.addEventListener("TP_RESET", async () => {
     try {
       await chrome.storage.local.clear();
       console.log(TAG, "RESET OK (storage cleared).");
-    } catch (e) {
-      console.log(TAG, "RESET FAILED:", e);
-    }
+    } catch (e) { console.log(TAG, "RESET FAILED:", e); }
   });
 
-  // ---------- DOC HELPERS (ALL FRAMES) ----------
+  // Kuyruktan sıradaki işi alıp tp_app_no'ya atar
+  async function checkQueueAndSetAppNo() {
+    const data = await chrome.storage.local.get(["tp_queue", "tp_is_queue_running", "tp_queue_index", "tp_app_no"]);
+    
+    // Kuyruk modu kapalıysa veya boşsa normal tekil moda devam et
+    if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) {
+      return true; 
+    }
+
+    const currentIndex = data.tp_queue_index || 0;
+    
+    // Kuyruk bitti mi?
+    if (currentIndex >= data.tp_queue.length) {
+      console.log(TAG, "🏁 Kuyruk tamamlandı!");
+      await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
+      alert("Toplu işlem tamamlandı!");
+      return false; // Döngüyü durdur
+    }
+
+    // Sıradaki işi al
+    const currentJob = data.tp_queue[currentIndex];
+    
+    // Eğer şu anki hafızadaki no farklıysa güncelle (Yeni işe başla)
+    if (data.tp_app_no !== currentJob.appNo) {
+      console.log(TAG, `🔄 Yeni İş Başlıyor: ${currentIndex + 1}/${data.tp_queue.length} - No: ${currentJob.appNo}`);
+      
+      // Önceki işlemin durum bayraklarını sıfırla
+      await chrome.storage.local.set({
+        tp_app_no: currentJob.appNo,
+        tp_current_job_id: currentJob.ipId, // Backend'e IP ID'si lazım
+        tp_current_doc_type: currentJob.docType, // Backend'e Belge Tipi lazım
+        tp_clicked_ara: false,
+        tp_download_clicked: false,
+        tp_expanded_twice: false
+      });
+      
+      // Arama kutusunu temizlemek için sayfayı yenilemek en garantisi (bazı durumlarda)
+      // Ancak akışı hızlandırmak için sadece inputu değiştirmeyi deniyoruz.
+      // Eğer takılırsa location.reload() eklenebilir.
+      searchPassCount = 0; // Tur sayacını sıfırla
+      return true;
+    }
+    
+    return true;
+  }
+
+  async function advanceQueue() {
+    const data = await chrome.storage.local.get(["tp_queue_index"]);
+    const nextIndex = (data.tp_queue_index || 0) + 1;
+    
+    console.log(TAG, "✅ İşlem tamam, kuyruk ilerletiliyor...");
+    await chrome.storage.local.set({ 
+      tp_queue_index: nextIndex,
+      tp_app_no: null, // Numarayı sıfırla ki checkQueue yeni numarayı set etsin
+      tp_download_clicked: false,
+      tp_clicked_ara: false
+    });
+    
+    // Sayfayı yenile (Temiz başlangıç için en iyisi)
+    location.reload(); 
+  }
+
+  // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
+
+  // PDF linkini alır, indirir ve sunucuya gönderir
+  async function processDocument(downloadUrl, element) {
+     console.log(TAG, "📄 Belge bulundu, işleniyor:", downloadUrl);
+     
+     // Görsel geri bildirim (ikonu sarı yap)
+     if(element) element.style.color = "orange";
+
+     try {
+        // 1. PDF'i blob olarak çek (EPATS Cookie'leri ile)
+        const response = await fetch(downloadUrl);
+        const blob = await response.blob();
+        
+        // 2. Base64'e çevir
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        
+        reader.onloadend = async () => {
+            const base64data = reader.result.split(',')[1];
+            
+            // Veritabanı ID'sini al
+            const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
+            
+            // 3. Backend'e Gönder
+            const payload = {
+                ipId: storage.tp_current_job_id,
+                fileContent: base64data,
+                fileName: "Tescil_Belgesi.pdf", // Veya dinamik isim
+                mimeType: "application/pdf",
+                docType: storage.tp_current_doc_type || "tescil_belgesi"
+            };
+
+            console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipId);
+            
+            // Fetch ile Cloud Function'a POST
+            const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ data: payload }) // Callable Function formatı { data: ... }
+            });
+
+            if (uploadRes.ok) {
+                console.log(TAG, "✅ Yükleme Başarılı!");
+                if(element) element.style.color = "green";
+                await advanceQueue();
+            } else {
+                console.error(TAG, "❌ Yükleme Hatası:", await uploadRes.text());
+                if(element) element.style.color = "red";
+                // Hata olsa da ilerle (sonsuz döngü olmasın)
+                await advanceQueue(); 
+            }
+        };
+
+     } catch (error) {
+         console.error(TAG, "Process hatası:", error);
+         await advanceQueue();
+     }
+  }
+
+  // ---------- DOC HELPERS ----------
   function getAllDocs() {
     const docs = [document];
     const frames = Array.from(document.querySelectorAll("iframe"));
     for (const fr of frames) {
-      try {
-        const d = fr.contentDocument;
-        if (d) docs.push(d);
-      } catch {}
+      try { const d = fr.contentDocument; if (d) docs.push(d); } catch {}
     }
     return docs;
   }
@@ -44,7 +167,6 @@
     return out;
   }
 
-  // ---------- CLICK / INPUT ----------
   function superClick(el) {
     if (!el) return false;
     try { el.scrollIntoView({ block: "center", inline: "center" }); } catch {}
@@ -53,7 +175,6 @@
       ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((t) =>
         el.dispatchEvent(new MouseEvent(t, opts))
       );
-      console.log(TAG, "Clicked:", (el.textContent || "").trim());
       return true;
     } catch {
       try { el.click(); return true; } catch {}
@@ -61,41 +182,11 @@
     return false;
   }
 
-  function getTreeToggleClickable() {
-  const host = qAll("div.ui-grid-tree-base-row-header-buttons");
-  if (!host) return null;
-
-  // Filtre sonrası handler bazen iç elemanda oluyor
-  return (
-    host.querySelector("button") ||
-    host.querySelector("[role='button']") ||
-    host.querySelector("a") ||
-    host.querySelector("i") ||
-    host
-  );
-}
-
-function readPlusMinusState() {
-  const host = qAll("div.ui-grid-tree-base-row-header-buttons");
-  if (!host) return "none";
-  const icon = host.querySelector("i");
-  const cls = (icon?.className || host.className || "").toLowerCase();
-
-  const plus  = cls.includes("plus")  || cls.includes("fa-plus")  || cls.includes("ui-grid-icon-plus");
-  const minus = cls.includes("minus") || cls.includes("fa-minus") || cls.includes("ui-grid-icon-minus");
-
-  if (plus && !minus) return "plus";
-  if (minus && !plus) return "minus";
-  return "unknown";
-}
-
-
   function fillInputAngularSafe(input, value) {
     if (!input) return false;
     input.focus();
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    if (setter) setter.call(input, value);
-    else input.value = value;
+    if (setter) setter.call(input, value); else input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
     input.blur();
@@ -105,200 +196,84 @@ function readPlusMinusState() {
   async function throttle(key, ms) {
     const now = Date.now();
     const obj = await chrome.storage.local.get([key]);
-    const last = obj[key] || 0;
-    if (now - last < ms) return false;
+    if (now - (obj[key] || 0) < ms) return false;
     await chrome.storage.local.set({ [key]: now });
     return true;
   }
 
-  // =======================
-  //  ARA BUTONU FIX (YENİ)
-  // =======================
-  // ng-click ifadesini Angular scope içinde $eval ile çalıştırır
-  function runNgClickExpression(el) {
-    try {
-      const doc = el.ownerDocument || document;
-      const win = doc.defaultView || window;
-      const angular = win.angular;
-      if (!angular?.element) return false;
+  // ---------- EPATS SPECIFIC ----------
+  
+  async function clickAraButtonOnly() {
+    const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
+    if (tp_clicked_ara) return true; 
 
-      const expr = el.getAttribute("ng-click");
-      if (!expr) return false;
+    const root = qAll("#button549");
+    if (!root) return false;
+    const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
+    
+    if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
 
-      let scope = angular.element(el).scope?.() || angular.element(el).isolateScope?.();
-      // Parent scope zinciri boyunca $eval ara
-      for (let i = 0; i < 20 && scope; i++) {
-        if (typeof scope.$eval === "function") {
-          scope.$apply(() => scope.$eval(expr));
-          return true;
-        }
-        scope = scope.$parent;
-      }
-      return false;
-    } catch (e) {
-      console.log(TAG, "runNgClickExpression error:", e);
-      return false;
-    }
+    console.log(TAG, "Ara butonuna basılıyor...");
+    superClick(btn);
+    await chrome.storage.local.set({ tp_clicked_ara: true });
+    return true;
   }
 
-// Ara butonunu tetiklemek için geliştirilmiş fonksiyon
-async function clickAraButtonOnly() {
-  const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
-  if (tp_clicked_ara) return true; // Zaten basıldıysa tekrar basma
-
-  const root = qAll("#button549");
-  if (!root) {
-    console.log(TAG, "Ara root (#button549) bulunamadı.");
-    return false;
-  }
-
-  const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
-  if (!btn) return false;
-
-  const isDisabled = btn.hasAttribute("disabled") || btn.classList.contains("disabled");
-  if (isDisabled) {
-    console.log(TAG, "Ara butonu henüz aktif değil (disabled), bekleniyor...");
-    return false;
-  }
-
-  // (İstersen buraya bir throttle da ekleyebilirsin)
-  console.log(TAG, "Ara butonuna basılıyor...");
-  superClick(btn);
-
-  await chrome.storage.local.set({ tp_clicked_ara: true });
-  return true;
-}
-
-
-  // ---------- PAGE STATE ----------
-  function isGirisPage() {
-    return location.href.includes("/run/TP/EDEVLET/giris");
-  }
-
-  // Çok önemli: yanlış “true” vermesin diye SADECE form elemanlarıyla anla
+  function isGirisPage() { return location.href.includes("/run/TP/EDEVLET/giris"); }
+  
   function isBelgelerimScreenOpen() {
-    return (
-      !!qAll("div.ui-select-container[name='selectbox550']") ||
-      !!qAll("#textbox551 input") ||
-      !!qAll("#button549") // ara butonu wrapperı gelince de bu ekran açık say
-    );
+    return (!!qAll("div.ui-select-container[name='selectbox550']") || !!qAll("#textbox551 input") || !!qAll("#button549"));
   }
 
-  function isGridLoaded() {
-    return !!qAll(".ui-grid-row") || !!qAll(".ui-grid-canvas") || !!qAll("i.fa-download");
-  }
-
-  // ---------- STEP 1: LOGIN ----------
   function findLoginButtonOnGiris() {
     const direct = qAll('a[href*="turkiye.gov.tr"]');
     if (direct) return direct;
-
-    const cand = qAllMany("a,button,div").find((el) => {
+    return qAllMany("a,button,div").find((el) => {
       const t = (el.textContent || "").trim().toLowerCase();
       const href = (el.getAttribute && el.getAttribute("href")) || "";
       return href.includes("turkiye.gov.tr") || t === "giriş" || t.includes("e-devlet");
     });
-    return cand || null;
   }
 
-  // ---------- STEP 2: BELGELERIM (ÇALIŞAN) ----------
   async function clickBelgelerim() {
     if (!(await throttle("tp_last_belgelerim_try", 2000))) return false;
-
-    // önce main document (senin testin burada 1 buluyordu)
-    const direct = [...document.querySelectorAll("div[ng-click]")].find(
-      (x) => (x.textContent || "").trim() === "Belgelerim"
-    );
-    if (direct) {
-      console.log(TAG, "Step2: Belgelerim found (direct). Clicking...");
-      superClick(direct);
-      return true;
-    }
-
-    // frame taraması
-    for (const d of getAllDocs()) {
-      const target = [...d.querySelectorAll("div[ng-click]")].find(
-        (x) => (x.textContent || "").trim() === "Belgelerim"
-      );
-      if (target) {
-        console.log(TAG, "Step2: Belgelerim found (frame). Clicking...");
-        superClick(target);
-        return true;
-      }
-    }
-
-    console.log(TAG, "Step2: Belgelerim not found.");
+    // ... (Aynen korundu: Frame ve main içinde ara)
+    const targets = qAllMany("div[ng-click]");
+    const target = targets.find(x => (x.textContent || "").trim() === "Belgelerim");
+    if(target) { superClick(target); return true; }
     return false;
   }
 
-  // ---------- STEP 3A: DOSYA TURU = MARKA (ÇALIŞAN) ----------
   function isMarkaSelectedNow() {
     const container = qAll("div.ui-select-container[name='selectbox550']");
     if (!container) return false;
-    const txt = (
-      container.querySelector(".ui-select-match-text span")?.textContent ||
-      container.querySelector(".ui-select-match-text")?.textContent ||
-      ""
-    ).trim().toLowerCase();
+    const txt = (container.querySelector(".ui-select-match-text")?.textContent || "").trim().toLowerCase();
     return txt.includes("marka");
   }
 
   async function ensureDosyaTuruMarka() {
     if (isMarkaSelectedNow()) return true;
-
     if (!(await throttle("tp_last_select_try", 1000))) return false;
 
     const container = qAll("div.ui-select-container[name='selectbox550']");
     if (!container) return false;
 
-    const toggle = container.querySelector(".ui-select-toggle") || container;
-    const caret = container.querySelector("i.caret");
-
+    const toggle = container.querySelector(".ui-select-toggle");
     if (!container.classList.contains("open")) {
-      superClick(toggle);
-      await sleep(150);
-      if (caret) superClick(caret);
-      for (let i = 0; i < 20; i++) {
-        if (container.classList.contains("open")) break;
-        await sleep(100);
-      }
+        superClick(toggle);
+        await sleep(200);
     }
-
-    const search = container.querySelector("input.ui-select-search");
-    if (search && !search.classList.contains("ng-hide")) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      if (setter) setter.call(search, "marka");
-      else search.value = "marka";
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-      search.dispatchEvent(new Event("change", { bubbles: true }));
-      await sleep(250);
-    } else {
-      await sleep(200);
-    }
-
-    for (let i = 0; i < 25; i++) {
-      const rows = [];
-      for (const d of getAllDocs()) {
-        rows.push(...Array.from(d.querySelectorAll(".ui-select-choices-row, .ui-select-choices-row-inner")));
-        rows.push(...Array.from(d.querySelectorAll("li[role='option'], [role='option']")));
-      }
-      const markaRow = rows.find((el) => (el.textContent || "").trim().toLowerCase().includes("marka"));
-      if (markaRow) {
-        superClick(markaRow);
-        await sleep(300);
-        return isMarkaSelectedNow();
-      }
-      await sleep(120);
-    }
-
+    
+    // "Marka" seçeneğini bul ve tıkla
+    const rows = qAllMany(".ui-select-choices-row, li[role='option']");
+    const markaRow = rows.find(el => (el.textContent || "").toLowerCase().includes("marka"));
+    if (markaRow) { superClick(markaRow); await sleep(300); return isMarkaSelectedNow(); }
     return false;
   }
 
-  // ---------- STEP 3B: BASVURU NO (ÇALIŞAN) + ARA (YENİ FIX) ----------
   async function fillBasvuruNo(appNo) {
     const input = qAll("#textbox551 input");
     if (!input) return false;
-
     if ((input.value || "").trim() !== String(appNo)) {
       fillInputAngularSafe(input, String(appNo));
       await sleep(200);
@@ -306,333 +281,209 @@ async function clickAraButtonOnly() {
     return true;
   }
 
-  // ---------- STEP 4: EXPAND (+/-) TWICE ----------
-async function expandAllSmart() {
-  const { tp_expanded_twice } = await chrome.storage.local.get(["tp_expanded_twice"]);
-  if (tp_expanded_twice) return true;
+  // --- AKORDEON & FİLTRELEME (GÜNCEL) ---
+  function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
+  
+  function getAccordionClickable() {
+    const host = getAccordionHost();
+    return host ? (host.querySelector("i") || host) : null;
+  }
 
-  const btn = qAll("div.ui-grid-tree-base-row-header-buttons");
-  if (!btn) return false;
+  // plus / minus / unknown
+  function readAccordionState() {
+    const host = getAccordionHost();
+    if (!host) return "none";
+    const icon = host.querySelector("i");
+    const cls = (icon?.className || host.className || "").toLowerCase();
+    
+    if (cls.includes("minus")) return "minus"; // Açık
+    if (cls.includes("plus")) return "plus";   // Kapalı
+    return "unknown";
+  }
 
-  const icon = btn.querySelector("i");
-  const cls = (icon?.className || "").toLowerCase();
+  async function ensureAccordionOpenAtStart() {
+    // Sadece ilk seferde çalışır, akordeonu açar
+    const state = readAccordionState();
+    if (state === "minus") return true; // Zaten açık
 
-  const isMinus = cls.includes("minus") || cls.includes("fa-minus");
-  const isPlus  = cls.includes("plus")  || cls.includes("fa-plus");
+    const clickable = getAccordionClickable();
+    if(clickable) {
+        superClick(clickable);
+        await sleep(1500); // Açılmasını bekle
+    }
+    return readAccordionState() === "minus";
+  }
 
-  if (isMinus) {
-    console.log(TAG, "Expand: '-' görüldü. Kapat -> aç yapılıyor...");
-    superClick(btn);
+  async function ensureAccordionExpandedAfterFilter() {
+    // Filtrelemeden sonra tablo yenilenir, akordeon durumunu kontrol et
     await sleep(500);
-    superClick(btn);
-    await sleep(700);
-  } else {
-    console.log(TAG, "Expand: '+' tık (1 kere)...");
-    superClick(btn);
-    await sleep(700);
-  }
+    const state = readAccordionState();
+    const clickable = getAccordionClickable();
+    
+    if (!clickable) return false;
 
-  await chrome.storage.local.set({ tp_expanded_twice: true });
-  return true;
-}
-
-function findEvrakAdiFilterInput() {
-  const headerCells = qAllMany(".ui-grid-header-cell");
-
-  for (const cell of headerCells) {
-    const title = (cell.innerText || "").trim().toLowerCase();
-
-    // 🔴 SADECE "Evrak Adı"
-    if (title === "evrak adı" || title === "evrak adi") {
-      const input = cell.querySelector("input.ui-grid-filter-input");
-      if (input) return input;
-    }
-  }
-
-  return null;
-}
-
-
-async function setEvrakAdiFilter(term) {
-  const input = findEvrakAdiFilterInput();
-  if (!input) return false;
-
-  if ((input.value || "").trim() !== term) {
-    fillInputAngularSafe(input, term);
-    console.log(TAG, `Evrak Adı filtresine yazıldı: ${term}`);
-    await sleep(400);
-  }
-  return true;
-}
-
-function findFirstRowDownloadIconByTerm(term) {
-  const t = String(term).toLowerCase();
-  const rows = qAllMany(".ui-grid-row");
-  for (const r of rows) {
-    const txt = (r.textContent || "").toLowerCase();
-    if (txt.includes(t)) {
-      const icon = r.querySelector("i.fa.fa-download, i.fa-download");
-      if (icon) return icon;
-    }
-  }
-  return null;
-}
-
-function findSecondVisibleDownloadIcon() {
-  const icons = qAllMany("i.fa.fa-download, i.fa-download")
-    .filter((el) => el && el.offsetParent !== null); // görünür olanlar
-  return icons[1] || null; // 2. ikon
-}
-
-// Dosyanın en üstüne (isActionInProgress yanına) ekleyin
-let searchPassCount = 0; // Tüm listenin kaç kez tarandığını tutar
-
-// -----------------------------
-// AKORDEON HELPERS (GÜNCEL)
-// -----------------------------
-function getAccordionHost() {
-  return qAll("div.ui-grid-tree-base-row-header-buttons");
-}
-
-function getAccordionClickable() {
-  const host = getAccordionHost();
-  if (!host) return null;
-
-  // Filtre sonrası click handler bazen iç elemanda oluyor
-  return (
-    host.querySelector("button") ||
-    host.querySelector("[role='button']") ||
-    host.querySelector("a") ||
-    host.querySelector("i") ||
-    host
-  );
-}
-
-// plus / minus / unknown
-function readAccordionState() {
-  const host = getAccordionHost();
-  if (!host) return "none";
-
-  const icon = host.querySelector("i");
-  const cls = (icon?.className || host.className || "").toLowerCase();
-
-  const plusHints = ["plus", "fa-plus", "ui-grid-icon-plus", "plus-squared", "icon-plus"];
-  const minusHints = ["minus", "fa-minus", "ui-grid-icon-minus", "minus-squared", "icon-minus"];
-
-  const isPlus = plusHints.some((h) => cls.includes(h));
-  const isMinus = minusHints.some((h) => cls.includes(h));
-
-  if (isPlus && !isMinus) return "plus";
-  if (isMinus && !isPlus) return "minus";
-  return "unknown";
-}
-
-// KURAL: + => 1 click, - => 2 click (kapat-aç), unknown => toggle dene
-async function ensureAccordionExpandedAfterFilter() {
-  const host = getAccordionHost();
-  if (!host) return false;
-
-  // DOM otursun
-  await sleep(250);
-
-  const stateBefore = readAccordionState();
-  let clickable = getAccordionClickable();
-  if (!clickable) return false;
-
-  if (stateBefore === "plus") {
-    console.log(TAG, "Akordeon '+' (kapalı). 1 kez açılıyor...");
-    superClick(clickable);
-    await sleep(1100);
-    return true;
-  }
-
-  if (stateBefore === "minus") {
-    console.log(TAG, "Akordeon '-' (açık görünüyor). 2 kez (kapat-aç) tazeleniyor...");
-    superClick(clickable);          // kapat
-    await sleep(650);
-
-    // re-render ihtimali: yeniden yakala
-    clickable = getAccordionClickable();
-    if (clickable) superClick(clickable); // tekrar aç
-    await sleep(1100);
-    return true;
-  }
-
-  // unknown: en az 1 kez toggle dene, değişmezse bir daha dene
-  console.log(TAG, "Akordeon durumu 'unknown'. Toggle zorlanıyor...");
-  superClick(clickable);
-  await sleep(900);
-
-  const stateAfter = readAccordionState();
-  if (stateAfter === stateBefore) {
-    clickable = getAccordionClickable();
-    if (clickable) {
-      console.log(TAG, "Toggle sonrası state değişmedi. 1 kez daha deneniyor...");
-      superClick(clickable);
-      await sleep(900);
-    }
-  }
-  return true;
-}
-
-// Sadece AŞAMA 1'de: kapalıysa açmayı garantile (unknown dahil)
-async function ensureAccordionOpenAtStart() {
-  const host = getAccordionHost();
-  if (!host) return false;
-
-  await sleep(250);
-
-  const state = readAccordionState();
-  let clickable = getAccordionClickable();
-  if (!clickable) return false;
-
-  if (state === "minus") {
-    console.log(TAG, "Akordeon başlangıçta açık (-).");
-    return true;
-  }
-
-  console.log(TAG, "Akordeon başlangıçta kapalı/unknown. Açmak için tıklanıyor...");
-  superClick(clickable);
-  await sleep(1400);
-
-  // Hala minus değilse bir kez daha dene (filtre öncesi de bazen boşa düşebiliyor)
-  const state2 = readAccordionState();
-  if (state2 !== "minus") {
-    clickable = getAccordionClickable();
-    if (clickable) {
-      console.log(TAG, "İlk açma denemesi yetmedi. 1 kez daha deneniyor...");
-      superClick(clickable);
-      await sleep(1400);
-    }
-  }
-
-  return readAccordionState() === "minus" || readAccordionState() === "unknown";
-}
-
-// -----------------------------
-// GÜNCEL downloadTescilBelge()
-// -----------------------------
-async function downloadTescilBelge() {
-  // 1) Durum Kontrolleri
-  const { tp_download_clicked, tp_clicked_ara } = await chrome.storage.local.get([
-    "tp_download_clicked",
-    "tp_clicked_ara",
-  ]);
-
-  if (tp_download_clicked || searchPassCount >= 2 || isActionInProgress || !tp_clicked_ara) {
-    return true;
-  }
-
-  // 2) Akordeon var mı?
-  const accordionHost = getAccordionHost();
-  if (!accordionHost) {
-    console.log(TAG, "Tablo henüz hazır değil, akordeon butonu bekleniyor...");
-    return false;
-  }
-
-  isActionInProgress = true;
-
-  try {
-    // ========================================================
-    // AŞAMA 1: AKORDEONU KESİN OLARAK AÇ (İlk yükleme)
-    // ========================================================
-    const okOpen = await ensureAccordionOpenAtStart();
-    if (!okOpen) {
-      console.log(TAG, "⚠️ Akordeon açılamadı. Filtreleme erteleniyor.");
-      return false;
-    }
-
-    // ========================================================
-    // AŞAMA 2: SIRALI FİLTRELEME
-    // ========================================================
-    const aramaListesi = ["Marka Yenileme Belges", "MYB", "TB", "Tescil_belgesi_us"];
-
-    for (const terim of aramaListesi) {
-      console.log(TAG, `🔍 Kriter Deneniyor: ${terim}`);
-
-      const okFilter = await setEvrakAdiFilter(terim);
-      if (!okFilter) continue;
-
-      // Filtre sonrası Angular render beklemesi
-      await sleep(1500);
-
-      // ========================================================
-      // KRİTİK: Filtre sonrası akordeonu senin kuralınla tazele
-      // + => 1 tık, - => 2 tık
-      // ========================================================
-      await ensureAccordionExpandedAfterFilter();
-
-      // İndirme ikonunu ara
-      let targetIcon = findFirstRowDownloadIconByTerm(terim) || findSecondVisibleDownloadIcon();
-
-      if (targetIcon) {
-        console.log(TAG, `✅ EŞLEŞME: ${terim} bulundu.`);
-        await chrome.storage.local.set({ tp_download_clicked: true });
-        superClick(targetIcon);
-        return true;
-      }
-
-      console.log(TAG, `❌ ${terim} için kayıt bulunamadı.`);
-
-      // Sonraki kriter için filtreyi temizle
-      const filterInput = findEvrakAdiFilterInput();
-      if (filterInput) {
-        fillInputAngularSafe(filterInput, "");
+    if (state === "plus") { // Kapalıysa aç (1 tık)
+        superClick(clickable);
+        await sleep(1000);
+    } else if (state === "minus") { // Açıksa kapat-aç (tazele - 2 tık)
+        superClick(clickable); // Kapat
         await sleep(500);
-      }
+        superClick(clickable); // Aç
+        await sleep(1000);
     }
-
-    searchPassCount++;
-    if (searchPassCount >= 2) {
-      console.log(TAG, "⚠️ 2 tur deneme sonunda sonuç yok.");
-      await chrome.storage.local.set({ tp_download_clicked: true });
-    }
-  } catch (e) {
-    console.error(TAG, "Hata:", e);
-  } finally {
-    isActionInProgress = false;
+    return true;
   }
 
-  return false;
-}
+  function findEvrakAdiFilterInput() {
+    const headerCells = qAllMany(".ui-grid-header-cell");
+    for (const cell of headerCells) {
+      if ((cell.innerText || "").trim().toLowerCase() === "evrak adı") {
+        return cell.querySelector("input.ui-grid-filter-input");
+      }
+    }
+    return null;
+  }
 
+  async function setEvrakAdiFilter(term) {
+    const input = findEvrakAdiFilterInput();
+    if (!input) return false;
+    if ((input.value || "").trim() !== term) {
+      fillInputAngularSafe(input, term);
+      await sleep(500);
+    }
+    return true;
+  }
 
-  // ---------- MAIN LOOP ----------
+  function findDownloadIcon() {
+    // Görünür olan ilk indirme ikonunu bul
+    const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
+    return icons[0] || null;
+  }
+
+  // --- İNDİRME VE İŞLEME MANTIĞI ---
+  async function downloadTescilBelge() {
+    const { tp_download_clicked, tp_clicked_ara } = await chrome.storage.local.get(["tp_download_clicked", "tp_clicked_ara"]);
+    
+    // Güvenlik kontrolleri
+    if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
+    if (!getAccordionHost()) return false; // Tablo henüz yok
+
+    isActionInProgress = true;
+
+    try {
+        // 1. Akordeonu Aç (Sadece ilk girişte)
+        await ensureAccordionOpenAtStart();
+
+        // 2. Kriter Listesi
+        const aramaListesi = ["Tescil Belgesi", "Marka Yenileme Belges", "MYB", "TB"];
+        
+        for (const terim of aramaListesi) {
+            console.log(TAG, `🔍 Kriter: ${terim}`);
+            
+            // Filtreyi uygula
+            await setEvrakAdiFilter(terim);
+            await sleep(1000); // Filtreleme beklemesi
+
+            // Akordeonu tazele (Kapat-Aç gerekebilir)
+            await ensureAccordionExpandedAfterFilter();
+
+            // İkon ara
+            const targetIcon = findDownloadIcon();
+            
+            if (targetIcon) {
+                // İndirme (İşleme) bulundu
+                console.log(TAG, `✅ BULUNDU: ${terim}`);
+                await chrome.storage.local.set({ tp_download_clicked: true });
+                
+                // İkonun onclick eventinden URL'yi çıkarmak zor olabilir
+                // Genelde ng-click="download(...)" şeklindedir.
+                // Basitçe tıklama simülasyonu indirmeyi başlatır.
+                // Ancak biz indirme URL'sini yakalayıp backend'e atmalıyız.
+                
+                // EPATS'ta PDF genelde yeni sekmede açılır veya direkt iner.
+                // Bu durumda 'chrome.downloads' API'sini kullanmak veya
+                // Network request'ini yakalamak gerekebilir.
+                
+                // Şimdilik Basit Yöntem: Tıkla ve geç (Kuyruğu ilerlet)
+                // Backend entegrasyonu tam yapılana kadar sadece kuyruğu test etmek için:
+                
+                // superClick(targetIcon); 
+                // await sleep(2000); 
+                // await advanceQueue(); 
+                
+                // EĞER URL'yi alabiliyorsak (href attribute varsa):
+                const link = targetIcon.closest('a');
+                if(link && link.href) {
+                    await processDocument(link.href, targetIcon);
+                } else {
+                    // Butonsa ve ng-click varsa, tıklayınca iniyorsa...
+                    // Şimdilik sadece kuyruğu ilerletiyoruz
+                    superClick(targetIcon);
+                    await sleep(3000); // İndirme başlasın
+                    await advanceQueue();
+                }
+                
+                return true;
+            }
+        }
+        
+        // Hiçbir kriterle bulunamadı
+        searchPassCount++;
+        if (searchPassCount >= 2) {
+            console.log(TAG, "⚠️ Belge bulunamadı, pas geçiliyor.");
+            await advanceQueue(); // Bir sonrakine geç
+        }
+
+    } catch(e) {
+        console.error(TAG, e);
+        // Hata durumunda da kuyruğu tıkamamak için geç
+        await advanceQueue(); 
+    } finally {
+        isActionInProgress = false;
+    }
+  }
+
+  // --- ANA DÖNGÜ ---
   async function run() {
+    // 1. Kuyruk Kontrolü
+    const continueProcess = await checkQueueAndSetAppNo();
+    if (!continueProcess) return;
+
+    // 2. Hafızadaki Numarayı Al
     const { tp_app_no } = await chrome.storage.local.get(["tp_app_no"]);
     if (!tp_app_no) return;
 
-    // Step1
+    // 3. Giriş Sayfası mı?
     if (isGirisPage()) {
       const btn = findLoginButtonOnGiris();
       if (btn) superClick(btn);
       return;
     }
 
-    // Step3/4
-  if (isBelgelerimScreenOpen()) {
-    const okMarka = await ensureDosyaTuruMarka();
-    if (!okMarka) return;
+    // 4. Belgelerim Ekranı Açık mı?
+    if (isBelgelerimScreenOpen()) {
+      const okMarka = await ensureDosyaTuruMarka();
+      if (!okMarka) return;
 
-    const okNo = await fillBasvuruNo(tp_app_no);
-    if (!okNo) return;
+      const okNo = await fillBasvuruNo(tp_app_no);
+      if (!okNo) return;
 
-    const okAra = await clickAraButtonOnly();
-    if (!okAra) return;
+      const okAra = await clickAraButtonOnly();
+      if (!okAra) return;
 
-    // Sadece ara tıklandıysa ve indirme henüz yapılmadıysa indirme fonksiyonuna gir
-    const { tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_clicked_ara", "tp_download_clicked"]);
-    
-    if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
-      await downloadTescilBelge();
+      // Ara tıklandıysa ve henüz işlenmediyse
+      const { tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_clicked_ara", "tp_download_clicked"]);
+      if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
+        await downloadTescilBelge();
+      }
+      return;
     }
-    return;
-  }
 
-    // Step2
+    // 5. Belgelerim'e Tıkla
     await clickBelgelerim();
   }
 
-  run().catch(() => {});
-  setInterval(() => run().catch(() => {}), 1200);
+  // Döngüyü Başlat
+  setInterval(() => run().catch(() => {}), 1500);
+
 })();
