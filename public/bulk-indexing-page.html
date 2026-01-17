@@ -9,134 +9,77 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
     <link rel="stylesheet" href="./css/task-update.css"> <style>
-        /* Sayfaya Özel Stil İyileştirmeleri */
-        :root {
-            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            --primary-blue: #1e3c72;
-        }
-
+        /* Task Update Tasarımına Uyum Sağlayan Ek Düzenlemeler */
         .page-wrapper {
-            flex-grow: 1;
             display: flex;
-            flex-direction: column;
-            padding-top: 80px; /* Üst bar için yer açar */
             min-height: 100vh;
+            background-color: #f8fafc;
+        }
+        
+        .main-content {
+            flex-grow: 1;
+            padding: 20px 30px;
+            margin-top: 60px; /* Sidebar/Topbar uyumu */
+            transition: margin-left 0.3s;
         }
 
-        .main-content-container {
-            width: 100%;
-            max-width: 1300px;
-            margin: 0 auto;
-            padding: 30px;
-        }
-
-        /* Modern Kart Tasarımı */
-        .modern-card {
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: var(--card-shadow);
-            margin-bottom: 25px;
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-        }
-
-        .card-header-custom {
-            background: #f8fafc;
-            padding: 20px 25px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .card-title-custom {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--primary-blue);
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .card-body-custom {
-            padding: 25px;
-        }
-
-        /* Sekme Sistemi (Task Update Benzeri) */
-        .nav-tabs-custom {
+        /* Sekme (Tab) Navigasyonu */
+        .nav-tabs-container {
             display: flex;
             gap: 10px;
-            padding: 0 25px;
-            background: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .tab-btn-custom {
-            padding: 15px 25px;
-            border: none;
-            background: transparent;
-            font-weight: 600;
-            color: #64748b;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-            position: relative;
-        }
-
-        .tab-btn-custom.active {
-            color: var(--primary-blue);
-            border-bottom-color: var(--primary-blue);
-        }
-
-        .tab-pane-custom {
-            display: none;
-        }
-
-        .tab-pane-custom.active {
-            display: block;
-            animation: fadeIn 0.4s ease-out;
-        }
-
-        /* EPATS Grid */
-        .epats-filter-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            background: #f1f5f9;
-            padding: 20px;
-            border-radius: 8px;
             margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
         }
 
-        /* Badge Stilleri */
+        .tab-trigger {
+            padding: 10px 20px;
+            border: none;
+            background: #fff;
+            color: #64748b;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .tab-trigger.active {
+            background: #1e3c72;
+            color: #fff;
+            box-shadow: 0 4px 6px rgba(30, 60, 114, 0.2);
+        }
+
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; animation: fadeIn 0.3s ease; }
+
+        /* Badge Sayacı */
         .badge-count {
             background: #ef4444;
             color: white;
             font-size: 11px;
-            padding: 2px 7px;
+            padding: 2px 6px;
             border-radius: 10px;
-            margin-left: 6px;
         }
 
-        /* Sürükle Bırak Alanı */
-        .file-upload-area {
-            border: 2px dashed #cbd5e1;
-            padding: 40px;
-            text-align: center;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        .file-upload-area:hover {
-            border-color: var(--primary-blue);
-            background: #f0f7ff;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Arama Sonuçları Dropdown */
+        .search-results-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -144,193 +87,222 @@
     <div id="layout-placeholder"></div>
 
     <div class="page-wrapper">
-        <main class="main-content-container">
-            
-            <div class="modern-card">
-                <div class="card-body-custom" style="text-align: center;">
-                    <h1 style="color: var(--primary-blue); margin: 0 0 10px 0;">Belge Yükleme ve Yönetimi</h1>
-                    <p style="color: #64748b; margin: 0;">Yüklenecek belgeleri yönetin, EPATS ve ETEBS entegrasyonlarını kullanın.</p>
-                </div>
+        <main class="main-content">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-folder-open me-2"></i> Belge Yükleme ve Yönetimi
+                </h2>
+                <p class="text-muted">Portföy kayıtlarına belge ekleyin, ETEBS ve EPATS işlemlerini yönetin.</p>
             </div>
 
-            <div class="modern-card">
-                <nav class="nav-tabs-custom">
-                    <button class="tab-btn-custom active" data-tab="manual-indexing-pane">
-                        <i class="fas fa-hand-holding-medical"></i> Manuel İşlem
-                    </button>
-                    <button class="tab-btn-custom" data-tab="bulk-indexing-pane">
-                        <i class="fas fa-envelope-open-text"></i> ETEBS Tebligatları
-                        <span class="badge-count" id="totalBadge">0</span>
-                    </button>
-                    <button class="tab-btn-custom" data-tab="epats-indexing-pane">
-                        <i class="fas fa-cloud-download-alt"></i> EPATS Evrak Yükleme
-                    </button>
-                </nav>
+            <div class="nav-tabs-container">
+                <button class="tab-trigger active" data-target="manual-indexing-pane">
+                    <i class="fas fa-pen-to-square"></i> Manuel İşlem
+                </button>
+                <button class="tab-trigger" data-target="bulk-indexing-pane">
+                    <i class="fas fa-envelope-open-text"></i> ETEBS Tebligatları
+                    <span class="badge-count" id="totalBadge">0</span>
+                </button>
+                <button class="tab-trigger" data-target="epats-indexing-pane">
+                    <i class="fas fa-robot"></i> EPATS Evrak Yükleme
+                </button>
+            </div>
 
-                <div class="card-body-custom">
-                    
-                    <div id="manual-indexing-pane" class="tab-pane-custom active">
-                        <div class="form-section mb-4">
-                            <h3 class="card-title-custom mb-3"><span>1.1</span> Kayıt Seçin</h3>
-                            <div class="search-wrapper position-relative">
-                                <input type="text" id="recordSearchInputManual" class="form-control" placeholder="Başvuru Numarası veya Başlık ile Ara..." autocomplete="off">
-                                <div id="searchResultsContainerManual" class="search-results-dropdown" style="display:none;"></div>
-                            </div>
-                            <div class="mt-3">
-                                <label class="form-label">Seçili Kayıt</label>
-                                <input type="text" id="selectedRecordDisplayManual" class="form-control bg-light" readonly placeholder="Henüz kayıt seçilmedi.">
-                            </div>
+            <div class="tab-content">
+                
+                <div id="manual-indexing-pane" class="tab-pane active">
+                    <div class="update-card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-search me-2"></i> Kayıt ve İşlem Seçimi</h3>
                         </div>
-
-                        <div class="form-section mb-4">
-                            <h3 class="card-title-custom mb-3"><span>1.2</span> Yeni İşlem Detayları</h3>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">İşlem Türü <span class="text-danger">*</span></label>
-                                    <select id="specificManualTransactionType" class="form-select"></select>
+                        <div class="card-body">
+                            <div class="update-section">
+                                <label class="field-label">Başvuru / Kayıt Ara</label>
+                                <div class="position-relative">
+                                    <input type="text" id="recordSearchInputManual" class="form-input" placeholder="Başvuru No veya Marka Adı..." autocomplete="off">
+                                    <div id="searchResultsContainerManual" class="search-results-dropdown" style="display:none;"></div>
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Tebliğ Tarihi</label>
-                                    <input type="date" id="manualTransactionDeliveryDate" class="form-control">
+                                <div class="mt-3">
+                                    <label class="field-label">Seçili Kayıt</label>
+                                    <input type="text" id="selectedRecordDisplayManual" class="form-input bg-light" readonly placeholder="Henüz kayıt seçilmedi.">
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Notlar</label>
-                                <textarea id="manualTransactionNotes" class="form-control" rows="3" placeholder="Notlarınızı buraya yazın..."></textarea>
-                            </div>
-                        </div>
 
-                        <div class="form-section">
-                            <h3 class="card-title-custom mb-3"><span>1.3</span> Dosya Seçin</h3>
-                            <div class="file-upload-area" id="filesManualButton">
-                                <i class="fas fa-file-upload fa-3x text-muted mb-3"></i>
-                                <p>Dosyaları sürükleyin veya <strong>seçmek için tıklayın</strong></p>
-                                <small class="text-muted">PDF, DOC, JPG (Maks. 10MB)</small>
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="update-section">
+                                        <label class="field-label">İşlem Türü <span class="text-danger">*</span></label>
+                                        <select id="specificManualTransactionType" class="form-select"></select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="update-section">
+                                        <label class="field-label">Tebliğ Tarihi</label>
+                                        <input type="date" id="manualTransactionDeliveryDate" class="form-input">
+                                    </div>
+                                </div>
                             </div>
-                            <input type="file" id="filesManual" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display: none;">
-                            <div id="fileListManual" class="mt-3"></div>
-                            
-                            <div class="d-flex justify-content-end mt-4">
-                                <button type="button" id="saveManualTransactionBtn" class="btn btn-primary px-5" disabled>
-                                    <i class="fas fa-save me-2"></i> Manuel İşlemi Kaydet
+
+                            <div class="update-section mt-4">
+                                <label class="field-label">Notlar</label>
+                                <textarea id="manualTransactionNotes" class="form-input" rows="3" placeholder="İşlemle ilgili notlar..."></textarea>
+                            </div>
+
+                            <div class="update-section mt-4">
+                                <label class="field-label">Belge Yükle</label>
+                                <div class="file-upload-area" id="filesManualButton" style="border: 2px dashed #cbd5e1; padding: 40px; border-radius: 12px; text-align: center; cursor: pointer;">
+                                    <i class="fas fa-cloud-arrow-up fa-2x text-muted mb-2"></i>
+                                    <p class="mb-0">Dosyaları buraya sürükleyin veya <strong>tıklayın</strong></p>
+                                </div>
+                                <input type="file" id="filesManual" multiple style="display: none;">
+                                <div id="fileListManual" class="mt-3"></div>
+                            </div>
+
+                            <div class="form-actions mt-4" style="text-align: right;">
+                                <button type="button" id="saveManualTransactionBtn" class="btn-save" disabled>
+                                    <i class="fas fa-save me-2"></i> İşlemi Kaydet
                                 </button>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div id="bulk-indexing-pane" class="tab-pane-custom">
-                        <div class="etebs-mode-selection mb-4">
-                            <div class="btn-group w-100">
-                                <button class="btn btn-outline-primary active" data-mode="etebs">ETEBS Token</button>
-                                <button class="btn btn-outline-primary" data-mode="upload">Manuel PDF Yükle</button>
-                            </div>
+                <div id="bulk-indexing-pane" class="tab-pane">
+                    <div class="update-card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-shield-halved me-2"></i> ETEBS Yönetimi</h3>
                         </div>
-
-                        <div id="etebs-mode">
-                            <div class="form-section mb-4">
-                                <h3 class="card-title-custom mb-3"><i class="fas fa-key"></i> Token Yönetimi</h3>
-                                <div class="input-group">
-                                    <input type="text" id="etebsTokenInput" class="form-control" placeholder="GUID Token Giriniz...">
-                                    <button id="fetchNotificationsBtn" class="btn btn-primary px-4">Tebligatları Çek</button>
-                                </div>
+                        <div class="card-body">
+                            <div class="mode-buttons mb-4" style="display: flex; gap: 10px;">
+                                <button class="btn-mode active" data-mode="etebs" style="flex:1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">🔐 ETEBS Token</button>
+                                <button class="btn-mode" data-mode="upload" style="flex:1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">📁 Manuel PDF Yükle</button>
                             </div>
 
-                            <div id="notificationsSection" style="display: none;">
-                                <div class="etebs-results-tabs mt-4">
+                            <div id="etebs-mode" class="mode-content">
+                                <div class="update-section">
+                                    <label class="field-label">ETEBS Token (GUID)</label>
+                                    <div class="d-flex gap-2">
+                                        <input type="text" id="etebsTokenInput" class="form-input" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
+                                        <button id="fetchNotificationsBtn" class="btn-save" style="width: auto; padding: 0 20px;">Sorgula</button>
+                                    </div>
+                                </div>
+                                <div id="notificationsSection" class="mt-4" style="display: none;">
                                     <div id="matchedNotificationsList"></div>
                                     <div id="unmatchedNotificationsList"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div id="epats-indexing-pane" class="tab-pane-custom">
-                        <div class="epats-filter-grid">
-                            <div class="form-group">
-                                <label class="form-label">Müvekkil (Sahip)</label>
-                                <select id="epatsClientSelect" class="form-select"></select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">IP Türü</label>
-                                <select id="epatsIpTypeSelect" class="form-select">
-                                    <option value="trademark">Marka</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Belge Türü</label>
-                                <select id="epatsDocTypeSelect" class="form-select">
-                                    <option value="tescil_belgesi">Tescil Belgesi</option>
-                                    <option value="marka_basvuru_belgesi">Başvuru Belgesi</option>
-                                </select>
-                            </div>
+                <div id="epats-indexing-pane" class="tab-pane">
+                    <div class="update-card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-cloud-arrow-down me-2"></i> EPATS Transfer Merkezi</h3>
                         </div>
-
-                        <div class="d-flex gap-2 mb-4">
-                            <button id="btnFetchMissingDocs" class="btn btn-primary px-4">
-                                <i class="fas fa-search me-2"></i> Eksik Belgeleri Listele
-                            </button>
-                            <button id="btnStartEpatsTransfer" class="btn btn-success px-4" disabled>
-                                <i class="fas fa-play me-2"></i> Transferi Başlat (<span id="selectedEpatsCount">0</span>)
-                            </button>
-                        </div>
-
-                        <div id="epatsResultsSection" style="display: none;">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th><input type="checkbox" id="selectAllEpats"></th>
-                                            <th>Başvuru No</th>
-                                            <th>Marka Adı</th>
-                                            <th>Durum</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="epatsResultsBody"></tbody>
-                                </table>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="update-section">
+                                        <label class="field-label">Müvekkil (Sahip)</label>
+                                        <select id="epatsClientSelect" class="form-select"></select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="update-section">
+                                        <label class="field-label">IP Türü</label>
+                                        <select id="epatsIpTypeSelect" class="form-select">
+                                            <option value="trademark">Marka</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="update-section">
+                                        <label class="field-label">Belge Türü</label>
+                                        <select id="epatsDocTypeSelect" class="form-select">
+                                            <option value="tescil_belgesi">Tescil Belgesi</option>
+                                            <option value="marka_basvuru_belgesi">Başvuru Belgesi</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="epatsPagination" class="mt-4 d-flex justify-content-center"></div>
+
+                            <div class="form-actions mt-4" style="display: flex; gap: 10px;">
+                                <button id="btnFetchMissingDocs" class="btn-save" style="background: #1e3c72; width: auto; padding: 0 25px;">
+                                    <i class="fas fa-filter me-2"></i> Belgeleri Ara
+                                </button>
+                                <button id="btnStartEpatsTransfer" class="btn-save" style="background: #10b981; width: auto; padding: 0 25px;" disabled>
+                                    <i class="fas fa-play me-2"></i> Transferi Başlat (<span id="selectedEpatsCount">0</span>)
+                                </button>
+                            </div>
+
+                            <div id="epatsResultsSection" class="mt-4" style="display: none;">
+                                <div class="table-container" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                                    <table class="table" style="width: 100%; margin: 0;">
+                                        <thead style="background: #f8fafc;">
+                                            <tr>
+                                                <th style="padding: 12px; width: 50px;"><input type="checkbox" id="selectAllEpats"></th>
+                                                <th style="padding: 12px;">Başvuru No</th>
+                                                <th style="padding: 12px;">Marka Adı</th>
+                                                <th style="padding: 12px;">Durum</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="epatsResultsBody"></tbody>
+                                    </table>
+                                </div>
+                                <div id="epatsPagination" class="mt-3" style="display: flex; justify-content: center;"></div>
+                            </div>
                         </div>
                     </div>
-
                 </div>
+
             </div>
         </main>
     </div>
 
     <script type="module">
-        import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
         import { loadSharedLayout } from './js/layout-loader.js';
+        import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
         import { ETEBSManager } from './js/etebs-module.js';
         import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Sol Frame ve Layout Yükle
+            // Sol Sidebar Yükleme
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
-            // Modülleri Başlat
+            // JS Modüllerini Başlat
             window.indexingModule = new BulkIndexingModule();
             window.etebsManager = new ETEBSManager();
             window.epatsUiManager = new EpatsUiManager();
 
-            // Gelişmiş Sekme Yönetimi
-            const tabButtons = document.querySelectorAll('.tab-btn-custom');
-            const tabPanes = document.querySelectorAll('.tab-pane-custom');
+            // Sekme Geçiş Mantığı
+            const triggers = document.querySelectorAll('.tab-trigger');
+            const panes = document.querySelectorAll('.tab-pane');
 
-            tabButtons.forEach(btn => {
+            triggers.forEach(trigger => {
+                trigger.addEventListener('click', () => {
+                    const target = trigger.getAttribute('data-target');
+                    
+                    triggers.forEach(t => t.classList.remove('active'));
+                    panes.forEach(p => p.classList.remove('active'));
+
+                    trigger.classList.add('active');
+                    document.getElementById(target).classList.add('active');
+                });
+            });
+
+            // ETEBS Modu Butonları
+            const modeButtons = document.querySelectorAll('.btn-mode');
+            modeButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const target = btn.getAttribute('data-tab');
-
-                    // Butonları güncelle
-                    tabButtons.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    // Panelleri güncelle
-                    tabPanes.forEach(pane => {
-                        pane.classList.remove('active');
-                        if (pane.id === target) {
-                            pane.classList.add('active');
-                        }
+                    modeButtons.forEach(b => {
+                        b.classList.remove('active');
+                        b.style.background = 'white';
+                        b.style.color = '#1e3c72';
                     });
+                    btn.classList.add('active');
+                    btn.style.background = '#1e3c72';
+                    btn.style.color = 'white';
                 });
             });
         });
