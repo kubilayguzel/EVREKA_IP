@@ -8,14 +8,13 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap">
+    
     <link rel="stylesheet" href="css/shared-styles.css">
     <link rel="stylesheet" href="css/task-update.css">
 
     <style>
-        /* Tab Navigasyon Stilleri */
-        .tab-navigation {
-            display: flex; gap: 15px; margin-bottom: 30px; padding: 0 5px;
-        }
+        /* Navigasyon Butonları */
+        .tab-navigation { display: flex; gap: 15px; margin-bottom: 30px; padding: 0 5px; }
         .nav-btn {
             background: rgba(255, 255, 255, 0.6); border: 1px solid #e1e8ed;
             padding: 15px 25px; border-radius: 12px; color: #64748b;
@@ -25,13 +24,14 @@
         .nav-btn:hover { background: #fff; transform: translateY(-2px); color: #1e3c72; }
         .nav-btn.active { background: #1e3c72; color: #fff; border-color: #1e3c72; box-shadow: 0 8px 20px rgba(30, 60, 114, 0.25); }
         
+        /* Tab İçerik Animasyonu */
         .tab-pane { display: none; animation: fadeIn 0.4s ease-out; }
         .tab-pane.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Dosya Listesi Tabları */
-        .file-tab-pane { display: none; }
-        .file-tab-pane.active { display: block; }
+        /* Dosya ve Bildirim Listeleri */
+        .file-tab-pane, .notification-tab-pane { display: none; }
+        .file-tab-pane.active, .notification-tab-pane.active { display: block; }
 
         /* Arama Sonuçları */
         .search-results-wrapper {
@@ -40,7 +40,11 @@
             border-radius: 0 0 10px 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
             z-index: 1000; max-height: 300px; overflow-y: auto;
         }
+
+        /* Badge Stilleri */
         .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
+        .badge-success-custom { background: #2ecc71; color: white; }
+        .badge-warning-custom { background: #f1c40f; color: #333; }
     </style>
 </head>
 <body>
@@ -118,7 +122,9 @@
                                     <div class="upload-subtext">veya sürükleyip bırakın</div>
                                     <input type="file" id="filesManual" multiple style="display:none;">
                                 </div>
+                                <div id="filesManualInfo" class="text-center text-muted mt-2 small"></div>
                                 <div id="fileListManual" class="file-list-container mt-3"></div>
+                                
                                 <button id="saveManualTransactionBtn" class="btn btn-primary btn-block mt-4 py-3" disabled>
                                     <i class="fas fa-save mr-2"></i>İşlemi Kaydet
                                 </button>
@@ -150,11 +156,29 @@
                                         <i class="fas fa-sync-alt mr-2"></i>Sorgula
                                     </button>
                                 </div>
+                                <div id="tokenStatus" class="mt-2"></div>
                             </div>
-                            <div id="notificationsSection" style="display: none; margin-top: 20px;">
-                                <h4 class="section-title" style="font-size: 1rem;">Sorgu Sonuçları</h4>
-                                <div id="matchedNotificationsList"></div>
-                                <div id="unmatchedNotificationsList"></div>
+
+                            <div id="notificationsSection" style="display: none; margin-top: 30px;">
+                                <div class="d-flex justify-content-center mb-3">
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-outline-success notification-tab-btn active" data-target="matched-notifications-tab">
+                                            Eşleşenler <span class="badge badge-success-custom ml-1" id="matchedTabBadge">0</span>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger notification-tab-btn" data-target="unmatched-notifications-tab">
+                                            Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedTabBadge">0</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="tab-content">
+                                    <div id="matched-notifications-tab" class="notification-tab-pane active">
+                                        <div id="matchedNotificationsList"></div>
+                                    </div>
+                                    <div id="unmatched-notifications-tab" class="notification-tab-pane">
+                                        <div id="unmatchedNotificationsList"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -168,7 +192,7 @@
                             <div id="bulkFilesInfo" class="text-center text-muted mt-2 small"></div>
 
                             <div id="fileListSection" class="mt-4" style="display: none;">
-                                <div class="d-flex justify-content-center mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
                                     <div class="btn-group">
                                         <button class="btn btn-sm btn-outline-primary active file-tab-btn" data-target="all-files-pane">
                                             Eşleşenler <span class="badge badge-primary ml-1" id="allCount">0</span>
@@ -177,9 +201,12 @@
                                             Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedCount">0</span>
                                         </button>
                                         <button class="btn btn-sm btn-outline-success file-tab-btn" data-target="indexed-files-pane">
-                                            İndekslenenler <span class="badge badge-success ml-1" id="indexedCount">0</span>
+                                            İndekslenenler <span class="badge badge-success-custom ml-1" id="indexedCount">0</span>
                                         </button>
                                     </div>
+                                    <button class="btn btn-sm btn-info" onclick="window.indexingModule.reprocessMatching()">
+                                        <i class="fas fa-sync mr-1"></i>Yeniden Eşleştir
+                                    </button>
                                 </div>
 
                                 <div class="tab-content">
@@ -271,14 +298,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
+            // Global modülleri başlat
             window.indexingModule = new BulkIndexingModule();
             window.etebsManager = new ETEBSManager();
             window.epatsUiManager = new EpatsUiManager();
 
-            // Ana Tab Geçişleri
+            // 1. Ana Tab Geçişleri
             const navBtns = document.querySelectorAll('.nav-btn');
             const panes = document.querySelectorAll('.tab-pane');
-
             navBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const target = btn.getAttribute('data-target');
@@ -289,18 +316,14 @@
                 });
             });
 
-            // ETEBS Modu Değiştirme (Token vs Upload)
+            // 2. ETEBS Modu (Token / Upload)
             const modeBtns = document.querySelectorAll('.mode-btn');
             const etebsContent = document.getElementById('etebs-content');
             const uploadContent = document.getElementById('upload-content');
-
             modeBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    // Buton Aktifliği
                     modeBtns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-
-                    // İçerik Göster/Gizle
                     const mode = btn.getAttribute('data-mode');
                     if (mode === 'etebs') {
                         etebsContent.style.display = 'block';
@@ -312,16 +335,27 @@
                 });
             });
 
-            // Upload Modu Dosya Tabları
+            // 3. Dosya Listesi Tabları (Eşleşen/Eşleşmeyen/İndekslenen)
             const fileTabBtns = document.querySelectorAll('.file-tab-btn');
             const fileTabPanes = document.querySelectorAll('.file-tab-pane');
-            
             fileTabBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const target = btn.getAttribute('data-target');
                     fileTabBtns.forEach(b => b.classList.remove('active'));
                     fileTabPanes.forEach(p => p.classList.remove('active'));
-                    
+                    btn.classList.add('active');
+                    document.getElementById(target).classList.add('active');
+                });
+            });
+
+            // 4. ETEBS Bildirim Tabları (Matched/Unmatched)
+            const notifTabBtns = document.querySelectorAll('.notification-tab-btn');
+            const notifTabPanes = document.querySelectorAll('.notification-tab-pane');
+            notifTabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const target = btn.getAttribute('data-target');
+                    notifTabBtns.forEach(b => b.classList.remove('active'));
+                    notifTabPanes.forEach(p => p.classList.remove('active'));
                     btn.classList.add('active');
                     document.getElementById(target).classList.add('active');
                 });
