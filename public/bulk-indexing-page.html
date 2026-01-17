@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="css/task-update.css">
 
     <style>
-        /* --- TASK UPDATE UYUMLU ÖZEL STİLLER --- */
+        /* --- ÖZELLEŞTİRİLMİŞ STİLLER --- */
         
         /* 1. Tab Navigasyonu */
         .tab-navigation {
@@ -33,7 +33,7 @@
             box-shadow: 0 4px 12px rgba(30, 60, 114, 0.2);
         }
 
-        /* 2. Dosya Listesi Uyumluluğu */
+        /* 2. Dosya Kartları */
         .file-item, .pdf-list-item {
             display: flex; align-items: center; justify-content: space-between;
             padding: 15px; border: 1px solid #e1e8ed; border-radius: 12px;
@@ -43,7 +43,6 @@
             transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-color: #b0c4de;
         }
         
-        /* İkon ve Metinler */
         .file-item-name, .pdf-name {
             font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 0;
         }
@@ -55,7 +54,6 @@
         }
         .file-item-controls button:hover { background: #ef4444; color: white; }
 
-        /* PDF Listesi Durumları */
         .pdf-list-item.matched { border-left: 5px solid #2ecc71; background: #f0fdf4; }
         .pdf-list-item.unmatched { border-left: 5px solid #ef4444; background: #fef2f2; }
         
@@ -67,18 +65,10 @@
         .match-status.matched { background: #dcfce7; color: #155724; }
         .match-status.unmatched { background: #f8d7da; color: #721c24; }
 
-        .pdf-actions button {
-            padding: 6px 12px; border-radius: 6px; border: none; font-size: 0.9rem; margin-left: 5px; cursor: pointer;
-        }
-        .view-btn { background: #e0f2fe; color: #0284c7; }
-        .complete-btn { background: #dcfce7; color: #166534; }
-        .danger-btn { background: #fee2e2; color: #dc2626; }
-
         /* 3. Genel Düzenlemeler */
         .tab-pane { display: none; }
         .tab-pane.active { display: block; animation: fadeIn 0.3s ease-out; }
         
-        /* Tab İçeriklerini Gizleme Fixi */
         .file-tab-pane, .notification-tab-pane { display: none !important; }
         .file-tab-pane.active, .notification-tab-pane.active { display: block !important; animation: fadeIn 0.3s ease; }
 
@@ -93,11 +83,11 @@
         
         .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
         
-        /* Sürükle Bırak Alanı */
+        /* Dosya Yükleme Alanı */
         .file-upload-area { cursor: pointer; transition: border-color 0.3s, background 0.3s; background: #fff; }
         .file-upload-area:hover { border-color: #1e3c72 !important; background: #f0f7ff !important; }
 
-        /* ETEBS Filtre Butonları */
+        /* Filtre Butonları (Gri/Mavi) */
         .filter-tabs {
             display: flex; gap: 8px; margin-bottom: 20px; background: #f8f9fa; padding: 5px; border-radius: 10px; border: 1px solid #e9ecef;
         }
@@ -145,6 +135,7 @@
                 <div id="manual-indexing-pane" class="tab-pane active">
                     <div class="row">
                         <div class="col-12">
+                            
                             <div class="section-card">
                                 <h3 class="section-title">Kayıt Seçimi</h3>
                                 <div class="form-group position-relative">
@@ -179,7 +170,7 @@
                             <div class="section-card">
                                 <h3 class="section-title">Belgeler & Dosyalar</h3>
                                 
-                                <div class="file-upload-area" id="filesManualButton" style="border: 2px dashed #cbd5e1; padding: 40px; border-radius: 12px; text-align: center;">
+                                <div class="file-upload-area" id="filesManualButton" style="border: 2px dashed #cbd5e1; padding: 30px; border-radius: 12px; text-align: center;">
                                     <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
                                     <div class="text-muted font-weight-bold">PDF Dosyalarını Buraya Sürükleyin</div>
                                 </div>
@@ -189,10 +180,11 @@
                                 
                                 <div class="form-actions mt-4 text-right">
                                     <button id="saveManualTransactionBtn" class="btn btn-primary btn-lg px-5 font-weight-bold" disabled>
-                                        <i class="fas fa-save mr-2"></i>Manuel İşlemi Kaydet
+                                        <i class="fas fa-save mr-2"></i> Manuel İşlemi Kaydet
                                     </button>
                                 </div>
                             </div>
+
                         </div>
                     </div>
                 </div>
@@ -203,10 +195,10 @@
                             <h3 class="section-title mb-0">ETEBS İşlemleri</h3>
                             <div class="filter-tabs mb-0 p-1" style="width: auto;">
                                 <button class="filter-btn active mode-btn" data-mode="etebs">
-                                    <i class="fas fa-key mr-2"></i>Token İle
+                                    <i class="fas fa-key mr-2"></i> Token İle
                                 </button>
                                 <button class="filter-btn mode-btn" data-mode="upload">
-                                    <i class="fas fa-file-upload mr-2"></i>Manuel Yükleme
+                                    <i class="fas fa-file-upload mr-2"></i> Manuel Yükleme
                                 </button>
                             </div>
                         </div>
@@ -217,7 +209,7 @@
                                 <div class="d-flex gap-2">
                                     <input type="text" id="etebsTokenInput" class="form-input" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
                                     <button id="fetchNotificationsBtn" class="btn btn-primary px-4">
-                                        <i class="fas fa-sync-alt mr-2"></i>Sorgula
+                                        <i class="fas fa-sync-alt mr-2"></i> Sorgula
                                     </button>
                                 </div>
                                 <div id="tokenStatus" class="mt-2"></div>
@@ -231,7 +223,9 @@
                             </div>
                             <input type="file" id="bulkFiles" multiple style="display:none;" accept=".pdf">
                             
-                            <div id="bulkFilesInfo" style="display:none;"></div> <div id="fileListSection" class="mt-4" style="display: none;">
+                            <div id="bulkFilesInfo" style="display:none;"></div>
+
+                            <div id="fileListSection" class="mt-4" style="display: none;">
                                 <div class="filter-tabs">
                                     <button class="filter-btn active file-tab-btn" data-target="all-files-pane">
                                         Eşleşenler <span class="badge badge-secondary ml-1" id="allCount">0</span>
@@ -311,7 +305,7 @@
                         </div>
                         <div class="form-actions border-top-0 pt-0 mt-3">
                             <button id="btnFetchMissingDocs" class="btn btn-primary px-4">
-                                <i class="fas fa-search mr-2"></i>Eksik Belgeleri Listele
+                                <i class="fas fa-search mr-2"></i> Eksik Belgeleri Listele
                             </button>
                         </div>
                     </div>
@@ -320,7 +314,7 @@
                         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
                             <h3 class="section-title mb-0 border-0 p-0">İşlem Bekleyen Kayıtlar</h3>
                             <button id="btnStartEpatsTransfer" class="btn btn-success" disabled>
-                                <i class="fas fa-rocket mr-2"></i>Transferi Başlat (<span id="selectedEpatsCount">0</span>)
+                                <i class="fas fa-rocket mr-2"></i> Transferi Başlat (<span id="selectedEpatsCount">0</span>)
                             </button>
                         </div>
                         
@@ -357,17 +351,25 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
-            // Modülleri Başlat
+            // Global modülleri başlat
             window.indexingModule = new BulkIndexingModule();
             window.etebsManager = new ETEBSManager();
             window.epatsUiManager = new EpatsUiManager();
 
-            // 1. Ana Tab Geçişleri (JS Modülü ile Uyumlu Selector)
+            // *** KRİTİK DÜZELTME: Sayfa Açılışında Manuel Sekmeyi Aktif Et (JS Tarafı İçin) ***
+            // Bu satır, JS modülünün 'Manuel İşlem' sekmesinde olduğumuzu anlamasını sağlar
+            // Böylece 'checkFormCompleteness' doğru çalışır ve Kaydet butonu aktif olur.
+            setTimeout(() => {
+                if(window.indexingModule && window.indexingModule.activateTab) {
+                    window.indexingModule.activateTab('manual-indexing-pane');
+                }
+            }, 500); // Modülün yüklenmesi için kısa bir bekleme
+
+            // 1. Ana Tab Geçişleri
             const navBtns = document.querySelectorAll('.nav-btn');
             const panes = document.querySelectorAll('.tab-pane');
             navBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    // ID eşleşmesi kritik (JS modülü için)
                     const target = btn.getAttribute('data-tab');
                     navBtns.forEach(b => b.classList.remove('active'));
                     panes.forEach(p => p.classList.remove('active'));
