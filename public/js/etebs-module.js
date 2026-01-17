@@ -360,6 +360,9 @@ activateUploadMode() {
             const bulkFilesInput = document.getElementById('bulkFiles');
             const bulkFilesButton = document.getElementById('bulkFilesButton');
             const bulkFilesInfo = document.getElementById('bulkFilesInfo');
+            if (bulkFilesInput) bulkFilesInput.style.display = 'none';
+            const fileListSection = document.getElementById('fileListSection');
+            if (fileListSection) fileListSection.style.display = 'block';
                         
             if (bulkFilesButton) {
                 bulkFilesButton.style.display = 'block';
