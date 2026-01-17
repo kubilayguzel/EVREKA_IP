@@ -6,10 +6,13 @@ document.getElementById('startBtn').addEventListener('click', () => {
   }
 
   // Durumu sıfırla ve numarayı kaydet
-  chrome.storage.local.set({ 
-    "tp_app_no": appNo, 
-    "tp_step": "LOGIN_REQUIRED" 
-  }, () => {
-    chrome.tabs.create({ url: "https://epats.turkpatent.gov.tr/run/TP/EDEVLET/giris" });
-  });
+chrome.storage.local.set({
+  tp_app_no: appNo,
+  tp_step: "LOGIN_REQUIRED",
+  tp_clicked_ara: false,
+  tp_download_clicked: false,
+  tp_expanded_twice: false
+}, () => {
+  chrome.tabs.create({ url: "https://epats.turkpatent.gov.tr/run/TP/EDEVLET/giris" });
+});
 });
