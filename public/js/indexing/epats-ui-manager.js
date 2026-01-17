@@ -4,7 +4,8 @@ import { PersonDataManager } from '../persons/PersonDataManager.js';
 import { PortfolioDataManager } from '../portfolio/PortfolioDataManager.js';
 import { ipRecordsService } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
-import { Pagination } from '../pagination.js';
+// DÜZELTME: 'export default' olduğu için süslü parantez kaldırıldı
+import Pagination from '../pagination.js';
 
 export class EpatsUiManager {
     constructor() {
@@ -15,7 +16,6 @@ export class EpatsUiManager {
         this.pagination = null;
         
         // Eklenti İletişim ID'si (Manifest.json'daki ID ile aynı olmalı)
-        // Eğer eklenti ID'niz sabitse buraya yazın, değilse window.postMessage kullanacağız.
         this.extensionId = "YOUR_EXTENSION_ID_HERE"; 
 
         this.init();
@@ -54,7 +54,7 @@ export class EpatsUiManager {
         try {
             const response = await this.personData.fetchPersons();
             if (response.success && Array.isArray(response.data)) {
-                // Sadece müvekkil (client) olanları veya hepsini listele
+                // İsme göre sırala
                 const clients = response.data.sort((a, b) => a.name.localeCompare(b.name));
                 
                 select.innerHTML = '<option value="">Müvekkil Seçiniz...</option>' + 
@@ -85,11 +85,10 @@ export class EpatsUiManager {
             await this.portfolioData.loadInitialData();
             
             // 2. Temel Filtreleme (Sahip + Tür + Status)
-            // Status: 'registered' olanları alıyoruz (Tescil belgesi tescillilerde olur)
             const candidates = this.portfolioData.allRecords.filter(r => {
                 const isClientMatch = r.applicants && r.applicants.some(app => app.id === clientId);
                 const isTypeMatch = r.type === ipType;
-                // Status kontrolü: registered, tescilli vb. veritabanındaki değere göre
+                // Status kontrolü: registered, tescilli vb.
                 const isRegistered = r.status && ['registered', 'tescilli'].includes(r.status.toLowerCase());
                 
                 return isClientMatch && isTypeMatch && isRegistered;
@@ -98,23 +97,16 @@ export class EpatsUiManager {
             console.log(`${candidates.length} adet aday kayıt bulundu. Detaylı tarama yapılıyor...`);
 
             // 3. Detaylı Tarama (Transaction Kontrolü)
-            // Her kaydın işlemlerini çekip, seçilen belge türü var mı bakacağız.
             const missingDocs = [];
             
-            // Paralel sorgu limiti (Firestore'u yormamak için)
+            // Paralel sorgu limiti
             const chunkSize = 10;
             for (let i = 0; i < candidates.length; i += chunkSize) {
                 const chunk = candidates.slice(i, i + chunkSize);
                 const results = await Promise.all(chunk.map(async (record) => {
                     const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
                     if (txResult.success) {
-                        // Belge türü kontrolü
-                        // Transaction type ID'si veya designation kontrolü yapılabilir.
-                        // Şimdilik type üzerinden veya description üzerinden basit kontrol:
                         const hasDocument = txResult.transactions.some(t => {
-                            // Type kontrolü (Selectbox value'su ile transaction type ID veya alias eşleşmesi)
-                            // Veya documents array içinde documentDesignation kontrolü
-                            // Basitlik adına:
                             return t.type === docType || 
                                    (t.description && t.description.toLowerCase().includes('tescil belgesi'));
                         });
@@ -147,23 +139,41 @@ export class EpatsUiManager {
     }
 
     renderTable() {
-        // Pagination entegrasyonu
         if (this.pagination) {
-            // Varolan pagination'ı güncelle
-            this.pagination.data = this.filteredRecords;
-            this.pagination.render(); // Varsayımsal metod
-        } else {
-            // Yeni pagination oluştur (Pagination.js yapınıza göre)
-            this.pagination = new Pagination({
-                containerId: 'epatsPagination',
-                itemsPerPage: 10,
-                totalItems: this.filteredRecords.length,
-                onPageChange: (pageItems) => {
-                    this.renderTableRows(pageItems);
-                }
-            });
-            this.pagination.render(this.filteredRecords);
+            // Veriyi güncelle ve sayfayı yenile
+            this.pagination.update(this.filteredRecords.length);
+            // Sayfa değişim callback'i otomatik tetiklenmez, manuel render gerekebilir
+            // Ancak Pagination sınıfı update içinde render çağırmalıdır.
+            // Bizim Pagination.js yapımızda update metodu render'ı çağırıyor.
+            // Fakat veriyi "getCurrentPageData" ile almamız lazım onPageChange içinde.
+            
+            // Basitçe yeniden başlatmak daha güvenli:
+            this.pagination.destroy(); 
         }
+
+        // Yeni pagination başlat
+        this.pagination = new Pagination({
+            containerId: 'epatsPagination',
+            itemsPerPage: 10,
+            showItemsPerPageSelector: false,
+            onPageChange: (currentPage, itemsPerPage) => {
+                // Sayfalanmış veriyi hesapla
+                const start = (currentPage - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageItems = this.filteredRecords.slice(start, end);
+                this.renderTableRows(pageItems);
+            },
+            strings: {
+                noResults: 'Kayıt yok',
+                itemsInfo: 'Toplam {total} kayıt'
+            }
+        });
+        
+        // İlk render için manuel güncelleme
+        this.pagination.update(this.filteredRecords.length);
+        // İlk sayfayı göster
+        const initialItems = this.filteredRecords.slice(0, 10);
+        this.renderTableRows(initialItems);
     }
 
     renderTableRows(items) {
@@ -215,7 +225,6 @@ export class EpatsUiManager {
 
     startTransfer() {
         const queue = [];
-        // Seçili ID'lerden full data oluştur
         this.selectedRecordIds.forEach(id => {
             const record = this.filteredRecords.find(r => r.id === id);
             if (record) {
@@ -229,28 +238,26 @@ export class EpatsUiManager {
 
         if (queue.length === 0) return;
 
-        // 1. Yöntem: Window Message (Content Script yakalar)
+        // Eklentiye mesaj gönder
         window.postMessage({
             type: "EPATS_QUEUE_START",
             data: queue
         }, "*");
 
-        // 2. Yöntem: Extension ID varsa direkt mesaj (Daha güvenilir)
-        if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-             chrome.runtime.sendMessage(this.extensionId, {
-                action: "START_QUEUE",
-                queue: queue
-            }, (response) => {
-                console.log("Extension response:", response);
-            });
+        // Alternatif: Chrome Extension API
+        if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+             try {
+                 chrome.runtime.sendMessage(this.extensionId, {
+                    action: "START_QUEUE",
+                    queue: queue
+                });
+             } catch(e) { console.log("Extension mesaj hatası (normaldir):", e); }
         }
 
         showNotification(`${queue.length} adet işlem eklentiye gönderildi. EPATS açılıyor...`, 'success');
         
-        // Seçimleri sıfırla
         this.selectedRecordIds.clear();
         this.updateActionButtons();
-        // Checkboxları temizle
         document.querySelectorAll('.epats-row-check').forEach(cb => cb.checked = false);
     }
 }
