@@ -135,14 +135,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             
             // 3. Backend'e Gönder
             const payload = {
-                ipId: storage.tp_current_job_id,
-                fileContent: base64data,
-                fileName: "Tescil_Belgesi.pdf", // Veya dinamik isim
-                mimeType: "application/pdf",
-                docType: storage.tp_current_doc_type || "tescil_belgesi"
+              ipRecordId: storage.tp_current_job_id,      // ✅ ipRecordId olmalı
+              fileBase64: base64data,                     // ✅ fileBase64 olmalı
+              fileName: "Tescil_Belgesi.pdf",
+              mimeType: "application/pdf",
+              docType: storage.tp_current_doc_type || "tescil_belgesi"
             };
-
-            console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipId);
+            console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipRecordId);
             
             // Fetch ile Cloud Function'a POST
             const uploadRes = await fetch(UPLOAD_ENDPOINT, {
