@@ -16,7 +16,7 @@ export class EpatsUiManager {
         this.pagination = null;
         
         // Eklenti İletişim ID'si (Manifest.json'daki ID ile aynı olmalı)
-        this.extensionId = "YOUR_EXTENSION_ID_HERE"; 
+        this.extensionId = "mhjacaphbimellgnbbnoblhgpdlchkgi"; 
 
         this.init();
     }
