@@ -7113,3 +7113,135 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
     return null;
   }
 );
+
+// =========================================================
+//              EPATS BELGE TRANSFERİ (OTOMASYON)
+// =========================================================
+
+export const saveEpatsDocument = onCall(
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 300, // Dosya yazma işlemi zaman alabilir
+    memory: '1GiB'       // PDF işleme için bellek
+  },
+  async (request) => {
+    // 1. Parametre Kontrolü
+    const { ipRecordId, fileBase64, fileName, appNo, docType } = request.data || {};
+    
+    if (!ipRecordId || !fileBase64) {
+      throw new HttpsError('invalid-argument', 'Eksik parametre: ipRecordId ve fileBase64 zorunludur.');
+    }
+
+    // Kullanıcı bilgisi (Sistemi kimin çalıştırdığı)
+    const userId = request.auth?.uid || 'system_automation';
+    const userEmail = request.auth?.token?.email || 'system@evrekapatent.com';
+
+    // Güvenli dosya adı oluştur
+    const safeAppNo = (appNo || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+    const timestamp = Date.now();
+    const finalFileName = fileName 
+        ? fileName.replace(/[^a-zA-Z0-9._-]/g, '_') 
+        : `tescil_belgesi_${safeAppNo}_${timestamp}.pdf`;
+
+    const targetType = docType || 'tescil_belgesi'; // Varsayılan: Tescil Belgesi
+
+    console.log(`📥 EPATS Belge Transferi Başladı: ${safeAppNo} -> ${ipRecordId}`);
+
+    try {
+      // 2. Dosyayı Storage'a Kaydet
+      const bucket = admin.storage().bucket();
+      const buffer = Buffer.from(fileBase64, 'base64');
+      const storagePath = `ipRecords/${ipRecordId}/documents/${finalFileName}`;
+      const file = bucket.file(storagePath);
+
+      await file.save(buffer, {
+        contentType: 'application/pdf',
+        metadata: {
+          metadata: {
+            originalName: fileName || 'belge.pdf',
+            source: 'epats_chrome_extension',
+            applicationNumber: appNo,
+            uploadedBy: userId
+          }
+        }
+      });
+
+      // İmzalı URL oluştur (Frontend'de görüntülemek için)
+      // Not: Public yapmak yerine Signed URL kullanmak daha güvenlidir. 
+      // Ancak transaction kaydında kalıcı erişim için uzun süreli bir signed URL üretiyoruz.
+      const [signedUrl] = await file.getSignedUrl({
+        action: 'read',
+        expires: '01-01-2099' 
+      });
+
+      // 3. Parent Transaction'ı Bul (Hiyerarşi Bağlantısı)
+      // Hedef: 'trademark_application' (Başvuru) tipindeki ana işlemi bulmak.
+      const transactionsRef = adminDb.collection('ipRecords').doc(ipRecordId).collection('transactions');
+      
+      const parentSnapshot = await transactionsRef
+        .where('hierarchy', '==', 'parent')
+        // Ana işlem tipleri (Gerekirse 'patent_application' vb. eklenebilir)
+        .where('type', 'in', ['trademark_application', '2', 'marka_basvuru']) 
+        .limit(1)
+        .get();
+
+      let parentId = null;
+      let parentDescription = 'Ana işlem';
+
+      if (!parentSnapshot.empty) {
+        const parentDoc = parentSnapshot.docs[0];
+        parentId = parentDoc.id;
+        parentDescription = parentDoc.data().description || parentDescription;
+        console.log(`🔗 Parent Transaction Bulundu: ${parentId} (${parentDescription})`);
+      } else {
+        console.warn(`⚠️ Parent Transaction bulunamadı! Belge 'root' seviyesine yakın eklenecek.`);
+        // Fallback: Herhangi bir parent işlem bulmaya çalış
+        const anyParent = await transactionsRef.where('hierarchy', '==', 'parent').limit(1).get();
+        if (!anyParent.empty) parentId = anyParent.docs[0].id;
+      }
+
+      // 4. Yeni Transaction (Alt İşlem) Oluştur
+      const newTransactionData = {
+        type: targetType, // 'tescil_belgesi'
+        description: 'Tescil Belgesi (EPATS Otomasyonu ile eklendi)',
+        designation: 'Tescil Belgesi', // UI'da görünen ad
+        
+        hierarchy: 'child',
+        parentId: parentId, // Parent ID (Varsa)
+        
+        storagePath: storagePath,
+        fileUrl: signedUrl,     // Görüntüleme linki
+        downloadURL: signedUrl, // İndirme linki (bazı yapılar bunu kullanıyor olabilir)
+        fileName: finalFileName,
+        
+        timestamp: new Date().toISOString(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        
+        userId: userId,
+        userEmail: userEmail,
+        source: 'epats_extension_transfer'
+      };
+
+      const docRef = await transactionsRef.add(newTransactionData);
+      console.log(`✅ Transaction Eklendi: ${docRef.id}`);
+
+      // 5. Ana Kaydı Güncelle (Flagging)
+      // Bu, "Eksik Belgeleri Getir" sorgusunu ileride hızlandırmak için (Yöntem 2 hazırlığı)
+      await adminDb.collection('ipRecords').doc(ipRecordId).update({
+        hasRegistrationCert: true,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return { 
+        success: true, 
+        message: 'Belge transferi başarılı.', 
+        transactionId: docRef.id,
+        storagePath 
+      };
+
+    } catch (error) {
+      console.error('❌ saveEpatsDocument Hatası:', error);
+      throw new HttpsError('internal', `Belge kaydedilemedi: ${error.message}`);
+    }
+  }
+);
