@@ -15,7 +15,7 @@
     <style>
         /* --- TASK UPDATE TASARIM KÖPRÜSÜ --- */
         
-        /* 1. Tab Navigasyonu (Modern ve Temiz) */
+        /* 1. Tab Navigasyonu */
         .tab-navigation {
             display: flex; gap: 15px; margin-bottom: 25px; padding: 0 5px;
         }
@@ -33,9 +33,7 @@
             box-shadow: 0 4px 12px rgba(30, 60, 114, 0.2);
         }
 
-        /* 2. Dosya Listesi Uyumluluğu (JS Çıktısını Task Update'e Benzetme) */
-        
-        /* Manuel İşlem Dosya Listesi (.file-item) */
+        /* 2. Dosya Listesi Uyumluluğu */
         .file-item, .pdf-list-item {
             display: flex; align-items: center; justify-content: space-between;
             padding: 15px; border: 1px solid #e1e8ed; border-radius: 12px;
@@ -54,7 +52,7 @@
             background: #fee2e2; color: #ef4444; border: none;
             width: 30px; height: 30px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            transition: all 0.2s;
+            transition: all 0.2s; cursor: pointer;
         }
         .file-item-controls button:hover { background: #ef4444; color: white; }
 
@@ -92,6 +90,19 @@
         }
         
         .badge-counter { background: #ff4757; color: white; font-size: 0.75em; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
+
+        /* Filtre Butonları (ETEBS Manuel Yükleme İçin) */
+        .filter-tabs {
+            display: flex; gap: 10px; margin-bottom: 20px;
+        }
+        .filter-btn {
+            padding: 8px 16px; border-radius: 20px; border: 1px solid #e1e8ed; background: #fff;
+            color: #64748b; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .filter-btn:hover { background: #f1f5f9; color: #1e3c72; }
+        .filter-btn.active { background: #1e3c72; color: white; border-color: #1e3c72; }
+        .filter-btn.active .badge { background: white; color: #1e3c72; }
     </style>
 </head>
 <body>
@@ -126,60 +137,57 @@
             <div class="tab-content-wrapper">
                 
                 <div id="manual-pane" class="tab-pane active">
-                    <div class="row">
-                        <div class="col-lg-8">
-                            <div class="section-card">
-                                <h3 class="section-title">Kayıt Seçimi</h3>
-                                <div class="form-group position-relative">
-                                    <label class="form-label">Başvuru Numarası veya Marka Adı</label>
-                                    <input type="text" id="recordSearchInputManual" class="form-input" placeholder="Aramak için yazın..." autocomplete="off">
-                                    <div id="searchResultsContainerManual" class="search-results-wrapper" style="display:none;"></div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Seçili Kayıt</label>
-                                    <input type="text" id="selectedRecordDisplayManual" class="form-input" readonly style="background-color: #f8f9fa;" placeholder="Henüz bir kayıt seçilmedi.">
-                                </div>
-                            </div>
+                    
+                    <div class="section-card">
+                        <h3 class="section-title">Kayıt Seçimi</h3>
+                        <div class="form-group position-relative">
+                            <label class="form-label">Başvuru Numarası veya Marka Adı</label>
+                            <input type="text" id="recordSearchInputManual" class="form-input" placeholder="Aramak için yazın..." autocomplete="off">
+                            <div id="searchResultsContainerManual" class="search-results-wrapper" style="display:none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Seçili Kayıt</label>
+                            <input type="text" id="selectedRecordDisplayManual" class="form-input" readonly style="background-color: #f8f9fa;" placeholder="Henüz bir kayıt seçilmedi.">
+                        </div>
+                    </div>
 
-                            <div class="section-card">
-                                <h3 class="section-title">İşlem Detayları</h3>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label class="form-label">İşlem Türü <span class="text-danger">*</span></label>
-                                        <select id="specificManualTransactionType" class="form-select"></select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Tebliğ Tarihi</label>
-                                        <input type="date" id="manualTransactionDeliveryDate" class="form-input">
-                                    </div>
-                                </div>
-                                <div class="form-group mt-3">
-                                    <label class="form-label">Notlar</label>
-                                    <textarea id="manualTransactionNotes" class="form-textarea" placeholder="İşlemle ilgili notlar..."></textarea>
-                                </div>
+                    <div class="section-card">
+                        <h3 class="section-title">İşlem Detayları</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">İşlem Türü <span class="text-danger">*</span></label>
+                                <select id="specificManualTransactionType" class="form-select"></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Tebliğ Tarihi</label>
+                                <input type="date" id="manualTransactionDeliveryDate" class="form-input">
                             </div>
                         </div>
+                        <div class="form-group mt-3">
+                            <label class="form-label">Notlar</label>
+                            <textarea id="manualTransactionNotes" class="form-textarea" placeholder="İşlemle ilgili notlar..."></textarea>
+                        </div>
+                    </div>
 
-                        <div class="col-lg-4">
-                            <div class="section-card">
-                                <h3 class="section-title">
-                                    <span>Belgeler & Dosyalar</span>
-                                </h3>
-                                
-                                <div class="file-upload-area" id="filesManualButton">
-                                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                                    <div class="upload-text">Dosya Yüklemek İçin Tıklayın</div>
-                                    <div class="upload-subtext">veya dosyaları buraya sürükleyin</div>
-                                    <input type="file" id="filesManual" multiple style="display:none;">
-                                </div>
-                                
-                                <div id="filesManualInfo" class="text-center text-muted mt-2 small"></div>
-                                <div id="fileListManual" class="file-list-container mt-3"></div>
-                                
-                                <button id="saveManualTransactionBtn" class="btn btn-primary btn-block mt-4 py-3 font-weight-bold" disabled>
-                                    <i class="fas fa-save mr-2"></i>İşlemi Kaydet
-                                </button>
-                            </div>
+                    <div class="section-card">
+                        <h3 class="section-title">
+                            <span>Belgeler & Dosyalar</span>
+                        </h3>
+                        
+                        <div class="file-upload-area" id="filesManualButton">
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <div class="upload-text">Dosya Yüklemek İçin Tıklayın</div>
+                            <div class="upload-subtext">veya dosyaları buraya sürükleyin</div>
+                            <input type="file" id="filesManual" multiple style="display:none;">
+                        </div>
+                        
+                        <div id="filesManualInfo" class="text-center text-muted mt-2 small"></div>
+                        <div id="fileListManual" class="file-list-container mt-3"></div>
+                        
+                        <div class="form-actions mt-4">
+                            <button id="saveManualTransactionBtn" class="btn btn-primary btn-lg px-5" disabled>
+                                <i class="fas fa-save mr-2"></i>İşlemi Kaydet
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -221,22 +229,17 @@
                             <div id="bulkFilesInfo" class="text-center text-muted mt-2 small"></div>
 
                             <div id="fileListSection" class="mt-4" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-primary active file-tab-btn" data-target="all-files-pane">
-                                            Eşleşenler <span class="badge badge-primary ml-1" id="allCount">0</span>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger file-tab-btn" data-target="unmatched-files-pane">
-                                            Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedCount">0</span>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-success file-tab-btn" data-target="indexed-files-pane">
-                                            İndekslenenler <span class="badge badge-success ml-1" id="indexedCount">0</span>
-                                        </button>
-                                    </div>
-                                    <button class="btn btn-sm btn-info" onclick="window.indexingModule.reprocessMatching()">
-                                        <i class="fas fa-sync mr-1"></i>Yeniden Eşleştir
+                                <div class="filter-tabs">
+                                    <button class="filter-btn active file-tab-btn" data-target="all-files-pane">
+                                        Eşleşenler <span class="badge badge-primary ml-1" id="allCount">0</span>
                                     </button>
-                                </div>
+                                    <button class="filter-btn file-tab-btn" data-target="unmatched-files-pane">
+                                        Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedCount">0</span>
+                                    </button>
+                                    <button class="filter-btn file-tab-btn" data-target="indexed-files-pane">
+                                        İndekslenenler <span class="badge badge-success ml-1" id="indexedCount">0</span>
+                                    </button>
+                                    </div>
 
                                 <div class="tab-content">
                                     <div id="all-files-pane" class="file-tab-pane active">
@@ -257,11 +260,11 @@
                         <div class="section-card">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h3 class="section-title mb-0">Sorgu Sonuçları</h3>
-                                <div class="btn-group">
-                                    <button class="btn btn-sm btn-outline-success notification-tab-btn active" data-target="matched-notifications-tab">
+                                <div class="filter-tabs mb-0">
+                                    <button class="filter-btn active notification-tab-btn" data-target="matched-notifications-tab">
                                         Eşleşenler <span class="badge badge-success ml-1" id="matchedTabBadge">0</span>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger notification-tab-btn" data-target="unmatched-notifications-tab">
+                                    <button class="filter-btn notification-tab-btn" data-target="unmatched-notifications-tab">
                                         Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedTabBadge">0</span>
                                     </button>
                                 </div>
@@ -383,7 +386,7 @@
                     if (mode === 'etebs') {
                         etebsContent.style.display = 'block';
                         uploadContent.style.display = 'none';
-                        document.getElementById('notificationsSection').style.display = 'none'; // Sonuçları sıfırla
+                        document.getElementById('notificationsSection').style.display = 'none'; 
                     } else {
                         etebsContent.style.display = 'none';
                         uploadContent.style.display = 'block';
