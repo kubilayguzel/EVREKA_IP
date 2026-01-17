@@ -357,7 +357,7 @@
   function findDownloadIcon() {
     // Görünür olan ilk indirme ikonunu bul
     const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
-    return icons[0] || null;
+    return icons[1] || null;
   }
 
   // --- İNDİRME VE İŞLEME MANTIĞI ---
@@ -375,7 +375,7 @@
         await ensureAccordionOpenAtStart();
 
         // 2. Kriter Listesi
-        const aramaListesi = ["Tescil Belgesi", "Marka Yenileme Belges", "MYB", "TB"];
+        const aramaListesi = ["Marka Yenileme Belges", "MYB", "TB", "Tescil_belgesi_us"];
         
         for (const terim of aramaListesi) {
             console.log(TAG, `🔍 Kriter: ${terim}`);
