@@ -39,13 +39,16 @@ export class PortfolioDetailManager {
         // Eğer user null ise (yönlendirme başladı demektir), işlemi durdur
         if (!user) return; 
 
-        // 🔥 KRİTİK DÜZELTME: Token Senkronizasyonunu Bekle
-        // Auth objesi hazır olsa bile Firestore bağlantısı için token'ın
-        // tamamen hazır olduğundan emin oluyoruz. Bu satır "Missing permissions" hatasını çözer.
+        // 🔥 KRİTİK DÜZELTME: Token Senkronizasyonu
+        // Kullanıcı nesnesi var olsa bile, Firestore kurallarının (Rules) 
+        // bu oturumu tanıması için token'ın tazelenmesini ve hazır olmasını bekliyoruz.
         try {
-            await user.getIdToken(); 
+            // 'true' parametresi token'ı zorla yeniler, bu da yetki sorunlarını çözer.
+            await user.getIdToken(true);
+            console.log("✅ Token senkronize edildi, veri çekiliyor...");
         } catch (e) {
-            console.warn("Token yenileme uyarısı:", e);
+            console.error("Token yenileme hatası:", e);
+            // Hata olsa bile devam etmeyi deneyebiliriz veya durdurabiliriz.
         }
 
         // 3. ID kontrolü
