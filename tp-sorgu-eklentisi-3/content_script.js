@@ -1,6 +1,6 @@
-// content_script.js (Stable Version: Singleton + Queue Fix + Simple Delay)
+// content_script.js (Final Fix: Loading Screen & Busy State Check)
 (() => {
-  // --- SINGLETON CHECK (Çift çalışmayı engeller) ---
+  // --- SINGLETON CHECK ---
   if (window.TP_SCRIPT_ALREADY_LOADED) {
       console.log("[TP-AUTO] ♻️ Script zaten yüklü.");
       return; 
@@ -23,9 +23,7 @@
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
       sendResponse({ ok: true }); 
 
-      // Mükerrer URL ise reddet
       if (request.url === lastProcessedUrl) return; 
-      // Sistem meşgulse reddet
       if (globalProcessingLock || isAdvancing) return; 
 
       globalProcessingLock = true;
@@ -38,9 +36,7 @@
             globalProcessingLock = false; 
             return;
           }
-          // İndirildi olarak işaretle
           await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
-          // İşleme başla
           await processDocument(request.url, null);
         } catch (err) {
           console.error(TAG, "Hata:", err);
@@ -66,7 +62,6 @@
     if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) return true; 
 
     const currentIndex = data.tp_queue_index || 0;
-    // Kuyruk bitti mi?
     if (currentIndex >= data.tp_queue.length) {
       console.log(TAG, "🏁 Kuyruk tamamlandı!");
       await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
@@ -75,7 +70,6 @@
     }
 
     const currentJob = data.tp_queue[currentIndex];
-    // Yeni işe geçiş
     if (data.tp_app_no !== currentJob.appNo) {
       console.log(TAG, `🔄 Yeni İş: ${currentIndex + 1}/${data.tp_queue.length} - ${currentJob.appNo}`);
       await chrome.storage.local.set({
@@ -84,8 +78,11 @@
         tp_current_doc_type: currentJob.docType,
         tp_clicked_ara: false,
         tp_download_clicked: false,
+        tp_grid_ready: false,
+        tp_prev_grid_sig: null,
         tp_expanded_twice: false,
-        tp_last_belgelerim_try: 0
+        tp_last_belgelerim_try: 0,
+        tp_last_search_ts: 0
       });
       searchPassCount = 0; 
       return true;
@@ -100,22 +97,23 @@
     console.log(TAG, "✅ İşlem bitti, ilerleniyor...");
 
     try {
-        // Inputu temizle
         const input = qAll("#textbox551 input");
         if (input) fillInputAngularSafe(input, ""); 
 
         const data = await chrome.storage.local.get(["tp_queue_index"]);
         const nextIndex = (data.tp_queue_index || 0) + 1;
 
-        // İndeksi artır
         await chrome.storage.local.set({ 
           tp_queue_index: nextIndex,
           tp_app_no: null,            
           tp_download_clicked: false, 
           tp_clicked_ara: false,      
           tp_waiting_pdf_url: false,  
+          tp_grid_ready: false,
+          tp_prev_grid_sig: null,
           tp_expanded_twice: false,
-          tp_last_belgelerim_try: 0 
+          tp_last_belgelerim_try: 0,
+          tp_last_search_ts: 0
         });
 
         console.log(TAG, `🔓 Sıradaki İndeks: ${nextIndex}`);
@@ -205,28 +203,133 @@
     return true;
   }
 
+  // --- GRID HELPERS (sonuçların gerçekten yenilendiğini anlamak için) ---
+  function getGridHost() {
+    // EPATS ui-grid yapısı farklı sayfalarda değişebiliyor; o yüzden birden fazla aday.
+    return (
+      qAll(".ui-grid-render-container-body") ||
+      qAll(".ui-grid-viewport") ||
+      qAll(".ui-grid-canvas")
+    );
+  }
+
+  function getFirstRowText() {
+    const row = qAllMany(".ui-grid-row").find(r => r.offsetParent !== null);
+    return (row?.innerText || "").trim();
+  }
+
+  function getGridSignature() {
+    const host = getGridHost();
+    const hostText = (host?.innerText || "").trim();
+    const firstRow = getFirstRowText();
+    // Çok büyük text'i storage'a basmamak için kısalt.
+    const compact = (firstRow || hostText).replace(/\s+/g, " ").slice(0, 200);
+    const rowCount = qAllMany(".ui-grid-row").filter(r => r.offsetParent !== null).length;
+    return `${rowCount}|${compact}`;
+  }
+
+  async function waitForGridToRefresh(prevSig, timeoutMs = 20000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (isPageBusy()) { await sleep(400); continue; }
+      const sig = getGridSignature();
+      if (sig && sig !== prevSig && !sig.startsWith("0|")) return true;
+      await sleep(400);
+    }
+    console.warn(TAG, "⚠️ Grid yenilenmesi zaman aşımı. Mevcut veri ile devam edilecek.");
+    return false;
+  }
+
+  async function clearEvrakAdiFilter() {
+    const cells = qAllMany(".ui-grid-header-cell");
+    for (const cell of cells) {
+      if (cell.innerText.toLowerCase().includes("evrak adı")) {
+        const input = cell.querySelector("input");
+        if (input && (input.value || "").trim() !== "") {
+          fillInputAngularSafe(input, "");
+          await sleep(300);
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 🔥 [GÜNCELLENDİ] SAYFA MEŞGULİYET KONTROLÜ
+  function isPageBusy() {
+    // 1. Selector bazlı kontrol (Spinner, Overlay, Backdrop)
+    const busySelectors = [
+        ".modal-backdrop",          // Bootstrap modal arkası
+        ".block-ui-overlay",        // Angular BlockUI
+        ".block-ui-message-container",
+        ".loading-spinner",
+        ".fa-spinner",
+        ".fa-refresh.fa-spin",
+        "div[ng-show='isLoading']", // Angular loading flag
+        ".ui-grid-icon-spin"        // Grid yükleniyor ikonu
+    ];
+
+    const els = qAllMany(busySelectors.join(","));
+    const isOverlayVisible = els.some(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    });
+
+    if (isOverlayVisible) {
+        // console.log(TAG, "⏳ Sayfa meşgul (Overlay/Spinner)...");
+        return true;
+    }
+
+    // 2. Metin bazlı kontrol ("Lütfen Bekleyiniz", "Yükleniyor")
+    const messageContainers = qAllMany(".modal-content, .alert, .growl-message, .block-ui-message");
+    const hasWaitText = messageContainers.some(el => {
+        const text = (el.innerText || "").toLowerCase();
+        const style = window.getComputedStyle(el);
+        const isVisible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        
+        return isVisible && (
+            text.includes("bekleyiniz") || 
+            text.includes("yükleniyor") || 
+            text.includes("işleminiz") ||
+            text.includes("aranıyor")
+        );
+    });
+
+    if (hasWaitText) {
+        // console.log(TAG, "⏳ Sayfa meşgul (Mesaj: Bekleyiniz/Yükleniyor)...");
+        return true;
+    }
+
+    return false;
+  }
+
   // --- EPATS UI ---
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
     if (tp_clicked_ara) return true; 
 
+    // Arama tetiklenmeden önce mevcut grid imzasını kaydet ki,
+    // yeni başvuruya ait sonuçlar gelmeden filtreleme başlamasın.
+    const prevSig = getGridSignature();
+
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     
+    // Ara butonu pasifse bekle
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) {
-        console.log(TAG, "⏳ Ara butonu pasif...");
+        console.log(TAG, "⏳ Ara butonu pasif, bekleniyor...");
         return false;
     }
 
     console.log(TAG, "🔎 Ara butonuna basılıyor...");
     superClick(btn);
-    await chrome.storage.local.set({ tp_clicked_ara: true });
     
-    // 🔥 TEK EKLEME: Ara butonuna bastıktan sonra 3 saniye bekle
-    // Bu, 2. dosya için acele etmesini engeller.
-    await sleep(3000); 
-    
+    await chrome.storage.local.set({ 
+        tp_clicked_ara: true,
+        tp_last_search_ts: Date.now(),
+        tp_prev_grid_sig: prevSig
+    });
     return true;
   }
 
@@ -273,11 +376,13 @@
 
   // --- ACCORDION & DOWNLOAD ---
   function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
+  
   function getAccordionClickable() {
     const host = getAccordionHost();
     if (!host || host.offsetParent === null) return null; 
     return host.querySelector("i") || host;
   }
+
   function readAccordionState() {
     const host = getAccordionHost();
     if (!host) return "none";
@@ -300,6 +405,7 @@
     const clickable = getAccordionClickable();
     if (!clickable) return false;
     const state = readAccordionState();
+    
     if (state === "plus") { superClick(clickable); await sleep(1500); }
     else if (state === "minus") { 
         superClick(clickable); await sleep(800);
@@ -324,7 +430,7 @@
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
 
-    // Tablo yüklenmediyse bekle
+    // 🔥 Tablo yüklenmediyse bekle
     if (!getAccordionClickable()) return false; 
 
     isActionInProgress = true;
@@ -375,7 +481,8 @@
     const continueProcess = await checkQueueAndSetAppNo();
     if (!continueProcess) return;
 
-    const { tp_app_no, tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked"]);
+    const { tp_app_no, tp_clicked_ara, tp_download_clicked, tp_last_search_ts } = 
+        await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked", "tp_last_search_ts"]);
     if (!tp_app_no) return;
 
     if (isGirisPage()) {
@@ -392,6 +499,19 @@
       const currentVal = input ? (input.value || "").trim() : "";
       
       if (currentVal !== String(tp_app_no)) {
+          // Önce önceki aramadan kalan "Evrak adı" filtresini temizle.
+          // Çünkü yeni başvuruya ait veriler henüz gelmeden filtre aktif kalırsa
+          // grid boş/yanlış görünebiliyor ve eklenti yanlış zamanda aramaya başlıyor.
+          await clearEvrakAdiFilter();
+
+          // Garanti olsun diye arama state'ini de sıfırla (başvuru no değişti).
+          await chrome.storage.local.set({
+            tp_clicked_ara: false,
+            tp_download_clicked: false,
+            tp_waiting_pdf_url: false,
+            tp_grid_ready: false
+          });
+
           await fillBasvuruNo(tp_app_no);
           return; 
       }
@@ -401,7 +521,26 @@
           return;
       }
 
-      if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
+      // 1) Çok kısa bir güvenlik beklemesi
+      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
+
+      // 2) UI hala yükleniyorsa asla devam etme
+      if (isPageBusy()) {
+        console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
+        return;
+      }
+
+      // 3) Asıl kritik nokta:
+      // Ara'ya basıldıktan sonra grid'in gerçekten yenilenmesini bekle.
+      // (Yeni başvuru verileri gelmeden Evrak Adı filtresi uygulanmasın.)
+      const { tp_grid_ready, tp_prev_grid_sig } = await chrome.storage.local.get(["tp_grid_ready", "tp_prev_grid_sig"]);
+      if (tp_clicked_ara && !tp_grid_ready) {
+        await waitForGridToRefresh(tp_prev_grid_sig || "", 20000);
+        await chrome.storage.local.set({ tp_grid_ready: true });
+        return; // Bir sonraki tick'te indirmeye geçsin
+      }
+
+      if (tp_clicked_ara && tp_grid_ready && !tp_download_clicked && !isActionInProgress) {
         await downloadTescilBelge();
       }
       return;
