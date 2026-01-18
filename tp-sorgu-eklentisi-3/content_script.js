@@ -1,4 +1,4 @@
-// content_script.js (Final Fix: Search Cooldown & Modal Check)
+// content_script.js (Final Fix: Aggressive Wait & Grid Check)
 (() => {
   // --- SINGLETON CHECK ---
   if (window.TP_SCRIPT_ALREADY_LOADED) {
@@ -23,8 +23,8 @@
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
       sendResponse({ ok: true }); 
 
-      if (request.url === lastProcessedUrl) return; // Mükerrer red
-      if (globalProcessingLock || isAdvancing) return; // Kilitli red
+      if (request.url === lastProcessedUrl) return; 
+      if (globalProcessingLock || isAdvancing) return; 
 
       globalProcessingLock = true;
       lastProcessedUrl = request.url;
@@ -80,7 +80,7 @@
         tp_download_clicked: false,
         tp_expanded_twice: false,
         tp_last_belgelerim_try: 0,
-        tp_last_search_ts: 0 // Arama zamanını sıfırla
+        tp_last_search_ts: 0
       });
       searchPassCount = 0; 
       return true;
@@ -199,16 +199,29 @@
     return true;
   }
 
-  // 🔥 YENİ: SAYFA MEŞGULİYET KONTROLÜ
   function isPageBusy() {
-    // Modal, Loading Spinner, Block UI kontrolü
-    const busyIndicators = qAllMany(".modal-backdrop, .block-ui-overlay, .loading-spinner, .fa-spinner");
-    // Görünür olan var mı?
-    const isBusy = busyIndicators.some(el => el.offsetParent !== null); // offsetParent check görünürlük içindir
-    if(isBusy) {
-        // console.log(TAG, "⏳ Sayfa meşgul (Modal/Loading)...");
-    }
-    return isBusy;
+    // 1. Selector bazlı kontrol
+    const busySelectors = [
+        ".modal-backdrop", ".block-ui-overlay", ".block-ui-message-container",
+        ".loading-spinner", ".fa-spinner", ".fa-refresh.fa-spin",
+        "div[ng-show='isLoading']", ".ui-grid-icon-spin"
+    ];
+    const els = qAllMany(busySelectors.join(","));
+    if (els.some(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    })) return true;
+
+    // 2. Metin bazlı kontrol
+    const messageContainers = qAllMany(".modal-content, .alert, .growl-message, .block-ui-message");
+    if (messageContainers.some(el => {
+        const text = (el.innerText || "").toLowerCase();
+        const style = window.getComputedStyle(el);
+        return (style.display !== 'none' && style.visibility !== 'hidden') && 
+               (text.includes("bekleyiniz") || text.includes("yükleniyor") || text.includes("aranıyor"));
+    })) return true;
+
+    return false;
   }
 
   // --- EPATS UI ---
@@ -219,12 +232,18 @@
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
-    if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
+    
+    if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) {
+        console.log(TAG, "⏳ Ara butonu pasif...");
+        return false;
+    }
 
     console.log(TAG, "🔎 Ara butonuna basılıyor...");
     superClick(btn);
     
-    // 🔥 Arama zamanını kaydet (Bekleme için)
+    // 🔥 ÖNEMLİ: Tıkladıktan sonra hemen işlem yapma, bekle!
+    await sleep(2000); 
+
     await chrome.storage.local.set({ 
         tp_clicked_ara: true,
         tp_last_search_ts: Date.now() 
@@ -275,14 +294,11 @@
 
   // --- ACCORDION & DOWNLOAD ---
   function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
-  
-  // Akordeon kontrol (Görünürlük + Varlık)
   function getAccordionClickable() {
     const host = getAccordionHost();
-    if (!host || host.offsetParent === null) return null; // Görünür değilse null
+    if (!host || host.offsetParent === null) return null; 
     return host.querySelector("i") || host;
   }
-
   function readAccordionState() {
     const host = getAccordionHost();
     if (!host) return "none";
@@ -305,7 +321,6 @@
     const clickable = getAccordionClickable();
     if (!clickable) return false;
     const state = readAccordionState();
-    
     if (state === "plus") { superClick(clickable); await sleep(1500); }
     else if (state === "minus") { 
         superClick(clickable); await sleep(800);
@@ -330,8 +345,13 @@
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
 
-    // 🔥 Tablo yüklenmediyse bekle
-    if (!getAccordionClickable()) return false; 
+    // 🔥 Tablo veya Satır yoksa bekle (Henüz yüklenmedi)
+    const gridRows = qAllMany(".ui-grid-row");
+    const accordion = getAccordionClickable();
+    if (!accordion || gridRows.length === 0) {
+        // console.log(TAG, "⏳ Tablo verisi bekleniyor...");
+        return false; 
+    }
 
     isActionInProgress = true;
     try {
@@ -345,7 +365,7 @@
             await ensureAccordionExpandedAfterFilter();
 
             const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
-            const targetIcon = icons[1] || icons[0]; // Genelde 2. ikon (detay satırındaki)
+            const targetIcon = icons[1] || icons[0]; 
 
             if (targetIcon) {
                 console.log(TAG, `✅ Dosya Bulundu: ${terim}`);
@@ -353,7 +373,6 @@
                 superClick(targetIcon);
                 await sleep(1000);
 
-                // Failover
                 setTimeout(async () => {
                   const s = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
                   if (s.tp_waiting_pdf_url && !s.tp_download_clicked) {
@@ -386,8 +405,11 @@
         await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked", "tp_last_search_ts"]);
     if (!tp_app_no) return;
 
-    // Sayfa meşgulse bekle
-    if (isPageBusy()) return;
+    // 🔥 AKILLI BEKLEME: Sayfa meşgulse bekle
+    if (isPageBusy()) {
+        console.log(TAG, "⏳ Sistem meşgul (Loading)...");
+        return;
+    }
 
     if (isGirisPage()) {
       const btn = findLoginButtonOnGiris();
@@ -402,7 +424,6 @@
       const input = qAll("#textbox551 input");
       const currentVal = input ? (input.value || "").trim() : "";
       
-      // Input boşsa doldur
       if (currentVal !== String(tp_app_no)) {
           await fillBasvuruNo(tp_app_no);
           return; 
@@ -413,10 +434,8 @@
           return;
       }
 
-      // 🔥 KRİTİK BEKLEME: Ara butonuna bastıktan sonra en az 4 saniye bekle
-      // Bu süre zarfında eski grid temizlenir, yenisi yüklenir ve + ikonu belirir.
-      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 4000)) {
-          // console.log(TAG, "⏳ Sonuçların yüklenmesi bekleniyor...");
+      // 🔥 KESİN BEKLEME SÜRESİ: 5 Saniye (4000 -> 5000)
+      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 5000)) {
           return;
       }
 
