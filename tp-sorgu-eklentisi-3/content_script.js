@@ -9,14 +9,31 @@
   // Background'dan PDF URL yakalandı mesajı gelince işle
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-    console.log(TAG, "📥 BG PDF URL:", request.url);
-    sendResponse({ ok: true });
+    sendResponse({ ok: true }); // port kapanmasın
 
     (async () => {
-      const { tp_download_clicked } = await chrome.storage.local.get(["tp_download_clicked"]);
-      if (tp_download_clicked) return; // sadece ikinci kez gelirse engelle
+      const state = await chrome.storage.local.get([
+        "tp_waiting_pdf_url",
+        "tp_download_clicked",
+        "tp_queue_index",
+        "tp_current_job_id",
+        "tp_app_no"
+      ]);
 
-      // ✅ URL GELDİ, artık "clicked" sayabiliriz
+      console.log(TAG, "PDF_URL_CAPTURED state:", state, "url:", request.url);
+
+      // ✅ Sadece gerçekten PDF bekliyorsak işleyelim
+      if (!state.tp_waiting_pdf_url) {
+        console.warn(TAG, "PDF geldi ama beklemiyorum -> IGNORE", request.url);
+        return;
+      }
+
+      // ✅ Aynı işte ikinci kez geldiyse ignore
+      if (state.tp_download_clicked) {
+        console.warn(TAG, "PDF geldi ama zaten indirildi -> IGNORE", request.url);
+        return;
+      }
+
       await chrome.storage.local.set({
         tp_download_clicked: true,
         tp_waiting_pdf_url: false
@@ -28,7 +45,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
-
 
   if (window.top !== window) return; // Sadece ana frame çalışsın
   
@@ -87,6 +103,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Ancak akışı hızlandırmak için sadece inputu değiştirmeyi deniyoruz.
       // Eğer takılırsa location.reload() eklenebilir.
       searchPassCount = 0; // Tur sayacını sıfırla
+      console.log(TAG, "QUEUE STATE:", {
+        idx: currentIndex,
+        appNo: currentJob?.appNo,
+        ipId: currentJob?.ipId,
+        storedAppNo: data.tp_app_no
+      });
+
       return true;
     }
     
@@ -103,11 +126,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       tp_app_no: null,
       tp_download_clicked: false,
       tp_clicked_ara: false,
-      tp_waiting_pdf_url: false,   // ✅ EKLENDİ
-      tp_expanded_twice: false     // ✅ EKLENDİ (temizlik)
+      tp_waiting_pdf_url: false,  // ✅ EKLE
+      tp_expanded_twice: false    // ✅ EKLE (temizlik)
     });
-
     location.reload();
+
   }
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
@@ -317,6 +340,7 @@ async function processDocument(downloadUrl, element) {
 
   async function fillBasvuruNo(appNo) {
     const input = qAll("#textbox551 input");
+    console.log(TAG, "fillBasvuruNo", { from: input.value, to: String(appNo) });
     if (!input) return false;
     if ((input.value || "").trim() !== String(appNo)) {
       fillInputAngularSafe(input, String(appNo));
