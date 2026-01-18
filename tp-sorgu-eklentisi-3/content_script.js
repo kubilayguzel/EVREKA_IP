@@ -116,21 +116,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+// content_script.js içerisindeki güncel advanceQueue fonksiyonu
   async function advanceQueue() {
     const data = await chrome.storage.local.get(["tp_queue_index"]);
     const nextIndex = (data.tp_queue_index || 0) + 1;
     
-    console.log(TAG, "✅ İşlem tamam, kuyruk ilerletiliyor...");
+    console.log(TAG, "✅ İşlem tamam, sayfa yenilenmeden bir sonraki başvuruya geçiliyor...");
+
+    // 1. Önce Input alanını temizle (Angular'a değişikliği hissettirerek)
+    // Böylece bir sonraki turda fillBasvuruNo fonksiyonu alanın boş olduğunu görüp yeni numarayı yazacak.
+    const input = qAll("#textbox551 input");
+    if (input) {
+        fillInputAngularSafe(input, ""); // İçeriği sil
+    }
+
+    // 2. Storage'daki index'i artır ve işlem bayraklarını (flags) sıfırla
+    // tp_app_no: null yapıyoruz ki, checkQueueAndSetAppNo fonksiyonu yeni bir işin geldiğini algılasın.
     await chrome.storage.local.set({ 
       tp_queue_index: nextIndex,
-      tp_app_no: null,
-      tp_download_clicked: false,
-      tp_clicked_ara: false,
-      tp_waiting_pdf_url: false,  // ✅ EKLE
-      tp_expanded_twice: false    // ✅ EKLE (temizlik)
+      tp_app_no: null,            // Null yapıyoruz, döngü yeni numarayı algılasın
+      tp_download_clicked: false, // İndirme kilidini aç
+      tp_clicked_ara: false,      // "Ara" butonuna tekrar basılmasına izin ver
+      tp_waiting_pdf_url: false,  // PDF bekleme modundan çık
+      tp_expanded_twice: false    // Akordeon durumunu sıfırla
     });
-    location.reload();
 
+    // 3. location.reload() KODUNU KALDIRDIK.
+    // Sayfa yenilenmeyecek. setInterval ile çalışan run() fonksiyonu, 
+    // yukarıda sıfırladığımız bayrakları görünce otomatik olarak:
+    // Yeni numarayı alacak -> Inputa yazacak -> Ara'ya basacak.
   }
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
