@@ -183,12 +183,13 @@ const ETEBS_ERROR_CODES = {
 };
 
 // ETEBS API Proxy Function (Toptan Kayıt Modeli)
+// functions/index.js (GÜNCELLENMİŞ ETEBS PROXY)
 
 export const etebsProxyV2 = onRequest(
   {
     region: 'europe-west1',
     timeoutSeconds: 540,
-    memory: '2GiB' // PDF işleme için yüksek bellek şart
+    memory: '2GiB' // Yüksek bellek şart
   },
   async (req, res) => {
     return corsHandler(req, res, async () => {
@@ -205,8 +206,6 @@ export const etebsProxyV2 = onRequest(
 
         // --- 1. LİSTELEME ---
         const listApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DAILY_NOTIFICATIONS?apikey=etebs';
-        console.log("🚀 [LIST] Liste isteniyor...");
-        
         const listResponse = await fetch(listApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -216,7 +215,6 @@ export const etebsProxyV2 = onRequest(
         if (!listResponse.ok) throw new Error(`Liste API Hatası: ${listResponse.status}`);
         const listResult = await listResponse.json();
         
-        // Hata kontrolü
         if (listResult?.IslemSonucKod && listResult.IslemSonucKod !== '000') {
            return res.status(400).json({ success: false, error: listResult.IslemSonucAck, code: listResult.IslemSonucKod });
         }
@@ -258,7 +256,7 @@ export const etebsProxyV2 = onRequest(
                     // --- İNDİRME İSTEĞİ ---
                     const downloadApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
                     
-                    // Parametre doğru: DOCUMENT_NO
+                    // Parametre: DOCUMENT_NO (Alt çizgili - Doğru)
                     const requestBody = { 
                         "TOKEN": token, 
                         "DOCUMENT_NO": docNo 
@@ -268,12 +266,12 @@ export const etebsProxyV2 = onRequest(
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(requestBody),
-                        timeout: 90000 // Timeout süresi artırıldı (90sn)
+                        timeout: 90000 // 90sn timeout
                     });
 
                     const downloadRawData = await downloadResponse.json();
 
-                    // --- 🔥 KRİTİK DÜZELTME: VERİ AYIKLAMA MANTIĞI ---
+                    // --- 🔥 DÜZELTME: PATLAMIŞ VERİ (EXPLODED OBJECT) ONARIMI ---
                     let base64Data = null;
                     
                     // 1. Standart Hata Kontrolü
@@ -289,29 +287,30 @@ export const etebsProxyV2 = onRequest(
                         resultNode = resultNode[0];
                     }
 
-                    // 3. Base64 Verisini Çıkar (Standart Durum)
+                    // 3. Base64 Verisini Çıkar (Normal Durum)
                     if (resultNode && resultNode.BASE64 && typeof resultNode.BASE64 === 'string') {
                         base64Data = resultNode.BASE64;
                     } 
-                    // 4. Base64 Verisini Çıkar (Bozuk/Exploded Nesne Durumu - Sizin Hatanız İçin)
+                    // 4. Base64 Verisini Çıkar (Sizin Durumunuz: Parçalanmış Nesne)
                     else if (resultNode && typeof resultNode === 'object') {
-                        // Eğer nesne anahtarları "0", "1", "2" gibi gidiyorsa...
+                        // Eğer nesne anahtarları "0", "1"... diye gidiyorsa bu bir exploded string'dir
                         const keys = Object.keys(resultNode);
                         if (keys.includes('0') && keys.includes('1')) {
-                            console.warn(`⚠️ [${docNo}] Bozuk (exploded) veri algılandı. Onarılıyor...`);
-                            // Değerleri birleştirerek string'i yeniden oluştur
+                            console.warn(`⚠️ [${docNo}] Bozuk (parçalanmış) veri formatı algılandı. Onarılıyor...`);
+                            // Object.values() ile değerleri (harfleri) alıp join('') ile birleştiriyoruz.
+                            // Not: Object.values genelde index sırasına göre verir ama garanti olsun diye birleştirmeyi deniyoruz.
+                            // Eğer standart bir JS ortamıysa numeric key'ler sıralı gelir.
                             base64Data = Object.values(resultNode).join('');
                         }
                     }
 
                     if (!base64Data) {
-                        // Veri yoksa logla ama tüm objeyi basma (hafıza tasarrufu)
-                        console.error(`❌ [${docNo}] BASE64 bulunamadı. Yapı:`, Object.keys(resultNode || {}));
-                        downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı veya boş.' });
+                        console.error(`❌ [${docNo}] Veri kurtarılamadı. Yapı:`, Object.keys(resultNode || {}).slice(0, 10));
+                        downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı.' });
                         return;
                     }
 
-                    // --- STORAGE KAYIT ---
+                    // --- KAYDETME İŞLEMLERİ ---
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
@@ -322,7 +321,6 @@ export const etebsProxyV2 = onRequest(
                         metadata: { metadata: { originalName: belgeAciklamasi } }
                     });
                     
-                    // --- FIRESTORE KAYIT ---
                     let targetRef;
                     if (!existingQuery.empty) targetRef = existingQuery.docs[0].ref;
                     else targetRef = adminDb.collection('unindexed_pdfs').doc();
@@ -354,14 +352,14 @@ export const etebsProxyV2 = onRequest(
         res.json({
           success: true,
           data: {
-            message: `İşlem tamamlandı. ${savedDocuments.length} kaydedildi, ${downloadFailures.length} başarısız.`,
+            message: `İşlem tamamlandı. ${savedDocuments.length} başarılı, ${downloadFailures.length} hatalı.`,
             savedDocuments,
             failures: downloadFailures
           }
         });
 
       } catch (error) {
-        console.error("Kritik Proxy Hatası:", error);
+        console.error("Kritik Hata:", error);
         res.status(500).json({ success: false, error: error.message });
       }
     });
