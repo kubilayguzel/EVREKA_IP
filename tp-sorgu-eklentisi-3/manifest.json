@@ -15,9 +15,8 @@
       "https://kubilayguzel.github.io/*"
     ]
   },
-  "action": {
-    "default_popup": "popup.html"
-  },
+  "action": {  },
+  
   "background": {
     "service_worker": "background.js"
   },
