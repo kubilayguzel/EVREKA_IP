@@ -183,12 +183,12 @@ const ETEBS_ERROR_CODES = {
 };
 
 // ETEBS API Proxy Function (Toptan Kayıt Modeli)
-// ETEBS API Proxy Function (Toptan Kayıt Modeli) - GÜNCELLENMİŞ VERSİYON
+
 export const etebsProxyV2 = onRequest(
   {
     region: 'europe-west1',
     timeoutSeconds: 540,
-    memory: '1GiB'
+    memory: '2GiB' // PDF işleme için yüksek bellek şart
   },
   async (req, res) => {
     return corsHandler(req, res, async () => {
@@ -199,68 +199,44 @@ export const etebsProxyV2 = onRequest(
       try {
         const { action, token, userId } = req.body;
 
-        // Temel parametre kontrolü
         if (!action || !token || !userId) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameters (action, token, or userId)'
-          });
+          return res.status(400).json({ success: false, error: 'Eksik parametreler.' });
         }
 
-        if (action !== 'process-daily-batch') {
-          return res.status(400).json({
-            success: false,
-            error: 'Invalid action. Only "process-daily-batch" is supported.'
-          });
-        }
-
-        let etebsData = null;
-
-        // --- 1. GÜNLÜK TEBLİGAT LİSTESİNİ AL ---
+        // --- 1. LİSTELEME ---
         const listApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DAILY_NOTIFICATIONS?apikey=etebs';
-
         console.log("🚀 [LIST] Liste isteniyor...");
+        
         const listResponse = await fetch(listApiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ TOKEN: token })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ TOKEN: token })
         });
-
-        if (!listResponse.ok) {
-          throw new Error(`ETEBS List API HTTP ${listResponse.status}: ${listResponse.statusText}`);
-        }
-
+        
+        if (!listResponse.ok) throw new Error(`Liste API Hatası: ${listResponse.status}`);
         const listResult = await listResponse.json();
-
-        // Liste servisi hata kontrolü
-        if (listResult && listResult.IslemSonucKod && listResult.IslemSonucKod !== '000') {
-          const errorMsg = ETEBS_ERROR_CODES[listResult.IslemSonucKod] || listResult.IslemSonucAck || 'Bilinmeyen liste hatası';
-          return res.status(400).json({ success: false, error: errorMsg, code: listResult.IslemSonucKod });
+        
+        // Hata kontrolü
+        if (listResult?.IslemSonucKod && listResult.IslemSonucKod !== '000') {
+           return res.status(400).json({ success: false, error: listResult.IslemSonucAck, code: listResult.IslemSonucKod });
         }
 
         // Listeyi normalize et
         let notifications = [];
-        if (Array.isArray(listResult)) {
-          notifications = listResult;
-        } else if (Array.isArray(listResult.DAILY_NOTIFICATIONSResult)) {
-          notifications = listResult.DAILY_NOTIFICATIONSResult;
-        } else if (Array.isArray(listResult.DailyNotificationsResult)) {
-          notifications = listResult.DailyNotificationsResult;
-        } else if (Array.isArray(listResult.notifications)) {
-          notifications = listResult.notifications;
-        }
+        if (Array.isArray(listResult)) notifications = listResult;
+        else if (listResult.DAILY_NOTIFICATIONSResult) notifications = listResult.DAILY_NOTIFICATIONSResult;
+        else if (listResult.notifications) notifications = listResult.notifications;
 
-        console.log(`📊 ${notifications.length} tebligat bulundu. Batch indirme başlıyor...`);
+        console.log(`📊 ${notifications.length} tebligat bulundu.`);
 
-        // --- 2. HER BİR TEBLİGAT İÇİN PDF İNDİR VE KAYDET ---
         const savedDocuments = [];
         const downloadFailures = [];
-        const downloadQueue = notifications;
-
+        
+        // --- 2. İNDİRME DÖNGÜSÜ ---
         const CHUNK_SIZE = 5; 
-        for (let i = 0; i < downloadQueue.length; i += CHUNK_SIZE) {
-            const chunk = downloadQueue.slice(i, i + CHUNK_SIZE);
-            console.log(`📦 İşleniyor: ${i + 1}-${Math.min(i + CHUNK_SIZE, downloadQueue.length)} / ${downloadQueue.length}`);
+        for (let i = 0; i < notifications.length; i += CHUNK_SIZE) {
+            const chunk = notifications.slice(i, i + CHUNK_SIZE);
+            console.log(`📦 İşleniyor: ${i + 1}-${Math.min(i + CHUNK_SIZE, notifications.length)}`);
             
             await Promise.all(chunk.map(async (notification) => {
                 const docNo = String(notification.EVRAK_NO || notification.evrakNo || '').trim();
@@ -269,149 +245,124 @@ export const etebsProxyV2 = onRequest(
                 if (!docNo) return;
 
                 try {
-                    // Mükerrer Kontrolü (Hata varsa veya dosya yoksa tekrar dene)
+                    // Mükerrer Kontrolü
                     const existingQuery = await adminDb.collection('unindexed_pdfs').where('evrakNo', '==', docNo).limit(1).get();
                     if (!existingQuery.empty) {
-                        const existingDoc = existingQuery.docs[0].data();
-                        // Dosya URL'i varsa ve hata durumu yoksa atla
-                        if (existingDoc.fileUrl && existingDoc.status !== 'error') {
-                            savedDocuments.push({ ...existingDoc, id: existingQuery.docs[0].id, isPreExisting: true });
+                        const doc = existingQuery.docs[0].data();
+                        if (doc.fileUrl && doc.status !== 'error') {
+                            savedDocuments.push({ ...doc, id: existingQuery.docs[0].id, isPreExisting: true });
                             return;
                         }
-                        console.log(`⚠️ Kayıt var ama dosya eksik/hatalı, tekrar deneniyor: ${docNo}`);
                     }
 
-                    // ETEBS'ten İndir
+                    // --- İNDİRME İSTEĞİ ---
                     const downloadApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
                     
-                    // 🔥 DEBUG: Giden İsteği Hazırla ve Logla
-                    const requestPayload = { 
+                    // Parametre doğru: DOCUMENT_NO
+                    const requestBody = { 
                         "TOKEN": token, 
-                        "DOCUMENT_NO": docNo // ✅ DÜZELTİLDİ: Alt çizgili (Dokümana uygun)
+                        "DOCUMENT_NO": docNo 
                     };
-                    console.log(`🚀 [REQ] Giden İstek (${docNo}):`, JSON.stringify(requestPayload));
-
+                    
                     const downloadResponse = await fetch(downloadApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(requestPayload),
-                        timeout: 45000 
+                        body: JSON.stringify(requestBody),
+                        timeout: 90000 // Timeout süresi artırıldı (90sn)
                     });
-
-                    // 🔥 DEBUG: HTTP Durumunu Logla
-                    console.log(`📡 [HTTP] Yanıt Kodu (${docNo}): ${downloadResponse.status} ${downloadResponse.statusText}`);
 
                     const downloadRawData = await downloadResponse.json();
 
-                    // 🔥 DEBUG: Cevabı Logla (Base64'ü gizleyerek, yapıyı görmek için)
-                    const logSafeData = JSON.parse(JSON.stringify(downloadRawData));
-                    if (logSafeData.DownloadDocumentResult) {
-                        const results = Array.isArray(logSafeData.DownloadDocumentResult) 
-                            ? logSafeData.DownloadDocumentResult 
-                            : [logSafeData.DownloadDocumentResult];
-                        
-                        // Base64 verisini logda gizle (çok uzun olduğu için)
-                        logSafeData.DownloadDocumentResult = results.map(d => ({
-                            ...d, 
-                            BASE64: d.BASE64 ? "VAR (Veri Mevcut)" : "YOK (Veri Boş)"
-                        }));
-                    }
-                    // Eğer root seviyesinde BASE64 varsa
-                    if (logSafeData.BASE64) logSafeData.BASE64 = "VAR (Uzun Veri)";
+                    // --- 🔥 KRİTİK DÜZELTME: VERİ AYIKLAMA MANTIĞI ---
+                    let base64Data = null;
                     
-                    console.log(`📄 [RES] API Cevabı (${docNo}):`, JSON.stringify(logSafeData));
-
-                    // API HATA KONTROLÜ
+                    // 1. Standart Hata Kontrolü
                     if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
-                        console.error(`❌ ETEBS Hata (${docNo}):`, downloadRawData.IslemSonucAck);
-                        downloadFailures.push({ 
-                            docNo, 
-                            reason: `API Hatası: ${downloadRawData.IslemSonucAck}`, 
-                            code: downloadRawData.IslemSonucKod,
-                            notification 
-                        });
-                        return; // İşlemi durdur
+                        throw new Error(`API Hatası: ${downloadRawData.IslemSonucAck} (${downloadRawData.IslemSonucKod})`);
                     }
 
-                    const resultNode = downloadRawData?.DownloadDocumentResult || downloadRawData;
-                    const dataObj = Array.isArray(resultNode) ? resultNode[0] : resultNode;
-                    const base64Data = dataObj?.BASE64;
+                    // 2. Sonuç Objesini Bul
+                    let resultNode = downloadRawData.DownloadDocumentResult || downloadRawData;
+                    
+                    // Dizi ise ilk elemanı al
+                    if (Array.isArray(resultNode)) {
+                        resultNode = resultNode[0];
+                    }
+
+                    // 3. Base64 Verisini Çıkar (Standart Durum)
+                    if (resultNode && resultNode.BASE64 && typeof resultNode.BASE64 === 'string') {
+                        base64Data = resultNode.BASE64;
+                    } 
+                    // 4. Base64 Verisini Çıkar (Bozuk/Exploded Nesne Durumu - Sizin Hatanız İçin)
+                    else if (resultNode && typeof resultNode === 'object') {
+                        // Eğer nesne anahtarları "0", "1", "2" gibi gidiyorsa...
+                        const keys = Object.keys(resultNode);
+                        if (keys.includes('0') && keys.includes('1')) {
+                            console.warn(`⚠️ [${docNo}] Bozuk (exploded) veri algılandı. Onarılıyor...`);
+                            // Değerleri birleştirerek string'i yeniden oluştur
+                            base64Data = Object.values(resultNode).join('');
+                        }
+                    }
 
                     if (!base64Data) {
-                        console.error(`❌ [${docNo}] BASE64 veri bulunamadı. Yapı hatalı olabilir.`);
-                        downloadFailures.push({ docNo, reason: 'BASE64 veri yok', notification });
+                        // Veri yoksa logla ama tüm objeyi basma (hafıza tasarrufu)
+                        console.error(`❌ [${docNo}] BASE64 bulunamadı. Yapı:`, Object.keys(resultNode || {}));
+                        downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı veya boş.' });
                         return;
                     }
 
-                    // Storage'a Kaydet
+                    // --- STORAGE KAYIT ---
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
-                    
-                    const bucket = admin.storage().bucket(); 
-                    const file = bucket.file(storagePath);
+                    const file = admin.storage().bucket().file(storagePath);
                     
                     await file.save(pdfBuffer, { 
                         contentType: 'application/pdf',
-                        metadata: { metadata: { originalName: belgeAciklamasi } } 
+                        metadata: { metadata: { originalName: belgeAciklamasi } }
                     });
-
-                    const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-
-                    // Firestore'a Kaydet
+                    
+                    // --- FIRESTORE KAYIT ---
                     let targetRef;
-                    if (!existingQuery.empty) {
-                        targetRef = existingQuery.docs[0].ref;
-                    } else {
-                        targetRef = adminDb.collection('unindexed_pdfs').doc();
-                    }
+                    if (!existingQuery.empty) targetRef = existingQuery.docs[0].ref;
+                    else targetRef = adminDb.collection('unindexed_pdfs').doc();
 
                     const docData = {
                         evrakNo: docNo,
                         belgeAciklamasi,
                         dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
-                        fileUrl,
+                        fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`,
                         filePath: storagePath,
                         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
                         userId,
                         status: 'pending',
                         unindexedPdfId: targetRef.id,
-                        downloadSuccess: true 
+                        downloadSuccess: true
                     };
 
                     await targetRef.set(docData, { merge: true });
                     savedDocuments.push(docData);
-                    console.log(`✅ Başarıyla Kaydedildi: ${docNo}`);
+                    console.log(`✅ Kaydedildi: ${docNo}`);
 
                 } catch (err) {
-                    console.error(`💥 İşlem Hatası (${docNo}):`, err.message);
-                    downloadFailures.push({ docNo, reason: err.message, notification });
+                    console.error(`💥 Hata (${docNo}):`, err.message);
+                    downloadFailures.push({ docNo, reason: err.message });
                 }
             }));
         }
 
-        // 3. İSTEMCİYE ÖZET DÖNDÜR
-        etebsData = {
-          success: true,
-          message: `Batch tamamlandı. ${notifications.length} tebligat bulundu. ${savedDocuments.length} kayıt oluşturuldu/güncellendi.`,
-          notifications,
-          savedDocuments,
-          failures: downloadFailures
-        };
-
         res.json({
           success: true,
-          data: etebsData,
-          timestamp: new Date().toISOString()
+          data: {
+            message: `İşlem tamamlandı. ${savedDocuments.length} kaydedildi, ${downloadFailures.length} başarısız.`,
+            savedDocuments,
+            failures: downloadFailures
+          }
         });
+
       } catch (error) {
-        console.error("Genel Proxy Hatası:", error);
-        res.status(500).json({
-          success: false,
-          error: 'Internal proxy error',
-          code: 'PROXY_ERROR',
-          message: error.message
-        });
+        console.error("Kritik Proxy Hatası:", error);
+        res.status(500).json({ success: false, error: error.message });
       }
     });
   }
