@@ -1,6 +1,6 @@
-// content_script.js (Final Fix: Loading Screen & Busy State Check)
+// content_script.js (Stable Version: Singleton + Queue Fix + Simple Delay)
 (() => {
-  // --- SINGLETON CHECK ---
+  // --- SINGLETON CHECK (Çift çalışmayı engeller) ---
   if (window.TP_SCRIPT_ALREADY_LOADED) {
       console.log("[TP-AUTO] ♻️ Script zaten yüklü.");
       return; 
@@ -23,7 +23,9 @@
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
       sendResponse({ ok: true }); 
 
+      // Mükerrer URL ise reddet
       if (request.url === lastProcessedUrl) return; 
+      // Sistem meşgulse reddet
       if (globalProcessingLock || isAdvancing) return; 
 
       globalProcessingLock = true;
@@ -36,7 +38,9 @@
             globalProcessingLock = false; 
             return;
           }
+          // İndirildi olarak işaretle
           await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
+          // İşleme başla
           await processDocument(request.url, null);
         } catch (err) {
           console.error(TAG, "Hata:", err);
@@ -62,6 +66,7 @@
     if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) return true; 
 
     const currentIndex = data.tp_queue_index || 0;
+    // Kuyruk bitti mi?
     if (currentIndex >= data.tp_queue.length) {
       console.log(TAG, "🏁 Kuyruk tamamlandı!");
       await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
@@ -70,6 +75,7 @@
     }
 
     const currentJob = data.tp_queue[currentIndex];
+    // Yeni işe geçiş
     if (data.tp_app_no !== currentJob.appNo) {
       console.log(TAG, `🔄 Yeni İş: ${currentIndex + 1}/${data.tp_queue.length} - ${currentJob.appNo}`);
       await chrome.storage.local.set({
@@ -79,8 +85,7 @@
         tp_clicked_ara: false,
         tp_download_clicked: false,
         tp_expanded_twice: false,
-        tp_last_belgelerim_try: 0,
-        tp_last_search_ts: 0
+        tp_last_belgelerim_try: 0
       });
       searchPassCount = 0; 
       return true;
@@ -95,12 +100,14 @@
     console.log(TAG, "✅ İşlem bitti, ilerleniyor...");
 
     try {
+        // Inputu temizle
         const input = qAll("#textbox551 input");
         if (input) fillInputAngularSafe(input, ""); 
 
         const data = await chrome.storage.local.get(["tp_queue_index"]);
         const nextIndex = (data.tp_queue_index || 0) + 1;
 
+        // İndeksi artır
         await chrome.storage.local.set({ 
           tp_queue_index: nextIndex,
           tp_app_no: null,            
@@ -108,8 +115,7 @@
           tp_clicked_ara: false,      
           tp_waiting_pdf_url: false,  
           tp_expanded_twice: false,
-          tp_last_belgelerim_try: 0,
-          tp_last_search_ts: 0
+          tp_last_belgelerim_try: 0 
         });
 
         console.log(TAG, `🔓 Sıradaki İndeks: ${nextIndex}`);
@@ -199,54 +205,6 @@
     return true;
   }
 
-  // 🔥 [GÜNCELLENDİ] SAYFA MEŞGULİYET KONTROLÜ
-  function isPageBusy() {
-    // 1. Selector bazlı kontrol (Spinner, Overlay, Backdrop)
-    const busySelectors = [
-        ".modal-backdrop",          // Bootstrap modal arkası
-        ".block-ui-overlay",        // Angular BlockUI
-        ".block-ui-message-container",
-        ".loading-spinner",
-        ".fa-spinner",
-        ".fa-refresh.fa-spin",
-        "div[ng-show='isLoading']", // Angular loading flag
-        ".ui-grid-icon-spin"        // Grid yükleniyor ikonu
-    ];
-
-    const els = qAllMany(busySelectors.join(","));
-    const isOverlayVisible = els.some(el => {
-        const style = window.getComputedStyle(el);
-        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-    });
-
-    if (isOverlayVisible) {
-        // console.log(TAG, "⏳ Sayfa meşgul (Overlay/Spinner)...");
-        return true;
-    }
-
-    // 2. Metin bazlı kontrol ("Lütfen Bekleyiniz", "Yükleniyor")
-    const messageContainers = qAllMany(".modal-content, .alert, .growl-message, .block-ui-message");
-    const hasWaitText = messageContainers.some(el => {
-        const text = (el.innerText || "").toLowerCase();
-        const style = window.getComputedStyle(el);
-        const isVisible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-        
-        return isVisible && (
-            text.includes("bekleyiniz") || 
-            text.includes("yükleniyor") || 
-            text.includes("işleminiz") ||
-            text.includes("aranıyor")
-        );
-    });
-
-    if (hasWaitText) {
-        // console.log(TAG, "⏳ Sayfa meşgul (Mesaj: Bekleyiniz/Yükleniyor)...");
-        return true;
-    }
-
-    return false;
-  }
-
   // --- EPATS UI ---
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
@@ -256,19 +214,19 @@
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     
-    // Ara butonu pasifse bekle
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) {
-        console.log(TAG, "⏳ Ara butonu pasif, bekleniyor...");
+        console.log(TAG, "⏳ Ara butonu pasif...");
         return false;
     }
 
     console.log(TAG, "🔎 Ara butonuna basılıyor...");
     superClick(btn);
+    await chrome.storage.local.set({ tp_clicked_ara: true });
     
-    await chrome.storage.local.set({ 
-        tp_clicked_ara: true,
-        tp_last_search_ts: Date.now() 
-    });
+    // 🔥 TEK EKLEME: Ara butonuna bastıktan sonra 3 saniye bekle
+    // Bu, 2. dosya için acele etmesini engeller.
+    await sleep(3000); 
+    
     return true;
   }
 
@@ -315,13 +273,11 @@
 
   // --- ACCORDION & DOWNLOAD ---
   function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
-  
   function getAccordionClickable() {
     const host = getAccordionHost();
     if (!host || host.offsetParent === null) return null; 
     return host.querySelector("i") || host;
   }
-
   function readAccordionState() {
     const host = getAccordionHost();
     if (!host) return "none";
@@ -344,7 +300,6 @@
     const clickable = getAccordionClickable();
     if (!clickable) return false;
     const state = readAccordionState();
-    
     if (state === "plus") { superClick(clickable); await sleep(1500); }
     else if (state === "minus") { 
         superClick(clickable); await sleep(800);
@@ -369,7 +324,7 @@
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
 
-    // 🔥 Tablo yüklenmediyse bekle
+    // Tablo yüklenmediyse bekle
     if (!getAccordionClickable()) return false; 
 
     isActionInProgress = true;
@@ -420,8 +375,7 @@
     const continueProcess = await checkQueueAndSetAppNo();
     if (!continueProcess) return;
 
-    const { tp_app_no, tp_clicked_ara, tp_download_clicked, tp_last_search_ts } = 
-        await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked", "tp_last_search_ts"]);
+    const { tp_app_no, tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked"]);
     if (!tp_app_no) return;
 
     if (isGirisPage()) {
@@ -444,18 +398,6 @@
 
       if (!tp_clicked_ara) {
           await clickAraButtonOnly();
-          return;
-      }
-
-      // 🔥 KESİN BEKLEME: Ara butonuna bastıktan sonra en az 4 saniye bekle
-      // Bu güvenlik süresi, UI elementleri görünmeden önce işlem yapılmasını engeller.
-      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 4000)) {
-          return;
-      }
-
-      // 🔥 AKILLI BEKLEME: Sayfa meşgulse (yükleniyorsa) asla devam etme!
-      if (isPageBusy()) {
-          console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
           return;
       }
 
