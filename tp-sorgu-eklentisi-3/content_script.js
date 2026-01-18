@@ -1,57 +1,67 @@
-// content_script.js (Final + Queue + Backend Upload)
+// content_script.js
 (() => {
   const TAG = "[TP-AUTO]";
   let isActionInProgress = false; 
-  let searchPassCount = 0; // Tarama tur sayısı
+  let searchPassCount = 0; 
+  
+  // 🔥 YENİ EKLENEN KİLİT DEĞİŞKENİ
+  // Storage yerine RAM'de tutulan bu değişken, milisaniyelik çakışmaları %100 engeller.
+  let globalProcessingLock = false;
 
   console.log("[TP-AUTO] content_script loaded on:", location.href);
 
-  // Background'dan PDF URL yakalandı mesajı gelince işle
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-    sendResponse({ ok: true }); // port kapanmasın
+  // --- 1. MESAJ DİNLEYİCİSİ (GÜNCELLENDİ) ---
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
+      sendResponse({ ok: true }); // Port hemen kapansın, background rahatlasın
 
-    (async () => {
-      const state = await chrome.storage.local.get([
-        "tp_waiting_pdf_url",
-        "tp_download_clicked",
-        "tp_queue_index",
-        "tp_current_job_id",
-        "tp_app_no"
-      ]);
-
-      console.log(TAG, "PDF_URL_CAPTURED state:", state, "url:", request.url);
-
-      // ✅ Sadece gerçekten PDF bekliyorsak işleyelim
-      if (!state.tp_waiting_pdf_url) {
-        console.warn(TAG, "PDF geldi ama beklemiyorum -> IGNORE", request.url);
-        return;
+      // 🔥 KİLİT KONTROLÜ
+      if (globalProcessingLock) {
+        console.warn(TAG, "⛔ Çakışma önlendi! Şu an zaten bir belge işleniyor. Gelen istek reddedildi:", request.url);
+        return; 
       }
 
-      // ✅ Aynı işte ikinci kez geldiyse ignore
-      if (state.tp_download_clicked) {
-        console.warn(TAG, "PDF geldi ama zaten indirildi -> IGNORE", request.url);
-        return;
-      }
+      // Kilidi kapat (İşlem bitene kadar başka mesaj giremez)
+      globalProcessingLock = true;
 
-      await chrome.storage.local.set({
-        tp_download_clicked: true,
-        tp_waiting_pdf_url: false
-      });
+      (async () => {
+        try {
+          const state = await chrome.storage.local.get([
+            "tp_waiting_pdf_url",
+            "tp_download_clicked"
+          ]);
 
-      await processDocument(request.url, null);
-    })().catch(err => console.error(TAG, "PDF_URL_CAPTURED handler error:", err));
+          console.log(TAG, "PDF_URL_CAPTURED state:", state, "url:", request.url);
 
-    return true;
-  }
-});
+          // Eğer sistem PDF beklemiyorsa veya zaten indirildiyse
+          if (!state.tp_waiting_pdf_url || state.tp_download_clicked) {
+            console.warn(TAG, "⚠️ Beklenmeyen veya mükerrer PDF isteği. İşlem iptal.", request.url);
+            globalProcessingLock = false; // Kilidi aç ve çık
+            return;
+          }
 
-  if (window.top !== window) return; // Sadece ana frame çalışsın
+          // Durumu güncelle (Storage seviyesinde koruma)
+          await chrome.storage.local.set({
+            tp_download_clicked: true,
+            tp_waiting_pdf_url: false
+          });
+
+          // İşleme başla
+          await processDocument(request.url, null);
+
+        } catch (err) {
+          console.error(TAG, "Mesaj işleme hatası:", err);
+          globalProcessingLock = false; // Hata durumunda kilidi aç
+        }
+      })();
+
+      return true;
+    }
+  });
+
+  if (window.top !== window) return;
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  // --- AYARLAR ---
-  // Cloud Function URL'nizi buraya yazın (Firebase Functions Console'dan alabilirsiniz)
   const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
 
   // ---------- KUYRUK VE RESET MANTIĞI ----------
@@ -116,35 +126,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-// content_script.js içerisindeki güncel advanceQueue fonksiyonu
-  async function advanceQueue() {
+async function advanceQueue() {
     const data = await chrome.storage.local.get(["tp_queue_index"]);
     const nextIndex = (data.tp_queue_index || 0) + 1;
     
-    console.log(TAG, "✅ İşlem tamam, sayfa yenilenmeden bir sonraki başvuruya geçiliyor...");
+    console.log(TAG, "✅ İşlem tamam, sonraki kayıt için hazırlanılıyor...");
 
-    // 1. Önce Input alanını temizle (Angular'a değişikliği hissettirerek)
-    // Böylece bir sonraki turda fillBasvuruNo fonksiyonu alanın boş olduğunu görüp yeni numarayı yazacak.
+    // Input alanını temizle
     const input = qAll("#textbox551 input");
     if (input) {
-        fillInputAngularSafe(input, ""); // İçeriği sil
+        fillInputAngularSafe(input, ""); 
     }
 
-    // 2. Storage'daki index'i artır ve işlem bayraklarını (flags) sıfırla
-    // tp_app_no: null yapıyoruz ki, checkQueueAndSetAppNo fonksiyonu yeni bir işin geldiğini algılasın.
+    // Durumları güncelle
     await chrome.storage.local.set({ 
       tp_queue_index: nextIndex,
-      tp_app_no: null,            // Null yapıyoruz, döngü yeni numarayı algılasın
-      tp_download_clicked: false, // İndirme kilidini aç
-      tp_clicked_ara: false,      // "Ara" butonuna tekrar basılmasına izin ver
-      tp_waiting_pdf_url: false,  // PDF bekleme modundan çık
-      tp_expanded_twice: false    // Akordeon durumunu sıfırla
+      tp_app_no: null,            
+      tp_download_clicked: false, 
+      tp_clicked_ara: false,      
+      tp_waiting_pdf_url: false,  
+      tp_expanded_twice: false,
+      tp_last_belgelerim_try: 0 
     });
 
-    // 3. location.reload() KODUNU KALDIRDIK.
-    // Sayfa yenilenmeyecek. setInterval ile çalışan run() fonksiyonu, 
-    // yukarıda sıfırladığımız bayrakları görünce otomatik olarak:
-    // Yeni numarayı alacak -> Inputa yazacak -> Ara'ya basacak.
+    // 🔥 KİLİDİ AÇ (Yeni iş için hazırız)
+    globalProcessingLock = false;
+    console.log(TAG, "🔓 İşlem kilidi açıldı. Yeni dosya beklenebilir.");
+
+    // Menüye tekrar tıklatmak için bekleme
+    await sleep(1000);
   }
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
