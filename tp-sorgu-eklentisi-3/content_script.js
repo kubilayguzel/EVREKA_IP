@@ -112,62 +112,80 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
 
-  // PDF linkini alır, indirir ve sunucuya gönderir
-  async function processDocument(downloadUrl, element) {
-     console.log(TAG, "📄 Belge bulundu, işleniyor:", downloadUrl);
-     
-     // Görsel geri bildirim (ikonu sarı yap)
-     if(element) element.style.color = "orange";
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onloadend = () => {
+      try {
+        const res = String(reader.result || "");
+        resolve(res.split(",")[1] || "");
+      } catch (e) {
+        reject(e);
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}
 
-     try {
-        // 1. PDF'i blob olarak çek (EPATS Cookie'leri ile)
-        const response = await fetch(downloadUrl, { credentials: "include" });
-        const blob = await response.blob();
-        
-        // 2. Base64'e çevir
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        
-        reader.onloadend = async () => {
-            const base64data = reader.result.split(',')[1];
-            
-            // Veritabanı ID'sini al
-            const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
-            
-            // 3. Backend'e Gönder
-            const payload = {
-              ipRecordId: storage.tp_current_job_id,      // ✅ ipRecordId olmalı
-              fileBase64: base64data,                     // ✅ fileBase64 olmalı
-              fileName: "Tescil_Belgesi.pdf",
-              mimeType: "application/pdf",
-              docType: storage.tp_current_doc_type || "tescil_belgesi"
-            };
-            console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipRecordId);
-            
-            // Fetch ile Cloud Function'a POST
-            const uploadRes = await fetch(UPLOAD_ENDPOINT, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ data: payload }) // Callable Function formatı { data: ... }
-            });
+// PDF linkini alır, indirir ve sunucuya gönderir
+async function processDocument(downloadUrl, element) {
+  console.log(TAG, "📄 Belge bulundu, işleniyor:", downloadUrl);
+  if (element) element.style.color = "orange";
 
-            if (uploadRes.ok) {
-                console.log(TAG, "✅ Yükleme Başarılı!");
-                if(element) element.style.color = "green";
-                await advanceQueue();
-            } else {
-                console.error(TAG, "❌ Yükleme Hatası:", await uploadRes.text());
-                if(element) element.style.color = "red";
-                // Hata olsa da ilerle (sonsuz döngü olmasın)
-                await advanceQueue(); 
-            }
-        };
+  try {
+    // 1) PDF'i çek
+    const response = await fetch(downloadUrl, { credentials: "include" });
+    console.log(TAG, "PDF fetch:", response.status, response.headers.get("content-type"));
+    if (!response.ok) throw new Error("PDF fetch failed: " + response.status);
 
-     } catch (error) {
-         console.error(TAG, "Process hatası:", error);
-         await advanceQueue();
-     }
+    const blob = await response.blob();
+    console.log(TAG, "PDF size:", blob.size);
+    if (!blob.size) throw new Error("PDF blob boş geldi");
+
+    // 2) Base64
+    const base64data = await blobToBase64(blob);
+    if (!base64data || base64data.length < 1000) {
+      throw new Error("Base64 çok kısa/boş: " + (base64data?.length || 0));
+    }
+
+    // 3) ipRecordId/docType al
+    const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
+
+    const payload = {
+      ipRecordId: storage.tp_current_job_id,
+      fileBase64: base64data,
+      fileName: "Tescil_Belgesi.pdf",
+      mimeType: "application/pdf",
+      docType: storage.tp_current_doc_type || "tescil_belgesi",
+    };
+
+    console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipRecordId);
+
+    // 4) Upload
+    const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: payload }),
+    });
+
+    const text = await uploadRes.text();
+    if (uploadRes.ok) {
+      console.log(TAG, "✅ Yükleme Başarılı!", text);
+      if (element) element.style.color = "green";
+    } else {
+      console.error(TAG, "❌ Yükleme Hatası:", text);
+      if (element) element.style.color = "red";
+    }
+
+  } catch (error) {
+    console.error(TAG, "Process hatası:", error);
+  } finally {
+    // ✅ Hangi durumda olursa olsun kuyruk ilerlesin
+    await advanceQueue();
   }
+}
+
 
   // ---------- DOC HELPERS ----------
   function getAllDocs() {
@@ -419,11 +437,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (targetIcon) {
                 // İndirme (İşleme) bulundu
                 console.log(TAG, `✅ BULUNDU: ${terim}`);
-                await chrome.storage.local.set({ tp_waiting_pdf_url: true });
-               
-                // Burada PDF'i kendimiz indirmeye çalışmıyoruz.
-                // İkona tıklıyoruz, PDF yeni sekmede açılıyor,
-                // background.js URL'yi yakalayıp buraya gönderecek.
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
                 superClick(targetIcon);
 
