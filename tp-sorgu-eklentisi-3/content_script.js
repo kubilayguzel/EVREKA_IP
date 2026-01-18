@@ -1,15 +1,23 @@
-// content_script.js (Final Fix: Queue Stability & Deduplication)
+// content_script.js (Final Fix: Singleton Instance & Queue Stability)
 (() => {
+  // 🔥 KRİTİK DÜZELTME: SCRIPT TEKİLLİK KONTROLÜ
+  // Eğer bu script sayfada zaten varsa, ikinci kez çalışmasını engelle.
+  if (window.TP_SCRIPT_ALREADY_LOADED) {
+      console.log("[TP-AUTO] ♻️ Script zaten yüklü, mükerrer yükleme engellendi.");
+      return; 
+  }
+  window.TP_SCRIPT_ALREADY_LOADED = true;
+
   const TAG = "[TP-AUTO]";
   
   // --- GLOBAL STATE VARIABLES ---
   let isActionInProgress = false; 
   let searchPassCount = 0; 
   let globalProcessingLock = false; // Belge işleme kilidi
-  let isAdvancing = false;          // Kuyruk ilerletme kilidi (YENİ)
+  let isAdvancing = false;          // Kuyruk ilerletme kilidi
   let lastProcessedUrl = null;      // Mükerrer URL önleyici
 
-  console.log("[TP-AUTO] Content script loaded on:", location.href);
+  console.log("[TP-AUTO] Content script loaded & initialized on:", location.href);
 
   // --- 1. MESAJ DİNLEYİCİSİ ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -18,13 +26,13 @@
 
       // Mükerrer URL Kontrolü
       if (request.url === lastProcessedUrl) {
-        console.warn(TAG, "♻️ Bu URL zaten işlendi/işleniyor, reddedildi:", request.url);
+        console.warn(TAG, "♻️ Bu URL zaten işlendi, reddedildi:", request.url);
         return;
       }
 
       // Kilit Kontrolü
       if (globalProcessingLock || isAdvancing) {
-        console.warn(TAG, "⛔ Sistem meşgul/ilerliyor, istek reddedildi:", request.url);
+        console.warn(TAG, "⛔ Sistem meşgul, istek reddedildi:", request.url);
         return; 
       }
 
@@ -103,9 +111,6 @@
     if (data.tp_app_no !== currentJob.appNo) {
       console.log(TAG, `🔄 Yeni İş Başlıyor: ${currentIndex + 1}/${data.tp_queue.length} - No: ${currentJob.appNo}`);
       
-      // lastProcessedUrl'i burada SIFIRLAMIYORUZ. 
-      // Sadece yeni URL geldiğinde değişecek.
-
       await chrome.storage.local.set({
         tp_app_no: currentJob.appNo,
         tp_current_job_id: currentJob.ipId,
@@ -117,35 +122,33 @@
       });
       
       searchPassCount = 0; 
+      // Yeni işe başlarken URL kilidini sıfırlama, çünkü farklı bir dosya gelecek
+      // lastProcessedUrl = null; // (Opsiyonel: Eğer dosya isimleri/linkleri aynı olma riski varsa açın)
       return true;
     }
     
     return true;
   }
 
-  // --- [GÜNCELLENMİŞ] ADVANCE QUEUE ---
+  // --- ADVANCE QUEUE ---
   async function advanceQueue() {
-    // 1. Kilit Kontrolü: Zaten ilerliyorsak tekrar çalışma!
-    if (isAdvancing) {
-        console.warn(TAG, "⚠️ advanceQueue zaten çalışıyor, mükerrer çağrı engellendi.");
-        return;
-    }
-    isAdvancing = true; // Kilidi kapat
+    if (isAdvancing) return;
+    isAdvancing = true;
 
     console.log(TAG, "✅ İşlem tamam, kuyruk ilerletiliyor...");
 
     try {
-        // 2. Input alanını temizle (Angular için)
+        // 1. Input alanını temizle
         const input = qAll("#textbox551 input");
         if (input) {
             fillInputAngularSafe(input, ""); 
         }
 
-        // 3. İndeksi artır
+        // 2. İndeksi artır
         const data = await chrome.storage.local.get(["tp_queue_index"]);
         const nextIndex = (data.tp_queue_index || 0) + 1;
 
-        // 4. Durumları güncelle (AppNo null yapılıyor ki run döngüsü yeni işi algılasın)
+        // 3. Durumları güncelle
         await chrome.storage.local.set({ 
           tp_queue_index: nextIndex,
           tp_app_no: null,            
@@ -158,17 +161,17 @@
 
         console.log(TAG, `🔓 Sıradaki İndeks: ${nextIndex}. Arayüz hazırlanıyor...`);
         
-        // 5. İşlem kilitlerini aç
+        // 4. Kilitleri aç
         globalProcessingLock = false; 
         isActionInProgress = false;
 
-        // 6. Arayüzün toparlanması için bekle
+        // 5. Arayüzün toparlanması için bekle
         await sleep(2000); 
 
     } catch (e) {
         console.error(TAG, "advanceQueue hatası:", e);
     } finally {
-        isAdvancing = false; // İlerletme kilidini aç
+        isAdvancing = false; 
     }
   }
 
@@ -232,7 +235,7 @@
     } catch (error) {
       console.error(TAG, "Process hatası:", error);
     } finally {
-      // ✅ Sadece burada çağırıyoruz. Kilit sayesinde mükerrer çalışmaz.
+      // ✅ Sadece burada çağırıyoruz. 
       await advanceQueue();
     }
   }
@@ -324,7 +327,7 @@
   }
 
   async function clickBelgelerim() {
-    if (!(await throttle("tp_last_belgelerim_try", 3000))) return false; // 2000 -> 3000
+    if (!(await throttle("tp_last_belgelerim_try", 3000))) return false;
     const targets = qAllMany("div[ng-click]");
     const target = targets.find(x => (x.textContent || "").trim() === "Belgelerim");
     if(target) { superClick(target); return true; }
@@ -363,7 +366,6 @@
     
     const currentVal = (input.value || "").trim();
     if (currentVal !== String(appNo)) {
-      // console.log(TAG, "Input dolduruluyor:", appNo);
       fillInputAngularSafe(input, String(appNo));
       await sleep(300);
     }
@@ -394,7 +396,7 @@
     const clickable = getAccordionClickable();
     if(clickable) {
         superClick(clickable);
-        await sleep(2000); // 1500 -> 2000
+        await sleep(2000);
     }
     return readAccordionState() === "minus";
   }
@@ -449,7 +451,7 @@
     
     // Güvenlikler
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
-    if (isAdvancing) return true; // İlerlerken indirme deneme
+    if (isAdvancing) return true; 
 
     if (!getAccordionHost()) return false; 
 
@@ -477,12 +479,11 @@
 
                 await sleep(1000);
 
-                // Failover (12s sonra PDF gelmezse atla)
+                // Failover
                 setTimeout(async () => {
                   const { tp_waiting_pdf_url, tp_download_clicked } =
                     await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
 
-                  // Eğer hala bekliyorsak ve indirilmediyse -> Atla
                   if (tp_waiting_pdf_url && !tp_download_clicked) {
                     console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
                     await chrome.storage.local.set({ tp_waiting_pdf_url: false });
@@ -493,11 +494,10 @@
                   }
                 }, 12000);
                 
-                return true; // Döngüden çık
+                return true; 
             }
         }
         
-        // Kriterlerin hiçbiriyle bulunamadı
         searchPassCount++;
         if (searchPassCount >= 2) {
             console.log(TAG, "⚠️ Belge bulunamadı, pas geçiliyor.");
@@ -506,7 +506,7 @@
 
     } catch(e) {
         console.error(TAG, e);
-        await advanceQueue(); // Hata durumunda ilerle
+        await advanceQueue(); 
     } finally {
         isActionInProgress = false;
     }
@@ -514,62 +514,47 @@
 
   // --- ANA DÖNGÜ (RUN) ---
   async function run() {
-    // 1. İlerliyorsak (temizlik yapılıyorsa) döngüyü pas geç
     if (isAdvancing) return;
 
-    // 2. Kuyruk Kontrolü
     const continueProcess = await checkQueueAndSetAppNo();
     if (!continueProcess) return;
 
-    // 3. Hafızadaki Numarayı Al
     const { tp_app_no, tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked"]);
-    if (!tp_app_no) return; // Numara henüz set edilmedi
+    if (!tp_app_no) return; 
 
-    // 4. Giriş Sayfası mı?
     if (isGirisPage()) {
       const btn = findLoginButtonOnGiris();
       if (btn) superClick(btn);
       return;
     }
 
-    // 5. Belgelerim Ekranı Açık mı?
     if (isBelgelerimScreenOpen()) {
       const okMarka = await ensureDosyaTuruMarka();
       if (!okMarka) return;
 
-      // Input kontrolü
       const input = qAll("#textbox551 input");
       const currentVal = input ? (input.value || "").trim() : "";
       
-      // Eğer input boş veya eski numara ise doldur
+      // Input boşsa veya farklıysa doldur
       if (currentVal !== String(tp_app_no)) {
-          
-          // Eğer input boş ama tabloda eski veri varsa (ve Ara tıklanmadıysa)
-          // Menüye basıp temizlemek iyi olabilir.
-          // Şimdilik sadece dolduruyoruz.
-          
           await fillBasvuruNo(tp_app_no);
           return; 
       }
 
-      // Ara butonuna basılmadıysa bas
       if (!tp_clicked_ara) {
           const okAra = await clickAraButtonOnly();
           return;
       }
 
-      // Belgeyi ara ve indir
       if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
         await downloadTescilBelge();
       }
       return;
     }
 
-    // 6. Hiçbiri değilse "Belgelerim"e tıkla
     await clickBelgelerim();
   }
 
-  // Döngüyü 2sn arayla çalıştır (1.5sn -> 2sn daha güvenli)
   setInterval(() => run().catch(() => {}), 2000);
 
 })();
