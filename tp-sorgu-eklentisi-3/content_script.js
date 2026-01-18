@@ -1,28 +1,33 @@
-// content_script.js
+// content_script.js (URL Deduplication + Queue Fix)
 (() => {
   const TAG = "[TP-AUTO]";
   let isActionInProgress = false; 
   let searchPassCount = 0; 
-  
-  // 🔥 YENİ EKLENEN KİLİT DEĞİŞKENİ
-  // Storage yerine RAM'de tutulan bu değişken, milisaniyelik çakışmaları %100 engeller.
-  let globalProcessingLock = false;
+  let globalProcessingLock = false; // İşlem kilidi
+  let lastProcessedUrl = null;      // Son işlenen URL (Mükerrer önleme)
 
   console.log("[TP-AUTO] content_script loaded on:", location.href);
 
   // --- 1. MESAJ DİNLEYİCİSİ (GÜNCELLENDİ) ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
-      sendResponse({ ok: true }); // Port hemen kapansın, background rahatlasın
+      sendResponse({ ok: true }); 
 
-      // 🔥 KİLİT KONTROLÜ
+      // Mükerrer URL Kontrolü (Background retry yaparsa engelle)
+      if (request.url === lastProcessedUrl) {
+        console.warn(TAG, "♻️ Bu URL zaten işlendi, atlanıyor:", request.url);
+        return;
+      }
+
+      // Kilit Kontrolü
       if (globalProcessingLock) {
-        console.warn(TAG, "⛔ Çakışma önlendi! Şu an zaten bir belge işleniyor. Gelen istek reddedildi:", request.url);
+        console.warn(TAG, "⛔ Sistem meşgul, gelen istek reddedildi:", request.url);
         return; 
       }
 
-      // Kilidi kapat (İşlem bitene kadar başka mesaj giremez)
+      // Kilitle ve URL'i kaydet
       globalProcessingLock = true;
+      lastProcessedUrl = request.url;
 
       (async () => {
         try {
@@ -33,14 +38,14 @@
 
           console.log(TAG, "PDF_URL_CAPTURED state:", state, "url:", request.url);
 
-          // Eğer sistem PDF beklemiyorsa veya zaten indirildiyse
-          if (!state.tp_waiting_pdf_url || state.tp_download_clicked) {
-            console.warn(TAG, "⚠️ Beklenmeyen veya mükerrer PDF isteği. İşlem iptal.", request.url);
-            globalProcessingLock = false; // Kilidi aç ve çık
+          // Eğer sistem PDF beklemiyorsa (Manuel tıklama vs.)
+          if (!state.tp_waiting_pdf_url) {
+            console.warn(TAG, "⚠️ Beklenmeyen PDF isteği. İşlem iptal.", request.url);
+            globalProcessingLock = false; 
             return;
           }
 
-          // Durumu güncelle (Storage seviyesinde koruma)
+          // Durumu güncelle
           await chrome.storage.local.set({
             tp_download_clicked: true,
             tp_waiting_pdf_url: false
@@ -51,7 +56,7 @@
 
         } catch (err) {
           console.error(TAG, "Mesaj işleme hatası:", err);
-          globalProcessingLock = false; // Hata durumunda kilidi aç
+          globalProcessingLock = false; 
         }
       })();
 
@@ -73,11 +78,9 @@
     } catch (e) { console.log(TAG, "RESET FAILED:", e); }
   });
 
-  // Kuyruktan sıradaki işi alıp tp_app_no'ya atar
   async function checkQueueAndSetAppNo() {
     const data = await chrome.storage.local.get(["tp_queue", "tp_is_queue_running", "tp_queue_index", "tp_app_no"]);
     
-    // Kuyruk modu kapalıysa veya boşsa normal tekil moda devam et
     if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) {
       return true; 
     }
@@ -89,56 +92,52 @@
       console.log(TAG, "🏁 Kuyruk tamamlandı!");
       await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
       alert("Toplu işlem tamamlandı!");
-      return false; // Döngüyü durdur
+      return false; 
     }
 
-    // Sıradaki işi al
     const currentJob = data.tp_queue[currentIndex];
     
     // Eğer şu anki hafızadaki no farklıysa güncelle (Yeni işe başla)
     if (data.tp_app_no !== currentJob.appNo) {
       console.log(TAG, `🔄 Yeni İş Başlıyor: ${currentIndex + 1}/${data.tp_queue.length} - No: ${currentJob.appNo}`);
       
-      // Önceki işlemin durum bayraklarını sıfırla
+      // Yeni işe başlarken lastProcessedUrl'i sıfırla ki aynı isimli farklı dosya gelirse işleyebilsin
+      lastProcessedUrl = null; 
+
       await chrome.storage.local.set({
         tp_app_no: currentJob.appNo,
-        tp_current_job_id: currentJob.ipId, // Backend'e IP ID'si lazım
-        tp_current_doc_type: currentJob.docType, // Backend'e Belge Tipi lazım
+        tp_current_job_id: currentJob.ipId,
+        tp_current_doc_type: currentJob.docType,
         tp_clicked_ara: false,
         tp_download_clicked: false,
-        tp_expanded_twice: false
+        tp_expanded_twice: false,
+        tp_last_belgelerim_try: 0 // Menüyü tetiklemesi için
       });
       
-      // Arama kutusunu temizlemek için sayfayı yenilemek en garantisi (bazı durumlarda)
-      // Ancak akışı hızlandırmak için sadece inputu değiştirmeyi deniyoruz.
-      // Eğer takılırsa location.reload() eklenebilir.
-      searchPassCount = 0; // Tur sayacını sıfırla
-      console.log(TAG, "QUEUE STATE:", {
-        idx: currentIndex,
-        appNo: currentJob?.appNo,
-        ipId: currentJob?.ipId,
-        storedAppNo: data.tp_app_no
-      });
-
+      searchPassCount = 0; 
       return true;
     }
     
     return true;
   }
 
-async function advanceQueue() {
-    const data = await chrome.storage.local.get(["tp_queue_index"]);
-    const nextIndex = (data.tp_queue_index || 0) + 1;
-    
-    console.log(TAG, "✅ İşlem tamam, sonraki kayıt için hazırlanılıyor...");
+  // --- [DÜZELTİLMİŞ] ADVANCE QUEUE ---
+  async function advanceQueue() {
+    console.log(TAG, "✅ İşlem tamam, sayfa temizleniyor...");
 
-    // Input alanını temizle
+    // 1. Input alanını temizle
     const input = qAll("#textbox551 input");
     if (input) {
         fillInputAngularSafe(input, ""); 
     }
 
-    // Durumları güncelle
+    // Kısa bekleme
+    await sleep(500);
+
+    const data = await chrome.storage.local.get(["tp_queue_index"]);
+    const nextIndex = (data.tp_queue_index || 0) + 1;
+
+    // 2. İndeksi artır ve bayrakları sıfırla
     await chrome.storage.local.set({ 
       tp_queue_index: nextIndex,
       tp_app_no: null,            
@@ -149,92 +148,86 @@ async function advanceQueue() {
       tp_last_belgelerim_try: 0 
     });
 
-    // 🔥 KİLİDİ AÇ (Yeni iş için hazırız)
-    globalProcessingLock = false;
-    console.log(TAG, "🔓 İşlem kilidi açıldı. Yeni dosya beklenebilir.");
+    console.log(TAG, `🔓 Kilit açılıyor. Sonraki İndeks: ${nextIndex}`);
+    
+    // 3. Kilidi aç (Artık yeni mesaj veya işlem gelebilir)
+    globalProcessingLock = false; 
+    isActionInProgress = false;
 
-    // Menüye tekrar tıklatmak için bekleme
-    await sleep(1000);
+    // Arayüzün kendine gelmesi için bekle
+    await sleep(1500);
   }
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onloadend = () => {
-      try {
-        const res = String(reader.result || "");
-        resolve(res.split(",")[1] || "");
-      } catch (e) {
-        reject(e);
-      }
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
-// PDF linkini alır, indirir ve sunucuya gönderir
-async function processDocument(downloadUrl, element) {
-  console.log(TAG, "📄 Belge bulundu, işleniyor:", downloadUrl);
-  if (element) element.style.color = "orange";
-
-  try {
-    // 1) PDF'i çek
-    const response = await fetch(downloadUrl, { credentials: "include" });
-    console.log(TAG, "PDF fetch:", response.status, response.headers.get("content-type"));
-    if (!response.ok) throw new Error("PDF fetch failed: " + response.status);
-
-    const blob = await response.blob();
-    console.log(TAG, "PDF size:", blob.size);
-    if (!blob.size) throw new Error("PDF blob boş geldi");
-
-    // 2) Base64
-    const base64data = await blobToBase64(blob);
-    if (!base64data || base64data.length < 1000) {
-      throw new Error("Base64 çok kısa/boş: " + (base64data?.length || 0));
-    }
-
-    // 3) ipRecordId/docType al
-    const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
-
-    const payload = {
-      ipRecordId: storage.tp_current_job_id,
-      fileBase64: base64data,
-      fileName: "Tescil_Belgesi.pdf",
-      mimeType: "application/pdf",
-      docType: storage.tp_current_doc_type || "tescil_belgesi",
-    };
-
-    console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipRecordId);
-
-    // 4) Upload
-    const uploadRes = await fetch(UPLOAD_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: payload }),
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onloadend = () => {
+        try {
+          const res = String(reader.result || "");
+          resolve(res.split(",")[1] || "");
+        } catch (e) {
+          reject(e);
+        }
+      };
+      reader.readAsDataURL(blob);
     });
-
-    const text = await uploadRes.text();
-    if (uploadRes.ok) {
-      console.log(TAG, "✅ Yükleme Başarılı!", text);
-      if (element) element.style.color = "green";
-    } else {
-      console.error(TAG, "❌ Yükleme Hatası:", text);
-      if (element) element.style.color = "red";
-    }
-
-  } catch (error) {
-    console.error(TAG, "Process hatası:", error);
-  } finally {
-    // ✅ Hangi durumda olursa olsun kuyruk ilerlesin
-    await advanceQueue();
   }
-}
 
+  async function processDocument(downloadUrl, element) {
+    console.log(TAG, "📄 Belge bulundu, işleniyor:", downloadUrl);
+    if (element) element.style.color = "orange";
 
-  // ---------- DOC HELPERS ----------
+    try {
+      const response = await fetch(downloadUrl, { credentials: "include" });
+      if (!response.ok) throw new Error("PDF fetch failed: " + response.status);
+
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("PDF blob boş geldi");
+
+      const base64data = await blobToBase64(blob);
+      if (!base64data || base64data.length < 1000) {
+        throw new Error("Base64 çok kısa/boş");
+      }
+
+      const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
+
+      const payload = {
+        ipRecordId: storage.tp_current_job_id,
+        fileBase64: base64data,
+        fileName: "Tescil_Belgesi.pdf",
+        mimeType: "application/pdf",
+        docType: storage.tp_current_doc_type || "tescil_belgesi",
+      };
+
+      console.log(TAG, "📤 Sunucuya yükleniyor...", payload.ipRecordId);
+
+      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: payload }),
+      });
+
+      const text = await uploadRes.text();
+      if (uploadRes.ok) {
+        console.log(TAG, "✅ Yükleme Başarılı!", text);
+        if (element) element.style.color = "green";
+      } else {
+        console.error(TAG, "❌ Yükleme Hatası:", text);
+        if (element) element.style.color = "red";
+      }
+
+    } catch (error) {
+      console.error(TAG, "Process hatası:", error);
+    } finally {
+      // İşlem bitince kuyruğu ilerlet
+      await advanceQueue();
+    }
+  }
+
+  // ---------- DOM HELPERS ----------
   function getAllDocs() {
     const docs = [document];
     const frames = Array.from(document.querySelectorAll("iframe"));
@@ -292,7 +285,7 @@ async function processDocument(downloadUrl, element) {
     return true;
   }
 
-  // ---------- EPATS SPECIFIC ----------
+  // ---------- EPATS UI LOGIC ----------
   
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
@@ -328,7 +321,6 @@ async function processDocument(downloadUrl, element) {
 
   async function clickBelgelerim() {
     if (!(await throttle("tp_last_belgelerim_try", 2000))) return false;
-    // ... (Aynen korundu: Frame ve main içinde ara)
     const targets = qAllMany("div[ng-click]");
     const target = targets.find(x => (x.textContent || "").trim() === "Belgelerim");
     if(target) { superClick(target); return true; }
@@ -355,7 +347,6 @@ async function processDocument(downloadUrl, element) {
         await sleep(200);
     }
     
-    // "Marka" seçeneğini bul ve tıkla
     const rows = qAllMany(".ui-select-choices-row, li[role='option']");
     const markaRow = rows.find(el => (el.textContent || "").toLowerCase().includes("marka"));
     if (markaRow) { superClick(markaRow); await sleep(300); return isMarkaSelectedNow(); }
@@ -364,7 +355,7 @@ async function processDocument(downloadUrl, element) {
 
   async function fillBasvuruNo(appNo) {
     const input = qAll("#textbox551 input");
-    console.log(TAG, "fillBasvuruNo", { from: input.value, to: String(appNo) });
+    // console.log(TAG, "fillBasvuruNo", { from: input.value, to: String(appNo) }); // Log kirliliği azaltıldı
     if (!input) return false;
     if ((input.value || "").trim() !== String(appNo)) {
       fillInputAngularSafe(input, String(appNo));
@@ -373,7 +364,6 @@ async function processDocument(downloadUrl, element) {
     return true;
   }
 
-  // --- AKORDEON & FİLTRELEME (GÜNCEL) ---
   function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
   
   function getAccordionClickable() {
@@ -381,46 +371,42 @@ async function processDocument(downloadUrl, element) {
     return host ? (host.querySelector("i") || host) : null;
   }
 
-  // plus / minus / unknown
   function readAccordionState() {
     const host = getAccordionHost();
     if (!host) return "none";
     const icon = host.querySelector("i");
     const cls = (icon?.className || host.className || "").toLowerCase();
-    
-    if (cls.includes("minus")) return "minus"; // Açık
-    if (cls.includes("plus")) return "plus";   // Kapalı
+    if (cls.includes("minus")) return "minus"; 
+    if (cls.includes("plus")) return "plus";   
     return "unknown";
   }
 
   async function ensureAccordionOpenAtStart() {
-    // Sadece ilk seferde çalışır, akordeonu açar
     const state = readAccordionState();
-    if (state === "minus") return true; // Zaten açık
+    if (state === "minus") return true; 
 
     const clickable = getAccordionClickable();
     if(clickable) {
         superClick(clickable);
-        await sleep(1500); // Açılmasını bekle
+        await sleep(1500); 
     }
     return readAccordionState() === "minus";
   }
 
   async function ensureAccordionExpandedAfterFilter() {
-    // Filtrelemeden sonra tablo yenilenir, akordeon durumunu kontrol et
     await sleep(500);
     const state = readAccordionState();
     const clickable = getAccordionClickable();
     
     if (!clickable) return false;
 
-    if (state === "plus") { // Kapalıysa aç (1 tık)
+    if (state === "plus") { 
         superClick(clickable);
         await sleep(1000);
-    } else if (state === "minus") { // Açıksa kapat-aç (tazele - 2 tık)
-        superClick(clickable); // Kapat
+    } else if (state === "minus") { 
+        superClick(clickable); 
         await sleep(500);
-        superClick(clickable); // Aç
+        superClick(clickable); 
         await sleep(1000);
     }
     return true;
@@ -447,52 +433,41 @@ async function processDocument(downloadUrl, element) {
   }
 
   function findDownloadIcon() {
-    // Görünür olan ilk indirme ikonunu bul
     const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
     return icons[1] || null;
   }
 
-  // --- İNDİRME VE İŞLEME MANTIĞI ---
   async function downloadTescilBelge() {
     const { tp_download_clicked, tp_clicked_ara } = await chrome.storage.local.get(["tp_download_clicked", "tp_clicked_ara"]);
     
-    // Güvenlik kontrolleri
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
-    if (!getAccordionHost()) return false; // Tablo henüz yok
+    if (!getAccordionHost()) return false; 
 
     isActionInProgress = true;
 
     try {
-        // 1. Akordeonu Aç (Sadece ilk girişte)
         await ensureAccordionOpenAtStart();
 
-        // 2. Kriter Listesi
         const aramaListesi = ["Marka Yenileme Belges", "MYB", "TB", "Tescil_belgesi_us"];
         
         for (const terim of aramaListesi) {
             console.log(TAG, `🔍 Kriter: ${terim}`);
             
-            // Filtreyi uygula
             await setEvrakAdiFilter(terim);
-            await sleep(1000); // Filtreleme beklemesi
+            await sleep(1500); // 1000 -> 1500 (Daha güvenli bekleme)
 
-            // Akordeonu tazele (Kapat-Aç gerekebilir)
             await ensureAccordionExpandedAfterFilter();
 
-            // İkon ara
             const targetIcon = findDownloadIcon();
             
             if (targetIcon) {
-                // İndirme (İşleme) bulundu
                 console.log(TAG, `✅ BULUNDU: ${terim}`);
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
                 superClick(targetIcon);
 
-
-                // PDF yakalama bekleniyor; sakın advanceQueue çağırma.
                 await sleep(800);
 
-                // Güvenlik: eğer background yakalayamazsa 10 sn sonra failover
+                // Failover
                 setTimeout(async () => {
                   const { tp_waiting_pdf_url, tp_download_clicked } =
                     await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
@@ -505,67 +480,71 @@ async function processDocument(downloadUrl, element) {
 
                 }, 12000);
                 return true;
-
             }
         }
         
-        // Hiçbir kriterle bulunamadı
         searchPassCount++;
         if (searchPassCount >= 2) {
             console.log(TAG, "⚠️ Belge bulunamadı, pas geçiliyor.");
-            await advanceQueue(); // Bir sonrakine geç
+            await advanceQueue(); 
         }
 
     } catch(e) {
         console.error(TAG, e);
-        // Hata durumunda da kuyruğu tıkamamak için geç
         await advanceQueue(); 
     } finally {
         isActionInProgress = false;
     }
   }
 
-  // --- ANA DÖNGÜ ---
+  // --- ANA DÖNGÜ (GÜNCELLENDİ) ---
   async function run() {
-    // 1. Kuyruk Kontrolü
     const continueProcess = await checkQueueAndSetAppNo();
     if (!continueProcess) return;
 
-    // 2. Hafızadaki Numarayı Al
-    const { tp_app_no } = await chrome.storage.local.get(["tp_app_no"]);
+    const { tp_app_no, tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked"]);
     if (!tp_app_no) return;
 
-    // 3. Giriş Sayfası mı?
     if (isGirisPage()) {
       const btn = findLoginButtonOnGiris();
       if (btn) superClick(btn);
       return;
     }
 
-    // 4. Belgelerim Ekranı Açık mı?
     if (isBelgelerimScreenOpen()) {
       const okMarka = await ensureDosyaTuruMarka();
       if (!okMarka) return;
 
-      const okNo = await fillBasvuruNo(tp_app_no);
-      if (!okNo) return;
+      // Input kontrolü ve temizlik sonrası yeniden dolum
+      const input = qAll("#textbox551 input");
+      const currentVal = input ? input.value : "";
+      
+      // Input boşsa veya farklıysa doldur
+      if (currentVal !== String(tp_app_no)) {
+          // Eğer input boşsa ama tabloda eski veri varsa (veya kilitliyse), önce menüye tıkla
+          const gridRows = qAll(".ui-grid-row");
+          if (gridRows && !tp_clicked_ara && currentVal === "") {
+             // Opsiyonel: Tabloyu temizlemek için Belgelerim'e tıklatılabilir
+             // Şimdilik sadece doldurmayı deneyelim
+          }
+          await fillBasvuruNo(tp_app_no);
+          return; 
+      }
 
-      const okAra = await clickAraButtonOnly();
-      if (!okAra) return;
+      if (!tp_clicked_ara) {
+          const okAra = await clickAraButtonOnly();
+          return;
+      }
 
-      // Ara tıklandıysa ve henüz işlenmediyse
-      const { tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_clicked_ara", "tp_download_clicked"]);
       if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
         await downloadTescilBelge();
       }
       return;
     }
 
-    // 5. Belgelerim'e Tıkla
     await clickBelgelerim();
   }
 
-  // Döngüyü Başlat
   setInterval(() => run().catch(() => {}), 1500);
 
 })();
