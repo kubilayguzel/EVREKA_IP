@@ -1,4 +1,4 @@
-// content_script.js (Final Fix: Loading Screen & Busy State Check)
+// content_script.js (Düzeltilmiş Versiyon: PDF Kaydetme Sorunu Giderildi)
 (() => {
   // --- SINGLETON CHECK ---
   if (window.TP_SCRIPT_ALREADY_LOADED) {
@@ -32,11 +32,18 @@
       (async () => {
         try {
           const state = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
+          
+          // Eğer sistem PDF beklemiyorsa reddet
           if (!state.tp_waiting_pdf_url) {
+            console.warn(TAG, "⚠️ Beklenmeyen PDF isteği reddedildi.", request.url);
             globalProcessingLock = false; 
             return;
           }
+
+          // İndirildi olarak işaretle
           await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
+          
+          // İşlemeyi başlat
           await processDocument(request.url, null);
         } catch (err) {
           console.error(TAG, "Hata:", err);
@@ -82,7 +89,8 @@
         tp_prev_grid_sig: null,
         tp_expanded_twice: false,
         tp_last_belgelerim_try: 0,
-        tp_last_search_ts: 0
+        tp_last_search_ts: 0,
+        tp_waiting_pdf_url: false // Yeni işe başlarken bekleme modunu sıfırla
       });
       searchPassCount = 0; 
       return true;
@@ -135,7 +143,7 @@
   }
 
   async function processDocument(downloadUrl, element) {
-    console.log(TAG, "📄 PDF İndiriliyor:", downloadUrl);
+    console.log(TAG, "📄 PDF İndiriliyor ve İşleniyor:", downloadUrl);
     try {
       const response = await fetch(downloadUrl, { credentials: "include" });
       if (!response.ok) throw new Error("HTTP " + response.status);
@@ -153,15 +161,15 @@
         docType: storage.tp_current_doc_type || "tescil_belgesi",
       };
 
-      console.log(TAG, "📤 Upload:", payload.ipRecordId);
+      console.log(TAG, "📤 Upload Başlıyor ID:", payload.ipRecordId);
       const uploadRes = await fetch(UPLOAD_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: payload }),
       });
 
-      if (uploadRes.ok) console.log(TAG, "✅ Başarılı");
-      else console.error(TAG, "❌ Hata:", await uploadRes.text());
+      if (uploadRes.ok) console.log(TAG, "✅ Upload Başarılı");
+      else console.error(TAG, "❌ Upload Hata:", await uploadRes.text());
 
     } catch (error) { console.error(TAG, "Process hatası:", error); } 
     finally { await advanceQueue(); }
@@ -203,9 +211,8 @@
     return true;
   }
 
-  // --- GRID HELPERS (sonuçların gerçekten yenilendiğini anlamak için) ---
+  // --- GRID HELPERS ---
   function getGridHost() {
-    // EPATS ui-grid yapısı farklı sayfalarda değişebiliyor; o yüzden birden fazla aday.
     return (
       qAll(".ui-grid-render-container-body") ||
       qAll(".ui-grid-viewport") ||
@@ -222,7 +229,6 @@
     const host = getGridHost();
     const hostText = (host?.innerText || "").trim();
     const firstRow = getFirstRowText();
-    // Çok büyük text'i storage'a basmamak için kısalt.
     const compact = (firstRow || hostText).replace(/\s+/g, " ").slice(0, 200);
     const rowCount = qAllMany(".ui-grid-row").filter(r => r.offsetParent !== null).length;
     return `${rowCount}|${compact}`;
@@ -236,7 +242,7 @@
       if (sig && sig !== prevSig && !sig.startsWith("0|")) return true;
       await sleep(400);
     }
-    console.warn(TAG, "⚠️ Grid yenilenmesi zaman aşımı. Mevcut veri ile devam edilecek.");
+    console.warn(TAG, "⚠️ Grid yenilenmesi zaman aşımı.");
     return false;
   }
 
@@ -255,50 +261,25 @@
     return false;
   }
 
-  // 🔥 [GÜNCELLENDİ] SAYFA MEŞGULİYET KONTROLÜ
   function isPageBusy() {
-    // 1. Selector bazlı kontrol (Spinner, Overlay, Backdrop)
     const busySelectors = [
-        ".modal-backdrop",          // Bootstrap modal arkası
-        ".block-ui-overlay",        // Angular BlockUI
-        ".block-ui-message-container",
-        ".loading-spinner",
-        ".fa-spinner",
-        ".fa-refresh.fa-spin",
-        "div[ng-show='isLoading']", // Angular loading flag
-        ".ui-grid-icon-spin"        // Grid yükleniyor ikonu
+        ".modal-backdrop", ".block-ui-overlay", ".block-ui-message-container",
+        ".loading-spinner", ".fa-spinner", ".fa-refresh.fa-spin",
+        "div[ng-show='isLoading']", ".ui-grid-icon-spin"
     ];
-
     const els = qAllMany(busySelectors.join(","));
-    const isOverlayVisible = els.some(el => {
+    if (els.some(el => {
         const style = window.getComputedStyle(el);
         return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-    });
+    })) return true;
 
-    if (isOverlayVisible) {
-        // console.log(TAG, "⏳ Sayfa meşgul (Overlay/Spinner)...");
-        return true;
-    }
-
-    // 2. Metin bazlı kontrol ("Lütfen Bekleyiniz", "Yükleniyor")
     const messageContainers = qAllMany(".modal-content, .alert, .growl-message, .block-ui-message");
-    const hasWaitText = messageContainers.some(el => {
+    if (messageContainers.some(el => {
         const text = (el.innerText || "").toLowerCase();
         const style = window.getComputedStyle(el);
-        const isVisible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-        
-        return isVisible && (
-            text.includes("bekleyiniz") || 
-            text.includes("yükleniyor") || 
-            text.includes("işleminiz") ||
-            text.includes("aranıyor")
-        );
-    });
-
-    if (hasWaitText) {
-        // console.log(TAG, "⏳ Sayfa meşgul (Mesaj: Bekleyiniz/Yükleniyor)...");
-        return true;
-    }
+        return (style.display !== 'none' && style.visibility !== 'hidden') && 
+               (text.includes("bekleyiniz") || text.includes("yükleniyor") || text.includes("aranıyor"));
+    })) return true;
 
     return false;
   }
@@ -308,15 +289,11 @@
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
     if (tp_clicked_ara) return true; 
 
-    // Arama tetiklenmeden önce mevcut grid imzasını kaydet ki,
-    // yeni başvuruya ait sonuçlar gelmeden filtreleme başlamasın.
     const prevSig = getGridSignature();
-
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     
-    // Ara butonu pasifse bekle
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) {
         console.log(TAG, "⏳ Ara butonu pasif, bekleniyor...");
         return false;
@@ -432,13 +409,10 @@
       "tp_waiting_pdf_url"
     ]);
 
-    // PDF beklerken asla yeniden filtreleme / dokuman arama yapma.
-    if (tp_waiting_pdf_url) return true;
-
+    if (tp_waiting_pdf_url) return true; // Zaten bekliyorsak işlem yapma
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
 
-    // 🔥 Tablo yüklenmediyse bekle
     if (!getAccordionClickable()) return false; 
 
     isActionInProgress = true;
@@ -457,33 +431,14 @@
 
             if (targetIcon) {
                 console.log(TAG, `✅ Dosya Bulundu: ${terim}`);
+                
+                // 1) Önce durumu güncelle: PDF bekleniyor
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
 
-                // 1) Mümkünse download linkini yakala (PDF yeni sekme açılmadan da indirilebiliyor)
-                const linkEl = targetIcon.closest("a");
-                const href = (linkEl && linkEl.href) ? linkEl.href : null;
-
-                // 2) UI davranışını korumak için yine tıkla
+                // 2) Sadece tıklama yap, href yakalamaya çalışma
                 superClick(targetIcon);
-                await sleep(800);
-
-                // 3) Eğer href yakaladıysak, background yakalamayı beklemeden direkt PDF'i indirip işle.
-                // (Bu, sizde görülen "PDF Timeout" problemine çözüm olur.)
-                if (href) {
-                  console.log(TAG, "🔗 PDF linki yakalandı, direkt indirilecek:", href);
-
-                  // Bu noktadan sonra filtre yazma / tekrar arama yapma.
-                  await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
-                  globalProcessingLock = true;
-                  lastProcessedUrl = href;
-
-                  // Kısa bir gecikme: bazı durumlarda server click sonrası dosyayı hazır ediyor.
-                  setTimeout(() => {
-                    processDocument(href, null).catch(() => {});
-                  }, 400);
-                  return true;
-                }
-
+                
+                // 3) Timeout koruması (12 saniye sonra gelmezse atla)
                 setTimeout(async () => {
                   const s = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
                   if (s.tp_waiting_pdf_url && !s.tp_download_clicked) {
@@ -493,6 +448,7 @@
                     await advanceQueue();
                   }
                 }, 12000);
+                
                 return true;
             }
         }
@@ -530,19 +486,13 @@
       const currentVal = input ? (input.value || "").trim() : "";
       
       if (currentVal !== String(tp_app_no)) {
-          // Önce önceki aramadan kalan "Evrak adı" filtresini temizle.
-          // Çünkü yeni başvuruya ait veriler henüz gelmeden filtre aktif kalırsa
-          // grid boş/yanlış görünebiliyor ve eklenti yanlış zamanda aramaya başlıyor.
           await clearEvrakAdiFilter();
-
-          // Garanti olsun diye arama state'ini de sıfırla (başvuru no değişti).
           await chrome.storage.local.set({
             tp_clicked_ara: false,
             tp_download_clicked: false,
             tp_waiting_pdf_url: false,
             tp_grid_ready: false
           });
-
           await fillBasvuruNo(tp_app_no);
           return; 
       }
@@ -552,23 +502,18 @@
           return;
       }
 
-      // 1) Çok kısa bir güvenlik beklemesi
       if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
 
-      // 2) UI hala yükleniyorsa asla devam etme
       if (isPageBusy()) {
         console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
         return;
       }
 
-      // 3) Asıl kritik nokta:
-      // Ara'ya basıldıktan sonra grid'in gerçekten yenilenmesini bekle.
-      // (Yeni başvuru verileri gelmeden Evrak Adı filtresi uygulanmasın.)
       const { tp_grid_ready, tp_prev_grid_sig } = await chrome.storage.local.get(["tp_grid_ready", "tp_prev_grid_sig"]);
       if (tp_clicked_ara && !tp_grid_ready) {
         await waitForGridToRefresh(tp_prev_grid_sig || "", 20000);
         await chrome.storage.local.set({ tp_grid_ready: true });
-        return; // Bir sonraki tick'te indirmeye geçsin
+        return; 
       }
 
       if (tp_clicked_ara && tp_grid_ready && !tp_download_clicked && !isActionInProgress) {
