@@ -7178,22 +7178,41 @@ export const saveEpatsDocument = onCall(
 
       // 3. Parent Transaction Bul (Başvuru)
       const transactionsRef = adminDb.collection('ipRecords').doc(ipRecordId).collection('transactions');
-      
-      // Hiyerarşisi 'parent' olan ve tipi başvuru olan işlemi bulmaya çalış
-      // Not: Sizin sistemde Başvuru genelde "trademark_application" veya "2" olabilir.
-      // Garanti olsun diye hierarchy='parent' olan en eski kaydı alabiliriz veya spesifik tip arayabiliriz.
-      const parentQuery = await transactionsRef
-        .where('hierarchy', '==', 'parent')
-        .orderBy('timestamp', 'asc') // En eski parent (muhtemelen başvuru)
-        .limit(1)
-        .get();
 
       let parentId = null;
-      if (!parentQuery.empty) {
-        parentId = parentQuery.docs[0].id;
-      } else {
-        console.warn(`⚠️ Parent işlem bulunamadı, belge orphan olarak eklenecek.`);
+
+      // Önce "Başvuru" description'lı parent'ı bul (en doğru kriter)
+      const parentSnap = await transactionsRef
+        .where('transactionHierarchy', '==', 'parent')
+        .get();
+
+      if (!parentSnap.empty) {
+        // 1) description == "Başvuru" olanı seç
+        const basvuruDoc = parentSnap.docs.find(d => {
+          const data = d.data() || {};
+          const desc = String(data.description || '').toLowerCase();
+          return desc === 'başvuru' || desc.includes('başvuru');
+        });
+
+        if (basvuruDoc) {
+          parentId = basvuruDoc.id;
+        } else {
+          // 2) Yoksa: parent'lar içinden en eski timestamp'e sahip olanı seç
+          // (timestamp string ISO; Date ile kıyaslıyoruz)
+          let best = null;
+          for (const d of parentSnap.docs) {
+            const data = d.data() || {};
+            const ts = data.timestamp ? new Date(data.timestamp).getTime() : Number.POSITIVE_INFINITY;
+            if (!best || ts < best.ts) best = { id: d.id, ts };
+          }
+          parentId = best?.id || null;
+        }
       }
+
+      if (!parentId) {
+        console.warn(`⚠️ Başvuru parent transaction bulunamadı. ipRecordId=${ipRecordId} belge parentId olmadan eklenecek.`);
+      }
+
 
       // Tarih Ayarları
       const now = new Date();
