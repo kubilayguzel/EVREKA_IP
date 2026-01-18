@@ -100,13 +100,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log(TAG, "✅ İşlem tamam, kuyruk ilerletiliyor...");
     await chrome.storage.local.set({ 
       tp_queue_index: nextIndex,
-      tp_app_no: null, // Numarayı sıfırla ki checkQueue yeni numarayı set etsin
+      tp_app_no: null,
       tp_download_clicked: false,
-      tp_clicked_ara: false
+      tp_clicked_ara: false,
+      tp_waiting_pdf_url: false,   // ✅ EKLENDİ
+      tp_expanded_twice: false     // ✅ EKLENDİ (temizlik)
     });
-    
-    // Sayfayı yenile (Temiz başlangıç için en iyisi)
-    location.reload(); 
+
+    location.reload();
   }
 
   // ---------- PDF İŞLEME VE BACKEND TRANSFERİ ----------
@@ -435,10 +436,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   const { tp_waiting_pdf_url, tp_download_clicked } =
                     await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
 
-                  if (tp_waiting_pdf_url && !tp_download_clicked) {
-                    console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
-                    await advanceQueue();
-                  }
+                if (tp_waiting_pdf_url && !tp_download_clicked) {
+                  console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
+                  await chrome.storage.local.set({ tp_waiting_pdf_url: false });
+                  await advanceQueue();
+                }
+
                 }, 12000);
                 return true;
 
