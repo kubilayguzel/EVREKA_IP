@@ -33,12 +33,20 @@ export class PortfolioDetailManager {
         // 1. Önce layout yükle
         await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
 
-        // 2. Oturumu bekle. requireAuth: true sayesinde oturum yoksa 
-        // otomatik olarak index.html'e gönderir.
+        // 2. Oturumu bekle.
         const user = await waitForAuthUser({ requireAuth: true });
         
         // Eğer user null ise (yönlendirme başladı demektir), işlemi durdur
         if (!user) return; 
+
+        // 🔥 KRİTİK DÜZELTME: Token Senkronizasyonunu Bekle
+        // Auth objesi hazır olsa bile Firestore bağlantısı için token'ın
+        // tamamen hazır olduğundan emin oluyoruz. Bu satır "Missing permissions" hatasını çözer.
+        try {
+            await user.getIdToken(); 
+        } catch (e) {
+            console.warn("Token yenileme uyarısı:", e);
+        }
 
         // 3. ID kontrolü
         if (!this.recordId) {
@@ -51,7 +59,6 @@ export class PortfolioDetailManager {
         await this.loadRecord();
         this.setupEventListeners();
         
-        // Opsiyonel: Oturum açıkken biri logout olursa yönlendirmesi için dinleyiciyi buraya ekleyin
         redirectOnLogout(); 
     }
 
