@@ -426,7 +426,15 @@
   }
 
   async function downloadTescilBelge() {
-    const { tp_download_clicked, tp_clicked_ara } = await chrome.storage.local.get(["tp_download_clicked", "tp_clicked_ara"]);
+    const { tp_download_clicked, tp_clicked_ara, tp_waiting_pdf_url } = await chrome.storage.local.get([
+      "tp_download_clicked",
+      "tp_clicked_ara",
+      "tp_waiting_pdf_url"
+    ]);
+
+    // PDF beklerken asla yeniden filtreleme / dokuman arama yapma.
+    if (tp_waiting_pdf_url) return true;
+
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
 
@@ -450,8 +458,31 @@
             if (targetIcon) {
                 console.log(TAG, `✅ Dosya Bulundu: ${terim}`);
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
+
+                // 1) Mümkünse download linkini yakala (PDF yeni sekme açılmadan da indirilebiliyor)
+                const linkEl = targetIcon.closest("a");
+                const href = (linkEl && linkEl.href) ? linkEl.href : null;
+
+                // 2) UI davranışını korumak için yine tıkla
                 superClick(targetIcon);
-                await sleep(1000);
+                await sleep(800);
+
+                // 3) Eğer href yakaladıysak, background yakalamayı beklemeden direkt PDF'i indirip işle.
+                // (Bu, sizde görülen "PDF Timeout" problemine çözüm olur.)
+                if (href) {
+                  console.log(TAG, "🔗 PDF linki yakalandı, direkt indirilecek:", href);
+
+                  // Bu noktadan sonra filtre yazma / tekrar arama yapma.
+                  await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
+                  globalProcessingLock = true;
+                  lastProcessedUrl = href;
+
+                  // Kısa bir gecikme: bazı durumlarda server click sonrası dosyayı hazır ediyor.
+                  setTimeout(() => {
+                    processDocument(href, null).catch(() => {});
+                  }, 400);
+                  return true;
+                }
 
                 setTimeout(async () => {
                   const s = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
