@@ -3,10 +3,8 @@
   "name": "TP EPATS Otomasyon - V3 (Queue Support)",
   "version": "3.1.0",
   "description": "EPATS üzerinden toplu belge indirme ve kuyruk yönetimi.",
-  "permissions": ["storage", "tabs", "scripting"],
-  "host_permissions": [
-    "https://epats.turkpatent.gov.tr/*"
-  ],
+  "permissions": ["storage", "tabs", "scripting","webRequest"],
+  "host_permissions": ["https://epats.turkpatent.gov.tr/*"],
   "externally_connectable": {
     "matches": [
       "*://localhost/*",
