@@ -337,31 +337,41 @@
 
   // ---------- EPATS UI LOGIC ----------
   
+  let isSearching = false; // dosyanın üst tarafındaki state’lerin yanına ekle
+
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
     if (tp_clicked_ara) return true;
+
+    // ✅ Aynı anda iki kez arama başlatmayı engelle (run overlap)
+    if (isSearching) return true;
+
+    // ✅ 1 arama denemesinden sonra en az 6 sn bekle (spam click engeli)
+    const okThrottle = await throttle("tp_last_ara_try", 6000);
+    if (!okThrottle) return true;
 
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
 
-    console.log(TAG, "Ara butonuna basılıyor...");
-    const beforeRows = getGridRowCount();
+    isSearching = true;
+    try {
+      console.log(TAG, "Ara butonuna basılıyor...");
+      superClick(btn);
 
-    superClick(btn);
+      // ✅ EPATS’in toparlanması için biraz bekle (modal/grid init)
+      await sleep(2500);
 
-    // ✅ KRİTİK: sonuç listesinin yüklenmesini bekle
-    const ok = await waitForGridResultsToSettle(25000);
-    const afterRows = getGridRowCount();
+      // ✅ Bundan sonra “ara basıldı” kabul et
+      await chrome.storage.local.set({ tp_clicked_ara: true });
+      return true;
 
-    console.log(TAG, `📋 Liste durumu: before=${beforeRows}, after=${afterRows}, ok=${ok}`);
-
-    // ✅ ancak şimdi "ara basıldı ve sonuç hazır" de
-    await chrome.storage.local.set({ tp_clicked_ara: true });
-
-    return true;
+    } finally {
+      isSearching = false;
+    }
   }
+
 
   function isGirisPage() { return location.href.includes("/run/TP/EDEVLET/giris"); }
   
