@@ -1,75 +1,105 @@
-// background.js (Final + Robust Capture)
+// background.js (PDF Sekme Yakalayıcı) - MV3 önerilen
 
 let activeJobTabId = null;
 
-// PDF URL'ini ana sekmeye gönder
-function sendPdfUrlToMainTab(url) {
-  if (!activeJobTabId) return;
-  console.log("[BG] PDF URL Tespit Edildi:", url);
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content_script.js"],
+    });
+    console.log("[BG] content_script injected/ensured on tab:", tabId);
+  } catch (e) {
+    // Script zaten yüklüyse bazen hata atabilir; yine de mesaj deneyeceğiz
+    console.warn("[BG] inject warning:", e?.message || e);
+  }
+}
 
+async function sendPdfUrlToMainTab(url) {
+  if (!activeJobTabId) return;
+
+  // 1) content_script var mı garanti et
+  await ensureContentScript(activeJobTabId);
+
+  // 2) Mesajı gönder (1 kez retry ile)
   chrome.tabs.sendMessage(
     activeJobTabId,
-    { action: "PDF_URL_CAPTURED", url: url },
-    () => { if (chrome.runtime.lastError) { /* Ana sekme meşgul olabilir, sorun yok */ } }
+    { action: "PDF_URL_CAPTURED", url },
+    async (resp) => {
+      if (chrome.runtime.lastError) {
+        console.warn("[BG] sendMessage FAIL:", chrome.runtime.lastError.message);
+
+        // Retry: bir kez daha inject + send
+        await ensureContentScript(activeJobTabId);
+
+        chrome.tabs.sendMessage(
+          activeJobTabId,
+          { action: "PDF_URL_CAPTURED", url },
+          (resp2) => {
+            if (chrome.runtime.lastError) {
+              console.warn("[BG] sendMessage RETRY FAIL:", chrome.runtime.lastError.message);
+            } else {
+              console.log("[BG] sendMessage RETRY OK:", resp2);
+            }
+          }
+        );
+
+      } else {
+        console.log("[BG] sendMessage OK:", resp);
+      }
+    }
   );
 }
 
-// URL Kontrolü
-function checkForPdf(url, tabId) {
-    if (!url) return;
-    const isPdfLike =
-      url.includes("/project/downloadfile/") ||
-      (url.includes("/run/TP/") && url.includes("pdf")) ||
-      url.endsWith(".pdf") ||
-      url.startsWith("blob:");
-
-    if (isPdfLike) {
-      sendPdfUrlToMainTab(url);
-      // Sekmeyi biraz bekleyip kapat
-      setTimeout(() => { chrome.tabs.remove(tabId).catch(() => {}); }, 1500);
-    }
-}
-
-// 1. KUYRUK BAŞLATMA
+// Kuyruk başlatıldığında ana sekmenin ID'sini kaydet
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
   if (request.action === "START_QUEUE") {
-    console.log("[BG] Kuyruk başlatılıyor...", request.queue.length);
-    chrome.storage.local.set({
+    console.log("[BG] Kuyruk alındı.");
+
+    chrome.storage.local.set(
+      {
         tp_queue: request.queue,
-        tp_upload_url: request.uploadUrl,
         tp_is_queue_running: true,
         tp_queue_index: 0,
         tp_app_no: null,
-        tp_clicked_ara: false,
-        tp_download_clicked: false,
-        tp_waiting_pdf_url: false,
-        tp_grid_ready: false
-      }, () => {
-        chrome.tabs.create({ url: "https://epats.turkpatent.gov.tr/run/TP/EDEVLET/giris" }, (tab) => {
+      },
+      () => {
+        chrome.tabs.create(
+          { url: "https://epats.turkpatent.gov.tr/run/TP/EDEVLET/giris" },
+          async (tab) => {
             activeJobTabId = tab.id;
-        });
+            // Ana sekmede content_script garanti
+            await ensureContentScript(activeJobTabId);
+          }
+        );
         sendResponse({ status: "started" });
-      });
-    return true; 
+      }
+    );
+
+    return true;
   }
 });
 
-// 2. SEKME GÜNCELLENDİĞİNDE
+// PDF Yakalama
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (!activeJobTabId || tabId === activeJobTabId) return;
-  if (tab.url) checkForPdf(tab.url, tabId);
-});
+  if (!activeJobTabId) return;
 
-// 3. YENİ SEKME OLUŞTURULDUĞUNDA (Hızlı yakalama)
-chrome.tabs.onCreated.addListener((tab) => {
-    if (!activeJobTabId) return;
-    if (tab.url) checkForPdf(tab.url, tab.id);
-});
+  if (changeInfo.status === "complete" && tab.url) {
+    const isPdfLike =
+      tab.url.includes("/project/downloadfile/") ||
+      (tab.url.includes("/run/TP/") && tab.url.includes("pdf")) ||
+      tab.url.endsWith(".pdf");
 
-// 4. TEMİZLİK
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (tabId === activeJobTabId) {
-    activeJobTabId = null;
-    chrome.storage.local.set({ tp_is_queue_running: false });
+    if (isPdfLike) {
+      console.log("[BG] PDF Sekmesi Yakalandı:", tab.url);
+
+      // Ana sekmeye URL'i gönder
+      sendPdfUrlToMainTab(tab.url);
+
+      // PDF sekmesini kapat
+      setTimeout(() => {
+        chrome.tabs.remove(tabId).catch(() => {});
+      }, 800);
+    }
   }
 });
