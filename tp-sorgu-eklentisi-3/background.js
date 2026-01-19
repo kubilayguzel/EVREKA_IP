@@ -89,22 +89,23 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!activeJobTabId) return;
 
-  if (changeInfo.status === "complete" && tab.url) {
-    const isPdfLike =
-      tab.url.includes("/project/downloadfile/") ||
-      (tab.url.includes("/run/TP/") && tab.url.includes("pdf")) ||
-      tab.url.endsWith(".pdf");
+  // ✅ URL değiştiği anda yakala (complete bekleme)
+  const url = changeInfo.url || tab.url;
+  if (!url) return;
 
-    if (isPdfLike) {
-      console.log("[BG] PDF Sekmesi Yakalandı:", tab.url);
+  const isPdfLike =
+    url.includes("/project/downloadfile/") ||
+    (url.includes("/run/TP/") && url.toLowerCase().includes("pdf")) ||
+    url.toLowerCase().endsWith(".pdf");
 
-      // Ana sekmeye URL'i gönder
-      sendPdfUrlToMainTab(tab.url);
+  if (isPdfLike) {
+    console.log("[BG] PDF Sekmesi Yakalandı (early):", url);
 
-      // PDF sekmesini kapat
-      setTimeout(() => {
-        chrome.tabs.remove(tabId).catch(() => {});
-      }, 800);
-    }
+    sendPdfUrlToMainTab(url);
+
+    // PDF sekmesini biraz daha geç kapat (URL yakalama garanti olsun)
+    setTimeout(() => {
+      chrome.tabs.remove(tabId).catch(() => {});
+    }, 1500);
   }
 });
