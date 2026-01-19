@@ -12,7 +12,8 @@
       "*://localhost/*",
       "https://ip-manager-production-aab4b.web.app/*",
       "https://ip-manager-production-aab4b.firebaseapp.com/*",
-      "https://kubilayguzel.github.io/*"
+      "https://kubilayguzel.github.io/*",
+      "https://ipgate.evrekagroup.com/*"
     ]
   },
   "action": {  },
