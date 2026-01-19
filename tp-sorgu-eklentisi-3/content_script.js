@@ -1,7 +1,6 @@
-// content_script.js (Final Fix: Singleton Instance & Queue Stability)
+// content_script.js (Final: Dynamic Environment + Robust Queue)
 (() => {
   // 🔥 KRİTİK DÜZELTME: SCRIPT TEKİLLİK KONTROLÜ
-  // Eğer bu script sayfada zaten varsa, ikinci kez çalışmasını engelle.
   if (window.TP_SCRIPT_ALREADY_LOADED) {
       console.log("[TP-AUTO] ♻️ Script zaten yüklü, mükerrer yükleme engellendi.");
       return; 
@@ -76,7 +75,9 @@
   if (window.top !== window) return;
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+  
+  // ❌ ESKİ SABİT URL SATIRI SİLİNDİ (Artık storage'dan alıyoruz)
+  // const UPLOAD_ENDPOINT = "...";
 
   // ---------- KUYRUK VE RESET MANTIĞI ----------
   
@@ -122,8 +123,6 @@
       });
       
       searchPassCount = 0; 
-      // Yeni işe başlarken URL kilidini sıfırlama, çünkü farklı bir dosya gelecek
-      // lastProcessedUrl = null; // (Opsiyonel: Eğer dosya isimleri/linkleri aynı olma riski varsa açın)
       return true;
     }
     
@@ -191,6 +190,7 @@
     });
   }
 
+  // 🔥 GÜNCEL DİNAMİK URL İŞLEYİCİ 🔥
   async function processDocument(downloadUrl, element) {
     console.log(TAG, "📄 Belge işleniyor:", downloadUrl);
     if (element) element.style.color = "orange";
@@ -205,7 +205,16 @@
       const base64data = await blobToBase64(blob);
       if (!base64data || base64data.length < 1000) throw new Error("Base64 geçersiz");
 
-      const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
+      // 🔥 DEĞİŞİKLİK: tp_upload_url parametresini de istiyoruz
+      const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type", "tp_upload_url"]);
+      
+      const dynamicEndpoint = storage.tp_upload_url;
+      
+      // Eğer URL yoksa hata ver
+      if (!dynamicEndpoint) {
+          console.error(TAG, "❌ HATA: Hedef Upload URL (tp_upload_url) bulunamadı!");
+          throw new Error("Missing Upload URL");
+      }
 
       const payload = {
         ipRecordId: storage.tp_current_job_id,
@@ -215,9 +224,10 @@
         docType: storage.tp_current_doc_type || "tescil_belgesi",
       };
 
-      console.log(TAG, "📤 Upload ediliyor...", payload.ipRecordId);
+      console.log(TAG, "📤 Upload ediliyor...", dynamicEndpoint);
 
-      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+      // 🔥 DEĞİŞİKLİK: Dinamik adrese fetch atıyoruz
+      const uploadRes = await fetch(dynamicEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: payload }),
