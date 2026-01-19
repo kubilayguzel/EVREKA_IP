@@ -1,8 +1,21 @@
 // js/pagination.js - Yeniden kullanılabilir pagination sistemi
 
-export default class Pagination {
-    constructor(options = {}) {
+constructor(options = {}) {
+        // 1. Varsayılan metinleri tanımla
+        const defaultStrings = {
+            first: 'İlk',
+            previous: 'Önceki',
+            next: 'Sonraki',
+            last: 'Son',
+            pageInfo: 'Sayfa {current} / {total}',
+            itemsInfo: 'Toplam {total} kayıt ({start}-{end} arası gösteriliyor)',
+            itemsPerPage: 'Sayfa başına:',
+            noResults: 'Gösterilecek kayıt bulunamadı'
+        };
+
+        // 2. Ayarları oluştur
         this.options = {
+            // Varsayılan genel ayarlar
             itemsPerPage: 20,
             maxVisiblePages: 5,
             containerId: 'paginationContainer',
@@ -12,21 +25,18 @@ export default class Pagination {
             showPageInfo: true,
             showItemsPerPageSelector: true,
             itemsPerPageOptions: [10, 20, 50, 100],
+            
+            // Kullanıcıdan gelen ana ayarları (örn: itemsPerPage) varsayılanların üzerine yaz
+            ...options,
+
+            // 3. 'strings' objesini özel olarak birleştir (Deep Merge)
+            // Kullanıcıdan gelen options.strings varsa, varsayılanların üzerine ekle.
+            // Böylece kullanıcının göndermediği metinler varsayılan olarak kalır.
             strings: {
-                first: 'İlk',
-                previous: 'Önceki',
-                next: 'Sonraki',
-                last: 'Son',
-                pageInfo: 'Sayfa {current} / {total}',
-                itemsInfo: 'Toplam {total} kayıt ({start}-{end} arası gösteriliyor)',
-                itemsPerPage: 'Sayfa başına:',
-                noResults: 'Gösterilecek kayıt bulunamadı'
-            },
-            ...options.strings
+                ...defaultStrings,
+                ...(options.strings || {})
+            }
         };
-        
-        // Gelen seçeneklerle varsayılanları birleştir
-        this.options = {...this.options, ...options};
 
         this.currentPage = 1;
         this.totalItems = 0;
