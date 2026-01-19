@@ -150,6 +150,9 @@
             fillInputAngularSafe(input, ""); 
         }
 
+        // 1.1 Evrak Adı filtresini de temizle
+        await clearEvrakAdiFilter();
+
         // 2. İndeksi artır
         const data = await chrome.storage.local.get(["tp_queue_index"]);
         const nextIndex = (data.tp_queue_index || 0) + 1;
@@ -446,6 +449,18 @@
     }
     return true;
   }
+
+  async function clearEvrakAdiFilter() {
+  // ui-grid filter input’u bulup boşalt
+  const input = findEvrakAdiFilterInput();
+  if (!input) return false;
+
+  if ((input.value || "").trim() !== "") {
+    fillInputAngularSafe(input, "");
+    await sleep(800); // grid'in refresh olması için
+  }
+  return true;
+}
 
   function findDownloadIcon() {
     const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
