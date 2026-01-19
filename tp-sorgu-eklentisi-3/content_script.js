@@ -57,7 +57,7 @@
   if (window.top !== window) return;
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+
 
   // --- KUYRUK KONTROL ---
   document.addEventListener("TP_RESET", async () => {
@@ -142,37 +142,64 @@
     });
   }
 
+// PDF linkini alır, indirir ve sunucuya gönderir
   async function processDocument(downloadUrl, element) {
-    console.log(TAG, "📄 PDF İndiriliyor ve İşleniyor:", downloadUrl);
-    try {
-      const response = await fetch(downloadUrl, { credentials: "include" });
-      if (!response.ok) throw new Error("HTTP " + response.status);
-      const blob = await response.blob();
-      if (!blob.size) throw new Error("Boş dosya");
-      const base64data = await blobToBase64(blob);
-      if (!base64data || base64data.length < 1000) throw new Error("Base64 geçersiz");
+     console.log(TAG, "📄 Belge işleniyor (Fetch)...", downloadUrl);
+     if(element) element.style.color = "orange";
 
-      const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
-      const payload = {
-        ipRecordId: storage.tp_current_job_id,
-        fileBase64: base64data,
-        fileName: "Tescil_Belgesi.pdf",
-        mimeType: "application/pdf",
-        docType: storage.tp_current_doc_type || "tescil_belgesi",
-      };
+     try {
+        const response = await fetch(downloadUrl);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        
+        reader.onloadend = async () => {
+            const base64data = reader.result.split(',')[1];
+            
+            // 🔥 DEĞİŞİKLİK BURADA: 'tp_upload_url' parametresini de istiyoruz
+            const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type", "tp_upload_url"]);
+            
+            // Dinamik URL kontrolü
+            const dynamicEndpoint = storage.tp_upload_url;
+            if (!dynamicEndpoint) {
+                console.error(TAG, "❌ HATA: Hedef Upload URL (tp_upload_url) bulunamadı!");
+                alert("Hata: Sistem hedef adresi bulamadı. Sayfayı yenileyip tekrar deneyin.");
+                return;
+            }
 
-      console.log(TAG, "📤 Upload Başlıyor ID:", payload.ipRecordId);
-      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: payload }),
-      });
+            const payload = {
+                ipId: storage.tp_current_job_id,
+                fileContent: base64data,
+                fileName: "Tescil_Belgesi.pdf",
+                mimeType: "application/pdf",
+                docType: storage.tp_current_doc_type || "tescil_belgesi"
+            };
 
-      if (uploadRes.ok) console.log(TAG, "✅ Upload Başarılı");
-      else console.error(TAG, "❌ Upload Hata:", await uploadRes.text());
+            console.log(TAG, "📤 Sunucuya yükleniyor ->", dynamicEndpoint);
+            
+            // 🔥 DEĞİŞİKLİK BURADA: Sabit değişken yerine 'dynamicEndpoint' kullanıyoruz
+            const uploadRes = await fetch(dynamicEndpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ data: payload }) 
+            });
 
-    } catch (error) { console.error(TAG, "Process hatası:", error); } 
-    finally { await advanceQueue(); }
+            if (uploadRes.ok) {
+                console.log(TAG, "✅ Yükleme Başarılı!");
+                if(element) element.style.color = "green";
+                await advanceQueue();
+            } else {
+                console.error(TAG, "❌ Yükleme Hatası:", await uploadRes.text());
+                if(element) element.style.color = "red";
+                await advanceQueue(); 
+            }
+        };
+
+     } catch (error) {
+         console.error(TAG, "Process hatası:", error);
+         await advanceQueue();
+     }
   }
 
   // --- DOM HELPERS ---
