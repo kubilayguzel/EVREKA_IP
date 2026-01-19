@@ -1,24 +1,20 @@
-// content_script.js (Düzeltilmiş Versiyon: PDF Kaydetme Sorunu Giderildi)
+// content_script.js (Final Fix: Gentle Click)
+
 (() => {
-  // --- SINGLETON CHECK ---
-  if (window.TP_SCRIPT_ALREADY_LOADED) {
-      console.log("[TP-AUTO] ♻️ Script zaten yüklü.");
-      return; 
-  }
+  // --- SINGLETON ---
+  if (window.TP_SCRIPT_ALREADY_LOADED) return;
   window.TP_SCRIPT_ALREADY_LOADED = true;
 
   const TAG = "[TP-AUTO]";
-  
-  // --- STATE ---
   let isActionInProgress = false; 
   let searchPassCount = 0; 
   let globalProcessingLock = false; 
   let isAdvancing = false;          
   let lastProcessedUrl = null;      
 
-  console.log("[TP-AUTO] Content script loaded:", location.href);
+  console.log(TAG, "Content script active.");
 
-  // --- 1. MESAJ DİNLEYİCİSİ ---
+  // --- MESAJ DİNLEYİCİSİ ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
       sendResponse({ ok: true }); 
@@ -31,38 +27,28 @@
 
       (async () => {
         try {
-          const state = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
-          
-          // Eğer sistem PDF beklemiyorsa reddet
+          const state = await chrome.storage.local.get(["tp_waiting_pdf_url"]);
           if (!state.tp_waiting_pdf_url) {
-            console.warn(TAG, "⚠️ Beklenmeyen PDF isteği reddedildi.", request.url);
-            globalProcessingLock = false; 
-            return;
+            console.warn(TAG, "⚠️ Beklenmeyen PDF, reddedildi.");
+            globalProcessingLock = false; return;
           }
 
-          // İndirildi olarak işaretle
+          // İndirildi işaretle
           await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
-          
-          // İşlemeyi başlat
           await processDocument(request.url, null);
         } catch (err) {
-          console.error(TAG, "Hata:", err);
+          console.error(TAG, err);
           globalProcessingLock = false; 
         }
       })();
-      return true;
     }
   });
 
   if (window.top !== window) return;
-  
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-
-  // --- KUYRUK KONTROL ---
-  document.addEventListener("TP_RESET", async () => {
-    try { await chrome.storage.local.clear(); } catch {}
-  });
+  // --- KUYRUK ---
+  document.addEventListener("TP_RESET", async () => { try { await chrome.storage.local.clear(); } catch {} });
 
   async function checkQueueAndSetAppNo() {
     const data = await chrome.storage.local.get(["tp_queue", "tp_is_queue_running", "tp_queue_index", "tp_app_no"]);
@@ -70,9 +56,9 @@
 
     const currentIndex = data.tp_queue_index || 0;
     if (currentIndex >= data.tp_queue.length) {
-      console.log(TAG, "🏁 Kuyruk tamamlandı!");
+      console.log(TAG, "🏁 Kuyruk Bitti.");
       await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
-      alert("Toplu işlem tamamlandı!");
+      alert("İşlemler tamamlandı.");
       return false; 
     }
 
@@ -90,7 +76,7 @@
         tp_expanded_twice: false,
         tp_last_belgelerim_try: 0,
         tp_last_search_ts: 0,
-        tp_waiting_pdf_url: false // Yeni işe başlarken bekleme modunu sıfırla
+        tp_waiting_pdf_url: false
       });
       searchPassCount = 0; 
       return true;
@@ -98,21 +84,18 @@
     return true;
   }
 
-  // --- ADVANCE QUEUE ---
   async function advanceQueue() {
     if (isAdvancing) return;
     isAdvancing = true;
-    console.log(TAG, "✅ İşlem bitti, ilerleniyor...");
+    console.log(TAG, "✅ İlerleniyor...");
 
     try {
         const input = qAll("#textbox551 input");
         if (input) fillInputAngularSafe(input, ""); 
 
         const data = await chrome.storage.local.get(["tp_queue_index"]);
-        const nextIndex = (data.tp_queue_index || 0) + 1;
-
         await chrome.storage.local.set({ 
-          tp_queue_index: nextIndex,
+          tp_queue_index: (data.tp_queue_index || 0) + 1,
           tp_app_no: null,            
           tp_download_clicked: false, 
           tp_clicked_ara: false,      
@@ -123,28 +106,17 @@
           tp_last_belgelerim_try: 0,
           tp_last_search_ts: 0
         });
-
-        console.log(TAG, `🔓 Sıradaki İndeks: ${nextIndex}`);
+        
         globalProcessingLock = false; 
         isActionInProgress = false;
-        await sleep(2000); 
-    } catch (e) { console.error(TAG, e); } 
+        await sleep(1500); 
+    } catch (e) {} 
     finally { isAdvancing = false; }
   }
 
-  // --- PDF PROCESS ---
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(reader.error);
-      reader.onloadend = () => resolve((reader.result || "").split(",")[1] || "");
-      reader.readAsDataURL(blob);
-    });
-  }
-
-// PDF linkini alır, indirir ve sunucuya gönderir
+  // --- PDF UPLOAD ---
   async function processDocument(downloadUrl, element) {
-     console.log(TAG, "📄 Belge işleniyor (Fetch)...", downloadUrl);
+     console.log(TAG, "📄 İşleniyor...", downloadUrl);
      if(element) element.style.color = "orange";
 
      try {
@@ -156,16 +128,12 @@
         
         reader.onloadend = async () => {
             const base64data = reader.result.split(',')[1];
-            
-            // 🔥 DEĞİŞİKLİK BURADA: 'tp_upload_url' parametresini de istiyoruz
             const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type", "tp_upload_url"]);
             
-            // Dinamik URL kontrolü
             const dynamicEndpoint = storage.tp_upload_url;
             if (!dynamicEndpoint) {
-                console.error(TAG, "❌ HATA: Hedef Upload URL (tp_upload_url) bulunamadı!");
-                alert("Hata: Sistem hedef adresi bulamadı. Sayfayı yenileyip tekrar deneyin.");
-                return;
+                console.error(TAG, "❌ HATA: URL Yok.");
+                await advanceQueue(); return;
             }
 
             const payload = {
@@ -176,9 +144,7 @@
                 docType: storage.tp_current_doc_type || "tescil_belgesi"
             };
 
-            console.log(TAG, "📤 Sunucuya yükleniyor ->", dynamicEndpoint);
-            
-            // 🔥 DEĞİŞİKLİK BURADA: Sabit değişken yerine 'dynamicEndpoint' kullanıyoruz
+            console.log(TAG, "📤 Upload ->", dynamicEndpoint);
             const uploadRes = await fetch(dynamicEndpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -186,23 +152,22 @@
             });
 
             if (uploadRes.ok) {
-                console.log(TAG, "✅ Yükleme Başarılı!");
+                console.log(TAG, "✅ Başarılı!");
                 if(element) element.style.color = "green";
                 await advanceQueue();
             } else {
-                console.error(TAG, "❌ Yükleme Hatası:", await uploadRes.text());
+                console.error(TAG, "❌ Hata:", await uploadRes.text());
                 if(element) element.style.color = "red";
                 await advanceQueue(); 
             }
         };
-
      } catch (error) {
          console.error(TAG, "Process hatası:", error);
          await advanceQueue();
      }
   }
 
-  // --- DOM HELPERS ---
+  // --- HELPERS ---
   function qAll(selector) {
     const docs = [document];
     document.querySelectorAll("iframe").forEach(fr => { try { if(fr.contentDocument) docs.push(fr.contentDocument); } catch{} });
@@ -216,10 +181,16 @@
     for (const d of docs) out = out.concat(Array.from(d.querySelectorAll(selector)));
     return out;
   }
+
+  // 🔥 DÜZELTİLEN YER: Sadece basit click, Ctrl yok!
   function superClick(el) {
     if (!el) return false;
-    try { el.click(); return true; } catch { return false; }
+    try { 
+        el.click(); // En basit, en güvenli yöntem
+        return true; 
+    } catch { return false; }
   }
+
   function fillInputAngularSafe(input, value) {
     if (!input) return false;
     input.focus();
@@ -230,6 +201,7 @@
     input.blur();
     return true;
   }
+  
   async function throttle(key, ms) {
     const now = Date.now();
     const obj = await chrome.storage.local.get([key]);
@@ -238,27 +210,12 @@
     return true;
   }
 
-  // --- GRID HELPERS ---
-  function getGridHost() {
-    return (
-      qAll(".ui-grid-render-container-body") ||
-      qAll(".ui-grid-viewport") ||
-      qAll(".ui-grid-canvas")
-    );
-  }
-
-  function getFirstRowText() {
-    const row = qAllMany(".ui-grid-row").find(r => r.offsetParent !== null);
-    return (row?.innerText || "").trim();
-  }
+  // --- GRID & UI ---
+  function getGridHost() { return qAll(".ui-grid-viewport"); }
 
   function getGridSignature() {
-    const host = getGridHost();
-    const hostText = (host?.innerText || "").trim();
-    const firstRow = getFirstRowText();
-    const compact = (firstRow || hostText).replace(/\s+/g, " ").slice(0, 200);
-    const rowCount = qAllMany(".ui-grid-row").filter(r => r.offsetParent !== null).length;
-    return `${rowCount}|${compact}`;
+    const rows = qAllMany(".ui-grid-row");
+    return rows.length > 0 ? rows[0].innerText.slice(0,50) + rows.length : "empty";
   }
 
   async function waitForGridToRefresh(prevSig, timeoutMs = 20000) {
@@ -266,10 +223,9 @@
     while (Date.now() - start < timeoutMs) {
       if (isPageBusy()) { await sleep(400); continue; }
       const sig = getGridSignature();
-      if (sig && sig !== prevSig && !sig.startsWith("0|")) return true;
+      if (sig !== "empty" && sig !== prevSig) return true;
       await sleep(400);
     }
-    console.warn(TAG, "⚠️ Grid yenilenmesi zaman aşımı.");
     return false;
   }
 
@@ -280,7 +236,7 @@
         const input = cell.querySelector("input");
         if (input && (input.value || "").trim() !== "") {
           fillInputAngularSafe(input, "");
-          await sleep(300);
+          await sleep(500);
         }
         return true;
       }
@@ -289,29 +245,14 @@
   }
 
   function isPageBusy() {
-    const busySelectors = [
-        ".modal-backdrop", ".block-ui-overlay", ".block-ui-message-container",
-        ".loading-spinner", ".fa-spinner", ".fa-refresh.fa-spin",
-        "div[ng-show='isLoading']", ".ui-grid-icon-spin"
-    ];
-    const els = qAllMany(busySelectors.join(","));
-    if (els.some(el => {
-        const style = window.getComputedStyle(el);
-        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-    })) return true;
-
-    const messageContainers = qAllMany(".modal-content, .alert, .growl-message, .block-ui-message");
-    if (messageContainers.some(el => {
-        const text = (el.innerText || "").toLowerCase();
-        const style = window.getComputedStyle(el);
-        return (style.display !== 'none' && style.visibility !== 'hidden') && 
-               (text.includes("bekleyiniz") || text.includes("yükleniyor") || text.includes("aranıyor"));
-    })) return true;
-
-    return false;
+    const busyEls = qAllMany(".loading-spinner, .fa-spinner, .block-ui-overlay");
+    return busyEls.some(el => {
+       const style = window.getComputedStyle(el);
+       return style.display !== 'none' && style.visibility !== 'hidden';
+    });
   }
 
-  // --- EPATS UI ---
+  // --- ACTIONS ---
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
     if (tp_clicked_ara) return true; 
@@ -321,12 +262,9 @@
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     
-    if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) {
-        console.log(TAG, "⏳ Ara butonu pasif, bekleniyor...");
-        return false;
-    }
+    if (!btn || btn.classList.contains("disabled")) return false;
 
-    console.log(TAG, "🔎 Ara butonuna basılıyor...");
+    console.log(TAG, "🔎 Ara");
     superClick(btn);
     
     await chrome.storage.local.set({ 
@@ -378,12 +316,11 @@
     return true;
   }
 
-  // --- ACCORDION & DOWNLOAD ---
   function getAccordionHost() { return qAll("div.ui-grid-tree-base-row-header-buttons"); }
   
   function getAccordionClickable() {
     const host = getAccordionHost();
-    if (!host || host.offsetParent === null) return null; 
+    if (!host) return null; 
     return host.querySelector("i") || host;
   }
 
@@ -412,8 +349,8 @@
     
     if (state === "plus") { superClick(clickable); await sleep(1500); }
     else if (state === "minus") { 
-        superClick(clickable); await sleep(800);
-        superClick(clickable); await sleep(1500);
+        superClick(clickable); await sleep(800); // Kapat
+        superClick(clickable); await sleep(1500); // Aç
     }
     return true;
   }
@@ -431,15 +368,12 @@
 
   async function downloadTescilBelge() {
     const { tp_download_clicked, tp_clicked_ara, tp_waiting_pdf_url } = await chrome.storage.local.get([
-      "tp_download_clicked",
-      "tp_clicked_ara",
-      "tp_waiting_pdf_url"
+      "tp_download_clicked", "tp_clicked_ara", "tp_waiting_pdf_url"
     ]);
 
-    if (tp_waiting_pdf_url) return true; // Zaten bekliyorsak işlem yapma
+    if (tp_waiting_pdf_url) return true; 
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
     if (isAdvancing) return true;
-
     if (!getAccordionClickable()) return false; 
 
     isActionInProgress = true;
@@ -454,27 +388,28 @@
             await ensureAccordionExpandedAfterFilter();
 
             const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
-            const targetIcon = icons[1] || icons[0]; 
+            // Varsa 2. ikon, yoksa 1. ikon
+            const targetIcon = icons.length >= 2 ? icons[1] : icons[0]; 
 
             if (targetIcon) {
                 console.log(TAG, `✅ Dosya Bulundu: ${terim}`);
                 
-                // 1) Önce durumu güncelle: PDF bekleniyor
+                // Durumu PDF Bekliyor olarak ayarla
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
 
-                // 2) Sadece tıklama yap, href yakalamaya çalışma
+                // 🔥 NAZİK TIKLAMA (Ctrl yok)
                 superClick(targetIcon);
                 
-                // 3) Timeout koruması (12 saniye sonra gelmezse atla)
+                // Timeout koruması (15 saniye)
                 setTimeout(async () => {
                   const s = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
                   if (s.tp_waiting_pdf_url && !s.tp_download_clicked) {
-                    console.warn(TAG, "⏳ PDF Timeout. Geçiliyor.");
+                    console.warn(TAG, "⏳ PDF Timeout. İlerle.");
                     await chrome.storage.local.set({ tp_waiting_pdf_url: false });
                     globalProcessingLock = false;
                     await advanceQueue();
                   }
-                }, 12000);
+                }, 15000);
                 
                 return true;
             }
@@ -482,14 +417,13 @@
         
         searchPassCount++;
         if (searchPassCount >= 2) {
-            console.log(TAG, "⚠️ Belge yok, geçiliyor.");
+            console.log(TAG, "⚠️ Belge yok.");
             await advanceQueue(); 
         }
     } catch(e) { console.error(TAG, e); await advanceQueue(); } 
     finally { isActionInProgress = false; }
   }
 
-  // --- ANA DÖNGÜ ---
   async function run() {
     if (isAdvancing) return;
     const continueProcess = await checkQueueAndSetAppNo();
@@ -531,10 +465,7 @@
 
       if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
 
-      if (isPageBusy()) {
-        console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
-        return;
-      }
+      if (isPageBusy()) { console.log(TAG, "⏳ Sayfa meşgul..."); return; }
 
       const { tp_grid_ready, tp_prev_grid_sig } = await chrome.storage.local.get(["tp_grid_ready", "tp_prev_grid_sig"]);
       if (tp_clicked_ara && !tp_grid_ready) {
