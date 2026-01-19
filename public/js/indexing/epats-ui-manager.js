@@ -155,7 +155,7 @@ export class EpatsUiManager {
         this.pagination = new Pagination({
             containerId: 'epatsPagination',
             itemsPerPage: 10,
-            showItemsPerPageSelector: false,
+            showItemsPerPageSelector: true, // <--- TRUE yapın veya bu satırı silin
             onPageChange: (currentPage, itemsPerPage) => {
                 // Sayfalanmış veriyi hesapla
                 const start = (currentPage - 1) * itemsPerPage;
@@ -166,6 +166,7 @@ export class EpatsUiManager {
             strings: {
                 noResults: 'Kayıt yok',
                 itemsInfo: 'Toplam {total} kayıt'
+                // Diğer metinler (İlk, Son vb.) artık Pagination.js'teki varsayılanlardan gelecek
             }
         });
         
