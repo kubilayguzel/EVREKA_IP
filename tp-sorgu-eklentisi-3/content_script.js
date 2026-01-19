@@ -76,7 +76,13 @@
   if (window.top !== window) return;
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+  const DEFAULT_UPLOAD_ENDPOINT =
+    "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+
+  async function getUploadEndpoint() {
+    const { tp_upload_url } = await chrome.storage.local.get(["tp_upload_url"]);
+    return tp_upload_url || DEFAULT_UPLOAD_ENDPOINT;
+  }
 
   // ---------- KUYRUK VE RESET MANTIĞI ----------
   
@@ -217,7 +223,8 @@
 
       console.log(TAG, "📤 Upload ediliyor...", payload.ipRecordId);
 
-      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+      const uploadEndpoint = await getUploadEndpoint();
+      const uploadRes = await fetch(uploadEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: payload }),
