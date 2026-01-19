@@ -238,18 +238,42 @@ export class EpatsUiManager {
 
         if (queue.length === 0) return;
 
-        // Eklentiye mesaj gönder
+        // --- 🚀 YENİ: ORTAMA GÖRE URL BELİRLEME ---
+        // Mevcut projenin ID'sini Firebase servisinden alalım
+        // Eğer firebaseServices global değilse, import ettiğiniz yerden alabilirsiniz.
+        // Genelde firebase.app().options.projectId ile de erişilebilir.
+        
+        // Manuel Kontrol (Otomatik yapmak yerine garanti olsun diye domain kontrolü de yapabiliriz)
+        const isProduction = window.location.hostname === "ipgate.evrekagroup.com";
+        
+        let targetUploadUrl = "";
+
+        if (isProduction) {
+            // CANLI PROJE (ipgate-31bd2)
+            // Bölge (europe-west1) farklıysa lütfen düzeltin
+            targetUploadUrl = "https://europe-west1-ipgate-31bd2.cloudfunctions.net/saveEpatsDocument";
+        } else {
+            // TEST PROJESİ (ip-manager-production-aab4b)
+            targetUploadUrl = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
+        }
+
+        console.log("Hedef Fonksiyon URL:", targetUploadUrl);
+        // ------------------------------------------
+
+        // 1. Yöntem: Window Message
         window.postMessage({
             type: "EPATS_QUEUE_START",
-            data: queue
+            data: queue,
+            uploadUrl: targetUploadUrl // <--- ADRESİ EKLENTİYE GÖNDERİYORUZ
         }, "*");
 
-        // Alternatif: Chrome Extension API
+        // 2. Yöntem: Chrome Extension API
         if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
              try {
                  chrome.runtime.sendMessage(this.extensionId, {
                     action: "START_QUEUE",
-                    queue: queue
+                    queue: queue,
+                    uploadUrl: targetUploadUrl // <--- ADRESİ BURAYA DA EKLE
                 });
              } catch(e) { console.log("Extension mesaj hatası (normaldir):", e); }
         }
