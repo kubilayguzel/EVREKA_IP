@@ -4470,15 +4470,20 @@ export const generateSimilarityReport = onCall(
             const storagePath = `bulletin_reports/${bulletinNo}/${targetClientId}/${Date.now()}_${reportFileName}`;
             const file = admin.storage().bucket().file(storagePath);
 
-            await file.save(docBuffer, { 
-                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+            const token = uuidv4();
+
+            await file.save(docBuffer, {
+              contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              metadata: {
+                metadata: {
+                  firebaseStorageDownloadTokens: token,
+                },
+              },
             });
 
-            // SIGNED URL OLUŞTUR (Frontend bu linki kullanarak dosyayı gösterir)
-            const [signedUrl] = await file.getSignedUrl({
-                action: 'read',
-                expires: '01-01-2099' 
-            });
+            const downloadURL =
+              `https://firebasestorage.googleapis.com/v0/b/${admin.storage().bucket().name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+
 
             // Şablon ve Replacements... (Aynı kalıyor)
             let objectionDeadline = "-"; // (Yukarıdaki tarih hesaplama mantığı burada da kullanılabilir)
@@ -5315,19 +5320,27 @@ async function persistImageToStorage(src, applicationNumber) {
 
     const filePath = `trademarks/${safeAppNo}/logo.${ext}`;
     const file = bucket.file(filePath);
+    const token = uuidv4();
     await file.save(buffer, {
       contentType,
       resumable: false,
-      metadata: { cacheControl: 'public,max-age=31536000' },
+      metadata: {
+        cacheControl: "public,max-age=31536000",
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+        },
+      },
     });
 
-    // İmzalı URL (2035'e kadar)
-    const [signedUrl] = await file.getSignedUrl({
-      action: 'read',
-      expires: '2035-01-01',
-    });
+    const downloadURL =
+      `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
 
-    return { imagePath: filePath, imageSignedUrl: signedUrl, publicImageUrl: `https://storage.googleapis.com/${bucket.name}/${filePath}` };
+    return {
+      imagePath: filePath,
+      imageSignedUrl: downloadURL, // istersen alan adını değiştirmeden böyle bırak
+      publicImageUrl: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+    };
+
   } catch (e) {
     logger.warn('Görsel Storage’a kaydedilemedi, data URL döndürülecek.', { message: e?.message });
     return { imagePath: '', imageSignedUrl: '', publicImageUrl: '' };
@@ -7179,19 +7192,6 @@ export const saveEpatsDocument = onCall(
       const bucket = admin.storage().bucket();
       const buffer = Buffer.from(fileBase64, 'base64');
       const file = bucket.file(storagePath);
-
-      await file.save(buffer, {
-        contentType: 'application/pdf',
-        metadata: {
-          metadata: {
-            originalName: fileName,
-            source: 'epats_automation',
-            applicationNumber: appNo,
-            uploadedBy: userId
-          }
-        }
-      });
-
       const token = uuidv4();
 
       await file.save(buffer, {
@@ -7202,8 +7202,6 @@ export const saveEpatsDocument = onCall(
             source: "epats_automation",
             applicationNumber: appNo,
             uploadedBy: userId,
-
-            // ✅ Firebase download token
             firebaseStorageDownloadTokens: token,
           },
         },
