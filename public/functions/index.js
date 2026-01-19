@@ -182,6 +182,70 @@ const ETEBS_ERROR_CODES = {
     '006': 'Evraka Ait Ek Bulunamadı'
 };
 
+// --- BASE64 ÇIKARMA YARDIMCILARI ---
+function joinNumericKeyObject(obj) {
+  const keys = Object.keys(obj || {});
+  if (!keys.length) return null;
+
+  const allNumeric = keys.every(k => String(Number(k)) === k);
+  if (!allNumeric) return null;
+
+  return keys
+    .sort((a, b) => Number(a) - Number(b))
+    .map(k => obj[k])
+    .join('');
+}
+
+function extractBase64(downloadRawData) {
+  // Dokümana göre tipik alan: DownloadDocumentResult: [ { BASE64: "..." } ]
+  let node = downloadRawData?.DownloadDocumentResult ?? downloadRawData;
+
+  // 1) Node direkt STRING ise -> string key'leri "0,1,2..." gibi görünür; base64 bu olabilir
+  if (typeof node === 'string' && node.length > 0) return node;
+
+  // 2) Array ise ilk elemandan BASE64 al
+  if (Array.isArray(node)) {
+    const first = node[0];
+
+    if (first?.BASE64 && typeof first.BASE64 === 'string') return first.BASE64;
+    if (typeof first === 'string' && first.length > 0) return first;
+
+    // first numeric-key object olabilir
+    if (first && typeof first === 'object') {
+      const joined = joinNumericKeyObject(first);
+      if (joined) return joined;
+    }
+  }
+
+  // 3) Object ise BASE64 veya numeric-key join
+  if (node && typeof node === 'object') {
+    if (typeof node.BASE64 === 'string') return node.BASE64;
+
+    const joined = joinNumericKeyObject(node);
+    if (joined) return joined;
+  }
+
+  // 4) Son çare: tüm objede BASE64 alanını dolaşarak ara
+  const stack = [downloadRawData];
+  const seen = new Set();
+
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== 'object') continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+
+    if (typeof cur.BASE64 === 'string') return cur.BASE64;
+
+    for (const v of Object.values(cur)) {
+      if (v && typeof v === 'object') stack.push(v);
+    }
+  }
+
+  return null;
+}
+
+
 // ETEBS API Proxy Function (Toptan Kayıt Modeli)
 // functions/index.js (GÜNCELLENMİŞ ETEBS PROXY)
 
@@ -269,46 +333,54 @@ export const etebsProxyV2 = onRequest(
                         timeout: 90000 // 90sn timeout
                     });
 
-                    const downloadRawData = await downloadResponse.json();
+                    // İçerik tipi JSON değilse .json() denemek yerine text al
+                    const ct = (downloadResponse.headers.get('content-type') || '').toLowerCase();
+
+                    let downloadRawData;
+                    if (ct.includes('application/json') || ct.includes('text/json') || ct.includes('application/problem+json')) {
+                      downloadRawData = await downloadResponse.json();
+                    } else {
+                      const txt = await downloadResponse.text();
+                      // JSON gibi görünüyorsa parse etmeyi dene
+                      try {
+                        downloadRawData = JSON.parse(txt);
+                      } catch {
+                        // JSON değilse burada kontrollü şekilde "BASE64 yok" sayacağız
+                        downloadRawData = { __rawText: txt, IslemSonucKod: 'NON_JSON', IslemSonucAck: 'Non-JSON response' };
+                      }
+                    }
 
                     // --- 🔥 DÜZELTME: PATLAMIŞ VERİ (EXPLODED OBJECT) ONARIMI ---
                     let base64Data = null;
-                    
-                    // 1. Standart Hata Kontrolü
-                    if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
-                        throw new Error(`API Hatası: ${downloadRawData.IslemSonucAck} (${downloadRawData.IslemSonucKod})`);
-                    }
 
-                    // 2. Sonuç Objesini Bul
-                    let resultNode = downloadRawData.DownloadDocumentResult || downloadRawData;
-                    
-                    // Dizi ise ilk elemanı al
-                    if (Array.isArray(resultNode)) {
-                        resultNode = resultNode[0];
-                    }
-
-                    // 3. Base64 Verisini Çıkar (Normal Durum)
-                    if (resultNode && resultNode.BASE64 && typeof resultNode.BASE64 === 'string') {
-                        base64Data = resultNode.BASE64;
-                    } 
-                    // 4. Base64 Verisini Çıkar (Sizin Durumunuz: Parçalanmış Nesne)
-                    else if (resultNode && typeof resultNode === 'object') {
-                        // Eğer nesne anahtarları "0", "1"... diye gidiyorsa bu bir exploded string'dir
-                        const keys = Object.keys(resultNode);
-                        if (keys.includes('0') && keys.includes('1')) {
-                            console.warn(`⚠️ [${docNo}] Bozuk (parçalanmış) veri formatı algılandı. Onarılıyor...`);
-                            // Object.values() ile değerleri (harfleri) alıp join('') ile birleştiriyoruz.
-                            // Not: Object.values genelde index sırasına göre verir ama garanti olsun diye birleştirmeyi deniyoruz.
-                            // Eğer standart bir JS ortamıysa numeric key'ler sıralı gelir.
-                            base64Data = Object.values(resultNode).join('');
-                        }
-                    }
-
-                    if (!base64Data) {
-                        console.error(`❌ [${docNo}] Veri kurtarılamadı. Yapı:`, Object.keys(resultNode || {}).slice(0, 10));
-                        downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı.' });
+                    // 1) Standart Hata Kontrolü (005'i önemsemiyoruz => skip)
+                    if (downloadRawData?.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
+                      if (downloadRawData.IslemSonucKod === '005') {
+                        // kullanıcı istedi: 005'i önemsemeyelim
+                        downloadFailures.push({ docNo, reason: 'SKIP: 005 (daha önce indirildi)' });
                         return;
+                      }
+                      throw new Error(`API Hatası: ${downloadRawData.IslemSonucAck} (${downloadRawData.IslemSonucKod})`);
                     }
+
+                    // 2) Base64'ı robust şekilde çıkar (string/array/object/numeric-key hepsi)
+                    base64Data = extractBase64(downloadRawData);
+
+                    if (!base64Data || typeof base64Data !== 'string' || base64Data.length < 50) {
+                      // Çok kısa stringler genelde base64 değildir; kontrollü hata
+                      const hintKeys = (() => {
+                        try {
+                          const node = downloadRawData?.DownloadDocumentResult ?? downloadRawData;
+                          if (node && typeof node === 'object') return Object.keys(node).slice(0, 20);
+                          return [];
+                        } catch { return []; }
+                      })();
+
+                      console.error(`❌ [${docNo}] BASE64 okunamadı. HintKeys:`, hintKeys);
+                      downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı.' });
+                      return;
+                    }
+
 
                     // --- KAYDETME İŞLEMLERİ ---
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
