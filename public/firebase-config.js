@@ -635,24 +635,27 @@ export const ipRecordsService = {
         }
     },
 
-    subscribeToRecords(callback, limitCount = 500) {
+// Varsayılan değeri null yapıyoruz ki herhangi bir sayı verilmezse sınır koymasın
+    subscribeToRecords(callback, limitCount = null) {
         if (!isFirebaseAvailable) return () => {};
-        let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(limitCount));
+        
+        // Temel sorguyu oluştur
+        let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
+        
+        // SADECE eğer limitCount geçerli bir sayı olarak verilmişse limit ekle
+        if (limitCount && typeof limitCount === 'number') {
+            q = query(q, limit(limitCount));
+        }
         
         return onSnapshot(q, (snapshot) => {
             const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             callback({ success: true, data: records });
         }, (error) => {
-            // Hata durumunu analiz et
             console.error("Firestore Dinleme Hatası:", error.code, error.message);
-            
-            // Eğer hata geçici bir yetki hatasıysa (kod: 'permission-denied'), 
-            // sayfayı hemen kırma, sadece logla. 
             if (error.code === 'permission-denied') {
-                console.warn("Yeni sekme açılışı nedeniyle geçici yetki kaybı yaşandı, dinleyici hayatta tutuluyor.");
+                console.warn("Geçici yetki kaybı, dinleyici korunuyor.");
                 return;
             }
-
             callback({ success: false, error: error.message });
         });
     }
