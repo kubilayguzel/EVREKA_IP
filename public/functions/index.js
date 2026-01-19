@@ -5337,8 +5337,8 @@ async function persistImageToStorage(src, applicationNumber) {
 
     return {
       imagePath: filePath,
-      imageSignedUrl: downloadURL, // istersen alan adını değiştirmeden böyle bırak
-      publicImageUrl: `https://storage.googleapis.com/${bucket.name}/${filePath}`,
+      imageSignedUrl: downloadURL,   // geriye dönük uyumluluk
+      publicImageUrl: downloadURL,   // ✅ gerçekten çalışan URL
     };
 
   } catch (e) {
