@@ -1,6 +1,7 @@
 // js/pagination.js - Yeniden kullanılabilir pagination sistemi
 
-constructor(options = {}) {
+export default class Pagination {
+    constructor(options = {}) {
         // 1. Varsayılan metinleri tanımla
         const defaultStrings = {
             first: 'İlk',
