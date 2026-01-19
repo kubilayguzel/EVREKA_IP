@@ -1,6 +1,8 @@
 // background.js (PDF Sekme Yakalayıcı) - MV3 önerilen
 
 let activeJobTabId = null;
+let lastPdfUrl = null;
+
 
 async function ensureContentScript(tabId) {
   try {
@@ -100,12 +102,43 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
   if (isPdfLike) {
     console.log("[BG] PDF Sekmesi Yakalandı (early):", url);
-
+    lastPdfUrl = url;   
     sendPdfUrlToMainTab(url);
 
     // PDF sekmesini biraz daha geç kapat (URL yakalama garanti olsun)
     setTimeout(() => {
-      chrome.tabs.remove(tabId).catch(() => {});
+      if (tabId !== activeJobTabId) {
+        chrome.tabs.remove(tabId).catch(() => {});
+      }
     }, 1500);
   }
 });
+
+function hasPdfContentType(headers = []) {
+  const h = headers.find(x => (x.name || "").toLowerCase() === "content-type");
+  const v = (h?.value || "").toLowerCase();
+  return v.includes("application/pdf");
+}
+
+// ✅ Asıl çözüm: URL değil, Content-Type: application/pdf yakala
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (!activeJobTabId) return;
+    if (details.tabId == null || details.tabId < 0) return;
+    if (!hasPdfContentType(details.responseHeaders)) return;
+
+    const url = details.url;
+    console.log("[BG] PDF yakalandı (Content-Type):", url);
+
+    lastPdfUrl = url;
+    sendPdfUrlToMainTab(url);
+
+    // PDF ayrı sekmede açıldıysa kapat (ana sekmeyi kapatma)
+    if (details.tabId !== activeJobTabId) {
+      setTimeout(() => chrome.tabs.remove(details.tabId).catch(() => {}), 1500);
+    }
+  },
+  { urls: ["https://epats.turkpatent.gov.tr/*"] },
+  ["responseHeaders"]
+);
+
