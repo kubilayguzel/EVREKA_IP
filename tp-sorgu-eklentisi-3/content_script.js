@@ -1,193 +1,275 @@
-// content_script.js (Final Fix: Gentle Click)
-
+// content_script.js (Final Fix: Singleton Instance & Queue Stability)
 (() => {
-  // --- SINGLETON ---
-  if (window.TP_SCRIPT_ALREADY_LOADED) return;
+  // 🔥 KRİTİK DÜZELTME: SCRIPT TEKİLLİK KONTROLÜ
+  // Eğer bu script sayfada zaten varsa, ikinci kez çalışmasını engelle.
+  if (window.TP_SCRIPT_ALREADY_LOADED) {
+      console.log("[TP-AUTO] ♻️ Script zaten yüklü, mükerrer yükleme engellendi.");
+      return; 
+  }
   window.TP_SCRIPT_ALREADY_LOADED = true;
 
   const TAG = "[TP-AUTO]";
+  
+  // --- GLOBAL STATE VARIABLES ---
   let isActionInProgress = false; 
   let searchPassCount = 0; 
-  let globalProcessingLock = false; 
-  let isAdvancing = false;          
-  let lastProcessedUrl = null;      
+  let globalProcessingLock = false; // Belge işleme kilidi
+  let isAdvancing = false;          // Kuyruk ilerletme kilidi
+  let lastProcessedUrl = null;      // Mükerrer URL önleyici
 
-  console.log(TAG, "Content script active.");
+  console.log("[TP-AUTO] Content script loaded & initialized on:", location.href);
 
-  // --- MESAJ DİNLEYİCİSİ ---
+  // --- 1. MESAJ DİNLEYİCİSİ ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request?.action === "PDF_URL_CAPTURED" && request?.url) {
       sendResponse({ ok: true }); 
 
-      if (request.url === lastProcessedUrl) return; 
-      if (globalProcessingLock || isAdvancing) return; 
+      // Mükerrer URL Kontrolü
+      if (request.url === lastProcessedUrl) {
+        console.warn(TAG, "♻️ Bu URL zaten işlendi, reddedildi:", request.url);
+        return;
+      }
 
+      // Kilit Kontrolü
+      if (globalProcessingLock || isAdvancing) {
+        console.warn(TAG, "⛔ Sistem meşgul, istek reddedildi:", request.url);
+        return; 
+      }
+
+      // Kilitle
       globalProcessingLock = true;
       lastProcessedUrl = request.url;
 
       (async () => {
         try {
-          const state = await chrome.storage.local.get(["tp_waiting_pdf_url"]);
+          const state = await chrome.storage.local.get([
+            "tp_waiting_pdf_url",
+            "tp_download_clicked"
+          ]);
+
+          // Eğer sistem PDF beklemiyorsa
           if (!state.tp_waiting_pdf_url) {
-            console.warn(TAG, "⚠️ Beklenmeyen PDF, reddedildi.");
-            globalProcessingLock = false; return;
+            console.warn(TAG, "⚠️ Beklenmeyen PDF isteği. İşlem iptal.", request.url);
+            globalProcessingLock = false; 
+            return;
           }
 
-          // İndirildi işaretle
-          await chrome.storage.local.set({ tp_download_clicked: true, tp_waiting_pdf_url: false });
+          // Durumu güncelle
+          await chrome.storage.local.set({
+            tp_download_clicked: true,
+            tp_waiting_pdf_url: false
+          });
+
+          // İşleme başla
           await processDocument(request.url, null);
+
         } catch (err) {
-          console.error(TAG, err);
-          globalProcessingLock = false; 
+          console.error(TAG, "Mesaj işleme hatası:", err);
+          globalProcessingLock = false; // Hata olursa kilidi aç
         }
       })();
+
+      return true;
     }
   });
 
   if (window.top !== window) return;
+  
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
 
-  // --- KUYRUK ---
-  document.addEventListener("TP_RESET", async () => { try { await chrome.storage.local.clear(); } catch {} });
+  // ---------- KUYRUK VE RESET MANTIĞI ----------
+  
+  document.addEventListener("TP_RESET", async () => {
+    try {
+      await chrome.storage.local.clear();
+      console.log(TAG, "RESET OK.");
+    } catch (e) { console.log(TAG, "RESET FAILED:", e); }
+  });
 
   async function checkQueueAndSetAppNo() {
     const data = await chrome.storage.local.get(["tp_queue", "tp_is_queue_running", "tp_queue_index", "tp_app_no"]);
-    if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) return true; 
+    
+    if (!data.tp_is_queue_running || !data.tp_queue || data.tp_queue.length === 0) {
+      return true; 
+    }
 
     const currentIndex = data.tp_queue_index || 0;
+    
+    // Kuyruk bitti mi?
     if (currentIndex >= data.tp_queue.length) {
-      console.log(TAG, "🏁 Kuyruk Bitti.");
+      console.log(TAG, "🏁 Kuyruk tamamlandı!");
+      // Kuyruğu kapat
       await chrome.storage.local.set({ tp_is_queue_running: false, tp_queue: [] });
-      alert("İşlemler tamamlandı.");
+      alert("Toplu işlem tamamlandı!");
       return false; 
     }
 
     const currentJob = data.tp_queue[currentIndex];
+    
+    // Eğer şu anki hafızadaki no farklıysa (Yeni bir işe başlıyorsak)
     if (data.tp_app_no !== currentJob.appNo) {
-      console.log(TAG, `🔄 Yeni İş: ${currentIndex + 1}/${data.tp_queue.length} - ${currentJob.appNo}`);
+      console.log(TAG, `🔄 Yeni İş Başlıyor: ${currentIndex + 1}/${data.tp_queue.length} - No: ${currentJob.appNo}`);
+      
       await chrome.storage.local.set({
         tp_app_no: currentJob.appNo,
         tp_current_job_id: currentJob.ipId,
         tp_current_doc_type: currentJob.docType,
         tp_clicked_ara: false,
         tp_download_clicked: false,
-        tp_grid_ready: false,
-        tp_prev_grid_sig: null,
         tp_expanded_twice: false,
-        tp_last_belgelerim_try: 0,
-        tp_last_search_ts: 0,
-        tp_waiting_pdf_url: false
+        tp_last_belgelerim_try: 0
       });
+      
       searchPassCount = 0; 
+      // Yeni işe başlarken URL kilidini sıfırlama, çünkü farklı bir dosya gelecek
+      // lastProcessedUrl = null; // (Opsiyonel: Eğer dosya isimleri/linkleri aynı olma riski varsa açın)
       return true;
     }
+    
     return true;
   }
 
+  // --- ADVANCE QUEUE ---
   async function advanceQueue() {
     if (isAdvancing) return;
     isAdvancing = true;
-    console.log(TAG, "✅ İlerleniyor...");
+
+    console.log(TAG, "✅ İşlem tamam, kuyruk ilerletiliyor...");
 
     try {
+        // 1. Input alanını temizle
         const input = qAll("#textbox551 input");
-        if (input) fillInputAngularSafe(input, ""); 
+        if (input) {
+            fillInputAngularSafe(input, ""); 
+        }
 
+        // 2. İndeksi artır
         const data = await chrome.storage.local.get(["tp_queue_index"]);
+        const nextIndex = (data.tp_queue_index || 0) + 1;
+
+        // 3. Durumları güncelle
         await chrome.storage.local.set({ 
-          tp_queue_index: (data.tp_queue_index || 0) + 1,
+          tp_queue_index: nextIndex,
           tp_app_no: null,            
           tp_download_clicked: false, 
           tp_clicked_ara: false,      
           tp_waiting_pdf_url: false,  
-          tp_grid_ready: false,
-          tp_prev_grid_sig: null,
           tp_expanded_twice: false,
-          tp_last_belgelerim_try: 0,
-          tp_last_search_ts: 0
+          tp_last_belgelerim_try: 0 
         });
+
+        console.log(TAG, `🔓 Sıradaki İndeks: ${nextIndex}. Arayüz hazırlanıyor...`);
         
+        // 4. Kilitleri aç
         globalProcessingLock = false; 
         isActionInProgress = false;
-        await sleep(1500); 
-    } catch (e) {} 
-    finally { isAdvancing = false; }
+
+        // 5. Arayüzün toparlanması için bekle
+        await sleep(2000); 
+
+    } catch (e) {
+        console.error(TAG, "advanceQueue hatası:", e);
+    } finally {
+        isAdvancing = false; 
+    }
   }
 
-  // --- PDF UPLOAD ---
+  // ---------- PDF İŞLEME ----------
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onloadend = () => {
+        try {
+          const res = String(reader.result || "");
+          resolve(res.split(",")[1] || "");
+        } catch (e) { reject(e); }
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function processDocument(downloadUrl, element) {
-     console.log(TAG, "📄 İşleniyor...", downloadUrl);
-     if(element) element.style.color = "orange";
+    console.log(TAG, "📄 Belge işleniyor:", downloadUrl);
+    if (element) element.style.color = "orange";
 
-     try {
-        const response = await fetch(downloadUrl);
-        const blob = await response.blob();
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        
-        reader.onloadend = async () => {
-            const base64data = reader.result.split(',')[1];
-            const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type", "tp_upload_url"]);
-            
-            const dynamicEndpoint = storage.tp_upload_url;
-            if (!dynamicEndpoint) {
-                console.error(TAG, "❌ HATA: URL Yok.");
-                await advanceQueue(); return;
-            }
+    try {
+      const response = await fetch(downloadUrl, { credentials: "include" });
+      if (!response.ok) throw new Error("PDF fetch failed: " + response.status);
 
-            const payload = {
-                ipId: storage.tp_current_job_id,
-                fileContent: base64data,
-                fileName: "Tescil_Belgesi.pdf",
-                mimeType: "application/pdf",
-                docType: storage.tp_current_doc_type || "tescil_belgesi"
-            };
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("PDF blob boş");
 
-            console.log(TAG, "📤 Upload ->", dynamicEndpoint);
-            const uploadRes = await fetch(dynamicEndpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ data: payload }) 
-            });
+      const base64data = await blobToBase64(blob);
+      if (!base64data || base64data.length < 1000) throw new Error("Base64 geçersiz");
 
-            if (uploadRes.ok) {
-                console.log(TAG, "✅ Başarılı!");
-                if(element) element.style.color = "green";
-                await advanceQueue();
-            } else {
-                console.error(TAG, "❌ Hata:", await uploadRes.text());
-                if(element) element.style.color = "red";
-                await advanceQueue(); 
-            }
-        };
-     } catch (error) {
-         console.error(TAG, "Process hatası:", error);
-         await advanceQueue();
-     }
+      const storage = await chrome.storage.local.get(["tp_current_job_id", "tp_current_doc_type"]);
+
+      const payload = {
+        ipRecordId: storage.tp_current_job_id,
+        fileBase64: base64data,
+        fileName: "Tescil_Belgesi.pdf",
+        mimeType: "application/pdf",
+        docType: storage.tp_current_doc_type || "tescil_belgesi",
+      };
+
+      console.log(TAG, "📤 Upload ediliyor...", payload.ipRecordId);
+
+      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: payload }),
+      });
+
+      const text = await uploadRes.text();
+      if (uploadRes.ok) {
+        console.log(TAG, "✅ Yükleme Başarılı!", text);
+        if (element) element.style.color = "green";
+      } else {
+        console.error(TAG, "❌ Yükleme Hatası:", text);
+        if (element) element.style.color = "red";
+      }
+
+    } catch (error) {
+      console.error(TAG, "Process hatası:", error);
+    } finally {
+      // ✅ Sadece burada çağırıyoruz. 
+      await advanceQueue();
+    }
   }
 
-  // --- HELPERS ---
-  function qAll(selector) {
+  // ---------- DOM HELPERS ----------
+  function getAllDocs() {
     const docs = [document];
-    document.querySelectorAll("iframe").forEach(fr => { try { if(fr.contentDocument) docs.push(fr.contentDocument); } catch{} });
-    for (const d of docs) { const el = d.querySelector(selector); if (el) return el; }
+    const frames = Array.from(document.querySelectorAll("iframe"));
+    for (const fr of frames) {
+      try { const d = fr.contentDocument; if (d) docs.push(d); } catch {}
+    }
+    return docs;
+  }
+
+  function qAll(selector) {
+    for (const d of getAllDocs()) {
+      const el = d.querySelector(selector);
+      if (el) return el;
+    }
     return null;
   }
+
   function qAllMany(selector) {
     let out = [];
-    const docs = [document];
-    document.querySelectorAll("iframe").forEach(fr => { try { if(fr.contentDocument) docs.push(fr.contentDocument); } catch{} });
-    for (const d of docs) out = out.concat(Array.from(d.querySelectorAll(selector)));
+    for (const d of getAllDocs()) out = out.concat(Array.from(d.querySelectorAll(selector)));
     return out;
   }
 
-  // 🔥 DÜZELTİLEN YER: Sadece basit click, Ctrl yok!
   function superClick(el) {
     if (!el) return false;
-    try { 
-        el.click(); // En basit, en güvenli yöntem
-        return true; 
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch {}
+    try {
+      el.click();
+      return true;
     } catch { return false; }
   }
 
@@ -201,7 +283,7 @@
     input.blur();
     return true;
   }
-  
+
   async function throttle(key, ms) {
     const now = Date.now();
     const obj = await chrome.storage.local.get([key]);
@@ -210,78 +292,38 @@
     return true;
   }
 
-  // --- GRID & UI ---
-  function getGridHost() { return qAll(".ui-grid-viewport"); }
-
-  function getGridSignature() {
-    const rows = qAllMany(".ui-grid-row");
-    return rows.length > 0 ? rows[0].innerText.slice(0,50) + rows.length : "empty";
-  }
-
-  async function waitForGridToRefresh(prevSig, timeoutMs = 20000) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (isPageBusy()) { await sleep(400); continue; }
-      const sig = getGridSignature();
-      if (sig !== "empty" && sig !== prevSig) return true;
-      await sleep(400);
-    }
-    return false;
-  }
-
-  async function clearEvrakAdiFilter() {
-    const cells = qAllMany(".ui-grid-header-cell");
-    for (const cell of cells) {
-      if (cell.innerText.toLowerCase().includes("evrak adı")) {
-        const input = cell.querySelector("input");
-        if (input && (input.value || "").trim() !== "") {
-          fillInputAngularSafe(input, "");
-          await sleep(500);
-        }
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function isPageBusy() {
-    const busyEls = qAllMany(".loading-spinner, .fa-spinner, .block-ui-overlay");
-    return busyEls.some(el => {
-       const style = window.getComputedStyle(el);
-       return style.display !== 'none' && style.visibility !== 'hidden';
-    });
-  }
-
-  // --- ACTIONS ---
+  // ---------- EPATS UI LOGIC ----------
+  
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
     if (tp_clicked_ara) return true; 
 
-    const prevSig = getGridSignature();
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
     
-    if (!btn || btn.classList.contains("disabled")) return false;
+    if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
 
-    console.log(TAG, "🔎 Ara");
+    console.log(TAG, "Ara butonuna basılıyor...");
     superClick(btn);
-    
-    await chrome.storage.local.set({ 
-        tp_clicked_ara: true,
-        tp_last_search_ts: Date.now(),
-        tp_prev_grid_sig: prevSig
-    });
+    await chrome.storage.local.set({ tp_clicked_ara: true });
     return true;
   }
 
   function isGirisPage() { return location.href.includes("/run/TP/EDEVLET/giris"); }
-  function isBelgelerimScreenOpen() { return (!!qAll("div.ui-select-container[name='selectbox550']") || !!qAll("#textbox551 input")); }
   
+  function isBelgelerimScreenOpen() {
+    return (!!qAll("div.ui-select-container[name='selectbox550']") || !!qAll("#textbox551 input") || !!qAll("#button549"));
+  }
+
   function findLoginButtonOnGiris() {
     const direct = qAll('a[href*="turkiye.gov.tr"]');
-    if(direct) return direct;
-    return qAllMany("a,button").find(el => (el.textContent||"").toLowerCase().includes("giriş"));
+    if (direct) return direct;
+    return qAllMany("a,button,div").find((el) => {
+      const t = (el.textContent || "").trim().toLowerCase();
+      const href = (el.getAttribute && el.getAttribute("href")) || "";
+      return href.includes("turkiye.gov.tr") || t === "giriş" || t.includes("e-devlet");
+    });
   }
 
   async function clickBelgelerim() {
@@ -292,24 +334,38 @@
     return false;
   }
 
-  async function ensureDosyaTuruMarka() {
+  function isMarkaSelectedNow() {
     const container = qAll("div.ui-select-container[name='selectbox550']");
     if (!container) return false;
-    if (container.innerText.toLowerCase().includes("marka")) return true;
-    
+    const txt = (container.querySelector(".ui-select-match-text")?.textContent || "").trim().toLowerCase();
+    return txt.includes("marka");
+  }
+
+  async function ensureDosyaTuruMarka() {
+    if (isMarkaSelectedNow()) return true;
     if (!(await throttle("tp_last_select_try", 1000))) return false;
+
+    const container = qAll("div.ui-select-container[name='selectbox550']");
+    if (!container) return false;
+
     const toggle = container.querySelector(".ui-select-toggle");
-    if (!container.classList.contains("open")) { superClick(toggle); await sleep(200); }
-    const rows = qAllMany(".ui-select-choices-row");
-    const markaRow = rows.find(el => el.innerText.toLowerCase().includes("marka"));
-    if (markaRow) { superClick(markaRow); await sleep(300); }
+    if (!container.classList.contains("open")) {
+        superClick(toggle);
+        await sleep(200);
+    }
+    
+    const rows = qAllMany(".ui-select-choices-row, li[role='option']");
+    const markaRow = rows.find(el => (el.textContent || "").toLowerCase().includes("marka"));
+    if (markaRow) { superClick(markaRow); await sleep(300); return isMarkaSelectedNow(); }
     return false;
   }
 
   async function fillBasvuruNo(appNo) {
     const input = qAll("#textbox551 input");
     if (!input) return false;
-    if ((input.value || "").trim() !== String(appNo)) {
+    
+    const currentVal = (input.value || "").trim();
+    if (currentVal !== String(appNo)) {
       fillInputAngularSafe(input, String(appNo));
       await sleep(300);
     }
@@ -320,14 +376,14 @@
   
   function getAccordionClickable() {
     const host = getAccordionHost();
-    if (!host) return null; 
-    return host.querySelector("i") || host;
+    return host ? (host.querySelector("i") || host) : null;
   }
 
   function readAccordionState() {
     const host = getAccordionHost();
     if (!host) return "none";
-    const cls = (host.querySelector("i")?.className || host.className || "").toLowerCase();
+    const icon = host.querySelector("i");
+    const cls = (icon?.className || host.className || "").toLowerCase();
     if (cls.includes("minus")) return "minus"; 
     if (cls.includes("plus")) return "plus";   
     return "unknown";
@@ -336,102 +392,135 @@
   async function ensureAccordionOpenAtStart() {
     const state = readAccordionState();
     if (state === "minus") return true; 
+
     const clickable = getAccordionClickable();
-    if(clickable) { superClick(clickable); await sleep(2000); }
+    if(clickable) {
+        superClick(clickable);
+        await sleep(2000);
+    }
     return readAccordionState() === "minus";
   }
 
   async function ensureAccordionExpandedAfterFilter() {
     await sleep(800);
-    const clickable = getAccordionClickable();
-    if (!clickable) return false;
     const state = readAccordionState();
+    const clickable = getAccordionClickable();
     
-    if (state === "plus") { superClick(clickable); await sleep(1500); }
-    else if (state === "minus") { 
-        superClick(clickable); await sleep(800); // Kapat
-        superClick(clickable); await sleep(1500); // Aç
+    if (!clickable) return false;
+
+    if (state === "plus") { 
+        superClick(clickable);
+        await sleep(1500);
+    } else if (state === "minus") { 
+        superClick(clickable); 
+        await sleep(800);
+        superClick(clickable); 
+        await sleep(1500);
     }
     return true;
   }
 
-  async function setEvrakAdiFilter(term) {
-    const cells = qAllMany(".ui-grid-header-cell");
-    for (const cell of cells) {
-      if (cell.innerText.toLowerCase().includes("evrak adı")) {
-        const input = cell.querySelector("input");
-        if(input) { fillInputAngularSafe(input, term); await sleep(800); return true; }
+  function findEvrakAdiFilterInput() {
+    const headerCells = qAllMany(".ui-grid-header-cell");
+    for (const cell of headerCells) {
+      if ((cell.innerText || "").trim().toLowerCase() === "evrak adı") {
+        return cell.querySelector("input.ui-grid-filter-input");
       }
     }
-    return false;
+    return null;
   }
 
-  async function downloadTescilBelge() {
-    const { tp_download_clicked, tp_clicked_ara, tp_waiting_pdf_url } = await chrome.storage.local.get([
-      "tp_download_clicked", "tp_clicked_ara", "tp_waiting_pdf_url"
-    ]);
+  async function setEvrakAdiFilter(term) {
+    const input = findEvrakAdiFilterInput();
+    if (!input) return false;
+    if ((input.value || "").trim() !== term) {
+      fillInputAngularSafe(input, term);
+      await sleep(800);
+    }
+    return true;
+  }
 
-    if (tp_waiting_pdf_url) return true; 
+  function findDownloadIcon() {
+    const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
+    return icons[1] || null;
+  }
+
+  // --- DOWNLOAD MANTIĞI ---
+  async function downloadTescilBelge() {
+    const { tp_download_clicked, tp_clicked_ara } = await chrome.storage.local.get(["tp_download_clicked", "tp_clicked_ara"]);
+    
+    // Güvenlikler
     if (tp_download_clicked || isActionInProgress || !tp_clicked_ara) return true;
-    if (isAdvancing) return true;
-    if (!getAccordionClickable()) return false; 
+    if (isAdvancing) return true; 
+
+    if (!getAccordionHost()) return false; 
 
     isActionInProgress = true;
+
     try {
         await ensureAccordionOpenAtStart();
+
         const aramaListesi = ["Marka Yenileme Belges", "MYB", "TB", "Tescil_belgesi_us"];
         
         for (const terim of aramaListesi) {
-            console.log(TAG, `🔍 Filtre: ${terim}`);
+            console.log(TAG, `🔍 Kriter: ${terim}`);
+            
             await setEvrakAdiFilter(terim);
             await sleep(1500);
+
             await ensureAccordionExpandedAfterFilter();
 
-            const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
-            // Varsa 2. ikon, yoksa 1. ikon
-            const targetIcon = icons.length >= 2 ? icons[1] : icons[0]; 
-
+            const targetIcon = findDownloadIcon();
+            
             if (targetIcon) {
-                console.log(TAG, `✅ Dosya Bulundu: ${terim}`);
-                
-                // Durumu PDF Bekliyor olarak ayarla
+                console.log(TAG, `✅ BULUNDU: ${terim}`);
                 await chrome.storage.local.set({ tp_waiting_pdf_url: true });
-
-                // 🔥 NAZİK TIKLAMA (Ctrl yok)
                 superClick(targetIcon);
-                
-                // Timeout koruması (15 saniye)
+
+                await sleep(1000);
+
+                // Failover
                 setTimeout(async () => {
-                  const s = await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
-                  if (s.tp_waiting_pdf_url && !s.tp_download_clicked) {
-                    console.warn(TAG, "⏳ PDF Timeout. İlerle.");
+                  const { tp_waiting_pdf_url, tp_download_clicked } =
+                    await chrome.storage.local.get(["tp_waiting_pdf_url", "tp_download_clicked"]);
+
+                  if (tp_waiting_pdf_url && !tp_download_clicked) {
+                    console.warn(TAG, "⏳ PDF URL yakalanamadı (timeout). Kuyruk ilerletiliyor.");
                     await chrome.storage.local.set({ tp_waiting_pdf_url: false });
+                    
+                    // Kilitleri aç ve ilerle
                     globalProcessingLock = false;
                     await advanceQueue();
                   }
-                }, 15000);
+                }, 12000);
                 
-                return true;
+                return true; 
             }
         }
         
         searchPassCount++;
         if (searchPassCount >= 2) {
-            console.log(TAG, "⚠️ Belge yok.");
+            console.log(TAG, "⚠️ Belge bulunamadı, pas geçiliyor.");
             await advanceQueue(); 
         }
-    } catch(e) { console.error(TAG, e); await advanceQueue(); } 
-    finally { isActionInProgress = false; }
+
+    } catch(e) {
+        console.error(TAG, e);
+        await advanceQueue(); 
+    } finally {
+        isActionInProgress = false;
+    }
   }
 
+  // --- ANA DÖNGÜ (RUN) ---
   async function run() {
     if (isAdvancing) return;
+
     const continueProcess = await checkQueueAndSetAppNo();
     if (!continueProcess) return;
 
-    const { tp_app_no, tp_clicked_ara, tp_download_clicked, tp_last_search_ts } = 
-        await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked", "tp_last_search_ts"]);
-    if (!tp_app_no) return;
+    const { tp_app_no, tp_clicked_ara, tp_download_clicked } = await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked"]);
+    if (!tp_app_no) return; 
 
     if (isGirisPage()) {
       const btn = findLoginButtonOnGiris();
@@ -446,35 +535,18 @@
       const input = qAll("#textbox551 input");
       const currentVal = input ? (input.value || "").trim() : "";
       
+      // Input boşsa veya farklıysa doldur
       if (currentVal !== String(tp_app_no)) {
-          await clearEvrakAdiFilter();
-          await chrome.storage.local.set({
-            tp_clicked_ara: false,
-            tp_download_clicked: false,
-            tp_waiting_pdf_url: false,
-            tp_grid_ready: false
-          });
           await fillBasvuruNo(tp_app_no);
           return; 
       }
 
       if (!tp_clicked_ara) {
-          await clickAraButtonOnly();
+          const okAra = await clickAraButtonOnly();
           return;
       }
 
-      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
-
-      if (isPageBusy()) { console.log(TAG, "⏳ Sayfa meşgul..."); return; }
-
-      const { tp_grid_ready, tp_prev_grid_sig } = await chrome.storage.local.get(["tp_grid_ready", "tp_prev_grid_sig"]);
-      if (tp_clicked_ara && !tp_grid_ready) {
-        await waitForGridToRefresh(tp_prev_grid_sig || "", 20000);
-        await chrome.storage.local.set({ tp_grid_ready: true });
-        return; 
-      }
-
-      if (tp_clicked_ara && tp_grid_ready && !tp_download_clicked && !isActionInProgress) {
+      if (tp_clicked_ara && !tp_download_clicked && !isActionInProgress) {
         await downloadTescilBelge();
       }
       return;
@@ -484,4 +556,5 @@
   }
 
   setInterval(() => run().catch(() => {}), 2000);
+
 })();
