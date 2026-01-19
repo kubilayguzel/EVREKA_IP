@@ -27,6 +27,7 @@ import { getAuth } from 'firebase-admin/auth';                          // Admin
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from './utils.js';
 import { ImageRun } from 'docx';
+import { v4 as uuidv4 } from "uuid";
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -7191,11 +7192,27 @@ export const saveEpatsDocument = onCall(
         }
       });
 
-      // İmzalı URL (Uzun ömürlü)
-      const [downloadURL] = await file.getSignedUrl({
-        action: 'read',
-        expires: '01-01-2099'
+      const token = uuidv4();
+
+      await file.save(buffer, {
+        contentType: "application/pdf",
+        metadata: {
+          metadata: {
+            originalName: fileName,
+            source: "epats_automation",
+            applicationNumber: appNo,
+            uploadedBy: userId,
+
+            // ✅ Firebase download token
+            firebaseStorageDownloadTokens: token,
+          },
+        },
       });
+
+      // ✅ Download URL (token’lı)
+      const downloadURL =
+        `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+
 
       // 3. Parent Transaction Bul (Başvuru)
       const transactionsRef = adminDb.collection('ipRecords').doc(ipRecordId).collection('transactions');
