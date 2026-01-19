@@ -76,13 +76,7 @@
   if (window.top !== window) return;
   
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const DEFAULT_UPLOAD_ENDPOINT =
-    "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
-
-  async function getUploadEndpoint() {
-    const { tp_upload_url } = await chrome.storage.local.get(["tp_upload_url"]);
-    return tp_upload_url || DEFAULT_UPLOAD_ENDPOINT;
-  }
+  const UPLOAD_ENDPOINT = "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
 
   // ---------- KUYRUK VE RESET MANTIĞI ----------
   
@@ -149,9 +143,6 @@
         if (input) {
             fillInputAngularSafe(input, ""); 
         }
-
-        // 1.1 Evrak Adı filtresini de temizle
-        await clearEvrakAdiFilter();
 
         // 2. İndeksi artır
         const data = await chrome.storage.local.get(["tp_queue_index"]);
@@ -226,8 +217,7 @@
 
       console.log(TAG, "📤 Upload ediliyor...", payload.ipRecordId);
 
-      const uploadEndpoint = await getUploadEndpoint();
-      const uploadRes = await fetch(uploadEndpoint, {
+      const uploadRes = await fetch(UPLOAD_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: payload }),
@@ -302,76 +292,23 @@
     return true;
   }
 
-  function getGridRowCount() {
-  return qAllMany(".ui-grid-canvas .ui-grid-row").filter(el => el.offsetParent !== null).length;
-}
-
-  async function waitForGridResultsToSettle(timeoutMs = 20000) {
-    const start = Date.now();
-    const initial = getGridRowCount();
-
-    // İlk etapta bir değişim (yeniden render) bekle
-    while (Date.now() - start < timeoutMs) {
-      const cur = getGridRowCount();
-      if (cur !== initial) break;
-      await sleep(300);
-    }
-
-    // Sonra “stabil” hale gelmesini bekle (2 ardışık ölçüm aynı)
-    let last = -1;
-    let stableHits = 0;
-
-    while (Date.now() - start < timeoutMs) {
-      const cur = getGridRowCount();
-      if (cur === last) stableHits++;
-      else stableHits = 0;
-
-      last = cur;
-
-      if (stableHits >= 2) return true; // ~600ms stabil
-      await sleep(300);
-    }
-
-    return false;
-  }
-
   // ---------- EPATS UI LOGIC ----------
   
-  let isSearching = false; // dosyanın üst tarafındaki state’lerin yanına ekle
-
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
-    if (tp_clicked_ara) return true;
-
-    // ✅ Aynı anda iki kez arama başlatmayı engelle (run overlap)
-    if (isSearching) return true;
-
-    // ✅ 1 arama denemesinden sonra en az 6 sn bekle (spam click engeli)
-    const okThrottle = await throttle("tp_last_ara_try", 6000);
-    if (!okThrottle) return true;
+    if (tp_clicked_ara) return true; 
 
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
+    
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
 
-    isSearching = true;
-    try {
-      console.log(TAG, "Ara butonuna basılıyor...");
-      superClick(btn);
-
-      // ✅ EPATS’in toparlanması için biraz bekle (modal/grid init)
-      await sleep(2500);
-
-      // ✅ Bundan sonra “ara basıldı” kabul et
-      await chrome.storage.local.set({ tp_clicked_ara: true });
-      return true;
-
-    } finally {
-      isSearching = false;
-    }
+    console.log(TAG, "Ara butonuna basılıyor...");
+    superClick(btn);
+    await chrome.storage.local.set({ tp_clicked_ara: true });
+    return true;
   }
-
 
   function isGirisPage() { return location.href.includes("/run/TP/EDEVLET/giris"); }
   
@@ -503,51 +440,6 @@
     return true;
   }
 
-  function getVisibleGridRowCount() {
-  return qAllMany(".ui-grid-canvas .ui-grid-row").filter(el => el.offsetParent !== null).length;
-}
-
-async function waitForGridToLoad(timeoutMs = 20000) {
-  const start = Date.now();
-  const before = getVisibleGridRowCount();
-
-  // Önce bir değişim gör (eski listeyi “hazır” sanmasın)
-  while (Date.now() - start < timeoutMs) {
-    const cur = getVisibleGridRowCount();
-    if (cur !== before) break;
-    await sleep(300);
-  }
-
-  // Sonra stabil olmasını bekle (2 kez aynı sayı)
-  let last = -1;
-  let stable = 0;
-  while (Date.now() - start < timeoutMs) {
-    const cur = getVisibleGridRowCount();
-    if (cur === last) stable++;
-    else stable = 0;
-
-    last = cur;
-    if (stable >= 2) return true;
-
-    await sleep(300);
-  }
-
-  return false;
-}
-
-
-  async function clearEvrakAdiFilter() {
-  // ui-grid filter input’u bulup boşalt
-  const input = findEvrakAdiFilterInput();
-  if (!input) return false;
-
-  if ((input.value || "").trim() !== "") {
-    fillInputAngularSafe(input, "");
-    await sleep(800); // grid'in refresh olması için
-  }
-  return true;
-}
-
   function findDownloadIcon() {
     const icons = qAllMany("i.fa-download").filter(el => el.offsetParent !== null);
     return icons[1] || null;
@@ -573,9 +465,6 @@ async function waitForGridToLoad(timeoutMs = 20000) {
         for (const terim of aramaListesi) {
             console.log(TAG, `🔍 Kriter: ${terim}`);
             
-            const ok = await waitForGridToLoad(20000);
-            if (!ok) { console.warn(TAG, "⏳ Liste yüklenmedi, filtreye yazmıyorum."); continue; }
-
             await setEvrakAdiFilter(terim);
             await sleep(1500);
 
