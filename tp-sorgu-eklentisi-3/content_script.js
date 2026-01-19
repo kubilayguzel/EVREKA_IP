@@ -302,21 +302,64 @@
     return true;
   }
 
+  function getGridRowCount() {
+  return qAllMany(".ui-grid-canvas .ui-grid-row").filter(el => el.offsetParent !== null).length;
+}
+
+  async function waitForGridResultsToSettle(timeoutMs = 20000) {
+    const start = Date.now();
+    const initial = getGridRowCount();
+
+    // İlk etapta bir değişim (yeniden render) bekle
+    while (Date.now() - start < timeoutMs) {
+      const cur = getGridRowCount();
+      if (cur !== initial) break;
+      await sleep(300);
+    }
+
+    // Sonra “stabil” hale gelmesini bekle (2 ardışık ölçüm aynı)
+    let last = -1;
+    let stableHits = 0;
+
+    while (Date.now() - start < timeoutMs) {
+      const cur = getGridRowCount();
+      if (cur === last) stableHits++;
+      else stableHits = 0;
+
+      last = cur;
+
+      if (stableHits >= 2) return true; // ~600ms stabil
+      await sleep(300);
+    }
+
+    return false;
+  }
+
   // ---------- EPATS UI LOGIC ----------
   
   async function clickAraButtonOnly() {
     const { tp_clicked_ara } = await chrome.storage.local.get(["tp_clicked_ara"]);
-    if (tp_clicked_ara) return true; 
+    if (tp_clicked_ara) return true;
 
     const root = qAll("#button549");
     if (!root) return false;
     const btn = root.querySelector("div.btn[ng-click]") || root.querySelector(".btn");
-    
     if (!btn || btn.hasAttribute("disabled") || btn.classList.contains("disabled")) return false;
 
     console.log(TAG, "Ara butonuna basılıyor...");
+    const beforeRows = getGridRowCount();
+
     superClick(btn);
+
+    // ✅ KRİTİK: sonuç listesinin yüklenmesini bekle
+    const ok = await waitForGridResultsToSettle(25000);
+    const afterRows = getGridRowCount();
+
+    console.log(TAG, `📋 Liste durumu: before=${beforeRows}, after=${afterRows}, ok=${ok}`);
+
+    // ✅ ancak şimdi "ara basıldı ve sonuç hazır" de
     await chrome.storage.local.set({ tp_clicked_ara: true });
+
     return true;
   }
 
