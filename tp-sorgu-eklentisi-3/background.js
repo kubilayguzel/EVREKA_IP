@@ -54,7 +54,9 @@ async function sendPdfUrlToMainTab(url) {
 // Kuyruk başlatıldığında ana sekmenin ID'sini kaydet
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
   if (request.action === "START_QUEUE") {
-    console.log("[BG] Kuyruk alındı.");
+
+    const fallbackUrl =
+      "https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/saveEpatsDocument";
 
     chrome.storage.local.set(
       {
@@ -62,13 +64,15 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         tp_is_queue_running: true,
         tp_queue_index: 0,
         tp_app_no: null,
+
+        // ✅ EKLE: UI’dan gelen url’yi sakla (yoksa fallback)
+        tp_upload_url: request.uploadUrl || fallbackUrl,
       },
       () => {
         chrome.tabs.create(
           { url: "https://epats.turkpatent.gov.tr/run/TP/EDEVLET/giris" },
           async (tab) => {
             activeJobTabId = tab.id;
-            // Ana sekmede content_script garanti
             await ensureContentScript(activeJobTabId);
           }
         );
@@ -79,6 +83,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return true;
   }
 });
+
 
 // PDF Yakalama
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
