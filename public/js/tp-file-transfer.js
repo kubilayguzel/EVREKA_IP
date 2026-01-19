@@ -238,7 +238,7 @@ async function handleSaveToPortfolio() {
         errorCount++;
       }
     }
-    
+ 
     // Sonuç mesajı
     let message = `${successCount} kayıt başarıyla portföye eklendi. `;
     if (skippedCount > 0) message += `${skippedCount} kayıt zaten mevcut olduğu için atlandı. `;
@@ -247,9 +247,35 @@ async function handleSaveToPortfolio() {
     if (errorCount === 0) {
       saveLoading.showSuccess(message.trim());
       showNotification(message.trim(), 'success');
+
+      // 🔥 --- TEMİZLEME İŞLEMLERİ (BURAYI EKLEYİN) --- 🔥
+      
+      // 1. Hafızadaki Listeleri Sıfırla
+      currentOwnerResults = [];
+      if (window.batchResults) window.batchResults = [];
+
+      // 2. Tabloyu ve Sonuç Alanını Gizle/Temizle
+      if (singleResultInner) singleResultInner.innerHTML = '';
+      _hideBlock(singleResultContainer);
+
+      // 3. Input Alanlarını Temizle
+      if (basvuruNoInput) basvuruNoInput.value = '';
+      if (sahipNoInput) sahipNoInput.value = '';
+
+      // 4. (Opsiyonel) Seçili "İlgili Taraf" Listesini Temizle
+      // Eğer taraf seçimlerinin de sıfırlanmasını istiyorsanız bu satırları açın:
+      // selectedRelatedParties = [];
+      // renderSelectedRelatedParties();
+
+      // 5. Buton Durumunu Güncelle
+      updateSaveButton();
+
+      // -----------------------------------------------------
+
     } else {
       saveLoading.showError(message.trim());
       showNotification(message.trim(), 'warning');
+      // Hata varsa tabloyu temizlemiyoruz ki kullanıcı hatalı kayıtları görebilsin/tekrar deneyebilsin.
     }
     
   } catch (error) {
