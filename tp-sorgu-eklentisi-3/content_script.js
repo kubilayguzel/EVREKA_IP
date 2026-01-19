@@ -503,6 +503,39 @@
     return true;
   }
 
+  function getVisibleGridRowCount() {
+  return qAllMany(".ui-grid-canvas .ui-grid-row").filter(el => el.offsetParent !== null).length;
+}
+
+async function waitForGridToLoad(timeoutMs = 20000) {
+  const start = Date.now();
+  const before = getVisibleGridRowCount();
+
+  // Önce bir değişim gör (eski listeyi “hazır” sanmasın)
+  while (Date.now() - start < timeoutMs) {
+    const cur = getVisibleGridRowCount();
+    if (cur !== before) break;
+    await sleep(300);
+  }
+
+  // Sonra stabil olmasını bekle (2 kez aynı sayı)
+  let last = -1;
+  let stable = 0;
+  while (Date.now() - start < timeoutMs) {
+    const cur = getVisibleGridRowCount();
+    if (cur === last) stable++;
+    else stable = 0;
+
+    last = cur;
+    if (stable >= 2) return true;
+
+    await sleep(300);
+  }
+
+  return false;
+}
+
+
   async function clearEvrakAdiFilter() {
   // ui-grid filter input’u bulup boşalt
   const input = findEvrakAdiFilterInput();
@@ -540,6 +573,9 @@
         for (const terim of aramaListesi) {
             console.log(TAG, `🔍 Kriter: ${terim}`);
             
+            const ok = await waitForGridToLoad(20000);
+            if (!ok) { console.warn(TAG, "⏳ Liste yüklenmedi, filtreye yazmıyorum."); continue; }
+
             await setEvrakAdiFilter(terim);
             await sleep(1500);
 
