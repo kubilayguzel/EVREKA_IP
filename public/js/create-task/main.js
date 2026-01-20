@@ -870,25 +870,32 @@ setupEventListeners() {
             this.state.searchSource = 'suits';
             this.state.targetSuitTypes = selectedType.targetSuitTypes || [];
         } 
-        // 2. Yoksa Eski Mantık Devam Etsin (Else Bloğunun İçi)
+        // 2. Yoksa ID Bazlı Arama Kaynağı Belirle
         else {
-            // "isType20" kontrolünü siliyoruz veya false yapıyoruz.
-            // Çünkü 20'yi aşağıya, hibrit grubuna taşıyacağız.
-            const isType20 = false; 
+            // A) SADECE BÜLTEN ARAMASI YAPILACAKLAR
+            // Buraya "3. Kişi Görüşü" (ID: 170 veya string ID) ekliyoruz.
+            const isBulletinOnly = [
+                '1'
+            ].includes(typeId);
 
+            // B) HİBRİT ARAMA (HEM PORTFÖY HEM BÜLTEN) YAPILACAKLAR
             const isHybrid = [
-                // YAYINA İTİRAZ (20) BURAYA EKLENDİ
                 '20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN,
-                
-                // Diğer Hibrit İşlemler (Tam Portföy + Bülten)
                 '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
                 '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
                 '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
             ].includes(typeId);
 
-            if (isType20) this.state.searchSource = 'bulletin';
-            else if (isHybrid) this.state.searchSource = 'hybrid'; 
-            else this.state.searchSource = 'portfolio';
+            // KARAR MEKANİZMASI
+            if (isBulletinOnly) {
+                this.state.searchSource = 'bulletin';
+            } 
+            else if (isHybrid) {
+                this.state.searchSource = 'hybrid'; 
+            } 
+            else {
+                this.state.searchSource = 'portfolio';
+            }
         }
         
         console.log(`🔍 Arama Modu: ${this.state.searchSource.toUpperCase()}`);
