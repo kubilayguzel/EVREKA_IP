@@ -379,31 +379,40 @@ class TaskUpdateController {
     }
     
     async removeEpatsDocument() {
-    if (!confirm('EPATS evrakı silinecek ve yapılan veri değişiklikleri (varsa) eski haline döndürülecektir. Emin misiniz?')) return;
-    
-    // 1. Storage temizliği
-    if (this.uploadedEpatsFile?.storagePath) {
-        try {
-            await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
-        } catch (e) { console.warn("Storage silme hatası:", e); }
-    }
-    
-    // 2. Hafızayı sıfırla
-    this.uploadedEpatsFile = null;
-    this.tempApplicationData = null;
-    this.tempRenewalData = null;
-    
-    // 3. Statüyü geri al
-    if (this.statusBeforeEpatsUpload) {
-        document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
-    }
+        if (!confirm('EPATS evrakı silinecek ve yapılan veri değişiklikleri (varsa) eski haline döndürülecektir. Emin misiniz?')) return;
+        
+        // 1. Storage temizliği (Dosyayı buluttan sil)
+        if (this.uploadedEpatsFile?.storagePath) {
+            try {
+                await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
+            } catch (e) { console.warn("Storage silme hatası:", e); }
+        }
+        
+        // 2. Local değişkenleri sıfırla
+        this.uploadedEpatsFile = null;
+        this.tempApplicationData = null;
+        this.tempRenewalData = null;
+        
+        // [KRİTİK DÜZELTME] Ana veri objesinden (taskData) evrak bilgisini sil!
+        // Bunu yapmazsak saveTaskChanges() eski veriyi tekrar kaydeder.
+        if (this.taskData && this.taskData.details) {
+            delete this.taskData.details.epatsDocument;
+            delete this.taskData.details.statusBeforeEpatsUpload;
+        }
 
-    // 4. UI temizle
-    this.uiManager.renderEpatsDocument(null);
-    
-    // 5. Veritabanını kalıcı olarak güncelle (saveTaskChanges içindeki revert mantığı çalışacak)
-    await this.saveTaskChanges(); 
-}
+        // 3. Statüyü geri al (Yoksa 'open' yap)
+        if (this.statusBeforeEpatsUpload) {
+            document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
+        } else {
+            document.getElementById('taskStatus').value = 'open';
+        }
+
+        // 4. Arayüzü temizle (Dosya görselini kaldır)
+        this.uiManager.renderEpatsDocument(null);
+        
+        // 5. Veritabanını güncelle (Artık details içinde evrak yok, temiz gidecek)
+        await this.saveTaskChanges(); 
+    }
 
     isApplicationTask(taskType) {
         if (!taskType) return false;
