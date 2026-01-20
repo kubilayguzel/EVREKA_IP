@@ -55,14 +55,18 @@ function showNotification(message, type = 'info') {
 }
 
 export class ETEBSManager {
-    constructor() {
+constructor() {
     this.currentMode = 'etebs';
+
+    // Notifications state
     this.notifications = [];
     this.filteredNotifications = [];
+    this.isLoading = false;
+
     this.isInitialized = false;
+
     this.bindEvents();
     this.bindTabEvents();
-    
 }
 
 async uploadDocumentsToFirebase(documents, userId, evrakNo) {
@@ -239,14 +243,14 @@ async handleNotificationAction(action, notification) {
     }
 }
 
-    // 2. YENİ: Tab event binding fonksiyonu ekleyin
 bindTabEvents() {
     try {
-        // Notifications tab switching
-        document.querySelectorAll('.notifications-tab-btn').forEach(btn => {
+        // Notifications tab switching (bulk-indexing-page.html ile uyumlu)
+        document.querySelectorAll('.notification-tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.switchNotificationsTab(btn.getAttribute('data-notifications-tab'));
+                const targetId = btn.getAttribute('data-target');
+                if (targetId) this.switchNotificationsTab(targetId);
             });
         });
         console.log("✅ Tab events bound successfully");
@@ -255,24 +259,25 @@ bindTabEvents() {
     }
 }
 
-    // 3. YENİ: Tab switching fonksiyonu ekleyin
-switchNotificationsTab(tabName) {
+// 3. Tab switching
+switchNotificationsTab(targetId) {
     try {
         // Update tab buttons
-        document.querySelectorAll('.notifications-tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-notifications-tab') === tabName);
+        document.querySelectorAll('.notification-tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-target') === targetId);
         });
 
-        // Update tab content
-        document.querySelectorAll('.notifications-tab-pane').forEach(pane => {
-            pane.classList.toggle('active', pane.id === `${tabName}-notifications-tab`);
+        // Update tab panes
+        document.querySelectorAll('.notification-tab-pane').forEach(pane => {
+            pane.classList.toggle('active', pane.id === targetId);
         });
-        
-        console.log(`✅ Switched to ${tabName} tab`);
+
+        console.log(`✅ Switched to ${targetId}`);
     } catch (error) {
         console.error('❌ Error switching notifications tab:', error);
     }
 }
+
 bindEvents() {
         try {
             // Mode switching
@@ -493,91 +498,81 @@ updateTabBadge() {
         }
     }
 
-    async fetchNotifications() {
-        if (this.state.isLoading) return;
-        const token = localStorage.getItem('etebs_token');
-        
-        // Token olmasa bile veritabanındaki eski kayıtları gösterebilmeliyiz
-        // Ama yeni sorgu için token şart.
-        
-        this.setLoading(true);
-        this.updateStatusMessage('Veriler yükleniyor...');
+async fetchNotifications() {
+    if (this.isLoading) return;
 
-        // UI Temizliği
-        this.state.notifications = [];
-        this.state.matchedNotifications = [];
-        this.state.unmatchedNotifications = [];
-        this.renderNotifications();
+    const token = localStorage.getItem('etebs_token');
 
-        try {
-            // ADIM 1: Eğer Token varsa, Backend'e "Yeni liste var mı?" diye sor (Hafif işlem)
-            if (token) {
-                this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
-                try {
-                    // Bu çağrı listeyi çeker ve DB'ye 'queued' olarak yazar. Cevabı beklemiyoruz (fire-and-forget).
-                    window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
-                        action: 'CHECK_LIST_ONLY',
-                        token: token,
-                        userId: firebase.auth().currentUser.uid
-                    }).catch(e => console.warn("Liste güncelleme isteği arka planda devam ediyor:", e));
-                } catch (e) {
-                    console.log("Liste tetikleme pas geçildi.");
-                }
-            }
+    // Token olmasa bile veritabanındaki eski kayıtları gösterebilmeliyiz
+    // Ama yeni sorgu için token şart.
 
-            // ADIM 2: Hemen Veritabanından Son Durumu Çek ve Göster
-            // (İnternet yavaş olsa bile veritabanındaki veriyi hemen gösterir)
-            this.updateStatusMessage('Listeleniyor...');
-            
-            // 1 saniye bekle ki backend yeni kayıt varsa yazmaya başlasın
-            await new Promise(r => setTimeout(r, 1000)); 
+    this.setLoading(true);
+    this.updateStatusMessage('Veriler yükleniyor...');
 
-            const dbRecords = await window.firebaseConfig.etebs.getRecentUnindexedDocuments(50);
+    // UI Temizliği
+    this.notifications = [];
+    this.filteredNotifications = [];
+    this.displayNotifications();
 
-            if (dbRecords.length > 0) {
-                this.state.notifications = dbRecords;
-                
-                // Marka eşleştirmelerini çalıştır (Varsa)
-                if (this.matchWithIPRecords) await this.matchWithIPRecords();
-                
-                this.updateStatistics();
-                this.renderNotifications();
-                this.autoSwitchTab();
-                this.showNotificationsSection();
-                
-                this.showSuccess(`Veritabanından ${dbRecords.length} evrak listelendi.`);
+    try {
+        // ADIM 1: Token varsa, Backend'e "Yeni liste var mı?" diye sor (Hafif işlem)
+        if (token) {
+            this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
 
-                // ADIM 3: İndirilmemiş (queued) dosyalar varsa indirmeyi tetikle
-                const pendingDownloads = dbRecords.filter(d => d.status === 'queued').length;
-                
-                if (pendingDownloads > 0 && token) {
-                    this.showToast(`${pendingDownloads} yeni evrak arka planda indiriliyor...`, 'info');
-                    
-                    // İndirme işlemini tetikle
-                    window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
-                        action: 'PROCESS_DOWNLOAD_QUEUE',
-                        token: token,
-                        userId: firebase.auth().currentUser.uid
-                    }).then((res) => {
-                        console.log("Arka plan indirmesi bitti:", res);
-                        this.showSuccess("Dosyalar indirildi. Listeyi yenileyin.");
-                        // İsteğe bağlı: İşlem bitince listeyi otomatik yenile
-                        // this.fetchNotifications(); 
-                    });
-                }
+            const hasNew = await window.firebaseConfig.etebs.hasNewNotifications(token);
 
+            if (hasNew) {
+                this.updateStatusMessage('Yeni kayıtlar alınıyor...');
+
+                await window.firebaseConfig.etebs.fetchNotificationsFromEtebs(token);
+
+                this.showSuccess("Yeni tebligatlar alındı.");
             } else {
-                this.showInfo("Görüntülenecek evrak bulunamadı.");
-                this.hideNotificationsSection();
+                this.showInfo("Yeni tebligat bulunamadı.");
+            }
+        } else {
+            this.showInfo("Token bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
+        }
+
+        // ADIM 2: Hemen Veritabanından Son Durumu Çek ve Göster
+        this.updateStatusMessage('Listeleniyor...');
+
+        // 1 saniye bekle ki backend yeni kayıt varsa yazmaya başlasın
+        await new Promise((r) => setTimeout(r, 1000));
+
+        const dbRecords = await window.firebaseConfig.etebs.getRecentUnindexedDocuments(50);
+
+        if (dbRecords.length > 0) {
+            this.notifications = dbRecords;
+            this.filteredNotifications = dbRecords;
+
+            // Marka eşleştirmelerini çalıştır (Varsa)
+            try {
+                await this.runBrandMatchingIfAvailable();
+            } catch (e) {
+                console.warn('Brand matching çalıştırılamadı:', e);
             }
 
-        } catch (error) {
-            console.error('Arayüz Hatası:', error);
-            this.showError('Liste alınırken hata oluştu: ' + error.message);
-        } finally {
-            this.setLoading(false);
+            // İstatistikleri güncelle + listeyi bas
+            this.updateStatistics();
+            this.displayNotifications();
+
+            // Bildirim alanını göster
+            this.showNotificationsSection();
+
+        } else {
+            this.showInfo("Görüntülenecek evrak bulunamadı.");
+            this.hideNotificationsSection();
         }
+
+    } catch (error) {
+        console.error('Arayüz Hatası:', error);
+        this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
+    } finally {
+        this.setLoading(false);
     }
+}
+
 
     async refreshNotifications() {
         const tokenInput = document.getElementById('etebsTokenInput');
@@ -600,34 +595,38 @@ updateTabBadge() {
             console.error('Error filtering notifications:', error);
         }
     }
-    // 5. YENİ: Otomatik tab switching fonksiyonu
+// 5. GÜNCEL: Otomatik tab switching fonksiyonu (bulk-indexing-page.html ile uyumlu)
+// Beklenen HTML:
+// - buton:  .notification-tab-btn  + data-target="matched-notifications-tab" / "unmatched-notifications-tab"
+// - panel:  .notification-tab-pane + id="matched-notifications-tab" / "unmatched-notifications-tab"
 autoSwitchTab(matchedCount, unmatchedCount) {
     try {
         console.log(`🔄 autoSwitchTab başladı: matched=${matchedCount}, unmatched=${unmatchedCount}`);
-        
-        const activeTab = document.querySelector('.notifications-tab-btn.active');
+
+        const activeTab = document.querySelector('.notification-tab-btn.active');
         if (!activeTab) {
             console.log("⚠️ Aktif tab bulunamadı");
             return;
         }
 
-        const currentTab = activeTab.getAttribute('data-notifications-tab');
-        console.log(`📋 Şu anki tab: ${currentTab}`);
-        
-        // If current tab is empty but other tab has items, switch automatically
-        if (currentTab === 'matched' && matchedCount === 0 && unmatchedCount > 0) {
+        const currentTarget = activeTab.getAttribute('data-target');
+        console.log(`📋 Şu anki tab (data-target): ${currentTarget}`);
+
+        // Eğer aktif tab boş ama diğer tab doluysa otomatik geçir
+        if (currentTarget === 'matched-notifications-tab' && matchedCount === 0 && unmatchedCount > 0) {
             console.log("🔄 Matched tab boş, unmatched'e geçiliyor");
-            this.switchNotificationsTab('unmatched');
-        } else if (currentTab === 'unmatched' && unmatchedCount === 0 && matchedCount > 0) {
+            this.switchNotificationsTab('unmatched-notifications-tab');
+        } else if (currentTarget === 'unmatched-notifications-tab' && unmatchedCount === 0 && matchedCount > 0) {
             console.log("🔄 Unmatched tab boş, matched'e geçiliyor");
-            this.switchNotificationsTab('matched');
+            this.switchNotificationsTab('matched-notifications-tab');
         }
-        
+
         console.log("✅ autoSwitchTab tamamlandı");
     } catch (error) {
         console.error('❌ Error in auto tab switch:', error);
     }
 }
+
 
  displayNotifications() {
     try {
@@ -834,6 +833,43 @@ showNotificationsSection() {
         console.error('❌ Error showing notifications section:', error);
     }
 }
+
+// --- UI helpers (bulk-indexing-page.html ile uyumlu) ---
+setLoading(isLoading) {
+    this.isLoading = !!isLoading;
+
+    const fetchBtn = document.getElementById('fetchNotificationsBtn');
+    const refreshBtn = document.getElementById('refreshNotificationsBtn');
+
+    if (fetchBtn) fetchBtn.disabled = this.isLoading;
+    if (refreshBtn) refreshBtn.disabled = this.isLoading;
+}
+
+updateStatusMessage(message) {
+    // Eğer sayfada ayrı bir status alanı yoksa info toast göster
+    this.showToast(message, 'info');
+}
+
+showToast(message, type = 'info') {
+    try {
+        showNotification(message, type);
+    } catch (e) {
+        console.log(`${type.toUpperCase()}: ${message}`);
+    }
+}
+
+showSuccess(message) {
+    this.showToast(message, 'success');
+}
+
+showInfo(message) {
+    this.showToast(message, 'info');
+}
+
+showError(message) {
+    this.showToast(message, 'error');
+}
+
     showTokenStatus(type, message) {
         try {
             const statusEl = document.getElementById('tokenStatus');
