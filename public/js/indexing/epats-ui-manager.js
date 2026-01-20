@@ -16,7 +16,11 @@ export class EpatsUiManager {
         this.pagination = null;
         
         // Eklenti İletişim ID'si (Manifest.json'daki ID ile aynı olmalı)
-        this.extensionId = "mhjacaphbimellgnbbnoblhgpdlchkgi"; 
+        // Desteklenen Eklenti ID'leri (Hangi eklenti yüklüyse o çalışır)
+        this.extensionIds = [
+            "mhjacaphbimellgnbbnoblhgpdlchkgi", // 1. ID (Mevcut)
+            "poikphboglooldcjgmgakjnmibghbdbf"  // 2. ID (Yeni)
+        ];
 
         this.init();
     }
@@ -268,16 +272,27 @@ export class EpatsUiManager {
             uploadUrl: targetUploadUrl // <--- ADRESİ EKLENTİYE GÖNDERİYORUZ
         }, "*");
 
-        // 2. Yöntem: Chrome Extension API
-        if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
-             try {
-                 chrome.runtime.sendMessage(this.extensionId, {
-                    action: "START_QUEUE",
-                    queue: queue,
-                    uploadUrl: targetUploadUrl // <--- ADRESİ BURAYA DA EKLE
-                });
-             } catch(e) { console.log("Extension mesaj hatası (normaldir):", e); }
-        }
+        // 2. Yöntem: Chrome Extension API (Çoklu ID Desteği)
+                if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+                    this.extensionIds.forEach(extId => {
+                        try {
+                            // Her iki ID'ye de mesaj atıyoruz.
+                            chrome.runtime.sendMessage(extId, {
+                                action: "START_QUEUE",
+                                queue: queue,
+                                uploadUrl: targetUploadUrl
+                            }, (response) => {
+                                // Eğer eklenti yüklü değilse Chrome hata üretir.
+                                // lastError kontrolü yaparak bu hatayı sessizce yutuyoruz.
+                                if (chrome.runtime.lastError) {
+                                    // console.log(`ID ${extId} bulunamadı.`); // Debug için açılabilir
+                                }
+                            });
+                        } catch (e) {
+                            console.log(`Extension mesaj hatası (${extId}):`, e);
+                        }
+                    });
+                }
 
         showNotification(`${queue.length} adet işlem eklentiye gönderildi. EPATS açılıyor...`, 'success');
         
