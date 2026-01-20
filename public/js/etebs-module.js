@@ -62,6 +62,7 @@ export class ETEBSManager {
     this.isInitialized = false;
     this.bindEvents();
     this.bindTabEvents();
+    this.fetchNotifications = this.fetchNotifications.bind(this);
 }
 
 async uploadDocumentsToFirebase(documents, userId, evrakNo) {
