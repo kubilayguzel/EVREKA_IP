@@ -1608,56 +1608,58 @@ export const etebsService = {
         }
     },
 
-        // [YENİ] Veritabanından (unindexed_pdfs) Son Kayıtları Çekme Fonksiyonu
-        async getRecentUnindexedDocuments(limitCount = 50) {
-            try {
-                // Veritabanı referansı
-                const db = window.db || this.db; 
-                // Firestore fonksiyonlarını al (Firebase v9 modular syntax veya global namespace)
-                // Not: Projenizdeki import şekline göre window.firebaseFirestore veya firebase.firestore kullanın
-                const { collection, query, orderBy, limit, getDocs } = window.firebaseFirestore || firebase.firestore;
+// [YENİ] Veritabanından (unindexed_pdfs) Son Kayıtları Çekme Fonksiyonu
+async getRecentUnindexedDocuments(limitCount = 50) {
+    try {
+        // initializeFirestore ile oluşturulan db'yi kullan
+        const database = window.db || this.db || db;
+        if (!database) {
+            console.error("❌ Firestore db bulunamadı (window.db / this.db / db boş).");
+            return [];
+        }
 
-                const pdfsRef = collection(db, 'unindexed_pdfs');
-                
-                // En son yüklenenlere göre sırala (Tarih: Yeniden Eskiye)
-                const q = query(pdfsRef, orderBy('uploadedAt', 'desc'), limit(limitCount));
-                
-                const querySnapshot = await getDocs(q);
-                
-                const documents = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    
-                    // Firestore Timestamp'i okunabilir tarihe çevir
-                    let dateStr = '-';
-                    if (data.uploadedAt && data.uploadedAt.seconds) {
-                        dateStr = new Date(data.uploadedAt.seconds * 1000).toLocaleString('tr-TR');
-                    }
+        const pdfsRef = collection(database, 'unindexed_pdfs');
 
-                    documents.push({
-                        ...data,
-                        id: doc.id,
-                        // [KRİTİK] Arayüz ETEBS formatını (Büyük Harf) bekliyor, mapping yapıyoruz:
-                        EVRAK_NO: data.evrakNo,
-                        BELGE_ACIKLAMASI: data.belgeAciklamasi,
-                        DOSYA_NO: data.dosyaNo,
-                        
-                        // Durum ve Linkler
-                        status: data.status, // 'queued' veya 'pending'
-                        downloadUrl: data.fileUrl,
-                        formattedDate: dateStr
-                    });
-                });
-                
-                console.log(`📂 Veritabanından ${documents.length} kayıt çekildi.`);
-                return documents;
+        // En son yüklenenlere göre sırala
+        const q = query(pdfsRef, orderBy('uploadedAt', 'desc'), limit(limitCount));
 
-            } catch (error) {
-                console.error("Veritabanı Okuma Hatası:", error);
-                // Hata durumunda boş dizi dön ki arayüz patlamasın
-                return [];
+        const querySnapshot = await getDocs(q);
+
+        const documents = [];
+        querySnapshot.forEach((d) => {
+            const data = d.data();
+
+            let dateStr = '-';
+            if (data.uploadedAt?.seconds) {
+                dateStr = new Date(data.uploadedAt.seconds * 1000).toLocaleString('tr-TR');
+            } else if (data.uploadedAt?.toDate) {
+                dateStr = data.uploadedAt.toDate().toLocaleString('tr-TR');
             }
-        },
+
+            documents.push({
+                ...data,
+                id: d.id,
+
+                // UI mapping
+                EVRAK_NO: data.evrakNo,
+                BELGE_ACIKLAMASI: data.belgeAciklamasi,
+                DOSYA_NO: data.dosyaNo,
+
+                status: data.status,
+                downloadUrl: data.fileUrl,
+                formattedDate: dateStr
+            });
+        });
+
+        console.log(`📂 Veritabanından ${documents.length} kayıt çekildi.`);
+        return documents;
+
+    } catch (error) {
+        console.error("Veritabanı Okuma Hatası:", error);
+        return [];
+    }
+},
+
 
 async processNotifications(notifications, userId) {
         const processedNotifications = [];
