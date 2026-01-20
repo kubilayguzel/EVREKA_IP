@@ -584,79 +584,121 @@
     finally { isActionInProgress = false; }
   }
 
-  // --- ANA DÖNGÜ ---
-  async function run() {
-    if (isAdvancing) return;
-    const continueProcess = await checkQueueAndSetAppNo();
-    if (!continueProcess) return;
+// --- ANA DÖNGÜ ---
+async function run() {
+  if (isAdvancing) return;
 
-    const { tp_app_no, tp_clicked_ara, tp_download_clicked, tp_last_search_ts } = 
-        await chrome.storage.local.get(["tp_app_no", "tp_clicked_ara", "tp_download_clicked", "tp_last_search_ts"]);
-    if (!tp_app_no) return;
+  const continueProcess = await checkQueueAndSetAppNo();
+  if (!continueProcess) return;
 
-    if (isGirisPage()) {
-      const btn = findLoginButtonOnGiris();
-      if (btn) superClick(btn);
-      return;
-    }
+  const {
+    tp_app_no,
+    tp_clicked_ara,
+    tp_download_clicked,
+    tp_last_search_ts
+  } = await chrome.storage.local.get([
+    "tp_app_no",
+    "tp_clicked_ara",
+    "tp_download_clicked",
+    "tp_last_search_ts"
+  ]);
 
-    if (isBelgelerimScreenOpen()) {
-      const okMarka = await ensureDosyaTuruMarka();
-      if (!okMarka) return;
+  if (!tp_app_no) return;
 
-      const input = qAll("#textbox551 input");
-      const currentVal = input ? (input.value || "").trim() : "";
-      
-      if (currentVal !== String(tp_app_no)) {
-          // Önce önceki aramadan kalan "Evrak adı" filtresini temizle.
-          // Çünkü yeni başvuruya ait veriler henüz gelmeden filtre aktif kalırsa
-          // grid boş/yanlış görünebiliyor ve eklenti yanlış zamanda aramaya başlıyor.
-          await clearEvrakAdiFilter();
-
-          // Garanti olsun diye arama state'ini de sıfırla (başvuru no değişti).
-          await chrome.storage.local.set({
-            tp_clicked_ara: false,
-            tp_download_clicked: false,
-            tp_waiting_pdf_url: false,
-            tp_grid_ready: false
-          });
-
-          await fillBasvuruNo(tp_app_no);
-          return; 
-      }
-
-      if (!tp_clicked_ara) {
-          await clickAraButtonOnly();
-          return;
-      }
-
-      // 1) Çok kısa bir güvenlik beklemesi
-      if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
-
-      // 2) UI hala yükleniyorsa asla devam etme
-      if (isPageBusy()) {
-        console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
-        return;
-      }
-
-      // 3) Asıl kritik nokta:
-      // Ara'ya basıldıktan sonra grid'in gerçekten yenilenmesini bekle.
-      // (Yeni başvuru verileri gelmeden Evrak Adı filtresi uygulanmasın.)
-      const { tp_grid_ready, tp_prev_grid_sig } = await chrome.storage.local.get(["tp_grid_ready", "tp_prev_grid_sig"]);
-      if (tp_clicked_ara && !tp_grid_ready) {
-        await waitForGridToRefresh(tp_prev_grid_sig || "", 20000);
-        await chrome.storage.local.set({ tp_grid_ready: true });
-        return; // Bir sonraki tick'te indirmeye geçsin
-      }
-
-      if (tp_clicked_ara && tp_grid_ready && !tp_download_clicked && !isActionInProgress) {
-        await downloadTescilBelge();
-      }
-      return;
-    }
-
-    await clickBelgelerim();
+  if (isGirisPage()) {
+    const btn = findLoginButtonOnGiris();
+    if (btn) superClick(btn);
+    return;
   }
 
+  if (isBelgelerimScreenOpen()) {
+    const okMarka = await ensureDosyaTuruMarka();
+    if (!okMarka) return;
+
+    const input = qAll("#textbox551 input");
+    const currentVal = input ? (input.value || "").trim() : "";
+
+    if (currentVal !== String(tp_app_no)) {
+      // Önce önceki aramadan kalan "Evrak adı" filtresini temizle.
+      await clearEvrakAdiFilter();
+
+      // Garanti olsun diye arama state'ini de sıfırla (başvuru no değişti).
+      await chrome.storage.local.set({
+        tp_clicked_ara: false,
+        tp_download_clicked: false,
+        tp_waiting_pdf_url: false,
+        tp_grid_ready: false,
+        tp_grid_retry: 0
+      });
+
+      await fillBasvuruNo(tp_app_no);
+      return;
+    }
+
+    if (!tp_clicked_ara) {
+      await clickAraButtonOnly();
+      return;
+    }
+
+    // 1) Çok kısa bir güvenlik beklemesi
+    if (tp_clicked_ara && (Date.now() - (tp_last_search_ts || 0) < 1500)) return;
+
+    // 2) UI hala yükleniyorsa asla devam etme
+    if (isPageBusy()) {
+      console.log(TAG, "⏳ Sayfa meşgul, bekleniyor...");
+      return;
+    }
+
+    // 3) Asıl kritik nokta:
+    // Ara'ya basıldıktan sonra grid'in gerçekten yenilenmesini bekle.
+    const {
+      tp_grid_ready,
+      tp_prev_grid_sig,
+      tp_grid_retry = 0
+    } = await chrome.storage.local.get([
+      "tp_grid_ready",
+      "tp_prev_grid_sig",
+      "tp_grid_retry"
+    ]);
+
+    if (tp_clicked_ara && !tp_grid_ready) {
+      const ok = await waitForGridToRefresh(tp_prev_grid_sig || "", 20000);
+
+      if (!ok) {
+        // ✅ Grid gelmediyse ready yapma. 1 kez daha Ara'ya basıp dene.
+        const nextRetry = tp_grid_retry + 1;
+
+        if (nextRetry <= 1) {
+          console.log(TAG, "🔁 Grid gelmedi, Ara tekrar deneniyor...");
+          await chrome.storage.local.set({ tp_grid_retry: nextRetry, tp_grid_ready: false });
+          await clickAraButtonOnly();
+          return;
+        }
+
+        console.log(TAG, "⛔ Grid yine gelmedi, bu tur atlanıyor.");
+        await chrome.storage.local.set({ tp_grid_retry: 0, tp_grid_ready: false });
+        return; // burada istersen "işi atla/ilerle" mantığını çağırabilirsin
+      }
+
+      // ✅ Grid yenilendi: ready yap, retry sıfırla, prev sig güncelle
+      const newSig = getGridSignature() || "";
+      await chrome.storage.local.set({
+        tp_grid_ready: true,
+        tp_grid_retry: 0,
+        tp_prev_grid_sig: newSig
+      });
+
+      return; // Bir sonraki tick'te indirmeye geçsin
+    }
+
+    if (tp_clicked_ara && tp_grid_ready && !tp_download_clicked && !isActionInProgress) {
+      await downloadTescilBelge();
+    }
+
+    return;
+  }
+
+  await clickBelgelerim();
+}
   setInterval(() => run().catch(() => {}), 2000);
 })();
