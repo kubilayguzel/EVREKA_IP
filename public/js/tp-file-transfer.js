@@ -33,7 +33,8 @@ function parseDate(dateStr) {
 
 // --- Firebase Imports ---
 import { app, personService, ipRecordsService, transactionTypeService } from '../firebase-config.js';
-import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
+import { loadSharedLayout} from './layout-loader.js';
+import { PersonModalManager } from './components/PersonModalManager.js';
 import { mapTurkpatentResultsToIPRecords, mapTurkpatentToIPRecord} from './turkpatent-mapper.js';
 import { showNotification } from '../utils.js';
 
@@ -56,6 +57,7 @@ const relatedPartyCount = _el('relatedPartyCount');
 let allPersons = [];
 let selectedRelatedParties = [];
 let currentOwnerResults = []; // CSV export için
+let personModalManager = null;
 
 // --- Extension ID ---
 const EXTENSION_ID = 'kemjjkdjhijodjmmfpmlnhhnfaojndgn';
@@ -69,7 +71,8 @@ async function init() {
     const personsResult = await personService.getPersons();
     allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
     console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
-    
+    personModalManager = new PersonModalManager();
+
     setupEventListeners();
     setupExtensionMessageListener();
     setupRadioButtons();
@@ -129,14 +132,13 @@ function setupEventListeners() {
     }
   });
   
-  // Yeni kişi ekleme
-  addNewPersonBtn?.addEventListener('click', async () => {
-    if (typeof ensurePersonModal === 'function') await ensurePersonModal();
-    if (typeof openPersonModal === 'function') {
-      openPersonModal('relatedParty', (newPerson) => {
+  // Yeni kişi ekleme (Merkezi Modal)
+  addNewPersonBtn?.addEventListener('click', () => {
+    if (personModalManager) {
+      personModalManager.open(null, (newPerson) => {
         if (newPerson) {
-          allPersons.push(newPerson);
-          addRelatedParty(newPerson);
+          allPersons.push(newPerson); // Listeye ekle
+          addRelatedParty(newPerson); // Seçili yap
         }
       });
     }
