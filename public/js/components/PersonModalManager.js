@@ -687,6 +687,7 @@ export class PersonModalManager {
         const p = persons.data.find(x => x.id === id);
         if (!p) return;
 
+        // Temel alanları doldur
         document.getElementById('personType').value = p.type || 'gercek';
         document.getElementById('personType').dispatchEvent(new Event('change'));
         document.getElementById('personName').value = p.name || '';
@@ -699,6 +700,45 @@ export class PersonModalManager {
         document.getElementById('personAddress').value = p.address || '';
         document.getElementById('is_evaluation_required').checked = !!p.is_evaluation_required;
 
+        // 🔥 ÜLKE VE İL SEÇİMİ DÜZELTMESİ 🔥
+        const countrySelect = document.getElementById('countrySelect');
+        if (p.countryCode) {
+            countrySelect.value = p.countryCode;
+            
+            // Eğer ülke Türkiye ise illeri yükle ve seç
+            if (/^(TR|TUR)$/i.test(p.countryCode)) {
+                document.getElementById('provinceSelect').style.display = '';
+                document.getElementById('provinceText').style.display = 'none';
+                
+                // İllerin yüklenmesini bekle
+                await this.loadProvinces(p.countryCode);
+                
+                // Veritabanında il ismi (text) kayıtlı olduğu için text üzerinden eşleştirme yap
+                if (p.province) {
+                    const provinceSelect = document.getElementById('provinceSelect');
+                    let found = false;
+                    // Seçenekler arasında metni (text) eşleşen var mı?
+                    for (let i = 0; i < provinceSelect.options.length; i++) {
+                        if (provinceSelect.options[i].text === p.province) {
+                            provinceSelect.selectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    }
+                    // Eğer text olarak bulamazsa value olarak dene (eski kayıtlar için)
+                    if (!found) {
+                        provinceSelect.value = p.province;
+                    }
+                }
+            } else {
+                // Yabancı ülke ise input text'i doldur
+                document.getElementById('provinceSelect').style.display = 'none';
+                document.getElementById('provinceText').style.display = '';
+                document.getElementById('provinceText').value = p.province || '';
+            }
+        }
+
+        // Evrakları yükle
         this.documents = p.documents || [];
         this.renderDocuments();
 
