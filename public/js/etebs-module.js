@@ -495,57 +495,84 @@ updateTabBadge() {
     async fetchNotifications() {
         if (this.state.isLoading) return;
         const token = localStorage.getItem('etebs_token');
-        if (!token) return this.showError('Lütfen önce token alın.');
-
+        
+        // Token olmasa bile veritabanındaki eski kayıtları gösterebilmeliyiz
+        // Ama yeni sorgu için token şart.
+        
         this.setLoading(true);
-        this.updateStatusMessage('İşlem başlatılıyor...');
+        this.updateStatusMessage('Veriler yükleniyor...');
+
+        // UI Temizliği
+        this.state.notifications = [];
+        this.state.matchedNotifications = [];
+        this.state.unmatchedNotifications = [];
+        this.renderNotifications();
 
         try {
-            // ADIM 1: Backend'e "Git Listeyi Al ve Veritabanına Yaz" emri ver
-            // (PDF indirmeyi beklemiyoruz, sadece kuyruğa ekletiyoruz)
-            this.updateStatusMessage('Sunucu listeyi işliyor...');
-            
-            await window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
-                action: 'CHECK_LIST_ONLY', // Sadece listeyi çek ve DB'ye 'queued' olarak yaz
-                token: token,
-                userId: firebase.auth().currentUser.uid
-            });
+            // ADIM 1: Eğer Token varsa, Backend'e "Yeni liste var mı?" diye sor (Hafif işlem)
+            if (token) {
+                this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
+                try {
+                    // Bu çağrı listeyi çeker ve DB'ye 'queued' olarak yazar. Cevabı beklemiyoruz (fire-and-forget).
+                    window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
+                        action: 'CHECK_LIST_ONLY',
+                        token: token,
+                        userId: firebase.auth().currentUser.uid
+                    }).catch(e => console.warn("Liste güncelleme isteği arka planda devam ediyor:", e));
+                } catch (e) {
+                    console.log("Liste tetikleme pas geçildi.");
+                }
+            }
 
-            // ADIM 2: Hemen ardından "Git Veritabanından Listeyi Çek ve Göster"
+            // ADIM 2: Hemen Veritabanından Son Durumu Çek ve Göster
+            // (İnternet yavaş olsa bile veritabanındaki veriyi hemen gösterir)
             this.updateStatusMessage('Listeleniyor...');
+            
+            // 1 saniye bekle ki backend yeni kayıt varsa yazmaya başlasın
+            await new Promise(r => setTimeout(r, 1000)); 
+
             const dbRecords = await window.firebaseConfig.etebs.getRecentUnindexedDocuments(50);
 
             if (dbRecords.length > 0) {
                 this.state.notifications = dbRecords;
                 
-                // Tabloyu çiz
+                // Marka eşleştirmelerini çalıştır (Varsa)
+                if (this.matchWithIPRecords) await this.matchWithIPRecords();
+                
+                this.updateStatistics();
                 this.renderNotifications();
+                this.autoSwitchTab();
                 this.showNotificationsSection();
-                this.showSuccess(`Güncel liste veritabanından yüklendi (${dbRecords.length} kayıt).`);
+                
+                this.showSuccess(`Veritabanından ${dbRecords.length} evrak listelendi.`);
 
-                // ADIM 3: Arka planda PDF İndirmeyi Tetikle (Kullanıcıyı bekletme)
-                // Sadece 'queued' (henüz inmemiş) olanlar varsa tetikle
+                // ADIM 3: İndirilmemiş (queued) dosyalar varsa indirmeyi tetikle
                 const pendingDownloads = dbRecords.filter(d => d.status === 'queued').length;
-                if (pendingDownloads > 0) {
-                    this.showToast(`${pendingDownloads} dosya arka planda indiriliyor...`, 'info');
+                
+                if (pendingDownloads > 0 && token) {
+                    this.showToast(`${pendingDownloads} yeni evrak arka planda indiriliyor...`, 'info');
                     
-                    // Fire-and-forget (Cevabı bekleme)
+                    // İndirme işlemini tetikle
                     window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
                         action: 'PROCESS_DOWNLOAD_QUEUE',
                         token: token,
                         userId: firebase.auth().currentUser.uid
-                    }).then(() => {
-                        this.showSuccess("Arka plan indirmeleri tamamlandı. Listeyi yenileyin.");
+                    }).then((res) => {
+                        console.log("Arka plan indirmesi bitti:", res);
+                        this.showSuccess("Dosyalar indirildi. Listeyi yenileyin.");
+                        // İsteğe bağlı: İşlem bitince listeyi otomatik yenile
+                        // this.fetchNotifications(); 
                     });
                 }
 
             } else {
                 this.showInfo("Görüntülenecek evrak bulunamadı.");
+                this.hideNotificationsSection();
             }
 
         } catch (error) {
-            console.error(error);
-            this.showError('Hata: ' + error.message);
+            console.error('Arayüz Hatası:', error);
+            this.showError('Liste alınırken hata oluştu: ' + error.message);
         } finally {
             this.setLoading(false);
         }
