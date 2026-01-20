@@ -1,6 +1,8 @@
 import { authService, auth, generateUUID } from '../../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal } from '../layout-loader.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// ✅ EKLENDİ: Tarih dönüşümü için gerekli
+import { Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; 
 import { showNotification } from '../../utils.js';
 
 import { TaskUpdateDataManager } from './TaskUpdateDataManager.js';
@@ -28,7 +30,6 @@ class TaskUpdateController {
         await loadSharedLayout();
         ensurePersonModal();
 
-        // Başvuru Modalı HTML'ini sayfa açılır açılmaz enjekte et
         this.uiManager.ensureApplicationDataModal();
         this.setupApplicationModalEvents();
 
@@ -56,26 +57,21 @@ class TaskUpdateController {
         this.taskData = await this.dataManager.getTaskById(this.taskId);
         this.currentDocuments = this.taskData.documents || [];
         
-        // --- 🔥 DÜZELTME 1: Mevcut İlişkileri Hafızaya Al ---
         this.selectedIpRecordId = this.taskData.relatedIpRecordId || null;
         
-        // Task Owner bazen array ([id]) bazen string (id) gelebilir, düzeltiyoruz:
         let ownerId = this.taskData.taskOwner;
         if (Array.isArray(ownerId)) ownerId = ownerId[0];
         this.selectedPersonId = ownerId || null;
-        // ---------------------------------------------------
 
         this.uiManager.fillForm(this.taskData, this.masterData.users);
         this.uiManager.renderDocuments(this.currentDocuments);
         this.renderAccruals();
         
-        // İlgili Varlığı Ekrana Bas
         if (this.selectedIpRecordId) {
             const rec = this.masterData.ipRecords.find(r => r.id === this.selectedIpRecordId);
             this.uiManager.renderSelectedIpRecord(rec);
         }
 
-        // İlgili Tarafı Ekrana Bas
         if (this.selectedPersonId) {
             const p = this.masterData.persons.find(x => String(x.id) === String(this.selectedPersonId));
             this.uiManager.renderSelectedPerson(p);
@@ -87,34 +83,28 @@ class TaskUpdateController {
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
         }
 
-        // Başvuru ise alanları kilitle
         this.lockFieldsIfApplicationTask();
     }
 
-    // --- YENİ FONKSİYON: Alanları Kilitleme Mantığı ---
     lockFieldsIfApplicationTask() {
-        // Hangi tiplerde kilitlenecek? (Başvuru ID'leri)
         const lockedTypes = ['2'];
-        
         const isLocked = lockedTypes.includes(String(this.taskData.taskType));
         
         if (isLocked) {
             console.log('🔒 Başvuru işlemi tespit edildi, ilgili alanlar kilitleniyor.');
             
-            // 1. İlgili Varlık Alanını Kilitle
             const ipSearchInput = document.getElementById('relatedIpRecordSearch');
             const ipRemoveBtn = document.querySelector('#selectedIpRecordDisplay #removeIpRecordBtn');
             
             if (ipSearchInput) {
                 ipSearchInput.disabled = true;
                 ipSearchInput.placeholder = "Bu iş tipi için varlık değiştirilemez.";
-                ipSearchInput.style.backgroundColor = "#e9ecef"; // Readonly gri tonu
+                ipSearchInput.style.backgroundColor = "#e9ecef"; 
             }
             if (ipRemoveBtn) {
-                ipRemoveBtn.style.display = 'none'; // Çarpı butonunu gizle
+                ipRemoveBtn.style.display = 'none'; 
             }
             
-            // 2. İlgili Taraf Alanını Kilitle
             const partySearchInput = document.getElementById('relatedPartySearch');
             const partyRemoveBtn = document.querySelector('#selectedRelatedPartyDisplay #removeRelatedPartyBtn');
             
@@ -139,7 +129,6 @@ class TaskUpdateController {
             window.location.href = 'task-management.html';
         });
 
-        // Genel Dosyalar
         document.getElementById('fileUploadArea').addEventListener('click', () => document.getElementById('fileInput').click());
         document.getElementById('fileInput').addEventListener('change', (e) => this.uploadDocuments(e.target.files));
         document.getElementById('fileListContainer').addEventListener('click', (e) => {
@@ -147,7 +136,6 @@ class TaskUpdateController {
             if (btn) this.removeDocument(btn.dataset.id);
         });
 
-        // EPATS İşlemleri
         document.getElementById('epatsFileUploadArea').addEventListener('click', () => document.getElementById('epatsFileInput').click());
         document.getElementById('epatsFileInput').addEventListener('change', (e) => this.uploadEpatsDocument(e.target.files[0]));
         document.getElementById('epatsFileListContainer').addEventListener('click', (e) => {
@@ -156,7 +144,6 @@ class TaskUpdateController {
             }
         });
 
-        // Aramalar
         document.getElementById('relatedIpRecordSearch').addEventListener('input', (e) => {
             const results = this.dataManager.searchIpRecords(this.masterData.ipRecords, e.target.value);
             this.renderSearchResults(results, 'ipRecord');
@@ -166,16 +153,15 @@ class TaskUpdateController {
             this.renderSearchResults(results, 'person');
         });
 
-        // --- 🔥 DÜZELTME 2: Silme Butonları (Hafızadan Silme) ---
         document.getElementById('selectedIpRecordDisplay').addEventListener('click', (e) => {
             if(e.target.closest('#removeIpRecordBtn')) {
-                this.selectedIpRecordId = null; // Hafızayı temizle
+                this.selectedIpRecordId = null; 
                 this.uiManager.renderSelectedIpRecord(null);
             }
         });
         document.getElementById('selectedRelatedPartyDisplay').addEventListener('click', (e) => {
             if(e.target.closest('#removeRelatedPartyBtn')) {
-                this.selectedPersonId = null; // Hafızayı temizle
+                this.selectedPersonId = null; 
                 this.uiManager.renderSelectedPerson(null);
             }
         });
@@ -189,30 +175,24 @@ class TaskUpdateController {
                 const appNo = document.getElementById('modalAppNumber').value;
                 const appDate = document.getElementById('modalAppDate').value;
                 
-                // Validasyon
                 if(!appNo || !appDate) { 
                     alert('Lütfen Başvuru Numarası ve Tarihi alanlarını doldurunuz.'); 
                     return; 
                 }
                 
-                // 1. Veriyi hafızaya al
                 this.tempApplicationData = { appNo, appDate };
                 
-                // 2. Yeni kutucukları doldur
                 document.getElementById('displayModalAppNo').value = appNo;
                 document.getElementById('displayModalAppDate').value = appDate;
                 
-                // 3. Alanı görünür yap (Standart JS ile)
                 const infoArea = document.getElementById('updatedApplicationInfoArea');
                 if (infoArea) {
                     infoArea.style.display = 'block';
                 }
 
-                // 4. Sağ taraftaki "İlgili Varlık" kartını güncelle
                 const displayNo = document.getElementById('displayAppNumber');
                 if(displayNo) displayNo.textContent = appNo;
                 
-                // Modalı kapat
                 if(window.$) $('#applicationDataModal').modal('hide');
             };
         }
@@ -238,7 +218,6 @@ class TaskUpdateController {
         const record = this.masterData.ipRecords.find(r => r.id === this.selectedIpRecordId);
         if (!record) return;
 
-        // Menşei kontrolü (Harf duyarsız)
         const isTurkpatent = (record.origin || '').toUpperCase() === 'TÜRKPATENT';
         const currentRenewalDate = record.renewalDate;
         
@@ -246,7 +225,6 @@ class TaskUpdateController {
         const warningArea = document.getElementById('renewalWarningArea');
         const warningText = document.getElementById('renewalWarningText');
 
-        // Reset
         modalDateInput.value = '';
         warningArea.style.display = 'none';
 
@@ -256,7 +234,6 @@ class TaskUpdateController {
                 : new Date(currentRenewalDate);
 
             if (!isNaN(dateObj.getTime())) {
-                // 10 yıl ekle
                 const nextRenewalDate = new Date(dateObj);
                 nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 10);
                 
@@ -270,6 +247,7 @@ class TaskUpdateController {
             $('#renewalDataModal').modal({ backdrop: 'static', keyboard: false, show: true });
         }
     }
+    
     renderSearchResults(items, type) {
         const container = type === 'ipRecord' ? this.uiManager.elements.ipResults : this.uiManager.elements.partyResults;
         container.innerHTML = '';
@@ -282,7 +260,6 @@ class TaskUpdateController {
             div.className = 'search-result-item';
             div.textContent = type === 'ipRecord' ? item.title : item.name;
             div.onclick = () => {
-                // --- 🔥 DÜZELTME 3: Seçim Anında Hafızayı Güncelle ---
                 if (type === 'ipRecord') {
                     this.selectedIpRecordId = item.id;
                     this.uiManager.renderSelectedIpRecord(item);
@@ -323,15 +300,12 @@ class TaskUpdateController {
         await this.dataManager.updateTask(this.taskId, { documents: this.currentDocuments });
     }
 
-    // --- EPATS YÜKLEME ---
     async uploadEpatsDocument(file) {
         if (!file) return;
         
-        // 1. Durum ve Veri Yedekleme Başlatma
         if (!this.uploadedEpatsFile) {
             this.statusBeforeEpatsUpload = document.getElementById('taskStatus').value;
             
-            // Ana kaydın o anki halini yedekle (Geri dönüş için)
             const record = this.masterData.ipRecords.find(r => r.id === this.selectedIpRecordId);
             if (record) {
                 this.taskData.details.backupData = {
@@ -356,11 +330,9 @@ class TaskUpdateController {
 
             this.uiManager.renderEpatsDocument(this.uploadedEpatsFile);
 
-            // Statüyü "Tamamlandı" yap
             const statusSelect = document.getElementById('taskStatus');
             if(statusSelect) statusSelect.value = 'completed'; 
 
-            // İşlem Tipine Göre Mantığı Tetikle
             const taskType = String(this.taskData.taskType);
             if (taskType === '22') this.handleRenewalLogic();
             
@@ -381,36 +353,28 @@ class TaskUpdateController {
     async removeEpatsDocument() {
         if (!confirm('EPATS evrakı silinecek ve yapılan veri değişiklikleri (varsa) eski haline döndürülecektir. Emin misiniz?')) return;
         
-        // 1. Storage temizliği (Dosyayı buluttan sil)
         if (this.uploadedEpatsFile?.storagePath) {
             try {
                 await this.dataManager.deleteFileFromStorage(this.uploadedEpatsFile.storagePath);
             } catch (e) { console.warn("Storage silme hatası:", e); }
         }
         
-        // 2. Local değişkenleri sıfırla
         this.uploadedEpatsFile = null;
         this.tempApplicationData = null;
         this.tempRenewalData = null;
         
-        // [KRİTİK DÜZELTME] Ana veri objesinden (taskData) evrak bilgisini sil!
-        // Bunu yapmazsak saveTaskChanges() eski veriyi tekrar kaydeder.
         if (this.taskData && this.taskData.details) {
             delete this.taskData.details.epatsDocument;
             delete this.taskData.details.statusBeforeEpatsUpload;
         }
 
-        // 3. Statüyü geri al (Yoksa 'open' yap)
         if (this.statusBeforeEpatsUpload) {
             document.getElementById('taskStatus').value = this.statusBeforeEpatsUpload;
         } else {
             document.getElementById('taskStatus').value = 'open';
         }
 
-        // 4. Arayüzü temizle (Dosya görselini kaldır)
         this.uiManager.renderEpatsDocument(null);
-        
-        // 5. Veritabanını güncelle (Artık details içinde evrak yok, temiz gidecek)
         await this.saveTaskChanges(); 
     }
 
@@ -420,7 +384,6 @@ class TaskUpdateController {
         return applicationTypeIds.includes(String(taskType));
     }
 
-    // --- TAHAKKUK ---
     setupAccrualModal() {
         this.accrualManager = new AccrualFormManager('accrualFormContainer', 'taskUpdate', this.masterData.persons);
         this.accrualManager.render();
@@ -492,7 +455,6 @@ class TaskUpdateController {
             return;
         }
 
-        // ÖNEMLİ: Kartları bir satıra sarıyoruz ve her kartı col-12 (tam genişlik) yapıyoruz
         container.innerHTML = `
             <div class="row w-100 m-0">
                 ${accruals.map(a => {
@@ -511,34 +473,25 @@ class TaskUpdateController {
                     <div class="col-12 mb-3">
                         <div class="card shadow-sm border-light w-100 h-100">
                             <div class="card-body">
-
-                                <!-- Üst Satır: Tutar + Durum -->
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5 class="mb-0 font-weight-bold text-dark">${amountStr}</h5>
                                     ${statusHtml}
                                 </div>
-
-                                <!-- Orta Alan: Bilgiler blok blok -->
                                 <div class="row text-sm">
                                     <div class="col-md-4 mb-2">
                                         <small class="text-muted d-block">Tarih</small>
                                         <span>${dateStr}</span>
                                     </div>
-
                                     <div class="col-md-4 mb-2">
                                         <small class="text-muted d-block">Açıklama</small>
                                         <span>${itemsSummary}</span>
                                     </div>
-
                                     <div class="col-md-4 mb-2">
                                         <small class="text-muted d-block">Kayıt No</small>
                                         <span class="text-monospace">#${a.id.substring(0,6)}</span>
                                     </div>
                                 </div>
-
                                 <hr/>
-
-                                <!-- Alt Satır: Düzenle butonu -->
                                 <div class="text-right">
                                     <button class="btn btn-sm btn-outline-primary edit-accrual-btn" data-id="${a.id}">
                                         <i class="fas fa-pen mr-1"></i>Düzenle
@@ -552,7 +505,6 @@ class TaskUpdateController {
         `;
     }
 
-
     formatCurrency(amountData) {
         if (Array.isArray(amountData)) return amountData.map(x => `${x.amount} ${x.currency}`).join(' + ');
         return amountData;
@@ -561,82 +513,104 @@ class TaskUpdateController {
     // --- KAYDETME VE YÖNLENDİRME ---
 
     async saveTaskChanges() {
-    // 1. EPATS Validasyonu
-    if (this.uploadedEpatsFile) {
-        const evrakNo = document.getElementById('turkpatentEvrakNo').value;
-        const evrakDate = document.getElementById('epatsDocumentDate').value;
-        if (!evrakNo || !evrakDate) {
-            // ALERT YERİNE:
-            showNotification('Lütfen EPATS evrak bilgilerini (No ve Tarih) doldurunuz.', 'warning');
-            return;
-        }
-        this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
-        this.uploadedEpatsFile.documentDate = evrakDate;
-    }
-
-    // 2. Veri Hazırlama (Aynı kalıyor)
-    const updateData = {
-        status: document.getElementById('taskStatus').value,
-        updatedAt: new Date().toISOString(),
-        details: this.taskData.details || {},
-        relatedIpRecordId: this.selectedIpRecordId,
-        taskOwner: this.selectedPersonId,
-        // ... diğer alanlar
-    };
-
-    if (this.uploadedEpatsFile) {
-        updateData.details.epatsDocument = this.uploadedEpatsFile;
-        updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
-    }
-
-    const res = await this.dataManager.updateTask(this.taskId, updateData);
-    
-    if (res.success) {
-        const recordId = this.selectedIpRecordId;
-        const taskType = String(this.taskData.taskType);
-
-        // --- ÖZEL DURUM 1: Sahip Değişimi (3, 5, 18) ---
-        const ownerChangeTypes = ['3', '5', '18'];
-        if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
-            try {
-                const record = this.masterData.ipRecords.find(r => r.id === recordId);
-                const newPerson = this.masterData.persons.find(p => String(p.id) === String(this.selectedPersonId));
-                
-                if (record && newPerson) {
-                    const oldOwnerData = (record.applicants || record.owners || []).map(a => ({ id: a.id || '', name: a.name || a.applicantName || 'Bilinmeyen' }));
-                    const newApplicants = [{ id: newPerson.id, name: newPerson.name, email: newPerson.email || null, address: newPerson.address || null }];
-                    
-                    await this.dataManager.updateIpRecord(recordId, { applicants: newApplicants });
-                    
-                    if (this.taskData.transactionId) {
-                        await this.dataManager.updateTransaction(recordId, this.taskData.transactionId, { oldOwnerData });
-                    }
-
-                    // ==========================================================
-                    // SAHİP DEĞİŞİKLİĞİ BİLDİRİMİ (YENİ)
-                    // ==========================================================
-                    showNotification(`Başvuru sahibi "${newPerson.name}" olarak güncellendi.`, 'info');
-                }
-            } catch (err) { console.error("Sahip güncelleme hatası:", err); }
+        if (this.uploadedEpatsFile) {
+            const evrakNo = document.getElementById('turkpatentEvrakNo').value;
+            const evrakDate = document.getElementById('epatsDocumentDate').value;
+            if (!evrakNo || !evrakDate) {
+                showNotification('Lütfen EPATS evrak bilgilerini (No ve Tarih) doldurunuz.', 'warning');
+                return;
+            }
+            this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
+            this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        // --- DİĞER GÜNCELLEMELER (Başvuru ve Yenileme) ---
-        if (this.tempApplicationData && recordId) {
-            await this.dataManager.updateIpRecord(recordId, {
-                applicationNumber: this.tempApplicationData.appNo,
-                applicationDate: this.tempApplicationData.appDate
-            });
+        // 1. Temel Veriler
+        const updateData = {
+            status: document.getElementById('taskStatus').value,
+            title: document.getElementById('taskTitle').value,
+            description: document.getElementById('taskDescription').value,
+            priority: document.getElementById('taskPriority').value,
+            updatedAt: new Date().toISOString(),
+            details: this.taskData.details || {},
+            relatedIpRecordId: this.selectedIpRecordId,
+            taskOwner: this.selectedPersonId
+        };
+
+        // ✅ 2. TARİH ALANLARINI DÜZELTME (Timestamp Formatına Çevir)
+        const officialDateVal = document.getElementById('taskDueDate').value; // Resmi Tarih
+        const operationalDateVal = document.getElementById('deliveryDate').value; // Operasyonel Tarih
+
+        if (officialDateVal) {
+            // "Official Due Date" veritabanında Timestamp olarak tutuluyor
+            updateData.officialDueDate = Timestamp.fromDate(new Date(officialDateVal));
+        } else {
+            updateData.officialDueDate = null;
         }
-        if (this.tempRenewalData && recordId) {
-            await this.dataManager.updateIpRecord(recordId, { renewalDate: this.tempRenewalData });
+
+        if (operationalDateVal) {
+            // "Due Date" (sistemin ana tarihi) -> Timestamp
+            updateData.dueDate = Timestamp.fromDate(new Date(operationalDateVal));
+            
+            // "Operational Due Date" (isteğe bağlı, yedek alan) -> Timestamp
+            updateData.operationalDueDate = Timestamp.fromDate(new Date(operationalDateVal));
+            
+            // "Delivery Date" (String olarak tuttuğunuz format)
+            updateData.deliveryDate = operationalDateVal; 
+        } else {
+            updateData.dueDate = null;
+            updateData.deliveryDate = null;
         }
+
+        if (this.uploadedEpatsFile) {
+            updateData.details.epatsDocument = this.uploadedEpatsFile;
+            updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
+        }
+
+        const res = await this.dataManager.updateTask(this.taskId, updateData);
         
-        showNotification('Değişiklikler başarıyla kaydedildi.', 'success');
-        setTimeout(() => { window.location.href = 'task-management.html'; }, 1000); 
-    } else {
-        showNotification('Güncelleme sırasında bir hata oluştu: ' + res.error, 'error');
+        if (res.success) {
+            const recordId = this.selectedIpRecordId;
+            const taskType = String(this.taskData.taskType);
+
+            // Sahip Değişimi
+            const ownerChangeTypes = ['3', '5', '18'];
+            if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
+                try {
+                    const record = this.masterData.ipRecords.find(r => r.id === recordId);
+                    const newPerson = this.masterData.persons.find(p => String(p.id) === String(this.selectedPersonId));
+                    
+                    if (record && newPerson) {
+                        const oldOwnerData = (record.applicants || record.owners || []).map(a => ({ id: a.id || '', name: a.name || a.applicantName || 'Bilinmeyen' }));
+                        const newApplicants = [{ id: newPerson.id, name: newPerson.name, email: newPerson.email || null, address: newPerson.address || null }];
+                        
+                        await this.dataManager.updateIpRecord(recordId, { applicants: newApplicants });
+                        
+                        if (this.taskData.transactionId) {
+                            await this.dataManager.updateTransaction(recordId, this.taskData.transactionId, { oldOwnerData });
+                        }
+                        showNotification(`Başvuru sahibi "${newPerson.name}" olarak güncellendi.`, 'info');
+                    }
+                } catch (err) { console.error("Sahip güncelleme hatası:", err); }
+            }
+
+            // Başvuru Bilgileri Güncelleme
+            if (this.tempApplicationData && recordId) {
+                await this.dataManager.updateIpRecord(recordId, {
+                    applicationNumber: this.tempApplicationData.appNo,
+                    applicationDate: this.tempApplicationData.appDate
+                });
+            }
+            // Yenileme Tarihi Güncelleme
+            if (this.tempRenewalData && recordId) {
+                await this.dataManager.updateIpRecord(recordId, { renewalDate: this.tempRenewalData });
+            }
+            
+            showNotification('Değişiklikler başarıyla kaydedildi.', 'success');
+            setTimeout(() => { window.location.href = 'task-management.html'; }, 1000); 
+        } else {
+            showNotification('Güncelleme sırasında bir hata oluştu: ' + res.error, 'error');
+        }
     }
-}
 }
 
 new TaskUpdateController().init();
