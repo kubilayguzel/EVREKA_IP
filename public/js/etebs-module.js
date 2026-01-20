@@ -54,16 +54,26 @@ function showNotification(message, type = 'info') {
     }
 }
 
-export class ETEBSManager {
+class ETEBSManager {
     constructor() {
-    this.currentMode = 'etebs';
-    this.notifications = [];
-    this.filteredNotifications = [];
-    this.isInitialized = false;
-    this.bindEvents();
-    this.bindTabEvents();
-    this.fetchNotifications = this.fetchNotifications.bind(this);
-}
+        // 1. State nesnesini ve isLoading'i mutlaka tanımlayın
+        this.state = {
+            isLoading: false,
+            notifications: [],
+            matchedNotifications: [],
+            unmatchedNotifications: []
+        };
+
+        this.currentMode = 'etebs';
+        this.isInitialized = false;
+
+        // 2. Fonksiyonu bağlama (Bind) işlemi - Sorununuzu çözen satır
+        this.fetchNotifications = this.fetchNotifications.bind(this);
+
+        // 3. Event listener'ları başlat
+        this.bindEvents();
+        this.bindTabEvents();
+    }
 
 async uploadDocumentsToFirebase(documents, userId, evrakNo) {
     const uploadResults = [];
