@@ -170,11 +170,13 @@ export class TaskSubmitHandler {
             // 8. TAHAKKUK VE FİNANSAL İŞLEMLER
             await this._handleAccrualLogic(taskResult.id, taskData.title, selectedTaskType, state, accrualData, isFreeTransaction);
 
-            // 9. Otomasyon
+            /* // 9. Otomasyon
             if (['20', 'trademark_publication_objection'].includes(String(selectedTaskType.id))) {
                 await this._handleOppositionAutomation(taskResult.id, selectedTaskType, state.selectedIpRecord);
             }
-
+*/
+            //
+            
             alert('İş başarıyla oluşturuldu!');
             window.location.href = 'task-management.html';
 
@@ -193,7 +195,7 @@ export class TaskSubmitHandler {
      * GÜVENLİ VERSİYON: Bülten kaydını (Third Party) gerçek IP Record'a dönüştürür.
      * UI hatalarını önlemek için boş array ve default değerler titizlikle atanır.
      */
-    
+
     async _createRecordFromBulletin(bulletinRecord) {
         try {
             const now = new Date().toISOString();
