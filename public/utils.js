@@ -12,6 +12,7 @@ export function showNotification(message, type = 'info', duration = 3000) {
         document.body.appendChild(container);
         console.info('Bildirim konteyneri dinamik olarak oluşturuldu.');
     }
+    container.classList.add('notification-container');
 
     // Sticky: Kritik mesajları minimum 15 sn göster
     const STICKY_PARTS = [
