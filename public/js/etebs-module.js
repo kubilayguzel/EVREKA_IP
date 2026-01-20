@@ -492,62 +492,64 @@ updateTabBadge() {
         }
     }
 
-// etebs-module.js içindeki fetchNotifications fonksiyonunu güncelleyin
-async fetchNotifications() {
-    console.log("✅ fetchNotifications başladı");
-    const tokenInput = document.getElementById('etebsTokenInput');
-    if (!tokenInput) return;
+    async fetchNotifications() {
+        if (this.state.isLoading) return;
+        const token = localStorage.getItem('etebs_token');
+        if (!token) return this.showError('Lütfen önce token alın.');
 
-    const token = tokenInput.value.trim();
-    if (!token) {
-        this.showTokenStatus('error', 'Token giriniz');
-        return;
-    }
+        this.setLoading(true);
+        this.updateStatusMessage('İşlem başlatılıyor...');
 
-    const fetchBtn = document.getElementById('fetchNotificationsBtn');
-    const originalText = fetchBtn.innerHTML;
-    
-    try {
-        fetchBtn.innerHTML = '<span class="loading-spinner"></span><span>Sorgulanıyor...</span>';
-        fetchBtn.disabled = true;
-        this.showTokenStatus('loading', 'Tebligat listesi alınıyor...');
-
-        // ÖNEMLİ: getDailyNotifications fonksiyonuna "sadece liste" parametresi 
-        // eklenmiş bir mod varsa onu kullanın veya timeout'u yönetin.
-        const result = await etebsService.getDailyNotifications(token);
-
-        if (result.success) {
-            // Veri geldiğinde işlemleri yap
-            this.notifications = result.data.map(n => {
-                const records = window.indexingModule?.allRecords || [];
-                const isMatched = records.some(r => r.applicationNumber === n.dosyaNo);
-                return { ...n, matched: isMatched };
+        try {
+            // ADIM 1: Backend'e "Git Listeyi Al ve Veritabanına Yaz" emri ver
+            // (PDF indirmeyi beklemiyoruz, sadece kuyruğa ekletiyoruz)
+            this.updateStatusMessage('Sunucu listeyi işliyor...');
+            
+            await window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
+                action: 'CHECK_LIST_ONLY', // Sadece listeyi çek ve DB'ye 'queued' olarak yaz
+                token: token,
+                userId: firebase.auth().currentUser.uid
             });
 
-            this.filteredNotifications = [...this.notifications];
-            this.displayNotifications();
-            this.updateStatistics();
-            this.showNotificationsSection();
-            this.updateTabBadge();
-            
-            showNotification(`${result.totalCount} tebligat bulundu.`, 'success');
-        } else {
-            // 504 veya Fetch hatası durumunda özel mesaj
-            if (result.error?.includes('Failed to fetch') || result.error?.includes('timeout')) {
-                this.showTokenStatus('error', 'Sunucu yanıt vermiyor (Zaman aşımı). Lütfen biraz bekleyip tekrar deneyin.');
-                showNotification('İşlem çok uzun sürdüğü için kesildi. Liste kısmi olarak yüklenmiş olabilir.', 'warning');
+            // ADIM 2: Hemen ardından "Git Veritabanından Listeyi Çek ve Göster"
+            this.updateStatusMessage('Listeleniyor...');
+            const dbRecords = await window.firebaseConfig.etebs.getRecentUnindexedDocuments(50);
+
+            if (dbRecords.length > 0) {
+                this.state.notifications = dbRecords;
+                
+                // Tabloyu çiz
+                this.renderNotifications();
+                this.showNotificationsSection();
+                this.showSuccess(`Güncel liste veritabanından yüklendi (${dbRecords.length} kayıt).`);
+
+                // ADIM 3: Arka planda PDF İndirmeyi Tetikle (Kullanıcıyı bekletme)
+                // Sadece 'queued' (henüz inmemiş) olanlar varsa tetikle
+                const pendingDownloads = dbRecords.filter(d => d.status === 'queued').length;
+                if (pendingDownloads > 0) {
+                    this.showToast(`${pendingDownloads} dosya arka planda indiriliyor...`, 'info');
+                    
+                    // Fire-and-forget (Cevabı bekleme)
+                    window.firebaseConfig.etebs.callFunction('etebsProxyV2', {
+                        action: 'PROCESS_DOWNLOAD_QUEUE',
+                        token: token,
+                        userId: firebase.auth().currentUser.uid
+                    }).then(() => {
+                        this.showSuccess("Arka plan indirmeleri tamamlandı. Listeyi yenileyin.");
+                    });
+                }
+
             } else {
-                this.showTokenStatus('error', result.error || 'Veri alınamadı');
+                this.showInfo("Görüntülenecek evrak bulunamadı.");
             }
+
+        } catch (error) {
+            console.error(error);
+            this.showError('Hata: ' + error.message);
+        } finally {
+            this.setLoading(false);
         }
-    } catch (error) {
-        console.error('❌ Fetch notifications error:', error);
-        this.showTokenStatus('error', 'Bağlantı hatası oluştu');
-    } finally {
-        fetchBtn.innerHTML = originalText;
-        fetchBtn.disabled = false;
     }
-}
 
     async refreshNotifications() {
         const tokenInput = document.getElementById('etebsTokenInput');
