@@ -18,7 +18,7 @@ export class EpatsUiManager {
         // Eklenti İletişim ID'si (Manifest.json'daki ID ile aynı olmalı)
         // Desteklenen Eklenti ID'leri (Hangi eklenti yüklüyse o çalışır)
         this.extensionIds = [
-            "mhjacaphbimellgnbbnoblhgpdlchkgi", // 1. ID (Mevcut)
+            "hffjgcfcelfemkmgocpjjphfmjlhpdnb", // 1. ID (Mevcut)
             "poikphboglooldcjgmgakjnmibghbdbf"  // 2. ID (Yeni)
         ];
 
