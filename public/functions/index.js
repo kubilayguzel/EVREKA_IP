@@ -2589,7 +2589,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
-    // Statü Belirleme
+// Statü Belirleme
     const coreMissing = [];
     if ((toRecipients.length + ccRecipients.length) === 0) coreMissing.push("recipients");
     if (!hasTemplate) coreMissing.push("mailTemplate");
@@ -2617,7 +2617,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       associatedTransactionId: after.relatedTransactionId || after.transactionId || null,
       templateId: templateId || null,
       notificationType: "marka",
-      taskType: task.taskType || null,
+      taskType: after.taskType || null, 
       source: usedSource,
       epatsAttachment,
       taskOwner: ownerIds,
