@@ -98,7 +98,7 @@ export class TaskSubmitHandler {
             // 2.5. EĞER SEÇİLEN VARLIK BÜLTENDEN İSE VE HENÜZ IP RECORD DEĞİLSE
             // (Burada kaydı oluşturuyoruz ki Task ve Transaction doğru ID'ye bağlansın)
             // -----------------------------------------------------------------------
-            if (selectedIpRecord && (selectedIpRecord.source === 'bulletin' || selectedIpRecord._source === 'bulletin')) {
+            if (selectedIpRecord && (selectedIpRecord.source === 'bulletin' || selectedIpRecord._source === 'bulletin' || !selectedIpRecord.recordOwnerType)) {
                 console.log('📢 Bülten kaydı tespit edildi, ipRecords\'a dönüştürülüyor...');
                 
                 // Güvenli kayıt oluşturma metodunu çağır
@@ -176,7 +176,7 @@ export class TaskSubmitHandler {
             }
 */
             //
-            
+
             alert('İş başarıyla oluşturuldu!');
             window.location.href = 'task-management.html';
 
