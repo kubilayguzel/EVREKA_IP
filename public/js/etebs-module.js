@@ -842,6 +842,23 @@ showNotificationsSection() {
     }
 }
 
+hideNotificationsSection() {
+    try {
+        console.log("🙈 hideNotificationsSection başladı");
+
+        const section = document.getElementById('notificationsSection');
+        if (section) {
+            section.style.display = 'none';
+            console.log("✅ Notifications section gizlendi");
+        } else {
+            console.log("⚠️ notificationsSection elementi bulunamadı");
+        }
+    } catch (error) {
+        console.error('❌ Error hiding notifications section:', error);
+    }
+}
+
+
 // --- UI helpers (bulk-indexing-page.html ile uyumlu) ---
 setLoading(isLoading) {
     this.isLoading = !!isLoading;
