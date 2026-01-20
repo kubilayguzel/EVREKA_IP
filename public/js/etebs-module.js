@@ -502,9 +502,7 @@ async fetchNotifications() {
     if (this.isLoading) return;
 
     const token = localStorage.getItem('etebs_token');
-
-    // Token olmasa bile veritabanındaki eski kayıtları gösterebilmeliyiz
-    // Ama yeni sorgu için token şart.
+    const user = authService?.auth?.currentUser;
 
     this.setLoading(true);
     this.updateStatusMessage('Veriler yükleniyor...');
@@ -515,56 +513,67 @@ async fetchNotifications() {
     this.displayNotifications();
 
     try {
-        // ADIM 1: Token varsa, Backend'e "Yeni liste var mı?" diye sor (Hafif işlem)
-        if (token) {
+        // ADIM 1: Token varsa backend tetikle (fire-and-forget)
+        if (token && user) {
             this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
 
-            const hasNew = await window.firebaseConfig.etebs.hasNewNotifications(token);
+            try {
+                // firebase-functions'i burada lazy import ediyoruz (import satırlarını ellemen gerekmesin diye)
+                const { httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js');
 
-            if (hasNew) {
-                this.updateStatusMessage('Yeni kayıtlar alınıyor...');
+                if (!firebaseServices?.functions) {
+                    console.warn("firebaseServices.functions tanımlı değil. Backend tetiklenemedi.");
+                } else {
+                    const etebsProxyV2 = httpsCallable(firebaseServices.functions, 'etebsProxyV2');
 
-                await window.firebaseConfig.etebs.fetchNotificationsFromEtebs(token);
-
-                this.showSuccess("Yeni tebligatlar alındı.");
-            } else {
-                this.showInfo("Yeni tebligat bulunamadı.");
+                    // Listeyi çekip DB'ye queued olarak yazdıran tetikleme (cevabı beklemiyoruz)
+                    etebsProxyV2({
+                        action: 'CHECK_LIST_ONLY',
+                        token: token,
+                        userId: user.uid
+                    }).catch(e => console.warn("Liste güncelleme isteği arka planda devam ediyor:", e));
+                }
+            } catch (e) {
+                console.warn("Backend tetikleme atlandı:", e);
             }
         } else {
-            this.showInfo("Token bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
+            if (!user) this.showInfo("Oturum bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
+            if (!token) this.showInfo("Token bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
         }
 
-        // ADIM 2: Hemen Veritabanından Son Durumu Çek ve Göster
+        // ADIM 2: Veritabanından son durumu çek ve göster
         this.updateStatusMessage('Listeleniyor...');
 
-        // 1 saniye bekle ki backend yeni kayıt varsa yazmaya başlasın
+        // Backend yazdıysa yakalamak için kısa bekleme
         await new Promise((r) => setTimeout(r, 1000));
 
-        const dbRecords = await window.firebaseConfig.etebs.getRecentUnindexedDocuments(50);
+        // ✅ window.firebaseConfig yerine etebsService kullan
+        const dbRecords = await etebsService.getRecentUnindexedDocuments(50);
 
-        if (dbRecords.length > 0) {
+        if (dbRecords && dbRecords.length > 0) {
             this.notifications = dbRecords;
             this.filteredNotifications = dbRecords;
 
             // Marka eşleştirmelerini çalıştır (Varsa)
             try {
-                await this.runBrandMatchingIfAvailable();
+                if (typeof this.runBrandMatchingIfAvailable === 'function') {
+                    await this.runBrandMatchingIfAvailable();
+                } else if (typeof this.matchWithIPRecords === 'function') {
+                    await this.matchWithIPRecords();
+                }
             } catch (e) {
                 console.warn('Brand matching çalıştırılamadı:', e);
             }
 
-            // İstatistikleri güncelle + listeyi bas
             this.updateStatistics();
             this.displayNotifications();
-
-            // Bildirim alanını göster
             this.showNotificationsSection();
 
+            this.showSuccess(`Veritabanından ${dbRecords.length} evrak listelendi.`);
         } else {
             this.showInfo("Görüntülenecek evrak bulunamadı.");
             this.hideNotificationsSection();
         }
-
     } catch (error) {
         console.error('Arayüz Hatası:', error);
         this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
@@ -572,7 +581,6 @@ async fetchNotifications() {
         this.setLoading(false);
     }
 }
-
 
     async refreshNotifications() {
         const tokenInput = document.getElementById('etebsTokenInput');
