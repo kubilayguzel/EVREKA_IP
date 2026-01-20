@@ -1974,28 +1974,43 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     // 3. Konu Başlığını ve ID'yi Kesinleştir
     if (potentialTargetTypes.length > 0 && recordId) {
         try {
+            // ADIM A: Mevcut Zincirleri Ara
             for (const targetType of potentialTargetTypes) {
+                // "1" gelirse "2" olarak ara (Güvenlik)
                 const actualTarget = (targetType === "1") ? "2" : targetType;
+                
                 const threadKey = `${recordId}_${actualTarget}`;
                 const threadDoc = await adminDb.collection("mailThreads").doc(threadKey).get();
                 
                 if (threadDoc.exists && threadDoc.data()?.rootSubject) {
                     parentTemplateSubject = threadDoc.data().rootSubject;
                     foundInThread = true;
-                    namingTargetType = actualTarget; // Global değişkeni güncelle
-                    forcedThreadId = actualTarget;   // Zorunlu ID
+                    
+                    // Zincir bulundu!
+                    namingTargetType = actualTarget; 
+                    forcedThreadId = actualTarget;   
+                    
                     console.log(`✅ Zincir BULUNDU! ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
                     break; 
                 }
             }
 
+            // ADIM B: Zincir Yoksa -> PARENT STANDARTLARINI UYGULA
             if (!foundInThread) {
-                let targetTypeStr = potentialTargetTypes[0];
+                // Mapping listesinin başındaki tipi (Primary Parent - Örn: 2) hedef al.
+                let targetTypeStr = potentialTargetTypes[0]; 
+                
+                // Normalizasyon (1 -> 2)
                 if (targetTypeStr === "1") targetTypeStr = "2";
 
-                console.log(`ℹ️ Zincir bulunamadı. Hedef (${targetTypeStr}) şablonu kontrol ediliyor.`);
-
                 if (targetTypeStr) {
+                    console.log(`ℹ️ Zincir bulunamadı. Yeni zincir Parent (${targetTypeStr}) kimliğiyle başlatılıyor.`);
+                    
+                    // 1. ID'yi Parent Yap (Veritabanında zincir _2 olarak başlasın)
+                    namingTargetType = targetTypeStr;
+                    forcedThreadId = targetTypeStr;
+
+                    // 2. Konuyu Parent'tan Al (mailSubject alanını kullan)
                     const parentRuleSnap = await adminDb.collection("template_rules")
                         .where("sourceType", "==", "task_completion_epats")
                         .where("taskType", "==", targetTypeStr)
@@ -2008,18 +2023,22 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                             const pTemplateSnap = await adminDb.collection("mail_templates").doc(pRule.templateId).get();
                             if (pTemplateSnap.exists) {
                                 const ptData = pTemplateSnap.data();
-                                parentTemplateSubject = ptData.mailSubject || ptData.subject;
-                                namingTargetType = targetTypeStr; // Global değişkeni güncelle
-                                forcedThreadId = targetTypeStr;   // Zorunlu ID
-                                console.log(`🔗 Taslak Seçildi. ID: ${namingTargetType} (Konu: "${parentTemplateSubject}")`);
+                                
+                                // [DÜZELTME] Sadece mailSubject alanını al.
+                                // (ptData.subject yerine ptData.mailSubject kullanılıyor)
+                                parentTemplateSubject = ptData.mailSubject;
+                                
+                                console.log(`🔗 Parent Konusu Seçildi (mailSubject): "${parentTemplateSubject}"`);
                             }
                         }
+                    } else {
+                        console.log(`⚠️ Parent (${targetTypeStr}) şablon kuralı bulunamadı.`);
                     }
                 }
             }
-        } catch (err) { console.error("❌ Hata:", err); }
+            
+        } catch (err) { console.error("❌ Konu belirleme hatası:", err); }
     }
-
   // ---------------------------------------------------------------------------------------
     // [GÜNCELLENDİ v13] İÇERİK OLUŞTURMA & AKILLI HTML ENJEKSİYONU
     // ---------------------------------------------------------------------------------------
