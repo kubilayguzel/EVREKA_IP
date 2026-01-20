@@ -193,76 +193,122 @@ export class TaskSubmitHandler {
      * GÜVENLİ VERSİYON: Bülten kaydını (Third Party) gerçek IP Record'a dönüştürür.
      * UI hatalarını önlemek için boş array ve default değerler titizlikle atanır.
      */
+    
     async _createRecordFromBulletin(bulletinRecord) {
         try {
-            // 1. Sınıf Bilgilerini Parse Et (Hata önleyici mantık)
+            const now = new Date().toISOString();
+
+            // 1. Sınıf Bilgilerini Parse Et (Number Array)
             let niceClasses = [];
             if (bulletinRecord.niceClasses) {
                 if (Array.isArray(bulletinRecord.niceClasses)) {
                     niceClasses = bulletinRecord.niceClasses;
                 } else if (typeof bulletinRecord.niceClasses === 'string') {
-                    // "05, 35" veya "05/35" gibi stringleri diziye çevir
                     niceClasses = bulletinRecord.niceClasses
-                        .split(/[,/]/) // Hem virgül hem slash ile ayrılmış olabilir
+                        .split(/[,/]/)
                         .map(s => s.trim())
                         .map(Number)
                         .filter(n => !isNaN(n) && n > 0);
                 }
+            } else if (bulletinRecord.classNumbers && Array.isArray(bulletinRecord.classNumbers)) {
+                 // create-portfolio dosyasındaki gibi classNumbers alanına da bak
+                 niceClasses = bulletinRecord.classNumbers;
             }
 
-            // 2. Sahip Bilgisini Formatla (Sistem genelde 'applicants' dizisi bekler)
-            const holderName = bulletinRecord.holder || bulletinRecord.applicantName || 'Bilinmeyen Sahip';
-            const applicantsData = [{
-                name: holderName,
-                role: 'owner', // veya 'applicant'
-                id: null, // Dışarıdan geldiği için sistem ID'si yok
-                address: bulletinRecord.address || '' // Varsa adresi de alalım
-            }];
+            // 2. Sınıfları Detaylı Obje Dizisine Çevir (create-portfolio uyumu)
+            const goodsAndServices = niceClasses.map(classNum => ({
+                niceClass: classNum.toString(),
+                description: `Sınıf ${classNum} - Bulletin kaydından alınan`,
+                status: 'active'
+            }));
 
-            // 3. Tarih Formatlama (Undefined hatası vermemesi için)
-            const appDate = bulletinRecord.applicationDate || bulletinRecord.adDate || new Date().toISOString().split('T')[0];
+            // 3. Sahip Bilgisini Formatla (create-portfolio uyumu: ID üretmeli)
+            let applicants = [];
+            if (Array.isArray(bulletinRecord.holders) && bulletinRecord.holders.length > 0) {
+                applicants = bulletinRecord.holders.map(holder => ({
+                    id: `bulletin_holder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    name: holder.name || holder.holderName || holder.title || holder,
+                    address: holder.address || holder.addressText || null,
+                    country: holder.country || holder.countryCode || null,
+                }));
+            } else {
+                // Eğer holders dizisi yoksa tekil alandan üret
+                const holderName = bulletinRecord.holder || bulletinRecord.applicantName || 'Bilinmeyen Sahip';
+                applicants = [{
+                    id: `bulletin_holder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    name: holderName,
+                    address: bulletinRecord.address || '',
+                    country: '',
+                    role: 'owner'
+                }];
+            }
 
-            // 4. Veri Objesini Oluştur
+            // 4. Tarih Formatlama
+            const appDate = bulletinRecord.applicationDate || bulletinRecord.adDate || null;
+
+            // 5. Görsel Yolu (Varsa ham path'i de sakla)
+            const brandImageUrl = bulletinRecord.imageUrl || bulletinRecord.image || null;
+            const imagePath = bulletinRecord.imagePath || null;
+
+            // 6. Veri Objesini Oluştur (Referans dosya ile birebir aynı yapı)
             const newRecordData = {
-                // -- Kimlik --
-                title: bulletinRecord.markName || bulletinRecord.title || holderName + ' Markası',
-                brandText: bulletinRecord.markName || '',
-                
-                // -- Numaralar ve Tarihler --
-                applicationNumber: bulletinRecord.applicationNo || bulletinRecord.applicationNumber || '',
-                applicationDate: appDate,
-                registrationNumber: null, // Henüz tescilli değil
-                registrationDate: null,
-                
-                // -- Tip ve Statü (Kritik Alanlar) --
-                recordOwnerType: 'third_party', // Kendi markamız değil
+                // -- Temel Bilgiler --
+                title: bulletinRecord.markName || bulletinRecord.title || `Başvuru No: ${bulletinRecord.applicationNo}`,
                 type: 'trademark',
-                portfoyStatus: 'active', // Portföyde takip ediliyor
-                status: 'published', // Bültende yayında
-                
-                // -- Sınıflandırma (UI'ın çökmemesi için boş array'ler şart) --
-                niceClasses: niceClasses,
-                goodsAndServicesByClass: [], // Bu alan boş olsa bile ARRAY olarak tanımlanmalı!
-                
-                // -- Kişiler --
-                holder: holderName, // Eski uyumluluk için string olarak
-                applicants: applicantsData, // Yeni yapı için obje array olarak
-                
-                // -- Görsel --
-                brandImageUrl: bulletinRecord.imageUrl || bulletinRecord.image || null,
-                
-                // -- Sistem Metadata --
-                source: 'bulletin_conversion', // Kaynağı belirtelim
-                originalBulletinId: bulletinRecord.id || null,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                portfoyStatus: 'active',
+                status: 'published_in_bulletin', // ✅ Referans dosyadaki statü
+                recordOwnerType: 'third_party',
+
+                // -- Başvuru/Tescil --
+                applicationNumber: bulletinRecord.applicationNo || bulletinRecord.applicationNumber || null,
+                applicationNo: bulletinRecord.applicationNo || bulletinRecord.applicationNumber || null, // ✅ İkisi de olsun
+                applicationDate: appDate,
+                registrationNumber: null,
+                registrationDate: null,
+                renewalDate: null,
+
+                // -- Marka --
+                brandText: bulletinRecord.markName || null,
+                markName: bulletinRecord.markName || null, // ✅ Referans dosyadaki tekrar
+                brandImageUrl: brandImageUrl,
+                imagePath: imagePath,
+                description: `Yayına itiraz işi oluşturulurken otomatik açılan 3.taraf kaydı.`,
+
+                // -- İlişkiler --
+                applicants: applicants,
+                priorities: [],
+                goodsAndServices: goodsAndServices, // ✅ Detaylı sınıf yapısı
+                niceClasses: niceClasses, // ✅ Basit liste (UI için gerekebilir)
+
+                // -- Detaylar (Referans dosya yapısı) --
+                details: {
+                    sourceBulletinRecordId: bulletinRecord.id || null,
+                    originalBulletinRecordId: null,
+                    brandInfo: {
+                        brandType: bulletinRecord.markType || null,
+                        brandCategory: null,
+                        brandExampleText: bulletinRecord.markName || null,
+                        nonLatinAlphabet: null,
+                        brandImage: brandImageUrl,
+                        goodsAndServices: goodsAndServices,
+                        opposedMarkBulletinNo: bulletinRecord.bulletinNo || null,
+                        opposedMarkBulletinDate: bulletinRecord.bulletinDate || null
+                    }
+                },
+
+                // -- Sistem --
+                source: 'task_creation',
+                createdFrom: 'bulletin_record', // ✅ Referans dosyadaki etiket
+                createdBy: 'task_ui_automation',
+                createdAt: now,
+                updatedAt: now
             };
 
             // Firestore'a kaydet
             const result = await ipRecordsService.createRecord(newRecordData);
             
             if (result.success) {
-                console.log(`✅ Bülten kaydı başarıyla ipRecords'a eklendi. ID: ${result.id}`);
+                console.log(`✅ Bülten kaydı (create-portfolio uyumlu) oluşturuldu. ID: ${result.id}`);
                 return result.id;
             } else {
                 console.error("❌ Bülten kaydı dönüştürme hatası:", result.error);
