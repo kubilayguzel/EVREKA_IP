@@ -2519,9 +2519,18 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
     // --- İÇERİK OLUŞTURMA VE DEĞİŞKEN EŞLEŞTİRME ---
     let subject = "", body = "";
+    
     if (hasTemplate) {
-      subject = String(template.subject || "");
-      body    = String(template.body || "");
+      // 1. Konu Ayrımı
+      // Mail Başlığı (Dış): Varsa 'mailSubject' (Örn: {{appNo}} - Başvuru), yoksa 'subject' kullanılır.
+      let rawEmailSubject = String(template.mailSubject || template.subject || "");
+      
+      // İç Konu (Kutu): Şablonun orijinal konusu (subject) - Örn: "Marka Yayım Kararı"
+      // Bu kısım mailin içinde gri kutuda görünecek.
+      let rawInnerSubject = String(template.subject || "");
+      
+      // 2. Gövde (Body)
+      let rawBody = String(template.body || "");
       
       const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
 
@@ -2532,10 +2541,9 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
       };
       
-      // EPATS tarihini al, yoksa bugünü kullan
       const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
 
-      // ✅ GÜNCELLENMİŞ PARAMETRELER
+      // PARAMETRELER
       const parameters = {
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: ipTitle,
@@ -2543,21 +2551,42 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
         
-        // Yeni Eklenenler:
         applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         markName: ipRecord?.title || ipRecord?.markName || "-",
         markImageUrl: enrichedData.markImageUrl,
-        applicantNames: enrichedData.applicantNames, // Artık taskOwner > relatedParty > applicants önceliğiyle
+        applicantNames: enrichedData.applicantNames,
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
         
-        // Geri uyumluluk için eski parametreler
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
       };
       
-      subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-      body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      // 3. Değişkenleri Yerleştir
+      const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+
+      subject = replaceVars(rawEmailSubject);           // Mailin Dış Konusu
+      const innerSubjectResolved = replaceVars(rawInnerSubject); // İç Konu (Kutu)
+      let resolvedBody = replaceVars(rawBody);          // Gövde
+
+      // 4. [AKILLI ENJEKSİYON] Konu Kutusunu Gövdeye Ekle
+      // Mail içeriğine konu başlığını şık bir kutu içinde ekler.
+      if (innerSubjectResolved) {
+          const innerSubjectHtml = `
+            <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
+                <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
+            </div>
+          `;
+
+          // HTML body varsa içine (<body> etiketinden sonraya), yoksa en başa ekle
+          if (resolvedBody.toLowerCase().includes("<body")) {
+              body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
+          } else {
+              body = innerSubjectHtml + resolvedBody;
+          }
+      } else {
+          body = resolvedBody;
+      }
     }
 
     // Statü Belirleme
