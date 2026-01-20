@@ -241,15 +241,81 @@
 
   async function waitForGridToRefresh(prevSig, timeoutMs = 20000) {
     const start = Date.now();
+
+    // Grid DOM'undan ek bir imza (signature aynı kalsa bile DOM değişimini yakalar)
+    const getDomStamp = () => {
+      const rows = document.querySelectorAll(".ui-grid-row");
+      const count = rows.length;
+
+      // İlk satırdan ufak bir metin parçası al (çok pahalı olmasın)
+      const firstText =
+        rows[0]?.innerText?.trim()?.slice(0, 80) || "";
+
+      // Canvas boyu da değişimde iyi sinyal olur
+      const canvas = document.querySelector(".ui-grid-canvas");
+      const h = canvas?.scrollHeight || 0;
+
+      return `${count}|${h}|${firstText}`;
+    };
+
+    const prevDomStamp = getDomStamp();
+
+    let sawBusy = false;
+    let stableOkCount = 0;     // arka arkaya “ok” gördüğümüzde true döneceğiz
+    let lastSig = null;
+
     while (Date.now() - start < timeoutMs) {
-      if (isPageBusy()) { await sleep(400); continue; }
+      const busy = isPageBusy();
+      if (busy) {
+        sawBusy = true;
+        stableOkCount = 0; // busy iken stabil sayma
+        await sleep(250);
+        continue;
+      }
+
       const sig = getGridSignature();
-      if (sig && sig !== prevSig && !sig.startsWith("0|")) return true;
-      await sleep(400);
+      const domStamp = getDomStamp();
+
+      // 1) Signature değiştiyse (ve 0| değilse) -> güçlü sinyal
+      const sigChangedAndValid = sig && sig !== prevSig && !sig.startsWith("0|");
+
+      // 2) Signature değişmedi ama DOM değiştiyse -> yenilenmiş olabilir
+      const domChanged = domStamp !== prevDomStamp;
+
+      // 3) “0|” geçici olabiliyor; busy döngüsü gördükten sonra 0| dışına çıkınca kabul et
+      const sigNowValid = sig && !sig.startsWith("0|");
+
+      // Kabul koşulu:
+      // - sig değişip valid ise
+      // - veya DOM değiştiyse ve sig valid ise
+      // - veya en az bir busy döngüsü gördük ve sig valid ise (bazı durumlarda sig aynı kalabiliyor)
+      let ok =
+        sigChangedAndValid ||
+        (domChanged && sigNowValid) ||
+        (sawBusy && sigNowValid);
+
+      // Ek race önlemi: 2 kere üst üste ok görmeden dönme
+      // (grid bazen 1 tick doğru görünüp sonra tekrar değişebiliyor)
+      if (ok) {
+        // Aynı sig'i iki kez üst üste görürsek daha güvenli
+        if (lastSig === sig) stableOkCount += 1;
+        else stableOkCount = 1;
+
+        lastSig = sig;
+
+        if (stableOkCount >= 2) return true;
+      } else {
+        stableOkCount = 0;
+        lastSig = sig;
+      }
+
+      await sleep(250);
     }
+
     console.warn(TAG, "⚠️ Grid yenilenmesi zaman aşımı. Mevcut veri ile devam edilecek.");
     return false;
   }
+
 
   async function clearEvrakAdiFilter() {
     const cells = qAllMany(".ui-grid-header-cell");
