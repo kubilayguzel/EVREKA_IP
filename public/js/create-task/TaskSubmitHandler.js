@@ -15,7 +15,7 @@ export class TaskSubmitHandler {
     async handleFormSubmit(e, state) {
         e.preventDefault();
         
-        // State'i referans olarak alıyoruz, aşağıda güncelleyebiliriz
+        // State referansını alıyoruz
         const { 
             selectedTaskType, selectedIpRecord, selectedRelatedParties, selectedRelatedParty,
             selectedApplicants, priorities, selectedCountries, uploadedFiles,
@@ -99,20 +99,18 @@ export class TaskSubmitHandler {
             // (Burada kaydı oluşturuyoruz ki Task ve Transaction doğru ID'ye bağlansın)
             // -----------------------------------------------------------------------
             if (selectedIpRecord && (selectedIpRecord.source === 'bulletin' || selectedIpRecord._source === 'bulletin')) {
-                // Eğer bu zaten gerçek bir ipRecord değilse (id kontrolü veya source kontrolü)
-                // Bülten kayıtları genellikle ipRecords koleksiyonunda değildir.
-                
                 console.log('📢 Bülten kaydı tespit edildi, ipRecords\'a dönüştürülüyor...');
+                
+                // Güvenli kayıt oluşturma metodunu çağır
                 const newRealRecordId = await this._createRecordFromBulletin(selectedIpRecord);
                 
                 if (newRealRecordId) {
                     console.log('✅ Yeni IP Record oluşturuldu ID:', newRealRecordId);
                     
-                    // Task verilerini güncelle
+                    // Task verilerini güncelle (Yeni ID'yi kullan)
                     taskData.relatedIpRecordId = newRealRecordId;
                     
-                    // State içindeki selectedIpRecord'u da güncelle ki sonraki adımlar (tarih hesaplama vb.) yeni ID'yi bilsin
-                    // Ancak veri yapısını korumalıyız, sadece ID'yi ve source'u değiştiriyoruz.
+                    // State içindeki selectedIpRecord'u güncelle
                     state.selectedIpRecord.id = newRealRecordId;
                     state.selectedIpRecord.source = 'created_from_bulletin'; 
                     state.selectedIpRecord._source = 'ipRecord'; // Artık bir ipRecord
@@ -165,7 +163,6 @@ export class TaskSubmitHandler {
 
             // 7. Transaksiyon Ekleme
             // NOT: Eğer yukarıda bülten kaydını dönüştürdüysek, taskData.relatedIpRecordId artık yeni ID'dir.
-            // Transaction doğru yere (yeni kayda) gidecektir.
             if (taskData.relatedIpRecordId) {
                 await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state);
             }
@@ -174,8 +171,6 @@ export class TaskSubmitHandler {
             await this._handleAccrualLogic(taskResult.id, taskData.title, selectedTaskType, state, accrualData, isFreeTransaction);
 
             // 9. Otomasyon
-            // Eğer kaydı biz oluşturduysak otomasyonun tekrar oluşturmasını engellemek gerekebilir
-            // Ancak otomasyon genellikle "var olan" kaydı kullanırsa sorun olmaz.
             if (['20', 'trademark_publication_objection'].includes(String(selectedTaskType.id))) {
                 await this._handleOppositionAutomation(taskResult.id, selectedTaskType, state.selectedIpRecord);
             }
@@ -195,55 +190,87 @@ export class TaskSubmitHandler {
     // ============================================================
 
     /**
-     * Bülten kaydını (Third Party) gerçek IP Record'a dönüştürür.
+     * GÜVENLİ VERSİYON: Bülten kaydını (Third Party) gerçek IP Record'a dönüştürür.
+     * UI hatalarını önlemek için boş array ve default değerler titizlikle atanır.
      */
     async _createRecordFromBulletin(bulletinRecord) {
         try {
-            // Sınıf Bilgilerini Parse Et
+            // 1. Sınıf Bilgilerini Parse Et (Hata önleyici mantık)
             let niceClasses = [];
             if (bulletinRecord.niceClasses) {
                 if (Array.isArray(bulletinRecord.niceClasses)) {
                     niceClasses = bulletinRecord.niceClasses;
                 } else if (typeof bulletinRecord.niceClasses === 'string') {
-                    // "05, 35" gibi stringleri diziye çevir
-                    niceClasses = bulletinRecord.niceClasses.split(',').map(s => s.trim()).map(Number).filter(n => !isNaN(n));
+                    // "05, 35" veya "05/35" gibi stringleri diziye çevir
+                    niceClasses = bulletinRecord.niceClasses
+                        .split(/[,/]/) // Hem virgül hem slash ile ayrılmış olabilir
+                        .map(s => s.trim())
+                        .map(Number)
+                        .filter(n => !isNaN(n) && n > 0);
                 }
             }
 
-            // Bülten verilerini ipRecords şemasına eşle
+            // 2. Sahip Bilgisini Formatla (Sistem genelde 'applicants' dizisi bekler)
+            const holderName = bulletinRecord.holder || bulletinRecord.applicantName || 'Bilinmeyen Sahip';
+            const applicantsData = [{
+                name: holderName,
+                role: 'owner', // veya 'applicant'
+                id: null, // Dışarıdan geldiği için sistem ID'si yok
+                address: bulletinRecord.address || '' // Varsa adresi de alalım
+            }];
+
+            // 3. Tarih Formatlama (Undefined hatası vermemesi için)
+            const appDate = bulletinRecord.applicationDate || bulletinRecord.adDate || new Date().toISOString().split('T')[0];
+
+            // 4. Veri Objesini Oluştur
             const newRecordData = {
-                title: bulletinRecord.markName || bulletinRecord.title || 'Bilinmeyen Marka',
+                // -- Kimlik --
+                title: bulletinRecord.markName || bulletinRecord.title || holderName + ' Markası',
                 brandText: bulletinRecord.markName || '',
-                applicationNumber: bulletinRecord.applicationNo || bulletinRecord.applicationNumber || null,
-                applicationDate: bulletinRecord.applicationDate || null,
                 
-                // Üçüncü Taraf Olduğunu Belirtiyoruz
-                recordOwnerType: 'third_party', 
+                // -- Numaralar ve Tarihler --
+                applicationNumber: bulletinRecord.applicationNo || bulletinRecord.applicationNumber || '',
+                applicationDate: appDate,
+                registrationNumber: null, // Henüz tescilli değil
+                registrationDate: null,
+                
+                // -- Tip ve Statü (Kritik Alanlar) --
+                recordOwnerType: 'third_party', // Kendi markamız değil
                 type: 'trademark',
-                portfoyStatus: 'active', // Takip edilen potansiyel/rakip marka
+                portfoyStatus: 'active', // Portföyde takip ediliyor
+                status: 'published', // Bültende yayında
                 
+                // -- Sınıflandırma (UI'ın çökmemesi için boş array'ler şart) --
                 niceClasses: niceClasses,
+                goodsAndServicesByClass: [], // Bu alan boş olsa bile ARRAY olarak tanımlanmalı!
                 
-                // Varsa diğer detaylar
+                // -- Kişiler --
+                holder: holderName, // Eski uyumluluk için string olarak
+                applicants: applicantsData, // Yeni yapı için obje array olarak
+                
+                // -- Görsel --
                 brandImageUrl: bulletinRecord.imageUrl || bulletinRecord.image || null,
-                holder: bulletinRecord.holder || null, // Bülten verisinde varsa
                 
-                source: 'bulletin_conversion',
+                // -- Sistem Metadata --
+                source: 'bulletin_conversion', // Kaynağı belirtelim
                 originalBulletinId: bulletinRecord.id || null,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
 
+            // Firestore'a kaydet
             const result = await ipRecordsService.createRecord(newRecordData);
+            
             if (result.success) {
+                console.log(`✅ Bülten kaydı başarıyla ipRecords'a eklendi. ID: ${result.id}`);
                 return result.id;
             } else {
-                console.error("Bülten kaydı oluşturulamadı:", result.error);
-                return null;
+                console.error("❌ Bülten kaydı dönüştürme hatası:", result.error);
+                throw new Error("Seçilen bülten kaydı portföye eklenemedi: " + result.error);
             }
         } catch (error) {
-            console.error("_createRecordFromBulletin Hatası:", error);
-            return null;
+            console.error("❌ _createRecordFromBulletin Genel Hatası:", error);
+            throw error; 
         }
     }
 
@@ -707,7 +734,6 @@ export class TaskSubmitHandler {
     async _handleOppositionAutomation(taskId, taskType, ipRecord) {
         if (window.portfolioByOppositionCreator && typeof window.portfolioByOppositionCreator.handleTransactionCreated === 'function') {
             try {
-                // Not: ipRecord parametresi artık yeni oluşturulan kayıt olabilir.
                 const result = await window.portfolioByOppositionCreator.handleTransactionCreated({
                     id: taskId,
                     specificTaskType: taskType.id,
