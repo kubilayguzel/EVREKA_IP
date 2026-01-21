@@ -379,17 +379,8 @@
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
             // Global modülleri başlat
-            window.indexingModule = new BulkIndexingModule();
             window.etebsManager = new ETEBSManager();
             window.epatsUiManager = new EpatsUiManager();
-
-            // *** KRİTİK DÜZELTME: Manuel Sekmeyi JS Tarafında Zorla Aktif Et ***
-            // Bu, 'Kaydet' butonunun aktifleşmesi için modüle doğru sinyali gönderir.
-            setTimeout(() => {
-                if(window.indexingModule && window.indexingModule.activateTab) {
-                    window.indexingModule.activateTab('manual-indexing-pane');
-                }
-            }, 800); 
 
             // 1. Ana Tab Geçişleri
             const navBtns = document.querySelectorAll('.nav-btn');
