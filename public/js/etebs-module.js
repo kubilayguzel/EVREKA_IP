@@ -366,27 +366,31 @@ switchMode(mode) {
     }
 }
 
+// public/js/etebs-module.js
+
 activateUploadMode() {
     try {
         const bulkFilesInput = document.getElementById('bulkFiles');
+        const bulkFilesButton = document.getElementById('bulkFilesButton'); // ✅ Görsel Alan
         const bulkFilesInfo = document.getElementById('bulkFilesInfo');
         
-        // Input event listener'ı yeniden bağla (Eski indexingModule bağını kopar)
+        // 1. GİZLİ INPUT ELEMENTİNİ HAZIRLA
         if (bulkFilesInput) {
+            // Eski event listener'ları temizlemek için klonluyoruz
             const newInput = bulkFilesInput.cloneNode(true);
             bulkFilesInput.parentNode.replaceChild(newInput, bulkFilesInput);
             
+            // Dosya seçilince çalışacak kod
             newInput.addEventListener('change', async (e) => {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
 
-                // Dosya bilgisini güncelle
+                // Bilgi metnini güncelle
                 if (bulkFilesInfo) {
                     bulkFilesInfo.textContent = `${files.length} dosya işleniyor...`;
                     bulkFilesInfo.style.display = 'block';
                 }
 
-                // Kullanıcı ID'sini al
                 const userId = authService.auth.currentUser?.uid;
                 if (!userId) {
                     showNotification('Oturum açmanız gerekiyor.', 'error');
@@ -397,17 +401,63 @@ activateUploadMode() {
                 const documents = files.map(file => ({
                     file: file,
                     fileName: file.name,
-                    evrakNo: file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, ''), // Basit evrak no üretimi
+                    evrakNo: file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, ''),
                     belgeAciklamasi: 'Manuel Yükleme'
                 }));
 
-                // Yüklemeyi başlat (Bu işlem yukarıda güncellediğimiz fonksiyonu çağırır)
+                // Yüklemeyi başlat
                 showNotification('Yükleme başladı, lütfen bekleyin...', 'info');
+                
+                // Butonu geçici olarak pasif yapalım
+                const currentButton = document.getElementById('bulkFilesButton');
+                if(currentButton) currentButton.style.opacity = '0.5';
+
                 await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL');
                 
-                // Input'u temizle
+                // Temizlik
                 newInput.value = '';
+                if(currentButton) currentButton.style.opacity = '1';
                 if (bulkFilesInfo) bulkFilesInfo.textContent = 'Yükleme tamamlandı.';
+            });
+        }
+
+        // 2. GÖRSEL ALAN (BUTTON) TIKLAMASINI VE SÜRÜKLE-BIRAK'I BAĞLA
+        if (bulkFilesButton) {
+            // Eski event listener'ları temizlemek için klonluyoruz
+            const newButton = bulkFilesButton.cloneNode(true);
+            bulkFilesButton.parentNode.replaceChild(newButton, bulkFilesButton);
+
+            // ✅ TIKLAMA OLAYI: Görsele tıklanınca gizli inputu aç
+            newButton.addEventListener('click', () => {
+                const input = document.getElementById('bulkFiles');
+                if (input) input.click();
+            });
+
+            // ✅ SÜRÜKLE-BIRAK (DRAG & DROP) OLAYLARI
+            newButton.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                newButton.style.borderColor = '#1e3c72'; // Sürüklerken kenarlık rengi değişsin
+                newButton.style.backgroundColor = '#f0f7ff';
+            });
+
+            newButton.addEventListener('dragleave', () => {
+                newButton.style.borderColor = ''; // Eski haline dön
+                newButton.style.backgroundColor = '';
+            });
+
+            newButton.addEventListener('drop', (e) => {
+                e.preventDefault();
+                newButton.style.borderColor = '';
+                newButton.style.backgroundColor = '';
+
+                if (e.dataTransfer.files.length > 0) {
+                    const input = document.getElementById('bulkFiles');
+                    if (input) {
+                        input.files = e.dataTransfer.files;
+                        // Dosyalar atılınca 'change' olayını manuel tetikle
+                        input.dispatchEvent(new Event('change'));
+                    }
+                }
             });
         }
         
