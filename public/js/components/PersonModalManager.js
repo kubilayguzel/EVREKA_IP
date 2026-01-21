@@ -635,33 +635,42 @@ export class PersonModalManager {
         showNotification('İlgili bilgileri güncellendi.', 'success');
     }
 
-    resetRelatedForm() {
-        // 1. Form alanlarını temizle
-        document.getElementById('relatedId').value = '';
-        document.getElementById('relatedName').value = '';
-        document.getElementById('relatedEmail').value = '';
-        document.getElementById('relatedPhone').value = '';
-
-        // 2. Checkbox ve seçimleri sıfırla
-        document.querySelectorAll('.scope-cb').forEach(cb => cb.checked = false);
-        document.querySelectorAll('.mail-to, .mail-cc').forEach(cb => {
-            cb.checked = false;
-            cb.disabled = true;
-            cb.parentElement.classList.add('disabled');
+resetRelatedForm() {
+        // 1. Metin Alanlarını Temizle
+        const textIds = ['relatedId', 'relatedName', 'relatedEmail', 'relatedPhone'];
+        textIds.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.value = '';
         });
 
-        // 3. Edit modunu bitir
+        // 2. Edit Modunu Sıfırla
         this.editingRelated = null;
 
-        // --- BUTONLARI ESKİ HALİNE GETİR ---
-        
-        // Güncelleme grubunu GİZLE
+        // 3. Sorumlu Alanları Varsayılan Olarak SEÇİLİ Yap
+        document.querySelectorAll('.scope-cb').forEach(cb => cb.checked = true);
+
+        // 4. Mail Tercihlerini Ayarla
+        // Sorumlu alanlar seçili olduğu için mail kutuları da aktif olmalı
+        document.querySelectorAll('.mail-to').forEach(cb => {
+            cb.checked = true; // "To" varsayılan seçili
+            cb.disabled = false; // Aktif
+            if(cb.parentElement) cb.parentElement.classList.remove('disabled');
+        });
+
+        document.querySelectorAll('.mail-cc').forEach(cb => {
+            cb.checked = false; // "CC" varsayılan boş
+            cb.disabled = false; // Aktif (Seçilebilir)
+            if(cb.parentElement) cb.parentElement.classList.remove('disabled');
+        });
+
+        // 5. Butonları Varsayılan Hale Getir
+        // Güncelle/İptal grubunu gizle
         const editGroup = document.getElementById('relatedEditButtons');
         if (editGroup) editGroup.style.display = 'none';
 
-        // Ekle butonunu GÖSTER
+        // Ekle butonunu göster
         const addBtn = document.getElementById('addRelatedBtn');
-        if (addBtn) addBtn.style.display = 'inline-block';
+        if (addBtn) addBtn.style.display = 'inline-block'; // veya flex yapınıza göre
     }
 
     async removeRelated(idx, isLoaded) {
@@ -739,18 +748,26 @@ export class PersonModalManager {
         this.renderDocuments();
     }
 
-    // --- Veri Yükleme ve Yardımcılar ---
     async loadInitialData() {
         const countries = await this.dataManager.getCountries();
         const options = countries.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
-        document.getElementById('countrySelect').innerHTML = options;
-        document.getElementById('docCountry').innerHTML = options;
+        
+        const countrySelect = document.getElementById('countrySelect');
+        const docCountry = document.getElementById('docCountry');
 
-        // Varsayılan Türkiye Seçimi
-        const trOpt = Array.from(document.getElementById('countrySelect').options).find(o => /^(TR|TUR)$/i.test(o.value));
-        if (trOpt) {
-            trOpt.selected = true;
-            await this.loadProvinces('TR');
+        countrySelect.innerHTML = options;
+        docCountry.innerHTML = options;
+
+        // Varsayılan Türkiye Seçimi (HER İKİ ALAN İÇİN)
+        // Hem TR hem TUR kodlarını kontrol eder
+        const trOption = countries.find(c => /^(TR|TUR)$/i.test(c.code));
+        
+        if (trOption) {
+            countrySelect.value = trOption.code;
+            docCountry.value = trOption.code;
+            
+            // Kişi adresi TR olduğu için illeri yükle
+            await this.loadProvinces(trOption.code);
         }
     }
 
