@@ -698,7 +698,26 @@ displayNotifications() {
 
 createNotificationHTML(notification, listType) {
     try {
-        const date = new Date(notification.belgeTarihi || notification.uploadedAt).toLocaleDateString('tr-TR');
+        let date = '-';
+        const rawDate = notification.belgeTarihi || notification.uploadedAt;
+
+        if (rawDate) {
+            // 1. Durum: Firebase Timestamp Nesnesi ise (toDate fonksiyonu vardır)
+            if (typeof rawDate.toDate === 'function') {
+                date = rawDate.toDate().toLocaleDateString('tr-TR');
+            } 
+            // 2. Durum: Saniyeli Timestamp Objesi ise (örn: {seconds: 167...})
+            else if (rawDate.seconds) {
+                date = new Date(rawDate.seconds * 1000).toLocaleDateString('tr-TR');
+            } 
+            // 3. Durum: Standart String veya Date objesi ise
+            else {
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                    date = d.toLocaleDateString('tr-TR');
+                }
+            }
+        }
         
         // Kaynak Rozeti
         const sourceBadge = notification.source === 'etebs' 
