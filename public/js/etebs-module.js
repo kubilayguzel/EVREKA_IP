@@ -160,6 +160,13 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo) {
     }
 
     console.log('📤 uploadDocumentsToFirebase tamamlandı. Sonuçlar:', uploadResults);
+    console.log('📤 Yükleme bitti, liste yenileniyor...');
+    
+    // ✅ EKLENEN SATIR: Ortak listeyi yenile
+    await this.fetchNotifications(); 
+    
+    // ✅ EKLENEN SATIR: Başarı mesajı
+    showNotification(`${documents.length} belge havuza eklendi.`, 'success');
     return uploadResults;
 }
 
@@ -358,71 +365,55 @@ switchMode(mode) {
         console.error('Error switching mode:', error);
     }
 }
+
 activateUploadMode() {
     try {
-        // BulkIndexingModule'ün dosya yükleme event listener'larını aktif et
-        if (window.indexingModule && typeof window.indexingModule.setupBulkUploadListeners === 'function') {
-            // File input'u görünür yap
-            const bulkFilesInput = document.getElementById('bulkFiles');
-            const bulkFilesButton = document.getElementById('bulkFilesButton');
-            const bulkFilesInfo = document.getElementById('bulkFilesInfo');
-            if (bulkFilesInput) bulkFilesInput.style.display = 'none';
-            const fileListSection = document.getElementById('fileListSection');
-            if (fileListSection) fileListSection.style.display = 'block';
-                        
-            if (bulkFilesButton) {
-                bulkFilesButton.style.display = 'block';
-                // Event listener'ı yeniden bağla
-                const newButton = bulkFilesButton.cloneNode(true);
-                bulkFilesButton.parentNode.replaceChild(newButton, bulkFilesButton);
-                
-                newButton.addEventListener('click', () => {
-                    if (bulkFilesInput) bulkFilesInput.click();
-                });
-                
-                newButton.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    newButton.classList.add('drag-over');
-                });
-                
-                newButton.addEventListener('dragleave', () => {
-                    newButton.classList.remove('drag-over');
-                });
-                
-                newButton.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    newButton.classList.remove('drag-over');
-                    if (e.dataTransfer.files.length > 0) {
-                        bulkFilesInput.files = e.dataTransfer.files;
-                        bulkFilesInput.dispatchEvent(new Event('change'));
-                    }
-                });
-            }
+        const bulkFilesInput = document.getElementById('bulkFiles');
+        const bulkFilesInfo = document.getElementById('bulkFilesInfo');
+        
+        // Input event listener'ı yeniden bağla (Eski indexingModule bağını kopar)
+        if (bulkFilesInput) {
+            const newInput = bulkFilesInput.cloneNode(true);
+            bulkFilesInput.parentNode.replaceChild(newInput, bulkFilesInput);
             
-            if (bulkFilesInput) {
-                // File change event listener'ı yeniden bağla
-                const newInput = bulkFilesInput.cloneNode(true);
-                bulkFilesInput.parentNode.replaceChild(newInput, bulkFilesInput);
+            newInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+
+                // Dosya bilgisini güncelle
+                if (bulkFilesInfo) {
+                    bulkFilesInfo.textContent = `${files.length} dosya işleniyor...`;
+                    bulkFilesInfo.style.display = 'block';
+                }
+
+                // Kullanıcı ID'sini al
+                const userId = authService.auth.currentUser?.uid;
+                if (!userId) {
+                    showNotification('Oturum açmanız gerekiyor.', 'error');
+                    return;
+                }
+
+                // Dosyaları hazırlama
+                const documents = files.map(file => ({
+                    file: file,
+                    fileName: file.name,
+                    evrakNo: file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, ''), // Basit evrak no üretimi
+                    belgeAciklamasi: 'Manuel Yükleme'
+                }));
+
+                // Yüklemeyi başlat (Bu işlem yukarıda güncellediğimiz fonksiyonu çağırır)
+                showNotification('Yükleme başladı, lütfen bekleyin...', 'info');
+                await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL');
                 
-                newInput.addEventListener('change', (e) => {
-                    if (window.indexingModule && typeof window.indexingModule.handleFileSelect === 'function') {
-                        window.indexingModule.handleFileSelect(e);
-                    }
-                    
-                    // Info text'i güncelle
-                    if (bulkFilesInfo) {
-                        const fileCount = e.target.files.length;
-                        bulkFilesInfo.textContent = fileCount > 0 ? 
-                            `${fileCount} PDF dosyası seçildi.` : 
-                            'Henüz PDF dosyası seçilmedi. Birden fazla PDF dosyası seçebilirsiniz.';
-                    }
-                });
-            }
-            
-            console.log('✅ Upload mode aktif edildi');
+                // Input'u temizle
+                newInput.value = '';
+                if (bulkFilesInfo) bulkFilesInfo.textContent = 'Yükleme tamamlandı.';
+            });
         }
+        
+        console.log('✅ Upload mode (Entegre) aktif edildi');
     } catch (error) {
-        console.error('Upload mode aktif edilirken hata:', error);
+        console.error('Upload mode hatası:', error);
     }
 }
 
@@ -707,51 +698,38 @@ autoSwitchTab(matchedCount, unmatchedCount) {
         });
     }
 
+// public/js/etebs-module.js
+
 createNotificationHTML(notification, isMatched) {
     try {
-        const date = new Date(notification.belgeTarihi).toLocaleDateString('tr-TR');
-        const konmaTarihi = new Date(notification.uygulamaKonmaTarihi).toLocaleDateString('tr-TR');
+        const date = new Date(notification.belgeTarihi || notification.uploadedAt).toLocaleDateString('tr-TR'); // Tarih alanı yoksa upload tarihini kullan
+        
+        // Kaynak Rozeti (Badge)
+        const sourceBadge = notification.source === 'etebs' 
+            ? '<span class="badge badge-info mr-2">ETEBS</span>' 
+            : '<span class="badge badge-warning mr-2">MANUEL</span>';
 
         return `
             <div class="notification-block" data-evrak="${notification.evrakNo}">
-                <div><strong>Evrak No:</strong> ${notification.evrakNo}</div>
-                <div><strong>Dosya No:</strong> ${notification.dosyaNo}</div>
-                <div><strong>Tür:</strong> ${notification.dosyaTuru}</div>
-                <div><strong>Belge Tarihi:</strong> ${date}</div>
-                <div><strong>Konma Tarihi:</strong> ${konmaTarihi}</div>
-                <div><strong>Açıklama:</strong> ${notification.belgeAciklamasi}</div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>${sourceBadge} <strong>Evrak No:</strong> ${notification.evrakNo}</div>
+                    <small class="text-muted">${date}</small>
+                </div>
+                <div><strong>Açıklama:</strong> ${notification.belgeAciklamasi || notification.fileName}</div>
                 <div><strong>Durum:</strong> 
                     ${isMatched ? '<span class="status-matched">✔ Eşleşti</span>' : '<span class="status-unmatched">⚠ Eşleşmedi</span>'}
                 </div>
-                <div class="actions">
-                    <button class="btn btn-primary btn-sm notification-action-btn"
-                        data-action="index"
-                        data-evrak-no="${notification.evrakNo}">
-                        📝 İndeksle
-                    </button>
-                    <button class="btn btn-success btn-sm notification-action-btn"
-                        data-action="show"
-                        data-evrak-no="${notification.evrakNo}">
-                        👁️ Göster
-                    </button>
-                    <button class="btn btn-secondary btn-sm notification-action-btn"
-                        data-action="preview"
-                        data-evrak-no="${notification.evrakNo}">
-                        📋 Önizle
-                    </button>
+                <div class="actions mt-2">
+                    <button class="btn btn-primary btn-sm notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}">📝 İndeksle</button>
+                    <button class="btn btn-success btn-sm notification-action-btn" data-action="show" data-evrak-no="${notification.evrakNo}">👁️ Göster</button>
                 </div>
             </div>
         `;
     } catch (error) {
-        console.error('Error creating notification HTML:', error);
-        return `
-            <div class="notification-block error">
-                <div><strong>Hata:</strong> Tebligat gösterilemiyor: ${error.message}</div>
-            </div>
-        `;
+        console.error('HTML oluşturma hatası:', error);
+        return '';
     }
 }
-
 
 async previewNotification(token, notification) {
     try {
