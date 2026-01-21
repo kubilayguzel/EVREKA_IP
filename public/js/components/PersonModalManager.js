@@ -150,10 +150,19 @@ export class PersonModalManager {
                                                     </div>`).join('')}
                                             </div>
                                         </div>
-                                        <div class="col-12 text-right mt-3 border-top pt-3">
-                                            <button type="button" class="btn btn-sm btn-secondary" id="cancelRelatedBtn" style="display:none;">İptal</button>
-                                            <button type="button" class="btn btn-sm btn-primary px-4" id="addRelatedBtn">➕ İlgiliyi Ekle</button>
-                                            <button type="button" class="btn btn-sm btn-success px-4" id="updateRelatedBtn" style="display:none;">✔️ Güncelle</button>
+                                        <div class="col-12 d-flex justify-content-end align-items-center mt-3 border-top pt-3" style="gap: 10px;">
+                                            <button type="button" class="btn btn-sm btn-primary px-4" id="addRelatedBtn">
+                                                <i class="fas fa-plus-circle mr-1"></i> İlgiliyi Ekle
+                                            </button>
+
+                                            <div id="relatedEditButtons" style="display:none; gap: 10px;">
+                                                <button type="button" class="btn btn-sm btn-success px-4" id="updateRelatedBtn">
+                                                    <i class="fas fa-save mr-1"></i> Güncelle
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-secondary px-3" id="cancelRelatedBtn">
+                                                    <i class="fas fa-times mr-1"></i> İptal
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div id="relatedListContainer" class="list-group list-group-flush rounded border bg-white shadow-sm"></div>
@@ -534,9 +543,10 @@ export class PersonModalManager {
             if (ccInput) ccInput.checked = !!prefs.cc;
         });
 
-        document.getElementById('addRelatedBtn').style.display = 'none';
-        document.getElementById('updateRelatedBtn').style.display = 'inline-block';
-        document.getElementById('cancelRelatedBtn').style.display = 'inline-block';
+        const editGroup = document.getElementById('relatedEditButtons');
+        if (editGroup) {
+            editGroup.style.display = 'flex';
+        }
         
         this.editingRelated = { idx, isLoaded };
         
@@ -583,6 +593,36 @@ export class PersonModalManager {
         this.renderRelatedList();
         this.resetRelatedForm();
         showNotification('İlgili bilgileri güncellendi.', 'success');
+    }
+
+    resetRelatedForm() {
+        // 1. Form alanlarını temizle
+        document.getElementById('relatedId').value = '';
+        document.getElementById('relatedName').value = '';
+        document.getElementById('relatedEmail').value = '';
+        document.getElementById('relatedPhone').value = '';
+
+        // 2. Checkboxları sıfırla
+        document.querySelectorAll('.scope-cb').forEach(cb => cb.checked = false);
+        
+        // Mail tercihlerini sıfırla ve pasife çek
+        document.querySelectorAll('.mail-to, .mail-cc').forEach(cb => {
+            cb.checked = false;
+            cb.disabled = true;
+            cb.parentElement.classList.add('disabled');
+        });
+
+        // 3. Edit modunu bitir
+        this.editingRelated = null;
+
+        // 4. BUTONLARI AYARLA
+        // Güncelleme grubunu gizle
+        const editGroup = document.getElementById('relatedEditButtons');
+        if (editGroup) {
+            editGroup.style.display = 'none';
+        }
+        
+        // Ekle butonu zaten hep açık, dokunmaya gerek yok.
     }
 
     async removeRelated(idx, isLoaded) {
