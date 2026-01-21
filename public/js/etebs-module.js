@@ -425,24 +425,19 @@ deactivateUploadMode() {
         console.error('Upload mode deaktif edilirken hata:', error);
     }
 }
+// 🔄 GÜNCELLENECEK FONKSİYON (public/js/etebs-module.js)
+
 updateTabBadge() {
     try {
-        console.log("🔄 updateTabBadge başladı");
+        const badge = document.querySelector('.tab-badge') || document.getElementById('totalBadge'); // ID değişebilir, kontrol edin
         
-        const badge = document.querySelector('.tab-badge');
-        if (!badge) {
-            console.log("⚠️ Tab badge elementi bulunamadı");
-            return;
-        }
-
-        if (this.currentMode === 'etebs') {
-            badge.textContent = this.notifications.length || '0';
-            console.log(`✅ ETEBS badge güncellendi: ${this.notifications.length}`);
-        } else {
-            // Get uploaded files count from existing bulk upload logic
-            const uploadedFiles = document.querySelectorAll('#allFilesList .pdf-list-item');
-            badge.textContent = uploadedFiles.length || '0';
-            console.log(`✅ Upload badge güncellendi: ${uploadedFiles.length}`);
+        // Artık mod ayrımı yapmaya gerek yok, hepsi notifications içinde.
+        // ETEBS veya Manuel fark etmeksizin toplam sayıyı göster.
+        if (badge) {
+            const count = this.notifications ? this.notifications.length : 0;
+            badge.textContent = count;
+            // Badge görünürlüğü (opsiyonel)
+            badge.style.display = count > 0 ? 'inline-block' : 'none'; 
         }
     } catch (error) {
         console.error('❌ Error updating tab badge:', error);
@@ -1006,37 +1001,6 @@ async copyToUnindexedPdfs(etebsDocData) {
         return this.currentMode;
     }
 
-    // Method to integrate with existing bulk indexing module
-  integrateWithBulkIndexing(bulkIndexingModule) {
-    try {
-        // BulkIndexingModule referansını sakla
-        this.bulkIndexingModule = bulkIndexingModule;
-        
-        // Mode değiştiğinde upload işlevselliğini aktif/deaktif et
-        if (this.currentMode === 'upload') {
-            this.activateUploadMode();
-        }
-        
-        // Dosya listesi değişikliklerini izle
-        if (this.currentMode === 'upload' && bulkIndexingModule) {
-            const observer = new MutationObserver(() => {
-                if (this.currentMode === 'upload') {
-                    this.updateTabBadge();
-                }
-            });
-
-            const targetNode = document.getElementById('allFilesList');
-            if (targetNode) {
-                observer.observe(targetNode, { 
-                    childList: true, 
-                    subtree: true 
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Error integrating with bulk indexing:', error);
-    }
-}
 }
 
 // Export for global access
