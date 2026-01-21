@@ -620,45 +620,48 @@ autoSwitchTab(matchedCount, unmatchedCount) {
         console.error('❌ Error in auto tab switch:', error);
     }
 }
-
-
- displayNotifications() {
+displayNotifications() {
     try {
         const matchedList = document.getElementById('matchedNotificationsList');
         const unmatchedList = document.getElementById('unmatchedNotificationsList');
+        const indexedList = document.getElementById('indexedNotificationsList'); // ✅ YENİ
         
-        if (!matchedList || !unmatchedList) {
-            console.log("Liste DOM elementleri bulunamadı.");
-            return;
-        }
+        if (!matchedList || !unmatchedList || !indexedList) return;
 
-        const matchedNotifications = this.filteredNotifications.filter(n => n.matched);
-        const unmatchedNotifications = this.filteredNotifications.filter(n => !n.matched);
+        // Filtreleme Mantığı:
+        // 1. İndekslenenler: status === 'indexed'
+        // 2. Eşleşenler: matched === true VE status !== 'indexed'
+        // 3. Eşleşmeyenler: matched === false VE status !== 'indexed'
 
-        console.log("📋 matchedNotifications:", matchedNotifications);
-        console.log("📋 unmatchedNotifications:", unmatchedNotifications);
-
-        matchedList.setAttribute('data-type', 'matched');
-        unmatchedList.setAttribute('data-type', 'unmatched');
-
-        // Display matched notifications
-        this.renderNotificationsList(matchedList, matchedNotifications, true);
+        const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
+        const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
         
-        // Display unmatched notifications  
-        this.renderNotificationsList(unmatchedList, unmatchedNotifications, false);
+        const matchedNotifications = remainingNotifications.filter(n => n.matched);
+        const unmatchedNotifications = remainingNotifications.filter(n => !n.matched);
 
-        const matchedTabBadge = document.getElementById('matchedTabBadge');
-        const unmatchedTabBadge = document.getElementById('unmatchedTabBadge');
+        // Listeleri Render Et
+        this.renderNotificationsList(matchedList, matchedNotifications, 'matched');
+        this.renderNotificationsList(unmatchedList, unmatchedNotifications, 'unmatched');
+        this.renderNotificationsList(indexedList, indexedNotifications, 'indexed'); // ✅ YENİ
 
-        if (matchedTabBadge) matchedTabBadge.textContent = matchedNotifications.length;
-        if (unmatchedTabBadge) unmatchedTabBadge.textContent = unmatchedNotifications.length;
+        // Badges Güncelle
+        const updateBadge = (id, count) => {
+            const el = document.getElementById(id);
+            if(el) el.textContent = count;
+        };
 
+        updateBadge('matchedTabBadge', matchedNotifications.length);
+        updateBadge('unmatchedTabBadge', unmatchedNotifications.length);
+        updateBadge('indexedTabBadge', indexedNotifications.length); // ✅ YENİ
+
+        // Otomatik Tab Geçişi (İndekslenenler hariç, odaklanılması gereken işlere yönlendirir)
         this.autoSwitchTab(matchedNotifications.length, unmatchedNotifications.length);
 
     } catch (error) {
         console.error('Error displaying notifications:', error);
     }
 }
+
 
     // 6. renderNotificationsList fonksiyonunu güncelleyin (değişiklik yok ama kontrol için)
     renderNotificationsList(container, notifications, isMatched) {
@@ -693,36 +696,75 @@ autoSwitchTab(matchedCount, unmatchedCount) {
         });
     }
 
-// public/js/etebs-module.js
-
-createNotificationHTML(notification, isMatched) {
+createNotificationHTML(notification, listType) {
     try {
-        const date = new Date(notification.belgeTarihi || notification.uploadedAt).toLocaleDateString('tr-TR'); // Tarih alanı yoksa upload tarihini kullan
+        const date = new Date(notification.belgeTarihi || notification.uploadedAt).toLocaleDateString('tr-TR');
         
-        // Kaynak Rozeti (Badge)
+        // Kaynak Rozeti
         const sourceBadge = notification.source === 'etebs' 
             ? '<span class="badge badge-info mr-2">ETEBS</span>' 
             : '<span class="badge badge-warning mr-2">MANUEL</span>';
 
+        // Durum Stilleri (Kart Kenarlığı ve Arka Planı için)
+        let cardClass = '';
+        let iconClass = '';
+        let statusBadge = '';
+
+        if (listType === 'indexed') {
+            cardClass = 'pdf-list-item matched'; // Yeşil stil
+            iconClass = 'fas fa-check-double text-success';
+            statusBadge = '<span class="match-status matched"><i class="fas fa-check"></i> İndekslendi</span>';
+        } else if (listType === 'matched') {
+            cardClass = 'pdf-list-item matched'; 
+            iconClass = 'fas fa-file-contract text-success'; // İkon değişti
+            // Eşleşen kaydın adını göster
+            const recordName = notification.matchedRecordDisplay || notification.matchedRecord?.title || 'Eşleşen Kayıt';
+            statusBadge = `<span class="match-status matched" title="${recordName}"><i class="fas fa-link"></i> ${recordName}</span>`;
+        } else {
+            cardClass = 'pdf-list-item unmatched'; // Kırmızı stil
+            iconClass = 'fas fa-exclamation-circle text-danger';
+            statusBadge = '<span class="match-status unmatched"><i class="fas fa-times"></i> Eşleşmedi</span>';
+        }
+
+        // İndekslenmişse "İndeksle" butonunu gizle veya pasif yap
+        const indexButton = listType === 'indexed' 
+            ? `<button class="pdf-action-btn" disabled title="Zaten İndekslendi"><i class="fas fa-check"></i></button>`
+            : `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
+
         return `
-            <div class="notification-block" data-evrak="${notification.evrakNo}">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>${sourceBadge} <strong>Evrak No:</strong> ${notification.evrakNo}</div>
-                    <small class="text-muted">${date}</small>
+            <div class="${cardClass}" data-evrak="${notification.evrakNo}">
+                <div class="d-flex align-items-center" style="flex: 1;">
+                    <div class="pdf-icon mr-3" style="font-size: 1.8rem; width: 40px; text-align: center;">
+                        <i class="${iconClass}"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="d-flex align-items-center mb-1">
+                            ${sourceBadge}
+                            <h6 class="pdf-name mb-0 text-dark font-weight-bold">${notification.belgeAciklamasi || notification.fileName || 'Belge'}</h6>
+                        </div>
+                        <div class="text-muted small mb-1">
+                            <i class="far fa-calendar-alt"></i> ${date} • 
+                            <strong>Evrak No:</strong> ${notification.evrakNo}
+                            ${notification.dosyaNo ? `• <strong>Dosya:</strong> ${notification.dosyaNo}` : ''}
+                        </div>
+                        <div>${statusBadge}</div>
+                    </div>
                 </div>
-                <div><strong>Açıklama:</strong> ${notification.belgeAciklamasi || notification.fileName}</div>
-                <div><strong>Durum:</strong> 
-                    ${isMatched ? '<span class="status-matched">✔ Eşleşti</span>' : '<span class="status-unmatched">⚠ Eşleşmedi</span>'}
-                </div>
-                <div class="actions mt-2">
-                    <button class="btn btn-primary btn-sm notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}">📝 İndeksle</button>
-                    <button class="btn btn-success btn-sm notification-action-btn" data-action="show" data-evrak-no="${notification.evrakNo}">👁️ Göster</button>
+                
+                <div class="pdf-actions ml-3">
+                    ${indexButton}
+                    <button class="pdf-action-btn btn-success notification-action-btn" 
+                        data-action="show" 
+                        data-evrak-no="${notification.evrakNo}" 
+                        title="Önizle / İndir">
+                        <i class="fas fa-eye"></i>
+                    </button>
                 </div>
             </div>
         `;
     } catch (error) {
         console.error('HTML oluşturma hatası:', error);
-        return '';
+        return `<div class="alert alert-danger">Hata: ${error.message}</div>`;
     }
 }
 
@@ -757,46 +799,9 @@ ${notification.tebellugeden ? `📨 Tebellüğ Eden: ${notification.tebellugeden
 }
 
 updateStatistics() {
-    try {
-        console.log("📊 updateStatistics başladı");
-        
-        const total = this.filteredNotifications.length;
-        const matched = this.filteredNotifications.filter(n => n.matched).length;
-        const unmatched = total - matched;
-
-        const totalCountEl = document.getElementById('totalCount');
-        const matchedCountEl = document.getElementById('matchedCount');
-        const unmatchedCountEl = document.getElementById('unmatchedCount');
-
-        if (totalCountEl) {
-            totalCountEl.textContent = total;
-            console.log(`✅ Total count güncellendi: ${total}`);
-        } else {
-            console.log("⚠️ totalCountEl bulunamadı");
-        }
-        
-        if (matchedCountEl) {
-            matchedCountEl.textContent = matched;
-            console.log(`✅ Matched count güncellendi: ${matched}`);
-        } else {
-            console.log("⚠️ matchedCountEl bulunamadı");
-        }
-        
-        if (unmatchedCountEl) {
-            unmatchedCountEl.textContent = unmatched;
-            console.log(`✅ Unmatched count güncellendi: ${unmatched}`);
-        } else {
-            console.log("⚠️ unmatchedCountEl bulunamadı");
-        }
-
-        // Update tab badge
-        this.updateTabBadge();
-        
-        console.log("✅ updateStatistics tamamlandı");
-        
-    } catch (error) {
-        console.error('❌ Error updating statistics:', error);
-    }
+    // Sayılar displayNotifications içinde güncelleniyor.
+    // Sadece Tab Badge'i (Ana menüdeki kırmızı sayı) güncellemek yeterli.
+    this.updateTabBadge();
 }
 
 showNotificationsSection() {
