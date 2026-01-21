@@ -282,24 +282,34 @@
                     
                     <div id="notificationsSection" style="display: none;">
                         <div class="section-card">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
                                 <h3 class="section-title mb-0">Sorgu Sonuçları</h3>
-                                <div class="filter-tabs mb-0 p-1" style="width: auto;">
-                                    <button class="filter-btn active notification-tab-btn" data-target="matched-notifications-tab">
-                                        Eşleşenler <span class="badge badge-success ml-1" id="matchedTabBadge">0</span>
-                                    </button>
-                                    <button class="filter-btn notification-tab-btn" data-target="unmatched-notifications-tab">
-                                        Eşleşmeyenler <span class="badge badge-danger ml-1" id="unmatchedTabBadge">0</span>
-                                    </button>
-                                </div>
+                            </div>
+
+                            <div class="tab-navigation tabs-container mb-3" style="padding: 0; gap: 10px; margin-bottom: 20px;">
+                                <button class="nav-btn notification-tab-btn active" data-target="matched-notifications-tab">
+                                    <i class="fas fa-check-circle text-success"></i> Eşleşenler
+                                    <span class="badge-counter ml-2" id="matchedTabBadge">0</span>
+                                </button>
+                                <button class="nav-btn notification-tab-btn" data-target="unmatched-notifications-tab">
+                                    <i class="fas fa-times-circle text-danger"></i> Eşleşmeyenler
+                                    <span class="badge-counter ml-2" id="unmatchedTabBadge">0</span>
+                                </button>
+                                <button class="nav-btn notification-tab-btn" data-target="indexed-notifications-tab">
+                                    <i class="fas fa-check-double text-primary"></i> İndekslenenler
+                                    <span class="badge-counter ml-2" id="indexedTabBadge">0</span>
+                                </button>
                             </div>
 
                             <div class="tab-content">
                                 <div id="matched-notifications-tab" class="notification-tab-pane active">
-                                    <div id="matchedNotificationsList"></div>
+                                    <div id="matchedNotificationsList" class="file-list-container"></div>
                                 </div>
                                 <div id="unmatched-notifications-tab" class="notification-tab-pane">
-                                    <div id="unmatchedNotificationsList"></div>
+                                    <div id="unmatchedNotificationsList" class="file-list-container"></div>
+                                </div>
+                                <div id="indexed-notifications-tab" class="notification-tab-pane">
+                                    <div id="indexedNotificationsList" class="file-list-container"></div>
                                 </div>
                             </div>
                         </div>
