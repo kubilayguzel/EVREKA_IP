@@ -382,18 +382,31 @@ export const etebsProxyV2 = onRequest(
                       return;
                     }
 
-
                     // --- KAYDETME İŞLEMLERİ ---
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
-                    const file = admin.storage().bucket().file(storagePath);
-                    
+                    const bucket = admin.storage().bucket(); // Bucket referansını al
+                    const file = bucket.file(storagePath);
+
+                    // 1. Yeni bir Token oluştur (uuidv4 zaten import edilmiş durumda)
+                    const token = uuidv4();
+
+                    // 2. Dosyayı kaydederken token'ı metadata'ya ekle
                     await file.save(pdfBuffer, { 
                         contentType: 'application/pdf',
-                        metadata: { metadata: { originalName: belgeAciklamasi } }
+                        metadata: { 
+                            metadata: { 
+                                originalName: belgeAciklamasi,
+                                firebaseStorageDownloadTokens: token // Token burada tanımlanıyor
+                            } 
+                        }
                     });
-                    
+
+                    // 3. İstenilen formatta URL'yi oluştur
+                    // Not: encodeURIComponent kullanıyoruz çünkü path içinde '/' karakterleri %2F olmalı
+                    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+
                     let targetRef;
                     if (!existingQuery.empty) targetRef = existingQuery.docs[0].ref;
                     else targetRef = adminDb.collection('unindexed_pdfs').doc();
@@ -402,7 +415,7 @@ export const etebsProxyV2 = onRequest(
                         evrakNo: docNo,
                         belgeAciklamasi,
                         dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
-                        fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`,
+                        fileUrl: downloadUrl, // GÜNCELLENDİ: Artık token'lı URL
                         filePath: storagePath,
                         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
                         userId,
@@ -413,7 +426,8 @@ export const etebsProxyV2 = onRequest(
 
                     await targetRef.set(docData, { merge: true });
                     savedDocuments.push(docData);
-                    console.log(`✅ Kaydedildi: ${docNo}`);
+                    console.log(`✅ Kaydedildi: ${docNo} (URL: ${downloadUrl})`);
+
 
                 } catch (err) {
                     console.error(`💥 Hata (${docNo}):`, err.message);
