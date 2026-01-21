@@ -69,104 +69,77 @@ constructor() {
     this.bindTabEvents();
 }
 
-async uploadDocumentsToFirebase(documents, userId, evrakNo) {
+// public/js/etebs-module.js
+
+async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs') {
     const uploadResults = [];
     
-    // Storage'ı initialize et
-    await initializeStorage();
+    // Storage servisini başlat
+    await this.initializeStorage();
 
     for (const doc of documents) {
         try {
-            console.log('📁 Upload ediliyor:', doc.fileName, 'Evrak:', doc.evrakNo);
-
-            // Firebase Storage'a yükle
-            const storagePath = `etebs_documents/${userId}/${doc.evrakNo || evrakNo}/${doc.fileName}`;
-            console.log('📂 Storage path:', storagePath);
+            const timestamp = Date.now();
+            // Dosya ismini temizle
+            const cleanFileName = doc.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const storagePath = `users/${userId}/unindexed_pdfs/${timestamp}_${cleanFileName}`;
             
-            const storageRef = ref(storage, storagePath);
+            // Storage Referansı
+            const storageRef = firebaseServices.storage.ref(storagePath);
             
-            if (!doc.file) {
-                throw new Error('File objesi bulunamadı');
-            }
+            // Dosyayı Yükle
+            const snapshot = await storageRef.put(doc.file);
+            const downloadURL = await snapshot.ref.getDownloadURL();
 
-            console.log('⬆️ Storage\'a yükleniyor...');
-            await uploadBytes(storageRef, doc.file);
-            
-            console.log('🔗 Download URL alınıyor...');
-            const downloadURL = await getDownloadURL(storageRef);
-            console.log('✅ Download URL:', downloadURL);
-
-            // Firestore metadata hazırla
+            // Firestore için veri hazırla
             const docData = {
                 evrakNo: doc.evrakNo || evrakNo,
-                belgeAciklamasi: doc.belgeAciklamasi || 'ETEBS Belgesi',
+                belgeAciklamasi: doc.belgeAciklamasi || 'Manuel Yükleme',
                 fileName: doc.fileName,
                 fileUrl: downloadURL,
                 filePath: storagePath,
                 fileSize: doc.file.size,
-                uploadedAt: new Date(),
+                
+                // Tarih Bilgileri
+                uploadedAt: new Date(), // Timestamp olarak kaydedilir
+                belgeTarihi: new Date(), // Manuel yüklemede belge tarihi şimdiki zaman olsun
+                
                 userId: userId,
-                source: 'etebs',
+                
+                // ✅ ÖNEMLİ: Kaynak bilgisi (manual veya etebs)
+                source: sourceType,
+                
                 status: 'pending',
-                extractedAppNumber: doc.evrakNo || evrakNo,
-                matchedRecordId: null,
-                matchedRecordDisplay: null
+                matched: false,
+                downloadSuccess: true
             };
 
-            // Portfolio eşleştirmesi yap
-            console.log('🔍 Portfolio eşleştirmesi yapılıyor...');
-            try {
-                const matchResult = await etebsService.matchWithPortfolio(doc.evrakNo || evrakNo);
-                if (matchResult && matchResult.matched) {
-                    docData.matchedRecordId = matchResult.record.id;
-                    docData.matchedRecordDisplay = `${matchResult.record.title} - ${matchResult.record.applicationNumber}`;
-                    console.log('✅ ETEBS Eşleştirme başarılı:', doc.fileName, '→', docData.matchedRecordDisplay);
-                } else {
-                    console.log('❌ ETEBS Eşleştirme başarısız:', doc.fileName, 'Evrak No:', doc.evrakNo);
-                }
-            } catch (matchError) {
-                console.error('Eşleştirme hatası:', matchError);
-            }
-
-            // Firestore'a kaydet - HEM etebs_documents HEM DE unindexed_pdfs'e
-            console.log('💾 Firestore\'a kaydediliyor...');
+            // Firestore'a kaydet
+            const docRef = await firebaseServices.db.collection('unindexed_pdfs').add(docData);
             
-            // etebs_documents koleksiyonuna kaydet
-            const etebsDocRef = await addDoc(collection(firebaseServices.db, 'etebs_documents'), docData);
-            console.log('✅ etebs_documents\'a kaydedildi:', etebsDocRef.id);
-
-            // unindexed_pdfs koleksiyonuna da kaydet (indeksleme için)
-            const unindexedDocRef = await addDoc(collection(firebaseServices.db, 'unindexed_pdfs'), docData);
-            console.log('✅ unindexed_pdfs\'e kaydedildi:', unindexedDocRef.id);
-
             uploadResults.push({
-                ...docData,
-                id: etebsDocRef.id,
-                unindexedPdfId: unindexedDocRef.id,
-                success: true
+                success: true,
+                id: docRef.id,
+                ...docData
             });
 
-            console.log('✅ Upload tamamlandı:', doc.fileName);
-
         } catch (error) {
-            console.error(`❌ Upload failed for ${doc.fileName}:`, error);
+            console.error('Yükleme hatası:', error);
             uploadResults.push({
-                fileName: doc.fileName,
-                evrakNo: doc.evrakNo || evrakNo,
                 success: false,
+                fileName: doc.fileName,
                 error: error.message
             });
         }
     }
 
-    console.log('📤 uploadDocumentsToFirebase tamamlandı. Sonuçlar:', uploadResults);
     console.log('📤 Yükleme bitti, liste yenileniyor...');
     
-    // ✅ EKLENEN SATIR: Ortak listeyi yenile
-    await this.fetchNotifications(); 
+    // Listeyi yenile (Sessiz mod olmadan, yani loading göstererek)
+    await this.fetchNotifications(false); 
     
-    // ✅ EKLENEN SATIR: Başarı mesajı
     showNotification(`${documents.length} belge havuza eklendi.`, 'success');
+
     return uploadResults;
 }
 
@@ -407,7 +380,8 @@ activateUploadMode() {
 
                 // Yüklemeyi başlat
                 showNotification('Yükleme başladı, lütfen bekleyin...', 'info');
-                
+                await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL_NO', 'manual');
+
                 // Butonu geçici olarak pasif yapalım
                 const currentButton = document.getElementById('bulkFilesButton');
                 if(currentButton) currentButton.style.opacity = '0.5';
@@ -744,19 +718,20 @@ displayNotifications() {
 
 createNotificationHTML(notification, listType) {
     try {
+        // 1. TARİH FORMATLAMA (DÜZELTİLMİŞ)
         let date = '-';
         const rawDate = notification.belgeTarihi || notification.uploadedAt;
 
         if (rawDate) {
-            // 1. Durum: Firebase Timestamp Nesnesi ise (toDate fonksiyonu vardır)
+            // Firebase Timestamp Nesnesi ise
             if (typeof rawDate.toDate === 'function') {
                 date = rawDate.toDate().toLocaleDateString('tr-TR');
             } 
-            // 2. Durum: Saniyeli Timestamp Objesi ise (örn: {seconds: 167...})
+            // Saniyeli Obje ise
             else if (rawDate.seconds) {
                 date = new Date(rawDate.seconds * 1000).toLocaleDateString('tr-TR');
             } 
-            // 3. Durum: Standart String veya Date objesi ise
+            // String veya Date objesi ise
             else {
                 const d = new Date(rawDate);
                 if (!isNaN(d.getTime())) {
@@ -764,53 +739,71 @@ createNotificationHTML(notification, listType) {
                 }
             }
         }
-        
-        // Kaynak Rozeti
-        const sourceBadge = notification.source === 'etebs' 
-            ? '<span class="badge badge-info mr-2">ETEBS</span>' 
-            : '<span class="badge badge-warning mr-2">MANUEL</span>';
 
-        // Durum Stilleri (Kart Kenarlığı ve Arka Planı için)
+        // 2. KAYNAK ROZETİ (MANUEL / ETEBS)
+        const isManual = (notification.source === 'manual' || notification.source === 'MANUEL');
+        
+        const sourceBadge = isManual 
+            ? '<span class="badge badge-warning mr-2" style="color:#fff; background-color: #f39c12; font-size: 0.75rem;">MANUEL</span>' 
+            : '<span class="badge badge-info mr-2" style="background-color: #17a2b8; font-size: 0.75rem;">ETEBS</span>';
+
+
+        // 3. LİSTE TİPİNE GÖRE STİL VE İÇERİK AYARLARI
         let cardClass = '';
         let iconClass = '';
         let statusBadge = '';
+        let indexButton = '';
 
+        // İndekslenenler
         if (listType === 'indexed') {
             cardClass = 'pdf-list-item matched'; // Yeşil stil
             iconClass = 'fas fa-check-double text-success';
             statusBadge = '<span class="match-status matched"><i class="fas fa-check"></i> İndekslendi</span>';
-        } else if (listType === 'matched') {
+            
+            // İndekslenenlerde düzenleme butonu pasif
+            indexButton = `<button class="pdf-action-btn" disabled style="opacity:0.5; cursor:not-allowed;" title="Zaten İndekslendi"><i class="fas fa-check"></i></button>`;
+        } 
+        // Eşleşenler
+        else if (listType === 'matched') {
             cardClass = 'pdf-list-item matched'; 
-            iconClass = 'fas fa-file-contract text-success'; // İkon değişti
-            // Eşleşen kaydın adını göster
+            iconClass = 'fas fa-file-contract text-success';
+            
             const recordName = notification.matchedRecordDisplay || notification.matchedRecord?.title || 'Eşleşen Kayıt';
             statusBadge = `<span class="match-status matched" title="${recordName}"><i class="fas fa-link"></i> ${recordName}</span>`;
-        } else {
+            
+            // İndeksle butonu aktif
+            indexButton = `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
+        } 
+        // Eşleşmeyenler
+        else {
             cardClass = 'pdf-list-item unmatched'; // Kırmızı stil
             iconClass = 'fas fa-exclamation-circle text-danger';
             statusBadge = '<span class="match-status unmatched"><i class="fas fa-times"></i> Eşleşmedi</span>';
+            
+            // İndeksle butonu aktif
+            indexButton = `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
         }
 
-        // İndekslenmişse "İndeksle" butonunu gizle veya pasif yap
-        const indexButton = listType === 'indexed' 
-            ? `<button class="pdf-action-btn" disabled title="Zaten İndekslendi"><i class="fas fa-check"></i></button>`
-            : `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
-
+        // 4. HTML ÇIKTISI (KART TASARIMI)
         return `
             <div class="${cardClass}" data-evrak="${notification.evrakNo}">
                 <div class="d-flex align-items-center" style="flex: 1;">
                     <div class="pdf-icon mr-3" style="font-size: 1.8rem; width: 40px; text-align: center;">
                         <i class="${iconClass}"></i>
                     </div>
+                    
                     <div style="flex: 1;">
                         <div class="d-flex align-items-center mb-1">
                             ${sourceBadge}
-                            <h6 class="pdf-name mb-0 text-dark font-weight-bold">${notification.belgeAciklamasi || notification.fileName || 'Belge'}</h6>
+                            <h6 class="pdf-name mb-0 text-dark font-weight-bold" style="font-size: 1rem;">
+                                ${notification.belgeAciklamasi || notification.fileName || 'İsimsiz Belge'}
+                            </h6>
                         </div>
                         <div class="text-muted small mb-1">
-                            <i class="far fa-calendar-alt"></i> ${date} • 
+                            <i class="far fa-calendar-alt"></i> ${date} 
+                            <span class="mx-1">•</span>
                             <strong>Evrak No:</strong> ${notification.evrakNo}
-                            ${notification.dosyaNo ? `• <strong>Dosya:</strong> ${notification.dosyaNo}` : ''}
+                            ${notification.dosyaNo ? `<span class="mx-1">•</span> <strong>Dosya:</strong> ${notification.dosyaNo}` : ''}
                         </div>
                         <div>${statusBadge}</div>
                     </div>
@@ -829,7 +822,7 @@ createNotificationHTML(notification, listType) {
         `;
     } catch (error) {
         console.error('HTML oluşturma hatası:', error);
-        return `<div class="alert alert-danger">Hata: ${error.message}</div>`;
+        return `<div class="alert alert-danger p-2 m-2">Hata: ${error.message}</div>`;
     }
 }
 
