@@ -415,7 +415,17 @@ export const etebsProxyV2 = onRequest(
                         evrakNo: docNo,
                         belgeAciklamasi,
                         dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
-                        fileUrl: downloadUrl, // GÜNCELLENDİ: Artık token'lı URL
+                        
+                        // --- EKLENMESİ GEREKEN YENİ ALANLAR ---
+                        dosyaTuru: notification.DOSYA_TURU || notification.dosyaTuru || null,
+                        uygulamaKonmaTarihi: notification.UYGULAMAYA_KONMA_TARIHI || notification.uygulamayaKonmaTarihi || null,
+                        belgeTarihi: notification.BELGE_TARIHI || notification.belgeTarihi || null,
+                        ilgiliVekil: notification.ILGILI_VEKIL || notification.ilgiliVekil || null,
+                        tebligTarihi: notification.TEBLIG_TARIHI || notification.tebligTarihi || null,
+                        tebellugeden: notification.TEBELLUGEDEN || notification.tebellugeden || null,
+                        // --------------------------------------
+
+                        fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`, // Veya yeni token'lı URL yapınız
                         filePath: storagePath,
                         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
                         userId,
