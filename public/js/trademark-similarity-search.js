@@ -824,6 +824,7 @@ const performSearch = async () => {
     const monitoredMarksPayload = filteredMonitoringTrademarks.map(tm => ({
         id: tm.id,
         markName: (tm.title || tm.markName || '').trim() || 'BELİRSİZ_MARKA',
+        brandTextSearch: tm.brandTextSearch || [], 
         niceClassSearch: tm.niceClassSearch || [],
         goodsAndServicesByClass: tm.goodsAndServicesByClass || []
     }));
