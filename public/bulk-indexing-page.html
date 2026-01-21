@@ -275,34 +275,8 @@
                                 <span>PDF Dosyalarını Sürükleyin</span>
                             </div>
                             <input type="file" id="bulkFiles" multiple style="display:none;" accept=".pdf">
-                            
                             <div id="bulkFilesInfo" style="display:none;"></div>
 
-                            <div id="fileListSection" class="mt-4" style="display: none;">
-                                <div class="filter-tabs">
-                                    <button class="filter-btn active file-tab-btn" data-target="all-files-pane">
-                                        Eşleşenler <span class="badge badge-secondary ml-1" id="allCount">0</span>
-                                    </button>
-                                    <button class="filter-btn file-tab-btn" data-target="unmatched-files-pane">
-                                        Eşleşmeyenler <span class="badge badge-secondary ml-1" id="unmatchedCount">0</span>
-                                    </button>
-                                    <button class="filter-btn file-tab-btn" data-target="indexed-files-pane">
-                                        İndekslenenler <span class="badge badge-secondary ml-1" id="indexedCount">0</span>
-                                    </button>
-                                </div>
-
-                                <div class="tab-content">
-                                    <div id="all-files-pane" class="file-tab-pane active">
-                                        <div id="allFilesList"></div>
-                                    </div>
-                                    <div id="unmatched-files-pane" class="file-tab-pane">
-                                        <div id="unmatchedFilesList"></div>
-                                    </div>
-                                    <div id="indexed-files-pane" class="file-tab-pane">
-                                        <div id="indexedFilesList"></div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     
@@ -444,10 +418,11 @@
                     if (mode === 'etebs') {
                         etebsContent.style.display = 'block';
                         uploadContent.style.display = 'none';
-                        document.getElementById('notificationsSection').style.display = 'none'; 
+                        // NotificationsSection'ı gizleme komutunu kaldırdık.
                     } else {
                         etebsContent.style.display = 'none';
                         uploadContent.style.display = 'block';
+                        // Upload modunda da liste görünür kalacak.
                     }
                 });
             });
