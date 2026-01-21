@@ -484,14 +484,13 @@ updateTabBadge() {
         }
     }
 
-async fetchNotifications(isSilent = false) {
+    async fetchNotifications(isSilent = false) {
         if (this.isLoading) return;
 
         const token = localStorage.getItem('etebs_token');
         const user = authService?.auth?.currentUser;
 
         this.setLoading(true);
-        // Sessiz modda değilse kullanıcıya bilgi ver
         if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
 
         // UI Temizliği
@@ -501,73 +500,64 @@ async fetchNotifications(isSilent = false) {
 
         try {
             // ADIM 1: Token varsa backend tetikle (fire-and-forget)
-            // Bu işlem arka planda ETEBS'ten yeni veri varsa çeker ve DB'ye yazar
             if (token && user) {
                 if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
-
                 try {
                     const { httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js');
-
-                    if (!firebaseServices?.functions) {
-                        console.warn("firebaseServices.functions tanımlı değil. Backend tetiklenemedi.");
-                    } else {
+                    if (firebaseServices?.functions) {
                         const etebsProxyV2 = httpsCallable(firebaseServices.functions, 'etebsProxyV2');
-
-                        // Listeyi çekip DB'ye queued olarak yazdıran tetikleme (cevabı beklemiyoruz)
                         etebsProxyV2({
                             action: 'CHECK_LIST_ONLY',
                             token: token,
                             userId: user.uid
                         }).catch(e => console.warn("Arka plan sync hatası:", e));
                     }
-                } catch (e) {
-                    console.warn("Backend tetikleme atlandı:", e);
-                }
+                } catch (e) { console.warn("Backend tetikleme atlandı:", e); }
             } else {
-                // Token yoksa sadece veritabanından okuyacağız, sessiz modda uyarı verme
                 if (!isSilent) {
-                    if (!user) this.showInfo("Oturum bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
-                    if (!token) this.showInfo("Token bulunamadı. Sadece veritabanındaki kayıtlar gösterilecek.");
+                    if (!user) this.showInfo("Oturum bulunamadı.");
+                    if (!token) this.showInfo("Token bulunamadı.");
                 }
             }
 
             // ADIM 2: Veritabanından son durumu çek ve göster
             if (!isSilent) this.updateStatusMessage('Listeleniyor...');
-
-            // Backend yeni veri yazıyorsa yakalamak için kısa bekleme
+            
             await new Promise((r) => setTimeout(r, 1000));
 
-            // Son 50 kaydı veritabanından çek
             const dbRecords = await etebsService.getRecentUnindexedDocuments(50);
 
-            if (dbRecords && dbRecords.length > 0) {
-                this.notifications = dbRecords;
-                this.filteredNotifications = dbRecords;
+            // ✅ GÜNCELLEME: Kayıt olsun veya olmasın listeyi her zaman güncelle
+            this.notifications = dbRecords || [];
+            this.filteredNotifications = dbRecords || [];
 
-                // Marka eşleştirmelerini çalıştır (Otomatik eşleşme kontrolü)
+            // Marka eşleştirmelerini çalıştır
+            if (this.notifications.length > 0) {
                 try {
                     if (typeof this.runBrandMatchingIfAvailable === 'function') {
                         await this.runBrandMatchingIfAvailable();
                     } else if (typeof this.matchWithIPRecords === 'function') {
                         await this.matchWithIPRecords();
                     }
-                } catch (e) {
-                    console.warn('Brand matching çalıştırılamadı:', e);
-                }
+                } catch (e) { console.warn('Brand matching hatası:', e); }
+            }
 
-                // Arayüzü Güncelle
-                this.updateStatistics();
-                this.displayNotifications();
-                this.showNotificationsSection();
+            // İstatistikleri ve Görünümü Güncelle
+            this.updateStatistics();
+            this.displayNotifications();
+            
+            // ✅ ÖNEMLİ: Bölümü her zaman göster (Boş olsa bile)
+            this.showNotificationsSection();
 
+            if (dbRecords && dbRecords.length > 0) {
                 if (!isSilent) this.showSuccess(`Veritabanından ${dbRecords.length} evrak listelendi.`);
             } else {
-                // Kayıt yoksa kullanıcıya bilgi ver (Sessiz modda sadece gizle)
-                if (!isSilent) this.showInfo("Görüntülenecek evrak bulunamadı.");
-                this.hideNotificationsSection();
+                if (!isSilent) this.showInfo("Henüz listelenecek evrak bulunamadı.");
+                // hideNotificationsSection() ARTIK ÇAĞRILMIYOR
             }
+
         } catch (error) {
-            console.error('Arayüz Hatası:', error);
+            console.error('Liste Hatası:', error);
             if (!isSilent) this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
         } finally {
             this.setLoading(false);
