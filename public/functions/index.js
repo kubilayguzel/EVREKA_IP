@@ -4181,110 +4181,134 @@ export const performTrademarkSimilaritySearch = onCall(
         const progress = Math.round(((batchIndex + 1) / markBatches.length) * 100);
         logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor... (${progress}%)`);
 
-        // Batch içindeki her markayı işle
+      // Batch içindeki her markayı işle
         for (const monitoredMark of batch) {
-          logger.log("🔍 İşlenen monitored mark:", {
-            id: monitoredMark.id,
-            markName: monitoredMark.markName,
-            applicationDate: monitoredMark.applicationDate,
-            niceClasses: monitoredMark.niceClasses
-          });
+          // 1. Aranacak TÜM terimleri belirle (Ana Marka + Alternatifler)
+          // Örn: ["Efes", "Ephesus", "Effes"]
+          const primaryName = (monitoredMark.markName || monitoredMark.title || '').trim();
+          const searchTerms = [
+              primaryName, 
+              ...(monitoredMark.brandTextSearch || [])
+          ].filter(t => t && t.trim().length > 0); // Boş olanları temizle
 
-          const markNameRaw = monitoredMark.markName || monitoredMark.title || '';
-          const markName = (typeof markNameRaw === 'string') ? markNameRaw.trim() : '';
-          const applicationDate = monitoredMark.applicationDate || null;
-          const niceClasses = monitoredMark.niceClasses || [];
+          // Bu izlenen marka için bulunan EN İYİ sonuçları tutacak havuz (Tekilleştirme için)
+          // Key: ApplicationNo (Dosya No), Value: Result Objesi
+          const uniqueResultsMap = new Map();
 
-          if (!markName) {
-            logger.warn(`⚠️ İzlenen markanın adı eksik:`, monitoredMark);
-            continue;
-          }
+          logger.log(`🔎 Arama Terimleri (ID: ${monitoredMark.id}): ${searchTerms.join(', ')}`);
 
-          const cleanedSearchName = cleanMarkName(markName, markName.trim().split(/\s+/).length > 1);
-          logger.log(`🔎 Arama: '${markName}' (ID: ${monitoredMark.id})`);
+          // 2. Her bir terim için arama yap
+          for (const term of searchTerms) {
+              const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
+              
+              // Bülten kayıtlarını tara
+              for (const hit of bulletinRecords) {
+                  // Tarih filtresi (Mevcut mantık)
+                  const applicationDate = monitoredMark.applicationDate || null;
+                  if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) {
+                      continue;
+                  }
 
-          let matchCount = 0;
+                  // Nice sınıf filtresi (Mevcut mantık)
+                  const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
 
-          for (const hit of bulletinRecords) {
-            // Tarih filtresi
-            if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) {
-              continue;
-            }
+                  // 3. Benzerlik Skoru Hesapla (Artık 'term' kullanıyoruz)
+                  const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
+                  
+                  const { finalScore: similarityScore, positionalExactMatchScore } =
+                    calculateSimilarityScoreInternal(
+                      hit.markName,
+                      term, // <--- DİKKAT: Artık döngüdeki 'term' ile karşılaştırıyoruz
+                      hit.applicationDate,
+                      applicationDate,
+                      hit.niceClasses,
+                      niceClasses
+                    );
 
-            // Nice sınıf filtresi
-            const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
+                  // Eşik Değer Kontrolü (Mevcut mantık)
+                  const SIMILARITY_THRESHOLD = 0.5;
+                  const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+                  let isPrefixSuffixExactMatch = false;
+                  const MIN_SEARCH_LENGTH = 3;
 
-            // Benzerlik skoru
-            const { finalScore: similarityScore, positionalExactMatchScore } =
-              calculateSimilarityScoreInternal(
-                hit.markName,
-                markName,
-                hit.applicationDate,
-                applicationDate,
-                hit.niceClasses,
-                niceClasses
-              );
+                  if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
+                    const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
+                    for (const w of searchWords) {
+                      if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
+                    }
+                    if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
+                      isPrefixSuffixExactMatch = true;
+                    }
+                  }
 
-            const SIMILARITY_THRESHOLD = 0.5;
+                  if (
+                    similarityScore < SIMILARITY_THRESHOLD &&
+                    positionalExactMatchScore < SIMILARITY_THRESHOLD &&
+                    !isPrefixSuffixExactMatch
+                  ) {
+                    continue;
+                  }
 
-            // Baş-sona tam geçiş / içinde geçme kontrolü
-            const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
-            let isPrefixSuffixExactMatch = false;
-            const MIN_SEARCH_LENGTH = 3;
+                  // 4. Sonuç Hazırla
+                  let isEarlier = false;
+                  try {
+                    const searchDate = applicationDate ? new Date(applicationDate) : null;
+                    const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
+                    if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
+                  } catch (_) { isEarlier = false; }
 
-            if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
-              const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
-              for (const w of searchWords) {
-                if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
+                  const resultObj = {
+                    objectID: hit.id,
+                    markName: hit.markName,
+                    applicationNo: hit.applicationNo,
+                    applicationDate: hit.applicationDate,
+                    niceClasses: hit.niceClasses,
+                    holders: hit.holders,
+                    imagePath: hit.imagePath,
+                    bulletinId: hit.bulletinId,
+                    similarityScore,
+                    positionalExactMatchScore,
+                    sameClass: hasNiceClassOverlap,
+
+                    // Frontend alanları
+                    monitoredTrademark: primaryName, // Ekranda hep ana marka adı görünsün (Örn: Efes)
+                    matchedTerm: term,               // Hangi kelimeyle bulundu (Örn: Ephesus) - Bilgi amaçlı
+                    monitoredNiceClasses: monitoredMark.niceClassSearch || [],
+                    monitoredTrademarkId: monitoredMark.id,
+                    monitoredMarkId: monitoredMark.id, // Eksik olma ihtimaline karşı ekledik
+                    isEarlier
+                  };
+
+                  // 5. AKILLI TEKİLLEŞTİRME (DEDUPLICATION)
+                  // Eğer bu dosya numarası (hit.applicationNo) daha önce bulunduysa, skorları karşılaştır.
+                  if (uniqueResultsMap.has(hit.applicationNo)) {
+                      const existingResult = uniqueResultsMap.get(hit.applicationNo);
+                      // Yeni skor daha yüksekse güncelle
+                      if (resultObj.similarityScore > existingResult.similarityScore) {
+                          uniqueResultsMap.set(hit.applicationNo, resultObj);
+                      }
+                      // Değilse eski (yüksek skorlu) kalsın
+                  } else {
+                      // İlk kez bulunduysa ekle
+                      uniqueResultsMap.set(hit.applicationNo, resultObj);
+                  }
               }
-              if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
-                isPrefixSuffixExactMatch = true;
-              }
-            }
+          } // Term döngüsü sonu
 
-            if (
-              similarityScore < SIMILARITY_THRESHOLD &&
-              positionalExactMatchScore < SIMILARITY_THRESHOLD &&
-              !isPrefixSuffixExactMatch
-            ) {
-              logger.log(`⏩ Atlandı: Final ${similarityScore.toFixed(2)}, Positional ${positionalExactMatchScore.toFixed(2)} - ${hit.markName}`);
-              continue;
-            }
+          // Bu monitoredMark için bulunan EN İYİ sonuçları genel listeye ekle
+          const bestResultsForMark = Array.from(uniqueResultsMap.values());
+          allResults.push(...bestResultsForMark);
 
-            // Eşleşme
-            matchCount++;
-
-            // Öncelik (daha eski mi?)
-            let isEarlier = false;
-            try {
-              const searchDate = applicationDate ? new Date(applicationDate) : null;
-              const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
-              if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
-            } catch (_) { isEarlier = false; }
-
-            allResults.push({
-              objectID: hit.id,
-              markName: hit.markName,
-              applicationNo: hit.applicationNo,
-              applicationDate: hit.applicationDate,
-              niceClasses: hit.niceClasses,
-              holders: hit.holders,
-              imagePath: hit.imagePath,
-              bulletinId: hit.bulletinId,
-              similarityScore,
-              positionalExactMatchScore,
-              sameClass: hasNiceClassOverlap,
-
-              // Frontend alanları
-              monitoredTrademark: markName,
-              monitoredNiceClasses: monitoredMark.niceClassSearch || [],
-              monitoredTrademarkId: monitoredMark.id,
-              isEarlier
-            });
-          }
-
-          logger.log(`📊 '${markName}' (ID: ${monitoredMark.id}) için ${matchCount} eşleşme bulundu`);
+          logger.log(`📊 '${primaryName}' (ID: ${monitoredMark.id}) için toplam ${bestResultsForMark.length} tekil eşleşme bulundu.`);
         }
+
+        // Batch arası bekleme (rate limiting)
+        if (batchIndex < markBatches.length - 1) {
+          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
+        }
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
 
         // Batch arası bekleme (rate limiting)
         if (batchIndex < markBatches.length - 1) {
