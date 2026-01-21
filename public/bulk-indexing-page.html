@@ -441,18 +441,6 @@
                 });
             });
 
-            // 4. ETEBS Bildirim Tabları
-            const notifTabBtns = document.querySelectorAll('.notification-tab-btn');
-            const notifTabPanes = document.querySelectorAll('.notification-tab-pane');
-            notifTabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const target = btn.getAttribute('data-target');
-                    notifTabBtns.forEach(b => b.classList.remove('active'));
-                    notifTabPanes.forEach(p => p.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.getElementById(target).classList.add('active');
-                });
-            });
         });
     </script>
 </body>
