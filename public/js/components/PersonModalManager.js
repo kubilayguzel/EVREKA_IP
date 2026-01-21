@@ -150,12 +150,12 @@ export class PersonModalManager {
                                                     </div>`).join('')}
                                             </div>
                                         </div>
-                                        <div class="col-12 d-flex justify-content-end align-items-center mt-3 border-top pt-3" style="gap: 10px;">
+                                        <div class="col-12 text-right mt-3 border-top pt-3">
                                             <button type="button" class="btn btn-sm btn-primary px-4" id="addRelatedBtn">
                                                 <i class="fas fa-plus-circle mr-1"></i> İlgiliyi Ekle
                                             </button>
 
-                                            <div id="relatedEditButtons" style="display:none; gap: 10px;">
+                                            <div id="relatedEditButtons" style="display:none; align-items: center; justify-content: flex-end; gap: 10px;">
                                                 <button type="button" class="btn btn-sm btn-success px-4" id="updateRelatedBtn">
                                                     <i class="fas fa-save mr-1"></i> Güncelle
                                                 </button>
@@ -164,7 +164,7 @@ export class PersonModalManager {
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
+                                        </div>
                                     <div id="relatedListContainer" class="list-group list-group-flush rounded border bg-white shadow-sm"></div>
                                 </div>
                             </div>
@@ -505,12 +505,13 @@ export class PersonModalManager {
     }
 
     editRelated(idx, isLoaded) {
+        // 1. Düzenlenecek veriyi seç
         const data = isLoaded ? this.relatedLoaded[idx] : this.relatedDraft[idx];
         console.log("Düzenlenen İlgili Verisi:", data);
 
         if (!data) return;
 
-        // Elementleri güvenli bir şekilde doldurma (Null check ekleyelim)
+        // 2. Form Alanlarını Doldur (Güvenli atama)
         const safeSet = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.value = val || '';
@@ -521,17 +522,19 @@ export class PersonModalManager {
         safeSet('relatedEmail', data.email);
         safeSet('relatedPhone', data.phone);
 
-        // Checkbox ve diğer kısımlar (Önceki kodunuzdaki gibi devam edebilir)
+        // 3. Checkboxları (Sorumlu Alanlar) İşaretle
         const resp = data.responsible || {};
         const scopes = ['patent', 'marka', 'tasarim', 'dava', 'muhasebe'];
         
         scopes.forEach(s => {
             const capitalized = s.charAt(0).toUpperCase() + s.slice(1);
             const cb = document.getElementById('scope' + capitalized);
+            // Veri yapısı küçük/büyük harf duyarlılığına karşı önlem
             if (cb) cb.checked = !!(resp[s] || resp[capitalized]);
         });
 
-        this.syncMailPrefsAvailability();
+        // 4. Mail Tercihlerini (To/CC) Aktif Hale Getir ve İşaretle
+        this.syncMailPrefsAvailability(); // Önce disabled durumlarını kaldır
 
         const notify = data.notify || {};
         scopes.forEach(s => {
@@ -543,15 +546,30 @@ export class PersonModalManager {
             if (ccInput) ccInput.checked = !!prefs.cc;
         });
 
+        // 5. BUTON GÖRÜNÜRLÜĞÜNÜ AYARLA (İsteğinize Göre)
+        
+        // A) "İlgili Ekle" butonunu gizle
+        const addBtn = document.getElementById('addRelatedBtn');
+        if (addBtn) addBtn.style.display = 'none';
+
+        // B) "Güncelle/İptal" grubunu göster
         const editGroup = document.getElementById('relatedEditButtons');
         if (editGroup) {
-            editGroup.style.display = 'flex';
+            editGroup.style.display = 'flex'; // veya 'inline-flex'
+        } else {
+            // Eğer HTML'de grup div'i oluşturmadıysanız eski usul butonları tek tek açarız:
+            const updBtn = document.getElementById('updateRelatedBtn');
+            const canBtn = document.getElementById('cancelRelatedBtn');
+            if(updBtn) updBtn.style.display = 'inline-block';
+            if(canBtn) canBtn.style.display = 'inline-block';
         }
         
+        // 6. Durumu Kaydet
         this.editingRelated = { idx, isLoaded };
         
-        const form = document.getElementById('relatedForm');
-        if(form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // 7. Kullanıcıyı forma odakla
+        const formSection = document.getElementById('relatedSection');
+        if(formSection) formSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     updateRelatedHandler() {
@@ -602,10 +620,8 @@ export class PersonModalManager {
         document.getElementById('relatedEmail').value = '';
         document.getElementById('relatedPhone').value = '';
 
-        // 2. Checkboxları sıfırla
+        // 2. Checkbox ve seçimleri sıfırla
         document.querySelectorAll('.scope-cb').forEach(cb => cb.checked = false);
-        
-        // Mail tercihlerini sıfırla ve pasife çek
         document.querySelectorAll('.mail-to, .mail-cc').forEach(cb => {
             cb.checked = false;
             cb.disabled = true;
@@ -615,14 +631,15 @@ export class PersonModalManager {
         // 3. Edit modunu bitir
         this.editingRelated = null;
 
-        // 4. BUTONLARI AYARLA
-        // Güncelleme grubunu gizle
-        const editGroup = document.getElementById('relatedEditButtons');
-        if (editGroup) {
-            editGroup.style.display = 'none';
-        }
+        // --- BUTONLARI ESKİ HALİNE GETİR ---
         
-        // Ekle butonu zaten hep açık, dokunmaya gerek yok.
+        // Güncelleme grubunu GİZLE
+        const editGroup = document.getElementById('relatedEditButtons');
+        if (editGroup) editGroup.style.display = 'none';
+
+        // Ekle butonunu GÖSTER
+        const addBtn = document.getElementById('addRelatedBtn');
+        if (addBtn) addBtn.style.display = 'inline-block';
     }
 
     async removeRelated(idx, isLoaded) {
