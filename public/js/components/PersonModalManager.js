@@ -127,16 +127,17 @@ export class PersonModalManager {
                                                 <input type="tel" id="relatedPhone" class="form-control form-control-sm border-2" placeholder="+90 5__ ___ __ __">
                                             </div>
                                         </div>
+                                        
                                         <div class="col-md-4 border-left">
                                             <label class="small font-weight-bold text-dark">Sorumlu Alanlar</label>
                                             <div class="d-flex flex-wrap gap-2 mt-1">
                                                 ${['Patent', 'Marka', 'Tasarim', 'Dava', 'Muhasebe'].map(s => `
                                                     <div class="custom-control custom-checkbox mr-3 mb-2">
-                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scope${s}" value="${s.toLowerCase()}">
-                                                        <label class="custom-control-label small" for="scope${s}">${s}</label>
+                                                        <input type="checkbox" class="custom-control-input scope-cb" id="scope${s}" value="${s.toLowerCase()}" checked> <label class="custom-control-label small" for="scope${s}">${s}</label>
                                                     </div>`).join('')}
                                             </div>
                                         </div>
+
                                         <div class="col-md-4 border-left">
                                             <label class="small font-weight-bold text-dark">Mail To / CC</label>
                                             <div class="mail-prefs-grid small bg-light p-2 border rounded">
@@ -144,17 +145,17 @@ export class PersonModalManager {
                                                     <div class="mail-scope-row d-flex justify-content-between align-items-center mb-1">
                                                         <span class="text-capitalize font-weight-bold">${s}</span>
                                                         <div class="toggles">
-                                                            <label class="mb-0 mr-2 disabled"><input type="checkbox" class="mail-to" data-scope="${s}" checked> To</label>
-                                                            <label class="mb-0 disabled"><input type="checkbox" class="mail-cc" data-scope="${s}"> CC</label>
+                                                            <label class="mb-0 mr-2"><input type="checkbox" class="mail-to" data-scope="${s}" checked> To</label> 
+                                                            <label class="mb-0"><input type="checkbox" class="mail-cc" data-scope="${s}"> CC</label>
                                                         </div>
                                                     </div>`).join('')}
                                             </div>
                                         </div>
-                                        <div class="col-12 text-right mt-3 border-top pt-3">
+                                        
+                                        <div class="col-12 d-flex justify-content-end align-items-center mt-3 border-top pt-3" style="gap: 10px;">
                                             <button type="button" class="btn btn-sm btn-primary px-4" id="addRelatedBtn">
                                                 <i class="fas fa-plus-circle mr-1"></i> İlgiliyi Ekle
                                             </button>
-
                                             <div id="relatedEditButtons" style="display:none; align-items: center; justify-content: flex-end; gap: 10px;">
                                                 <button type="button" class="btn btn-sm btn-success px-4" id="updateRelatedBtn">
                                                     <i class="fas fa-save mr-1"></i> Güncelle
@@ -164,7 +165,7 @@ export class PersonModalManager {
                                                 </button>
                                             </div>
                                         </div>
-                                        </div>
+                                    </div>
                                     <div id="relatedListContainer" class="list-group list-group-flush rounded border bg-white shadow-sm"></div>
                                 </div>
                             </div>
@@ -186,10 +187,20 @@ export class PersonModalManager {
                                             <label class="small font-weight-bold text-muted">VEKALET VERİLEN TARAF</label>
                                             <input type="text" id="docProxyParty" class="form-control form-control-sm border-2">
                                         </div>
+                                        
                                         <div class="col-md-3 mb-2">
                                             <label class="small font-weight-bold text-muted">GEÇERLİLİK TARİHİ</label>
-                                            <input type="date" id="docDate" class="form-control form-control-sm">
+                                            <div class="input-group input-group-sm">
+                                                <input type="date" id="docDate" class="form-control border-2">
+                                                <div class="input-group-append">
+                                                    <div class="input-group-text bg-white border-2">
+                                                        <input type="checkbox" id="docDateIndefinite">
+                                                        <label for="docDateIndefinite" class="mb-0 ml-1 small" style="cursor:pointer;">Süresiz</label>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
+
                                         <div class="col-md-3 mb-2">
                                             <label class="small font-weight-bold text-muted">ÜLKE</label>
                                             <select id="docCountry" class="form-control form-control-sm border-2"></select>
@@ -296,6 +307,17 @@ export class PersonModalManager {
 
             fileInput.onchange = () => {
                 if (fileInput.files.length) fileNameDisplay.innerText = fileInput.files[0].name;
+            };
+        }
+        const indefiniteCb = document.getElementById('docDateIndefinite');
+        const docDateInput = document.getElementById('docDate');
+        
+        if(indefiniteCb && docDateInput) {
+            indefiniteCb.onchange = (e) => {
+                docDateInput.disabled = e.target.checked;
+                if(e.target.checked) {
+                    docDateInput.value = ''; // Süresiz ise tarihi temizle
+                }
             };
         }
     }
@@ -658,13 +680,20 @@ export class PersonModalManager {
         const fileInput = document.getElementById('docFile');
         const file = fileInput.files[0];
         const proxyParty = document.getElementById('docProxyParty').value.trim();
+        
+        // YENİ: Süresiz kontrolü
+        const isIndefinite = document.getElementById('docDateIndefinite').checked;
+        const rawDate = document.getElementById('docDate').value;
+        
+        // Eğer süresiz seçiliyse 'Süresiz' yaz, değilse tarihi al
+        const validityDate = isIndefinite ? 'Süresiz' : rawDate;
 
         if (!file) return showNotification('Lütfen bir dosya seçin.', 'warning');
 
         this.documents.push({
             type: document.getElementById('docType').value,
-            proxyParty: proxyParty, // Yeni alan
-            validityDate: document.getElementById('docDate').value,
+            proxyParty: proxyParty,
+            validityDate: validityDate, // Değişkeni kullanıyoruz
             countryCode: document.getElementById('docCountry').value,
             fileName: file.name,
             fileObj: file,
@@ -676,7 +705,11 @@ export class PersonModalManager {
         // Temizlik
         fileInput.value = '';
         document.getElementById('docProxyParty').value = '';
-        document.getElementById('docFileNameDisplay').innerText = 'PDF Dosyasını Buraya Sürükleyin veya Tıklayın';    }
+        document.getElementById('docDate').value = '';
+        document.getElementById('docDateIndefinite').checked = false; // Checkbox'ı sıfırla
+        document.getElementById('docDate').disabled = false; // Tarihi tekrar aktif et
+        document.getElementById('docFileNameDisplay').innerText = 'PDF Sürükle veya Tıkla';    
+    }
 
     renderDocuments() {
         const cont = document.getElementById('docListContainer');
