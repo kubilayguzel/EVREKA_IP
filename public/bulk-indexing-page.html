@@ -395,13 +395,25 @@
             // 1. Ana Tab Geçişleri
             const navBtns = document.querySelectorAll('.nav-btn');
             const panes = document.querySelectorAll('.tab-pane');
+            
             navBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const target = btn.getAttribute('data-tab');
+                    
+                    // Görsel Sınıf Değişimleri
                     navBtns.forEach(b => b.classList.remove('active'));
                     panes.forEach(p => p.classList.remove('active'));
                     btn.classList.add('active');
                     document.getElementById(target).classList.add('active');
+
+                    // ✅ EKLENECEK KISIM: ETEBS Sekmesine Tıklanırsa Listeyi Getir
+                    if (target === 'bulk-indexing-pane') {
+                        console.log("📂 ETEBS Sekmesi açıldı, veriler yükleniyor...");
+                        if (window.etebsManager) {
+                            // true = sessiz mod (loading spinner göstermeden, veritabanından okur)
+                            window.etebsManager.fetchNotifications(true);
+                        }
+                    }
                 });
             });
 
