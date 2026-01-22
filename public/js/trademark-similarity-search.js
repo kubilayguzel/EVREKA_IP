@@ -30,6 +30,7 @@ const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 const MANUAL_COLLECTION_ID = 'GLOBAL_MANUAL_RECORDS';
 let tpSearchResultData = null;
 let cachedGroupedData = null; // Gruplanmış veriyi hafızada tutmak için
+const _storageUrlCache = new Map(); // Storage path -> Signed URL önbelleği
 
 // --- 2. YARDIMCI FONKSİYONLAR ---
 const tssLoadState = () => {
@@ -156,6 +157,60 @@ const _getBrandImageByAppNo = async (appNo) => {
     _appNoImgCache.set(appNo, url);
     return url;
 };
+
+// Görseller sadece ekrana girdiğinde yüklenir
+const imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(async (entry) => {
+        if (entry.isIntersecting) {
+            const container = entry.target;
+            const hitData = JSON.parse(container.dataset.hitData);
+            
+            observer.unobserve(container); // Artık izlemeyi bırak
+
+            try {
+                let imgUrl = '';
+
+                // 1. Önce hit içindeki hazır URL var mı?
+                if (hitData.brandImageUrl) {
+                    imgUrl = hitData.brandImageUrl;
+                } 
+                // 2. Storage Path var mı? (Varsa cache kontrolü yap)
+                else if (hitData.imagePath) {
+                    if (_storageUrlCache.has(hitData.imagePath)) {
+                        imgUrl = _storageUrlCache.get(hitData.imagePath);
+                    } else {
+                        try {
+                            const storage = getStorage();
+                            imgUrl = await getDownloadURL(ref(storage, hitData.imagePath));
+                            _storageUrlCache.set(hitData.imagePath, imgUrl);
+                        } catch (e) {
+                            console.warn('Storage görsel hatası:', e);
+                        }
+                    }
+                } 
+                // 3. Fallback: Veritabanından App No ile bul
+                else if (hitData.applicationNo) {
+                    imgUrl = await _getBrandImageByAppNo(hitData.applicationNo);
+                }
+
+                // Görsel bulunduysa HTML'i güncelle
+                if (imgUrl) {
+                    const normalizedUrl = _normalizeImageSrc(imgUrl);
+                    container.innerHTML = `<div class="tm-img-box tm-img-box-lg"><img src="${normalizedUrl}" loading="lazy" alt="Marka" class="trademark-image-thumbnail-large"></div>`;
+                } else {
+                    container.innerHTML = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">-</div></div>`;
+                }
+
+            } catch (err) {
+                console.warn(`Görsel yüklenemedi: ${hitData.applicationNo}`);
+                container.innerHTML = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">?</div></div>`;
+            }
+        }
+    });
+}, {
+    rootMargin: '100px 0px', // Ekrana girmeden 100px önce yüklemeye başla
+    threshold: 0.01
+});
 
 const _ipCache = new Map();
 const _getIp = async (recordId) => {
@@ -534,14 +589,29 @@ const createResultRow = (hit, rowIndex) => {
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
-    const imagePlaceholderHtml = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder">-</div></div>`;
+    
+    // Placeholder HTML
+    const imagePlaceholderHtml = `<div class="tm-img-box tm-img-box-lg"><div class="tm-placeholder"><i class="fas fa-spinner fa-spin text-muted"></i></div></div>`;
     const bulletinSelect = document.getElementById('bulletinSelect');
 
     const row = document.createElement('tr');
+    
+    // Gerekli verileri (imagePath, brandImageUrl, appNo) JSON string olarak dataset'e ekliyoruz
+    // Bu sayede observer bunlara erişebilecek.
+    const minimalHitData = JSON.stringify({
+        imagePath: hit.imagePath,
+        brandImageUrl: hit.brandImageUrl,
+        applicationNo: hit.applicationNo
+    });
+
     row.innerHTML = `
         <td>${rowIndex}</td>
         <td><button class="action-btn ${similarityBtnClass}" data-result-id="${hit.objectID || hit.applicationNo}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">${similarityBtnText}</button></td>
-        <td data-appno="${hit.applicationNo}" class="trademark-image-cell">${imagePlaceholderHtml}</td>
+        
+        <td class="trademark-image-cell lazy-load-container" data-hit-data='${minimalHitData}'>
+            ${imagePlaceholderHtml}
+        </td>
+
         <td><strong>${hit.markName || '-'}</strong></td>
         <td>${holders}</td>
         <td>${niceClassHtml}</td>
@@ -551,24 +621,13 @@ const createResultRow = (hit, rowIndex) => {
         <td class="note-cell" data-result-id="${hit.objectID || hit.applicationNo}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}"><div class="note-cell-content"><span class="note-icon">📝</span>${noteContent}</div></td>
     `;
 
-    setTimeout(async () => {
-        const imageCell = row.querySelector('.trademark-image-cell');
-        if (!imageCell || !imageCell.isConnected) return;
-        try {
-            let imgUrl = '';
-            if (hit.imagePath) {
-                const storage = getStorage();
-                imgUrl = await getDownloadURL(ref(storage, hit.imagePath));
-            } else if (hit.brandImageUrl) {
-                imgUrl = hit.brandImageUrl;
-            } else if (hit.applicationNo) {
-                imgUrl = await _getBrandImageByAppNo(hit.applicationNo);
-            }
-            if (imgUrl) imageCell.innerHTML = `<div class="tm-img-box tm-img-box-lg"><img src="${imgUrl}" alt="Marka" class="trademark-image-thumbnail-large"></div>`;
-        } catch (err) {
-            console.warn(`Görsel yüklenemedi: ${hit.applicationNo}`);
-        }
-    }, 50);
+    // Eski setTimeout kodunu SİLDİK.
+    // Yerine Observer'ı başlatıyoruz:
+    const imgContainer = row.querySelector('.lazy-load-container');
+    if (imgContainer) {
+        imageObserver.observe(imgContainer);
+    }
+
     return row;
 };
 
