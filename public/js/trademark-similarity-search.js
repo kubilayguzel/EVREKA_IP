@@ -346,6 +346,7 @@ const renderMonitoringList = async () => {
         const statusText = isTriggered ? 'Evet' : 'Hazır';
         const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
 
+        // 1. BAŞLIK SATIRI (Aynı Kalıyor)
         const headerRow = `
         <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
             <td><i class="fas fa-chevron-down toggle-icon"></i></td>
@@ -362,35 +363,28 @@ const renderMonitoringList = async () => {
         </tr>`;
         allRowsHtml.push(headerRow);
 
-        const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
-            const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
-            return `
-                <tr class="trademark-detail-row">
-                    <td class="td-nested-toggle"></td>
-                    <td class="td-nested-img">${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}</td>
-                    <td class="td-nested-name"><strong>${markName}</strong></td>
-                    <td class="td-nested-appno">${appNo}</td>
-                    <td class="td-nested-nice">${nices || '-'}</td> 
-                    <td class="td-nested-date">${appDate}</td>
-                </tr>`;
-        }).join('');
-
+        // 2. İÇERİK SATIRI (DEĞİŞTİ: Boş Konteyner)
+        // Veriyi buraya hemen yazmıyoruz, data attribute üzerinden referans veriyoruz.
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
-                    <table class="table table-sm nested-table">
-                        <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
-                        <tbody>${detailRowsHtml}</tbody>
-                    </table>
+                    <div class="nested-content-container" data-loaded="false" data-owner-key="${ownerKey}">
+                        <div class="p-3 text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>
+                    </div>
                 </td>
             </tr>`;
         allRowsHtml.push(contentRow);
     }
     tbody.innerHTML = allRowsHtml.join('');
 
-    attachMonitoringAccordionListeners();
+    // Mevcut listener'lar
+    // attachMonitoringAccordionListeners(); // <-- Buna artık gerek yok, yeni fonksiyon hem accordion'ı hem yüklemeyi yönetecek.
     attachGenerateReportListener();
     attachTrademarkClickListener();
+
+    // 3. YENİ LAZY LOAD LISTENER'I ÇAĞIR
+    // groupedByOwner verisini parametre olarak gönderiyoruz ki tıklandığında verilere erişebilsin.
+    attachLazyLoadListeners(groupedByOwner);
 
     setTimeout(() => {
         document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
@@ -406,6 +400,80 @@ const renderMonitoringList = async () => {
             }
         });
     }, 300);
+};
+
+// --- YENİ HELPER FONKSİYON ---
+const attachLazyLoadListeners = (groupedData) => {
+    const tbody = document.getElementById('monitoringListBody');
+    
+    // Eski listener'ları temizlemek için klonlama yapabiliriz veya
+    // jQuery kullanıyorsanız off() yapabilirsiniz. Vanilla JS'de üst üste binmemesi için kontrol:
+    if (tbody._lazyLoadAttached) return;
+    tbody._lazyLoadAttached = true;
+
+    tbody.addEventListener('click', (e) => {
+        // Butonlara tıklanırsa accordion'ı tetikleme
+        if (e.target.closest('.action-btn, button, a')) return;
+
+        const headerRow = e.target.closest('.owner-row');
+        if (!headerRow) return;
+
+        const targetId = headerRow.dataset.target || '#' + headerRow.getAttribute('aria-controls');
+        const contentRow = document.querySelector(targetId);
+        
+        if (!contentRow) return;
+
+        const isExpanded = headerRow.getAttribute('aria-expanded') === 'true';
+        
+        // Görünürlüğü değiştir
+        contentRow.style.display = isExpanded ? 'none' : 'table-row';
+        headerRow.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+        
+        // İkonu değiştir
+        const icon = headerRow.querySelector('.toggle-icon');
+        if (icon) {
+            icon.classList.toggle('fa-chevron-up', !isExpanded);
+            icon.classList.toggle('fa-chevron-down', isExpanded);
+        }
+
+        // Eğer açılıyorsa (isExpanded false -> true olacaksa) ve veri yüklenmemişse YÜKLE
+        if (!isExpanded) {
+            const container = contentRow.querySelector('.nested-content-container');
+            if (container && container.dataset.loaded === 'false') {
+                const ownerKey = container.dataset.ownerKey;
+                const group = groupedData[ownerKey];
+                
+                if (group && group.trademarks) {
+                    // HTML OLUŞTURMA (Burada yapılıyor)
+                    const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
+                        const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
+                        
+                        // loading="lazy" eklendi
+                        return `
+                            <tr class="trademark-detail-row">
+                                <td class="td-nested-toggle"></td>
+                                <td class="td-nested-img">
+                                    ${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}
+                                </td>
+                                <td class="td-nested-name"><strong>${markName}</strong></td>
+                                <td class="td-nested-appno">${appNo}</td>
+                                <td class="td-nested-nice">${nices || '-'}</td> 
+                                <td class="td-nested-date">${appDate}</td>
+                            </tr>`;
+                    }).join('');
+
+                    const tableHtml = `
+                        <table class="table table-sm nested-table">
+                            <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
+                            <tbody>${detailRowsHtml}</tbody>
+                        </table>`;
+
+                    container.innerHTML = tableHtml;
+                    container.dataset.loaded = 'true'; // Tekrar yüklemeyi engelle
+                }
+            }
+        }
+    });
 };
 
 const createResultRow = (hit, rowIndex) => {
