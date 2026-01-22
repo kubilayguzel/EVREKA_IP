@@ -543,14 +543,27 @@ updateTabBadge() {
             if (token && user) {
                 if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
                 try {
-                    // DÜZELTME: httpsCallable yerine fetch kullanıyoruz
-                    // Çünkü etebsProxyV2 bir HTTP (onRequest) fonksiyonudur.
-                    
-                    const projectId = firebaseServices.app.options.projectId || 'ip-manager-production-aab4b';
+                    // --- ORTAM BELİRLEME (DİNAMİK) ---
+                    // firebase-config.js dosyasındaki mantığı buraya uyguluyoruz
+                    const hostname = window.location.hostname;
+                    const isTestEnv = (
+                        hostname === "localhost" || 
+                        hostname === "127.0.0.1" || 
+                        hostname.includes("ip-manager-production-aab4b") ||
+                        hostname.includes("github.io")
+                    );
+
+                    // Ortama göre Proje ID seç
+                    const projectId = isTestEnv ? "ip-manager-production-aab4b" : "ipgate-31bd2";
                     const region = 'europe-west1';
+                    
+                    // URL oluştur
                     const functionUrl = `https://${region}-${projectId}.cloudfunctions.net/etebsProxyV2`;
 
-                    // fire-and-forget mantığıyla fetch
+                    console.log(`🚀 Algılanan Ortam: ${isTestEnv ? 'TEST' : 'CANLI (PROD)'}`);
+                    console.log(`🔗 Hedef URL: ${functionUrl}`);
+
+                    // İstek at (Fetch)
                     fetch(functionUrl, {
                         method: 'POST',
                         headers: {
@@ -563,10 +576,10 @@ updateTabBadge() {
                         })
                     })
                     .then(response => {
-                        if (!response.ok) {
-                            console.warn("Arka plan sync sunucu hatası:", response.status);
+                         if (!response.ok) {
+                            console.warn(`Arka plan sync sunucu hatası: ${response.status}`);
                         } else {
-                            console.log("Arka plan sync isteği gönderildi.");
+                            console.log("Arka plan sync isteği başarıyla gönderildi.");
                         }
                     })
                     .catch(e => console.warn("Arka plan sync ağ hatası:", e));
