@@ -17,10 +17,11 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
       selectedBulletinId
     });
 
-    // Async mode ile başlat
+    // İlk başlatma: startIndex 0
     const response = await performSearchCallable({
       monitoredMarks,
       selectedBulletinId,
+      startIndex: 0, // Başlangıç noktası
       async: true
     });
 
@@ -37,7 +38,22 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     return new Promise((resolve, reject) => {
       const progressRef = doc(db, 'searchProgress', jobId);
       
-      const unsubscribe = onSnapshot(progressRef, (snapshot) => {
+      // Güvenlik timeout'unu yönetmek için değişken
+      let safetyTimeout;
+      const resetSafetyTimeout = () => {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
+          safetyTimeout = setTimeout(() => {
+              unsubscribe();
+              reject(new Error('İşlem zaman aşımına uğradı (Uzun süre işlem yapılmadı)'));
+          }, 15 * 60 * 1000); // 15 dakika hareketsizlik süresi
+      };
+
+      resetSafetyTimeout(); // İlk başlatma
+
+      const unsubscribe = onSnapshot(progressRef, async (snapshot) => {
+        // Her veri geldiğinde timeout süresini uzat (işlem canlı demek)
+        resetSafetyTimeout();
+
         if (!snapshot.exists()) {
           unsubscribe();
           reject(new Error('Job bulunamadı'));
@@ -45,43 +61,64 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         }
 
         const progressData = snapshot.data();
-        console.log('📊 Progress:', progressData.progress + '%', 
-                    `(${progressData.processed}/${progressData.total})`);
+        
+        // Logu biraz temizledik, sadece değişimde basabiliriz ama şimdilik kalsın
+        console.log(`📊 Durum: ${progressData.status} | Progress: ${progressData.progress}% (${progressData.processed || 0}/${progressData.totalMarks || monitoredMarks.length})`);
 
         // Progress callback
         if (onProgress) {
           onProgress({
             progress: progressData.progress,
             processed: progressData.processed,
-            total: progressData.total,
+            total: progressData.totalMarks || monitoredMarks.length,
             currentResults: progressData.currentResults || 0,
-            status: progressData.status
+            status: progressData.status,
+            message: progressData.status === 'paused' ? 'Zaman aşımı önleniyor, işlem devam ettiriliyor...' : null
           });
+        }
+
+        // --- YENİ: PAUSED DURUMU (OTO-DEVAM) ---
+        if (progressData.status === 'paused') {
+            console.warn(`⚠️ Backend mola verdi (Timeout Koruması). Kaldığı yerden (${progressData.nextIndex}. kayıt) tekrar tetikleniyor...`);
+            
+            // Backend'i tekrar çağır (Resume)
+            try {
+                await performSearchCallable({
+                    jobId: jobId, // AYNI JOB ID İLE DEVAM ET
+                    monitoredMarks, // Veriyi tekrar gönderiyoruz (Backend state tutmuyorsa)
+                    selectedBulletinId,
+                    startIndex: progressData.nextIndex, // Kaldığı yer
+                    async: true
+                });
+                console.log("🔄 Tetikleme başarılı, işlem devam ediyor...");
+            } catch (retryError) {
+                console.error("❌ Tekrar tetikleme başarısız:", retryError);
+                // Burada reject etmiyoruz, belki bir sonraki snapshot'ta düzelir veya manuel müdahale gerekir.
+            }
+            return; // Loop'tan çıkma, dinlemeye devam et
         }
 
         // Tamamlandı
         if (progressData.status === 'completed') {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           unsubscribe();
-          console.log('✅ Arama tamamlandı:', progressData.results.length, 'sonuç');
-          resolve(progressData.results || []);
+          console.log('✅ Arama ve kaydetme tamamlandı. Toplam Sonuç:', progressData.currentResults || 0);
+          resolve(progressData.results || []); // Results dizisi boş gelebilir (backend incremental save yapıyorsa), bu normal.
         }
 
         // Hata
         if (progressData.status === 'error') {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           unsubscribe();
           console.error('❌ Arama hatası:', progressData.error);
           reject(new Error(progressData.error || 'Arama sırasında hata oluştu'));
         }
       }, (error) => {
         console.error('❌ Snapshot hatası:', error);
+        if (safetyTimeout) clearTimeout(safetyTimeout);
         reject(error);
       });
 
-      // 15 dakika timeout (güvenlik için)
-      setTimeout(() => {
-        unsubscribe();
-        reject(new Error('İşlem zaman aşımına uğradı (15 dk)'));
-      }, 15 * 60 * 1000);
     });
 
   } catch (error) {
