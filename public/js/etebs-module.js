@@ -539,25 +539,39 @@ updateTabBadge() {
         this.displayNotifications();
 
         try {
-            // ADIM 1: Token varsa backend tetikle (fire-and-forget)
+        // ADIM 1: Token varsa backend tetikle (fire-and-forget)
             if (token && user) {
                 if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
                 try {
-                    const { httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js');
-                    if (firebaseServices?.functions) {
-                        const etebsProxyV2 = httpsCallable(firebaseServices.functions, 'etebsProxyV2');
-                        etebsProxyV2({
+                    // DÜZELTME: httpsCallable yerine fetch kullanıyoruz
+                    // Çünkü etebsProxyV2 bir HTTP (onRequest) fonksiyonudur.
+                    
+                    const projectId = firebaseServices.app.options.projectId || 'ip-manager-production-aab4b';
+                    const region = 'europe-west1';
+                    const functionUrl = `https://${region}-${projectId}.cloudfunctions.net/etebsProxyV2`;
+
+                    // fire-and-forget mantığıyla fetch
+                    fetch(functionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
                             action: 'CHECK_LIST_ONLY',
                             token: token,
                             userId: user.uid
-                        }).catch(e => console.warn("Arka plan sync hatası:", e));
-                    }
+                        })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            console.warn("Arka plan sync sunucu hatası:", response.status);
+                        } else {
+                            console.log("Arka plan sync isteği gönderildi.");
+                        }
+                    })
+                    .catch(e => console.warn("Arka plan sync ağ hatası:", e));
+
                 } catch (e) { console.warn("Backend tetikleme atlandı:", e); }
-            } else {
-                if (!isSilent) {
-                    if (!user) this.showInfo("Oturum bulunamadı.");
-                    if (!token) this.showInfo("Token bulunamadı.");
-                }
             }
 
             // ADIM 2: Veritabanından son durumu çek ve göster
