@@ -29,6 +29,7 @@ const functions = firebaseServices.functions;
 const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 const MANUAL_COLLECTION_ID = 'GLOBAL_MANUAL_RECORDS';
 let tpSearchResultData = null;
+let cachedGroupedData = null; // Gruplanmış veriyi hafızada tutmak için
 
 // --- 2. YARDIMCI FONKSİYONLAR ---
 const tssLoadState = () => {
@@ -307,30 +308,73 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     }
 };
 
-// --- 5. RENDER FUNCTIONS ---
+// --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
+    
+    // Veri yoksa hemen göster
     if (!filteredMonitoringTrademarks.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
         return;
     }
 
-    const groupedByOwner = {};
-    for (const tm of filteredMonitoringTrademarks) {
-        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-        const ownerKey = ownerInfo.key;
-        if (!groupedByOwner[ownerKey]) groupedByOwner[ownerKey] = {
-            ownerName: ownerInfo.name,
-            ownerId: ownerInfo.id,
-            trademarks: [],
-            allNiceClasses: new Set()
-        };
-        _uniqNice(ip || tm).split(', ').forEach(n => groupedByOwner[ownerKey].allNiceClasses.add(n));
-        groupedByOwner[ownerKey].trademarks.push({ tm, ip, ownerInfo });
+    // --- OPTİMİZASYON 1: Cache Kontrolü ---
+    // Eğer veriyi daha önce grupladıysak ve filtre değişmediyse, tekrar hesaplama!
+    if (!cachedGroupedData) {
+        // Yükleniyor mesajı göster (İlk hesaplama biraz sürebilir)
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Veriler işleniyor...</td></tr>';
+        
+        // --- OPTİMİZASYON 2: Paralel İşleme (Promise.all) ---
+        // for döngüsü yerine map kullanarak tüm işlemleri aynı anda başlatıyoruz
+        const processPromises = filteredMonitoringTrademarks.map(async (tm) => {
+            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+            const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+            const nices = _uniqNice(ip || tm);
+            
+            return {
+                tm,
+                ip,
+                ownerInfo,
+                nices
+            };
+        });
+
+        // Tüm verilerin hazırlanmasını bekle (Paralel olduğu için çok daha hızlı biter)
+        const processedItems = await Promise.all(processPromises);
+
+        // Şimdi gruplama yap (Senkron işlem, çok hızlıdır)
+        const grouped = {};
+        for (const item of processedItems) {
+            const { tm, ip, ownerInfo, nices } = item;
+            const ownerKey = ownerInfo.key;
+
+            if (!grouped[ownerKey]) {
+                grouped[ownerKey] = {
+                    ownerName: ownerInfo.name,
+                    ownerId: ownerInfo.id,
+                    trademarks: [],
+                    allNiceClasses: new Set()
+                };
+            }
+            
+            // Nice sınıflarını ekle
+            if(nices) nices.split(', ').forEach(n => grouped[ownerKey].allNiceClasses.add(n));
+            
+            // Markayı gruba ekle
+            grouped[ownerKey].trademarks.push({ tm, ip, ownerInfo });
+        }
+
+        // Cache'e kaydet
+        cachedGroupedData = grouped;
     }
 
-    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName));
+    // --- SIRALAMA VE SAYFALAMA ---
+    // Artık elimizde hazır veri var, sadece sayfalamayı yapıyoruz.
+    const groupedByOwner = cachedGroupedData;
+    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
+        groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
+    );
+
     const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
     const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -339,6 +383,7 @@ const renderMonitoringList = async () => {
 
     let allRowsHtml = [];
 
+    // Sadece ekranda görülecek 5 kişi için döngüye gir
     for (const ownerKey of paginatedOwnerKeys) {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
@@ -346,7 +391,7 @@ const renderMonitoringList = async () => {
         const statusText = isTriggered ? 'Evet' : 'Hazır';
         const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
 
-        // 1. BAŞLIK SATIRI (Aynı Kalıyor)
+        // 1. BAŞLIK SATIRI
         const headerRow = `
         <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
             <td><i class="fas fa-chevron-down toggle-icon"></i></td>
@@ -363,8 +408,8 @@ const renderMonitoringList = async () => {
         </tr>`;
         allRowsHtml.push(headerRow);
 
-        // 2. İÇERİK SATIRI (DEĞİŞTİ: Boş Konteyner)
-        // Veriyi buraya hemen yazmıyoruz, data attribute üzerinden referans veriyoruz.
+        // 2. İÇERİK SATIRI (Lazy Load Placeholder)
+        // Veriyi data attribute'a eklemiyoruz, groupedByOwner üzerinden ID ile erişeceğiz.
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
@@ -375,17 +420,16 @@ const renderMonitoringList = async () => {
             </tr>`;
         allRowsHtml.push(contentRow);
     }
+    
     tbody.innerHTML = allRowsHtml.join('');
 
-    // Mevcut listener'lar
-    // attachMonitoringAccordionListeners(); // <-- Buna artık gerek yok, yeni fonksiyon hem accordion'ı hem yüklemeyi yönetecek.
     attachGenerateReportListener();
     attachTrademarkClickListener();
-
-    // 3. YENİ LAZY LOAD LISTENER'I ÇAĞIR
-    // groupedByOwner verisini parametre olarak gönderiyoruz ki tıklandığında verilere erişebilsin.
+    
+    // Cachelenmiş veriyi lazy load fonksiyonuna gönder
     attachLazyLoadListeners(groupedByOwner);
 
+    // Badge güncellemeleri
     setTimeout(() => {
         document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
             const btn = row.querySelector('.generate-report-and-notify-btn');
@@ -399,7 +443,7 @@ const renderMonitoringList = async () => {
                 badge.classList.add(hasTriggered ? 'trigger-yes' : 'trigger-ready');
             }
         });
-    }, 300);
+    }, 50);
 };
 
 // --- YENİ HELPER FONKSİYON ---
@@ -706,6 +750,7 @@ const applyMonitoringListFilters = async () => {
     }
     filteredMonitoringTrademarks = filteredResults;
     await updateOwnerBasedPagination();
+    cachedGroupedData = null;
     renderMonitoringList();
     updateMonitoringCount();
     checkCacheAndToggleButtonStates();
