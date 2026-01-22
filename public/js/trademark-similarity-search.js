@@ -751,7 +751,7 @@ const applyMonitoringListFilters = async () => {
     filteredMonitoringTrademarks = filteredResults;
     await updateOwnerBasedPagination();
     cachedGroupedData = null;
-    renderMonitoringList();
+    await renderMonitoringList();
     updateMonitoringCount();
     checkCacheAndToggleButtonStates();
 };
