@@ -4551,11 +4551,23 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
       // --- B) PARÇALI KAYIT (INCREMENTAL SAVE) ---
       // Batch sonuçlarını hemen DB'ye yaz ve RAM'den sil.
-      if (batchResults.length > 0) {
+if (batchResults.length > 0) {
+          const batchWrite = adminDb.batch();
+          const resultsCollection = progressRef.collection('foundResults'); // Alt koleksiyon (Çekmece)
+          
+          batchResults.forEach(result => {
+              // Her sonucu ayrı bir belge olarak ekle
+              const newDocRef = resultsCollection.doc(); 
+              batchWrite.set(newDocRef, result);
+          });
+          
+          // Toplu yazma işlemi (Hızlı ve Güvenli)
+          await batchWrite.commit();
+          
           totalResultsFound += batchResults.length;
-          // arrayUnion ile ana listeye ekle
+          
+          // Ana dökümanda SADECE SAYIYI güncelle (Veriyi değil, sadece sayacı)
           await progressRef.update({
-              results: admin.firestore.FieldValue.arrayUnion(...batchResults),
               currentResults: admin.firestore.FieldValue.increment(batchResults.length)
           });
       }
