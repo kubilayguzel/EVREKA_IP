@@ -383,13 +383,13 @@ activateUploadMode() {
 
                 // Yüklemeyi başlat
                 showNotification('Yükleme başladı, lütfen bekleyin...', 'info');
-                await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL_NO', 'manual');
-
+                
                 // Butonu geçici olarak pasif yapalım
                 const currentButton = document.getElementById('bulkFilesButton');
                 if(currentButton) currentButton.style.opacity = '0.5';
 
-                await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL');
+                // ✅ TEK VE DOĞRU ÇAĞRI:
+                await this.uploadDocumentsToFirebase(documents, userId, 'MANUEL_NO', 'manual');
                 
                 // Temizlik
                 newInput.value = '';
