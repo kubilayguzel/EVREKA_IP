@@ -2,7 +2,7 @@
 
 import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, doc, onSnapshot,collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 console.log(">>> run-search.js modülü yüklendi ve Firebase servisleri kullanılıyor <<<");
 
@@ -97,16 +97,30 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
             }
             return; // Loop'tan çıkma, dinlemeye devam et
         }
-
-        // Tamamlandı
+      
+        // Tamamlandı Durumu
         if (progressData.status === 'completed') {
           if (safetyTimeout) clearTimeout(safetyTimeout);
-          unsubscribe();
-          console.log('✅ Arama ve kaydetme tamamlandı. Toplam Sonuç:', progressData.currentResults || 0);
-          resolve(progressData.results || []); // Results dizisi boş gelebilir (backend incremental save yapıyorsa), bu normal.
+          unsubscribe(); // Dinlemeyi bırak
+          
+          console.log(`✅ İşlem tamamlandı. Veritabanından ${progressData.currentResults || 0} sonuç indiriliyor...`);
+
+          // 1MB Limiti Çözümü: Veriyi ana dökümandan değil, 'foundResults' alt koleksiyonundan çekiyoruz.
+          const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
+          
+          getDocs(resultsRef)
+            .then((snapshot) => {
+                const allResults = snapshot.docs.map(doc => doc.data());
+                console.log(`📥 ${allResults.length} adet sonuç başarıyla indirildi.`);
+                resolve(allResults); // Frontend'e veriyi teslim et
+            })
+            .catch((err) => {
+                console.error("Sonuçları indirirken hata oluştu:", err);
+                reject(new Error("Sonuçlar veritabanından çekilemedi."));
+            });
         }
 
-        // Hata
+        // Hata Durumu
         if (progressData.status === 'error') {
           if (safetyTimeout) clearTimeout(safetyTimeout);
           unsubscribe();
