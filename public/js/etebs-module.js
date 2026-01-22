@@ -117,8 +117,8 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs'
                 downloadSuccess: true
             };
 
-            // Firestore'a kaydet
-            const docRef = await firebaseServices.db.collection('unindexed_pdfs').add(docData);
+            // Firestore'a kaydet (DÜZELTİLDİ)
+            const docRef = await addDoc(collection(firebaseServices.db, 'unindexed_pdfs'), docData);
             
             uploadResults.push({
                 success: true,
