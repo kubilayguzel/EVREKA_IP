@@ -84,12 +84,15 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs'
             const cleanFileName = doc.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
             const storagePath = `users/${userId}/unindexed_pdfs/${timestamp}_${cleanFileName}`;
             
-            // Storage Referansı
-            const storageRef = firebaseServices.storage.ref(storagePath);
+            // Storage Referansı (DÜZELTİLDİ)
+            // 'storage' değişkeni initializeStorage() ile set edilen değişkendir.
+            const storageRef = ref(storage, storagePath);
             
-            // Dosyayı Yükle
-            const snapshot = await storageRef.put(doc.file);
-            const downloadURL = await snapshot.ref.getDownloadURL();
+            // Dosyayı Yükle (DÜZELTİLDİ)
+            const snapshot = await uploadBytes(storageRef, doc.file);
+            
+            // URL Al (DÜZELTİLDİ)
+            const downloadURL = await getDownloadURL(storageRef);
 
             // Firestore için veri hazırla
             const docData = {
