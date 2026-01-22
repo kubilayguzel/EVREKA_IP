@@ -75,7 +75,7 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs'
     const uploadResults = [];
     
     // Storage servisini başlat
-    await this.initializeStorage();
+    await initializeStorage();
 
     for (const doc of documents) {
         try {
