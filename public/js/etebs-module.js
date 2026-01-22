@@ -274,7 +274,20 @@ bindEvents() {
             // Token fetch
             const fetchBtn = document.getElementById('fetchNotificationsBtn');
             if (fetchBtn) {
-                fetchBtn.addEventListener('click', this.fetchNotifications.bind(this));
+                // DÜZELTME: Event objesinin isSilent yerine geçmesini engellemek için arrow function kullanıyoruz
+                fetchBtn.addEventListener('click', async (e) => {
+                    e.preventDefault(); // Sayfanın yenilenmesini engelle
+                    
+                    // 1. Kullanıcının girdiği token'ı alıp hafızaya kaydet
+                    const tokenInput = document.getElementById('etebsTokenInput');
+                    if (tokenInput && tokenInput.value.trim()) {
+                        localStorage.setItem('etebs_token', tokenInput.value.trim());
+                    }
+                    
+                    // 2. Fonksiyonu açıkça 'false' (Sessiz mod KAPALI) olarak çağır
+                    // Böylece ekranda "Yükleniyor..." veya Hata mesajlarını görebileceksiniz.
+                    await this.fetchNotifications(false);
+                });
             }
 
 
