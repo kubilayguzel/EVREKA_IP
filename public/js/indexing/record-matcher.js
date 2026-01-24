@@ -1,77 +1,96 @@
-// public/js/indexing/record-matcher.js
+// public/js/services/record-matcher.js
 
 export class RecordMatcher {
     /**
      * Verilen numarayı kayıt listesinde arar.
      */
     findMatch(searchNumber, allRecords) {
-        // TEST LOGU (İstediğiniz satır):
-        console.log("🔍 RecordMatcher -> Aranan:", searchNumber);
+        // TEST LOGLARI
+        console.log("🔍 RecordMatcher -> Aranan No:", searchNumber);
 
-        if (!searchNumber || !allRecords) {
-            console.warn("⚠️ RecordMatcher -> Parametreler eksik!");
+        if (!searchNumber || !allRecords || allRecords.length === 0) {
             return null;
         }
 
-        // Numarayı atomik hale getir (Sembolleri ve baştaki sıfırları temizle)
+        // Arama numarasını "Atomik" hale getir (Sembolleri ve baştaki sıfırları temizle)
         const cleanSearch = this._normalize(searchNumber);
-        console.log("🛠️ RecordMatcher -> Normalize Edilmiş Arama:", cleanSearch);
-
+        
         for (const record of allRecords) {
-            // Kontrol edilecek tüm olası alanlar
+            // Kontrol edilecek olası alanlar
             const fieldsToCheck = [
-                { val: record.applicationNumber, label: 'applicationNumber' },
-                { val: record.applicationNo, label: 'applicationNo' },
-                { val: record.wipoIR, label: 'wipoIR' },
-                { val: record.aripoIR, label: 'aripoIR' }
+                record.applicationNumber,
+                record.applicationNo,
+                record.wipoIR,
+                record.aripoIR
             ];
 
-            for (const field of fieldsToCheck) {
-                if (field.val && this._checkMatch(cleanSearch, field.val)) {
-                    console.log(`✅ RecordMatcher -> EŞLEŞME BULUNDU!`, {
-                        aranan: searchNumber,
-                        bulunan: field.val,
-                        alan: field.label,
-                        dosya: record.title
-                    });
-                    return { record, matchType: 'standard', matchedNumber: field.val };
+            for (const fieldValue of fieldsToCheck) {
+                if (fieldValue && this._checkMatch(cleanSearch, fieldValue)) {
+                    return { 
+                        record, 
+                        matchType: 'standard', 
+                        matchedNumber: fieldValue 
+                    };
                 }
             }
         }
         
-        console.log("❌ RecordMatcher -> Eşleşme bulunamadı:", searchNumber);
         return null;
     }
 
+    /**
+     * İki numarayı mantıksal olarak kıyaslar.
+     * @private
+     */
     _checkMatch(normalizedSearch, originalValue) {
         if (!normalizedSearch || !originalValue) return false;
+
         const normalizedRecord = this._normalize(originalValue);
 
-        // Tam eşleşme veya kapsama (en az 5 karakter)
+        // 1. Tam Eşleşme (Örn: 201799562 === 201799562)
         if (normalizedRecord === normalizedSearch) return true;
+
+        // 2. Kapsama Kontrolü (Minimum 5 karakter güvenlik sınırı ile)
         if (normalizedSearch.length >= 5) {
             if (normalizedRecord.includes(normalizedSearch) || normalizedSearch.includes(normalizedRecord)) {
                 return true;
             }
         }
+
         return false;
     }
 
     /**
-     * "2017/099562" -> "201799562" yapar (Padding sorununu çözer)
+     * Numarayı temizler: Rakam dışı karakterleri ve sayı başındaki sıfırları kaldırır.
+     * @private
      */
     _normalize(val) {
         if (!val) return '';
-        return String(val)
-            .split(/[^\d]+/) // Rakam dışı her şeyden böl
-            .map(part => part.replace(/^0+/, '')) // Her parçanın başındaki sıfırı at
+        
+        // Rakam dışındaki her şeyi temizle ve parçalara ayır
+        // "2017/099562" -> ["2017", "099562"]
+        const parts = String(val).split(/[^\d]+/);
+        
+        // Her parçanın başındaki sıfırları kaldır ve birleştir
+        // ["2017", "099562"] -> "201799562"
+        return parts
+            .map(part => part.replace(/^0+/, ''))
             .filter(part => part.length > 0)
             .join('');
     }
 
+    /**
+     * UI'da gösterilecek formatı hazırlar
+     */
     getDisplayLabel(record) {
         if (!record) return '';
-        const displayNum = record.applicationNumber || record.applicationNo || 'Numara Yok';
-        return `${record.title} (${displayNum})`;
+        
+        let displayNum = record.applicationNumber || record.applicationNo || 'Numara Yok';
+
+        if (record.recordOwnerType === 'wipo' && record.wipoIR) displayNum = record.wipoIR;
+        else if (record.recordOwnerType === 'aripo' && record.aripoIR) displayNum = record.aripoIR;
+
+        const markName = record.title || record.markName || '';
+        return markName ? `${displayNum} - ${markName}` : displayNum;
     }
 }
