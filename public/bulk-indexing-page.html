@@ -412,7 +412,7 @@
                         console.log("📂 ETEBS Sekmesi açıldı, veriler yükleniyor...");
                         if (window.etebsManager) {
                             // true = sessiz mod (loading spinner göstermeden, veritabanından okur)
-                            window.etebsManager.fetchNotifications(true);
+                            window.etebsManager.fetchNotifications(true, false);
                         }
                     }
                 });
