@@ -286,7 +286,7 @@ bindEvents() {
                     
                     // 2. Fonksiyonu açıkça 'false' (Sessiz mod KAPALI) olarak çağır
                     // Böylece ekranda "Yükleniyor..." veya Hata mesajlarını görebileceksiniz.
-                    await this.fetchNotifications(false);
+                    await this.fetchNotifications(false, true);
                 });
             }
 
@@ -524,7 +524,8 @@ updateTabBadge() {
         }
     }
 
-    async fetchNotifications(isSilent = false) {
+    async fetchNotifications(isSilent = false, triggerServerSync = false) {
+
         if (this.isLoading) return;
 
         const token = localStorage.getItem('etebs_token');
@@ -540,7 +541,7 @@ updateTabBadge() {
 
         try {
         // ADIM 1: Token varsa backend tetikle (fire-and-forget)
-            if (token && user) {
+            if (triggerServerSync && token && user) {
                 if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
                 try {
                     // --- ORTAM BELİRLEME (DİNAMİK) ---
