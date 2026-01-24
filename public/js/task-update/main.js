@@ -597,7 +597,8 @@ class TaskUpdateController {
                 } catch (err) {
                     console.error("❌ Transaction dosya güncelleme hatası:", err);
                 }
-
+            }
+            
             // Sahip Değişimi
             const ownerChangeTypes = ['3', '5', '18'];
             if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
