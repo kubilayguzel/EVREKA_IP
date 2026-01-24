@@ -578,37 +578,42 @@ export class BulkIndexingModule {
     }
 
     setupRealtimeListener() {
-        if (!this.currentUser) return;
-        
-        const q = query(
-            collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION),
-            where('userId', '==', this.currentUser.uid),
-            orderBy('uploadedAt', 'desc')
-        );
+    if (!this.currentUser) return;
+    
+    const q = query(
+        collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION),
+        where('userId', '==', this.currentUser.uid),
+        orderBy('uploadedAt', 'desc')
+    );
 
-        this.unsubscribe = onSnapshot(q, (snapshot) => {
-            const files = snapshot.docs.map(doc => ({
+    this.unsubscribe = onSnapshot(q, (snapshot) => {
+        const files = snapshot.docs.map(doc => {
+            const data = doc.data();
+            let fileObj = {
                 id: doc.id,
-                ...doc.data(),
-                uploadedAt: doc.data().uploadedAt ? doc.data().uploadedAt.toDate() : new Date()
-            }));
+                ...data,
+                uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : new Date()
+            };
 
-            files.forEach(file => {
-                // Eğer kayıt eşleşmemişse ve servisten gelen bir dosyaNo varsa eşleştirmeyi dene
-                if (!file.matchedRecordId && file.status === 'pending' && file.dosyaNo) {
-                    const matchResult = this.matcher.findMatch(file.dosyaNo, this.allRecords);
-                    if (matchResult) {
-                        file.matchedRecordId = matchResult.record.id;
-                        file.matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record) + ` - ${matchResult.record.title}`;
-                        file.recordOwnerType = matchResult.record.recordOwnerType || 'self';
-                    }
+            // OTOMATİK EŞLEŞTİRME MANTIĞI:
+            // Eğer kayıt henüz eşleşmemişse ve bir dosya numarası varsa portföyde ara
+            if (!fileObj.matchedRecordId && fileObj.dosyaNo && this.allRecords.length > 0) {
+                const matchResult = this.matcher.findMatch(fileObj.dosyaNo, this.allRecords);
+                
+                if (matchResult) {
+                    fileObj.matchedRecordId = matchResult.record.id;
+                    fileObj.matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record);
+                    fileObj.recordOwnerType = matchResult.record.recordOwnerType || 'self';
+                    console.log(`✅ Otomatik eşleşme başarılı: ${fileObj.dosyaNo} -> ${fileObj.matchedRecordDisplay}`);
                 }
-            });
-
-            this.uploadedFiles = files;
-            this.updateUI();
+            }
+            return fileObj;
         });
-    }
+
+        this.uploadedFiles = files;
+        this.updateUI();
+    });
+}
 
     updateUI() {
         // ETEBS dosya listelerini güncelle
