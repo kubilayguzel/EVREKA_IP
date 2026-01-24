@@ -1611,24 +1611,27 @@ export const etebsService = {
 // [YENİ] Veritabanından (unindexed_pdfs) Son Kayıtları Çekme Fonksiyonu
 async getRecentUnindexedDocuments(limitCount = 50) {
     try {
-        // initializeFirestore ile oluşturulan db'yi kullan
         const database = window.db || this.db || db;
         if (!database) {
-            console.error("❌ Firestore db bulunamadı (window.db / this.db / db boş).");
+            console.error("❌ Firestore db bulunamadı.");
             return [];
         }
 
         const pdfsRef = collection(database, 'unindexed_pdfs');
-
-        // En son yüklenenlere göre sırala
         const q = query(pdfsRef, orderBy('uploadedAt', 'desc'), limit(limitCount));
-
         const querySnapshot = await getDocs(q);
+
+        // 1. ÖNCE Portföy verilerini (ipRecords) çekiyoruz (Eşleştirme için gerekli)
+        const allRecordsResult = await ipRecordsService.getAllRecords();
+        const portfolioRecords = allRecordsResult.success ? allRecordsResult.data : [];
+        
+        // 2. RecordMatcher sınıfını başlatıyoruz
+        // Not: RecordMatcher'ın import edildiğinden veya global erişilebilir olduğundan emin olun
+        const matcher = new RecordMatcher();
 
         const documents = [];
         querySnapshot.forEach((d) => {
             const data = d.data();
-
             let dateStr = '-';
             if (data.uploadedAt?.seconds) {
                 dateStr = new Date(data.uploadedAt.seconds * 1000).toLocaleString('tr-TR');
@@ -1636,29 +1639,43 @@ async getRecentUnindexedDocuments(limitCount = 50) {
                 dateStr = data.uploadedAt.toDate().toLocaleString('tr-TR');
             }
 
+            // 3. ANLIK EŞLEŞTİRME MANTIĞI
+            const searchKey = data.dosyaNo || data.evrakNo;
+            let matchedData = { matched: false, matchedRecordId: null, matchedRecordDisplay: null };
+
+            if (searchKey && portfolioRecords.length > 0) {
+                const matchResult = matcher.findMatch(searchKey, portfolioRecords);
+                if (matchResult) {
+                    matchedData = {
+                        matched: true, // UI'daki matched-notifications-tab için gerekli
+                        matchedRecordId: matchResult.record.id,
+                        matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record)
+                    };
+                }
+            }
+
             documents.push({
                 ...data,
                 id: d.id,
+                ...matchedData, // Eşleşme bilgilerini objeye yayıyoruz
 
-                // UI mapping
                 EVRAK_NO: data.evrakNo,
                 BELGE_ACIKLAMASI: data.belgeAciklamasi,
                 DOSYA_NO: data.dosyaNo,
-
                 status: data.status,
                 downloadUrl: data.fileUrl,
                 formattedDate: dateStr
             });
         });
 
-        console.log(`📂 Veritabanından ${documents.length} kayıt çekildi.`);
+        console.log(`📂 Veritabanından ${documents.length} kayıt çekildi ve eşleştirildi.`);
         return documents;
 
     } catch (error) {
         console.error("Veritabanı Okuma Hatası:", error);
         return [];
     }
-},
+}
 
 
 async processNotifications(notifications, userId) {
