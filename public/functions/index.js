@@ -393,29 +393,31 @@ export const etebsProxyV2 = onRequest(
                       return;
                     }
 
-                    // --- KAYDETME İŞLEMLERİ ---
                     const pdfBuffer = Buffer.from(base64Data, 'base64');
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
-                    const bucket = admin.storage().bucket(); // Bucket referansını al
+                    const bucket = admin.storage().bucket();
                     const file = bucket.file(storagePath);
-                    
-                    // 1. Yeni bir Token oluştur (Değişken adını değiştirdik)
-                    const downloadToken = uuidv4(); 
 
-                    // 2. Dosyayı kaydederken token'ı metadata'ya ekle
+                    // 1. Yeni bir benzersiz token oluşturun
+                    const downloadToken = uuidv4();
+
+                    // 2. Dosyayı kaydederken token'ı metadata'ya ekleyin
                     await file.save(pdfBuffer, { 
                         contentType: 'application/pdf',
                         metadata: { 
                             metadata: { 
                                 originalName: belgeAciklamasi,
-                                firebaseStorageDownloadTokens: downloadToken // Yeni değişkeni kullan
+                                firebaseStorageDownloadTokens: downloadToken // Erişim için kritik alan
                             } 
                         }
                     });
 
-                    // 3. İstenilen formatta URL'yi oluştur
-                    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
+                    // 3. Firebase Storage API formatına uygun, token içeren URL'yi oluşturun
+                    // Path kısmının encode edilmesi (slashların %2F olması) zorunludur.
+                    const encodedPath = encodeURIComponent(storagePath);
+                    const firebaseUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+
 
                     // Döküman ID'si olarak doğrudan evrak numarasını kullanıyoruz
                     const targetRef = adminDb.collection('unindexed_pdfs').doc(docNo);
