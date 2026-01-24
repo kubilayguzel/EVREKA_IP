@@ -514,6 +514,7 @@ class TaskUpdateController {
     // --- KAYDETME VE YÖNLENDİRME ---
 
     async saveTaskChanges() {
+        // 1. Giriş Kontrolleri ve Validasyon (Değişmedi)
         if (this.uploadedEpatsFile) {
             const evrakNo = document.getElementById('turkpatentEvrakNo').value;
             const evrakDate = document.getElementById('epatsDocumentDate').value;
@@ -521,11 +522,12 @@ class TaskUpdateController {
                 showNotification('Lütfen EPATS evrak bilgilerini (No ve Tarih) doldurunuz.', 'warning');
                 return;
             }
+            // İlk atama (Validasyon için gerekli)
             this.uploadedEpatsFile.turkpatentEvrakNo = evrakNo;
             this.uploadedEpatsFile.documentDate = evrakDate;
         }
 
-        // 1. Temel Veriler
+        // 2. Temel Veriler
         const updateData = {
             status: document.getElementById('taskStatus').value,
             title: document.getElementById('taskTitle').value,
@@ -537,26 +539,20 @@ class TaskUpdateController {
             taskOwner: this.selectedPersonId
         };
 
-        // ✅ 2. TARİH ALANLARINI DÜZELTME (Timestamp Formatına Çevir)
-        const officialDateVal = document.getElementById('taskDueDate').value; // Resmi Tarih
-        const operationalDateVal = document.getElementById('deliveryDate').value; // Operasyonel Tarih
+        // 3. Tarih Alanlarını Düzeltme (Timestamp Formatı)
+        const officialDateVal = document.getElementById('taskDueDate').value;
+        const operationalDateVal = document.getElementById('deliveryDate').value;
 
         if (officialDateVal) {
-            // "Official Due Date" veritabanında Timestamp olarak tutuluyor
             updateData.officialDueDate = Timestamp.fromDate(new Date(officialDateVal));
         } else {
             updateData.officialDueDate = null;
         }
 
         if (operationalDateVal) {
-            // "Due Date" (sistemin ana tarihi) -> Timestamp
             updateData.dueDate = Timestamp.fromDate(new Date(operationalDateVal));
-            
-            // "Operational Due Date" (isteğe bağlı, yedek alan) -> Timestamp
             updateData.operationalDueDate = Timestamp.fromDate(new Date(operationalDateVal));
-            
-            // "Delivery Date" (String olarak tuttuğunuz format)
-            updateData.deliveryDate = operationalDateVal; 
+            updateData.deliveryDate = operationalDateVal;
         } else {
             updateData.dueDate = null;
             updateData.deliveryDate = null;
@@ -567,39 +563,62 @@ class TaskUpdateController {
             updateData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
         }
 
+        // 4. Task Güncelleme İsteği
         const res = await this.dataManager.updateTask(this.taskId, updateData);
         
         if (res.success) {
             const recordId = this.selectedIpRecordId;
             const taskType = String(this.taskData.taskType);
 
-            // Eğer bir EPATS dosyası varsa ve bu iş bir Transaction'a bağlıysa, dosyayı oraya da ekle
-            if (this.uploadedEpatsFile && this.taskData.transactionId && recordId) {
+            // --- [GÜNCELLEME BAŞLANGICI: Transaction Doküman Ekleme] ---
+            if (this.uploadedEpatsFile && recordId) {
                 try {
-                    // Transaction doküman formatı
-                    const docToAdd = {
-                        name: this.uploadedEpatsFile.name || 'EPATS Evrakı',
-                        url: this.uploadedEpatsFile.url,
-                        downloadURL: this.uploadedEpatsFile.url, // Portföy tarafı genelde bunu bekler
-                        type: 'application/pdf', 
-                        uploadedAt: this.uploadedEpatsFile.uploadedAt || new Date().toISOString(),
-                        // Varsa ek meta veriler
-                        turkpatentEvrakNo: this.uploadedEpatsFile.turkpatentEvrakNo || null,
-                        documentDate: this.uploadedEpatsFile.documentDate || null
-                    };
+                    // A) Verileri Inputlardan Taze Olarak Al ve Garantiye Al
+                    // (Asenkron işlemler sırasında veri kaybını önlemek için tekrar okuyoruz)
+                    const freshEvrakNo = document.getElementById('turkpatentEvrakNo')?.value || null;
+                    const freshEvrakDate = document.getElementById('epatsDocumentDate')?.value || null;
 
-                    await this.dataManager.updateTransaction(
-                        recordId,
-                        this.taskData.transactionId,
-                        { documents: arrayUnion(docToAdd) } // Mevcut listeye ekle (varsa üzerine yazmaz)
-                    );
-                    console.log("✅ EPATS evrakı işlem (transaction) geçmişine eklendi.");
+                    this.uploadedEpatsFile.turkpatentEvrakNo = freshEvrakNo;
+                    this.uploadedEpatsFile.documentDate = freshEvrakDate;
+
+                    // B) Transaction ID'yi belirle (Task'ta yoksa DataManager ile bul)
+                    let targetTransactionId = this.taskData.transactionId;
+                    if (!targetTransactionId) {
+                        console.log("🔍 Task içinde Transaction ID yok, veritabanından aranıyor...");
+                        // Bu metodun TaskUpdateDataManager.js içinde tanımlı olduğundan emin olun
+                        targetTransactionId = await this.dataManager.findTransactionIdByTaskId(recordId, this.taskId);
+                    }
+
+                    // C) Transaction varsa dosyayı ekle
+                    if (targetTransactionId) {
+                        const docToAdd = {
+                            name: this.uploadedEpatsFile.name || 'EPATS Evrakı',
+                            url: this.uploadedEpatsFile.url,
+                            downloadURL: this.uploadedEpatsFile.url, // Portföy tarafı için
+                            type: 'application/pdf', 
+                            uploadedAt: this.uploadedEpatsFile.uploadedAt || new Date().toISOString(),
+                            
+                            // Taze verileri kullanıyoruz
+                            turkpatentEvrakNo: this.uploadedEpatsFile.turkpatentEvrakNo,
+                            documentDate: this.uploadedEpatsFile.documentDate
+                        };
+
+                        await this.dataManager.updateTransaction(
+                            recordId,
+                            targetTransactionId,
+                            { documents: arrayUnion(docToAdd) } // Mevcut listeye ekle
+                        );
+                        console.log(`✅ EPATS evrakı transaction (${targetTransactionId}) geçmişine eklendi.`);
+                    } else {
+                        console.warn("⚠️ Bu işe bağlı bir Transaction bulunamadı, dosya geçmişe eklenemedi.");
+                    }
                 } catch (err) {
                     console.error("❌ Transaction dosya güncelleme hatası:", err);
                 }
             }
+            // --- [GÜNCELLEME SONU] ---
             
-            // Sahip Değişimi
+            // Sahip Değişimi Mantığı
             const ownerChangeTypes = ['3', '5', '18'];
             if (ownerChangeTypes.includes(taskType) && this.selectedPersonId && recordId) {
                 try {
@@ -612,8 +631,14 @@ class TaskUpdateController {
                         
                         await this.dataManager.updateIpRecord(recordId, { applicants: newApplicants });
                         
-                        if (this.taskData.transactionId) {
-                            await this.dataManager.updateTransaction(recordId, this.taskData.transactionId, { oldOwnerData });
+                        // Transaction ID varsa orayı da güncelle
+                        let transIdForOwner = this.taskData.transactionId;
+                        if (!transIdForOwner) {
+                             transIdForOwner = await this.dataManager.findTransactionIdByTaskId(recordId, this.taskId);
+                        }
+
+                        if (transIdForOwner) {
+                            await this.dataManager.updateTransaction(recordId, transIdForOwner, { oldOwnerData });
                         }
                         showNotification(`Başvuru sahibi "${newPerson.name}" olarak güncellendi.`, 'info');
                     }
