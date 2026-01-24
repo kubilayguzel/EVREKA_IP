@@ -2412,10 +2412,20 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         }
     }
 
-    // IP Kaydı Verilerini İşle
+// IP Kaydı Verilerini İşle
     if (ipRecord) {
         const clean = (val) => (val ? String(val).trim() : "");
-        enrichedData.markImageUrl = clean(ipRecord.brandImageUrl) || clean(ipRecord.trademarkImage) || clean(ipRecord.publicImageUrl) || "";
+        
+        // --- [GÜNCELLEME BURADA] ---
+        // imageUrl ve imageSignedUrl alanları eklendi
+        enrichedData.markImageUrl = 
+            clean(ipRecord.brandImageUrl) || 
+            clean(ipRecord.trademarkImage) || 
+            clean(ipRecord.publicImageUrl) || 
+            clean(ipRecord.imageUrl) ||       // EKLENDİ
+            clean(ipRecord.imageSignedUrl) || // EKLENDİ
+            "";
+        // ---------------------------
 
         if (!nameSourceFound) {
             try {
