@@ -12,9 +12,11 @@ export class TaskSubmitHandler {
         this.selectedParentTransactionId = null;
     }
 
-    // --- ANA GÖNDERİM FONKSİYONU ---
+    // --- ANA GÖNDERİM FONKSİYONU (GÜNCELLENMİŞ) ---
     async handleFormSubmit(e, state) {
         e.preventDefault();
+        
+        console.log('🚀 [DEBUG] handleFormSubmit tetiklendi.');
         
         // State referansını alıyoruz
         const { 
@@ -68,6 +70,7 @@ export class TaskSubmitHandler {
                 relatedIpRecordId: selectedIpRecord ? selectedIpRecord.id : null,
                 relatedIpRecordTitle: selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : taskTitle,
                 details: {},
+                documents: [], // Boş dizi olarak başlatıyoruz
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             };
@@ -80,7 +83,6 @@ export class TaskSubmitHandler {
             // 2. İlgili Taraflar
             this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty, selectedIpRecord);
 
-            // Eğer Marka Başvurusu ise ve Başvuru Sahibi seçilmişse, bunları Task Owner yap
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 if (selectedApplicants && selectedApplicants.length > 0) {
                     taskData.taskOwner = selectedApplicants.map(p => String(p.id));
@@ -95,70 +97,54 @@ export class TaskSubmitHandler {
                 }
             }
             
-            // -----------------------------------------------------------------------
-            // 2.5. EĞER SEÇİLEN VARLIK BÜLTENDEN İSE VE HENÜZ IP RECORD DEĞİLSE
-            // (Burada kaydı oluşturuyoruz ki Task ve Transaction doğru ID'ye bağlansın)
-            // -----------------------------------------------------------------------
+            // 2.5. Bülten Kaydı Dönüştürme
             if (selectedIpRecord && (selectedIpRecord.source === 'bulletin' || selectedIpRecord._source === 'bulletin' || !selectedIpRecord.recordOwnerType)) {
                 console.log('📢 Bülten kaydı tespit edildi, ipRecords\'a dönüştürülüyor...');
-                
-                // Güvenli kayıt oluşturma metodunu çağır
                 const newRealRecordId = await this._createRecordFromBulletin(selectedIpRecord);
-                
                 if (newRealRecordId) {
                     console.log('✅ Yeni IP Record oluşturuldu ID:', newRealRecordId);
-                    
-                    // Task verilerini güncelle (Yeni ID'yi kullan)
                     taskData.relatedIpRecordId = newRealRecordId;
-                    
-                    // State içindeki selectedIpRecord'u güncelle
                     state.selectedIpRecord.id = newRealRecordId;
                     state.selectedIpRecord.source = 'created_from_bulletin'; 
-                    state.selectedIpRecord._source = 'ipRecord'; // Artık bir ipRecord
+                    state.selectedIpRecord._source = 'ipRecord'; 
                 }
             }
-            // -----------------------------------------------------------------------
 
-            // 3. Marka Başvurusu Kaydı (Kendi firmanız için yapılan başvurular)
+            // 3. Marka Başvurusu Kaydı
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 const newRecordId = await this._handleTrademarkApplication(state, taskData);
                 if (!newRecordId) throw new Error("Marka kaydı oluşturulamadı.");
                 taskData.relatedIpRecordId = newRecordId;
             }
 
-            // 4. Otomatik Tarih Hesaplama
+            // 4. Tarih Hesaplama
             await this._calculateTaskDates(taskData, selectedTaskType, selectedIpRecord);
 
-            // 4.5. DOSYA YÜKLEME İŞLEMİ
-            console.log('🔍 [DEBUG] Dosya Yükleme Kontrolü:', {
-                uploadedFilesSayisi: uploadedFiles ? uploadedFiles.length : 0,
-                isTrademarkApp: (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark'),
-                uploadedFiles: uploadedFiles
-            });
-            if (!(selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark')) {
-                if (uploadedFiles && uploadedFiles.length > 0) {
-                    console.log('📤 Dokümanlar storage\'a yükleniyor...');
-                    const docs = [];
-                    for (const file of uploadedFiles) {
-                        const path = `task-documents/${Date.now()}_${file.name}`;
-                        try {
-                            const url = await this.dataManager.uploadFileToStorage(file, path);
-                            docs.push({
-                                name: file.name,
-                                url: url,
-                                type: file.type,
-                                uploadedAt: new Date().toISOString()
-                            });
-                        } catch (err) {
-                            console.error('Dosya yüklenirken hata:', err);
-                        }
+            // 4.5. DOSYA YÜKLEME İŞLEMİ (DÜZELTİLDİ: IF KALDIRILDI)
+            // Artık işlem tipi ne olursa olsun (Marka Başvurusu dahil) yüklenen dosyalar işlenir.
+            console.log('📂 [DEBUG] Dosya yükleme işlemi başlatılıyor...');
+            
+            if (uploadedFiles && uploadedFiles.length > 0) {
+                console.log(`📤 [DEBUG] ${uploadedFiles.length} adet dosya yükleniyor...`);
+                const docs = [];
+                for (const file of uploadedFiles) {
+                    const path = `task-documents/${Date.now()}_${file.name}`;
+                    try {
+                        const url = await this.dataManager.uploadFileToStorage(file, path);
+                        console.log('✅ [DEBUG] Dosya Yüklendi:', file.name, url);
+                        docs.push({
+                            name: file.name,
+                            url: url,
+                            type: file.type,
+                            uploadedAt: new Date().toISOString()
+                        });
+                    } catch (err) {
+                        console.error('Dosya yüklenirken hata:', err);
                     }
-                    taskData.documents = docs;
                 }
-                else {
-                // --- BU KISMI EKLEYİN ---
-                console.warn('⚠️ [DEBUG] Marka Başvurusu olduğu için standart dosya yükleme bloğu ATLANDI! Dosyalar taskData.documents\'e eklenmedi.');
-            }
+                taskData.documents = docs;
+            } else {
+                console.log('ℹ️ [DEBUG] Yüklenecek dosya bulunamadı.');
             }
 
             // 5. Task Oluştur
@@ -172,21 +158,19 @@ export class TaskSubmitHandler {
             }
 
             // 7. Transaksiyon Ekleme
-            // NOT: Eğer yukarıda bülten kaydını dönüştürdüysek, taskData.relatedIpRecordId artık yeni ID'dir.
             if (taskData.relatedIpRecordId) {
-                console.log('🚀 [DEBUG] _addTransactionToPortfolio çağrılıyor. Gönderilen Dokümanlar:', taskData.documents);
-                await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state, taskData.documents);
+                console.log('🚀 [DEBUG] Transaction ekleniyor. Dokümanlar:', taskData.documents);
+                await this._addTransactionToPortfolio(
+                    taskData.relatedIpRecordId, 
+                    selectedTaskType, 
+                    taskResult.id, 
+                    state, 
+                    taskData.documents // Dokümanları buraya gönderiyoruz
+                );
             }
 
-            // 8. TAHAKKUK VE FİNANSAL İŞLEMLER
+            // 8. Tahakkuk
             await this._handleAccrualLogic(taskResult.id, taskData.title, selectedTaskType, state, accrualData, isFreeTransaction);
-
-            /* // 9. Otomasyon
-            if (['20', 'trademark_publication_objection'].includes(String(selectedTaskType.id))) {
-                await this._handleOppositionAutomation(taskResult.id, selectedTaskType, state.selectedIpRecord);
-            }
-*/
-            //
 
             alert('İş başarıyla oluşturuldu!');
             window.location.href = 'task-management.html';
