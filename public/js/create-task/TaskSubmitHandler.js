@@ -130,6 +130,11 @@ export class TaskSubmitHandler {
             await this._calculateTaskDates(taskData, selectedTaskType, selectedIpRecord);
 
             // 4.5. DOSYA YÜKLEME İŞLEMİ
+            console.log('🔍 [DEBUG] Dosya Yükleme Kontrolü:', {
+                uploadedFilesSayisi: uploadedFiles ? uploadedFiles.length : 0,
+                isTrademarkApp: (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark'),
+                uploadedFiles: uploadedFiles
+            });
             if (!(selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark')) {
                 if (uploadedFiles && uploadedFiles.length > 0) {
                     console.log('📤 Dokümanlar storage\'a yükleniyor...');
@@ -150,6 +155,10 @@ export class TaskSubmitHandler {
                     }
                     taskData.documents = docs;
                 }
+                else {
+                // --- BU KISMI EKLEYİN ---
+                console.warn('⚠️ [DEBUG] Marka Başvurusu olduğu için standart dosya yükleme bloğu ATLANDI! Dosyalar taskData.documents\'e eklenmedi.');
+            }
             }
 
             // 5. Task Oluştur
@@ -165,6 +174,7 @@ export class TaskSubmitHandler {
             // 7. Transaksiyon Ekleme
             // NOT: Eğer yukarıda bülten kaydını dönüştürdüysek, taskData.relatedIpRecordId artık yeni ID'dir.
             if (taskData.relatedIpRecordId) {
+                console.log('🚀 [DEBUG] _addTransactionToPortfolio çağrılıyor. Gönderilen Dokümanlar:', taskData.documents);
                 await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state, taskData.documents);
             }
 
@@ -769,6 +779,7 @@ export class TaskSubmitHandler {
     // E) PORTFOLYO GEÇMİŞİ
     // --- [GÜNCELLEME: taskDocuments parametresi eklendi] ---
     async _addTransactionToPortfolio(recordId, taskType, taskId, state, taskDocuments = []) {
+        console.log('📥 [DEBUG] _addTransactionToPortfolio içine girildi. taskDocuments:', taskDocuments);
         let hierarchy = 'parent';
         let extraData = {};
         const tId = String(taskType.id);
