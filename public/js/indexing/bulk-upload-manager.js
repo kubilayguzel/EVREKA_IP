@@ -55,44 +55,70 @@ export class BulkIndexingModule {
     }
 
     async init() {
-        try {
-            this.currentUser = authService.getCurrentUser();
-            if (!this.currentUser) {
-                console.error('Kullanıcı oturum açmamış');
-                return;
-            }
-
-            await this.loadAllData();
-            
-            this.setupEventListeners();
-            this.setupRealtimeListener();
-            this.updateUI();
-            
-            console.log('✅ BulkIndexingModule initialized');
-        } catch (error) {
-            console.error('BulkIndexingModule initialization error:', error);
-            showNotification('Modül başlatılamadı: ' + error.message, 'error');
+    try {
+        this.currentUser = authService.getCurrentUser();
+        if (!this.currentUser) {
+            console.error('Kullanıcı oturum açmamış');
+            return;
         }
+
+        // 1. ÖNCE portföy ve işlem tiplerini tam olarak yükle
+        console.log('⏳ Veriler yükleniyor...');
+        await this.loadAllData();
+        
+        // 2. Veriler (this.allRecords) hazır olduktan sonra dinleyiciyi başlat
+        // Bu sayede matcher dolu bir listeyle kıyaslama yapmaya başlar
+        this.setupRealtimeListener();
+
+        // 3. Diğer UI kurulumlarını yap
+        this.setupEventListeners();
+        
+        // İlk yüklemede UI'ı bir kez zorla güncelle (allRecords yüklendiği için)
+        this.updateUI();
+        
+        console.log('✅ BulkIndexingModule initialized. Portföy kaydı:', this.allRecords.length);
+    } catch (error) {
+        console.error('BulkIndexingModule initialization error:', error);
+        showNotification('Modül başlatılamadı: ' + error.message, 'error');
     }
+}
 
     async loadAllData() {
-        try {
-            const [recordsResult, transactionTypesResult] = await Promise.all([
-                ipRecordsService.getRecords(),
-                transactionTypeService.getTransactionTypes()
-            ]);
+    try {
+        console.log('⏳ Portföy ve işlem tipleri yükleniyor...');
+        
+        // Matcher'ın tüm kayıtları tarayabilmesi için 'getAllRecords' kullanımı daha güvenlidir
+        const [recordsResult, transactionTypesResult] = await Promise.all([
+            ipRecordsService.getAllRecords ? ipRecordsService.getAllRecords() : ipRecordsService.getRecords(),
+            transactionTypeService.getTransactionTypes()
+        ]);
 
-            if (recordsResult.success) {
-                this.allRecords = recordsResult.data;
-            }
-
-            if (transactionTypesResult.success) {
-                this.allTransactionTypes = transactionTypesResult.data;
-            }
-        } catch (error) {
-            showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+        // Portföy Kayıtlarını Yükle
+        if (recordsResult && recordsResult.success) {
+            this.allRecords = recordsResult.data || [];
+            console.log(`📊 ${this.allRecords.length} adet portföy kaydı eşleşme için hazır.`);
+        } else {
+            this.allRecords = [];
+            console.warn('⚠️ Portföy kayıtları yüklenemedi, eşleşme yapılamayacak.');
         }
+
+        // İşlem Tiplerini Yükle
+        if (transactionTypesResult && transactionTypesResult.success) {
+            this.allTransactionTypes = transactionTypesResult.data || [];
+        }
+
+        // Eğer veriler boş geldiyse kullanıcıyı bilgilendir
+        if (this.allRecords.length === 0) {
+            showNotification('Sistemde eşleştirilecek portföy kaydı bulunamadı.', 'warning');
+        }
+
+    } catch (error) {
+        console.error('loadAllData hatası:', error);
+        showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+        // Hatayı yukarı (init'e) fırlatıyoruz ki işlem akışı durması gerektiğini bilsin
+        throw error; 
     }
+}
 
     setupEventListeners() {
         this.setupBulkUploadListeners();
@@ -580,6 +606,7 @@ export class BulkIndexingModule {
     setupRealtimeListener() {
     if (!this.currentUser) return;
     
+    // Sadece mevcut kullanıcıya ait bekleyen veya işlenmiş dosyaları çek
     const q = query(
         collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION),
         where('userId', '==', this.currentUser.uid),
@@ -595,42 +622,57 @@ export class BulkIndexingModule {
                 uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : new Date()
             };
 
-            // OTOMATİK EŞLEŞTİRME MANTIĞI:
-            // Eğer kayıt henüz eşleşmemişse ve bir dosya numarası varsa portföyde ara
-            if (!fileObj.matchedRecordId && fileObj.dosyaNo && this.allRecords.length > 0) {
+            // KRİTİK NOKTA: Eğer dosya pending ise ve dosyaNo varsa matcher'ı çalıştır
+            // matchedRecordId veritabanında boş olsa bile burada anlık olarak doldurulur
+            if (fileObj.dosyaNo && this.allRecords.length > 0) {
                 const matchResult = this.matcher.findMatch(fileObj.dosyaNo, this.allRecords);
                 
                 if (matchResult) {
                     fileObj.matchedRecordId = matchResult.record.id;
                     fileObj.matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record);
                     fileObj.recordOwnerType = matchResult.record.recordOwnerType || 'self';
-                    console.log(`✅ Otomatik eşleşme başarılı: ${fileObj.dosyaNo} -> ${fileObj.matchedRecordDisplay}`);
                 }
             }
             return fileObj;
         });
 
         this.uploadedFiles = files;
-        this.updateUI();
+        
+        // UI'ı güncellemeden önce verileri 'matched' ve 'unmatched' olarak ayırır
+        this.updateUI(); 
     });
 }
 
     updateUI() {
-        // ETEBS dosya listelerini güncelle
-        const allFiles = this.uploadedFiles.filter(f => f.status !== 'removed');
-        const matchedFiles = allFiles.filter(f => f.matchedRecordId && f.status !== 'indexed');
-        const unmatchedFiles = allFiles.filter(f => !f.matchedRecordId && f.status !== 'indexed');
-        const indexedFiles = allFiles.filter(f => f.status === 'indexed');
-        
-        this.renderFileList('allFilesList', matchedFiles);
-        this.renderFileList('unmatchedFilesList', unmatchedFiles);
-        this.renderFileList('indexedFilesList', indexedFiles);
+    // 1. Temel filtreleme: Silinmemiş tüm dosyalar
+    const allFiles = this.uploadedFiles.filter(f => f.status !== 'removed');
 
-        // Rozetleri Güncelle
-        this.setBadge('allCount', matchedFiles.length);
-        this.setBadge('unmatchedCount', unmatchedFiles.length);
-        this.setBadge('indexedCount', indexedFiles.length);
-    }
+    // 2. Sekme mantığına göre listeleri ayrıştır
+    // Eşleşenler: Matcher tarafından bulunanlar veya önceden eşleşenler (İndekslenmemiş olanlar)
+    const matchedFiles = allFiles.filter(f => f.matchedRecordId && f.status !== 'indexed');
+    
+    // Eşleşmeyenler: Hiçbir şekilde kaydı bulunamayanlar (İndekslenmemiş olanlar)
+    const unmatchedFiles = allFiles.filter(f => !f.matchedRecordId && f.status !== 'indexed');
+    
+    // İndekslenenler: İşlemi tamamlanmış olanlar
+    const indexedFiles = allFiles.filter(f => f.status === 'indexed');
+
+    // 3. UI Listelerini Render Et
+    // 'allFilesList' genellikle 'Tümü' sekmesidir, burada tüm aktif (indekslenmemiş) dosyalar görünmeli
+    const activeFiles = allFiles.filter(f => f.status !== 'indexed');
+    this.renderFileList('allFilesList', activeFiles); 
+    
+    this.renderFileList('unmatchedFilesList', unmatchedFiles);
+    this.renderFileList('indexedFilesList', indexedFiles);
+
+    // 4. Rozetleri (Badge) Güncelle
+    // Rozet isimleri HTML'deki id'ler ile uyumlu olmalıdır
+    this.setBadge('allCount', activeFiles.length); // Toplam bekleyen (Eşleşen + Eşleşmeyen)
+    this.setBadge('unmatchedCount', unmatchedFiles.length);
+    this.setBadge('indexedCount', indexedFiles.length);
+    
+    console.log(`📊 UI Güncellendi: Toplam Bekleyen=${activeFiles.length}, Eşleşen=${matchedFiles.length}, Eşleşmeyen=${unmatchedFiles.length}`);
+}
 
     setBadge(id, count) {
         const el = document.getElementById(id);
