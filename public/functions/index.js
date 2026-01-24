@@ -2362,12 +2362,9 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         markImageUrl: ""
     };
 
-    let nameSourceFound = false; // İsim bulundu mu bayrağı
+    let nameSourceFound = false;
 
-    // 1. ÖNCELİK (EN YÜKSEK): Task Owner (task.taskOwner)
-    // İtiraz ve diğer işlemlerde seçilen kişi buraya yazılıyor.
-    
-    // --- GÜNCELLEME: taskOwner string ise diziye çevir (İsim Çözümleme İçin) ---
+    // 1. ÖNCELİK: Task Owner
     let rawOwnerForName = after.taskOwner;
     if (typeof rawOwnerForName === 'string') rawOwnerForName = [rawOwnerForName];
     const taskOwnerIdsForName = Array.isArray(rawOwnerForName) ? rawOwnerForName.filter(Boolean) : [];
@@ -2385,24 +2382,16 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
             if (names.length > 0) {
                 enrichedData.applicantNames = names.join(", ");
                 nameSourceFound = true;
-                console.log("✅ Güncel Sahip (applicantNames) taskOwner üzerinden alındı:", enrichedData.applicantNames);
             }
-        } catch (e) {
-            console.error("taskOwner name fetch error:", e);
-        }
+        } catch (e) { console.error("taskOwner name fetch error:", e); }
     }
 
-    // 2. ÖNCELİK: Task Details (details.relatedParty)
-    // Eğer taskOwner boşsa buraya bakılır (eski kayıtlar veya farklı akışlar için)
+    // 2. ÖNCELİK: Task Details
     if (!nameSourceFound) {
         const tDetails = after.details || {};
         let targetParties = [];
-
-        if (tDetails.relatedParty) {
-            targetParties.push(tDetails.relatedParty);
-        } else if (Array.isArray(tDetails.relatedParties) && tDetails.relatedParties.length > 0) {
-            targetParties = tDetails.relatedParties;
-        }
+        if (tDetails.relatedParty) targetParties.push(tDetails.relatedParty);
+        else if (Array.isArray(tDetails.relatedParties)) targetParties = tDetails.relatedParties;
 
         if (targetParties.length > 0) {
             try {
@@ -2411,35 +2400,23 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
                     if (p.id) {
                         const pDoc = await adminDb.collection("persons").doc(p.id).get();
                         if (pDoc.exists) {
-                            const pd = pDoc.data();
-                            names.push(pd.name || pd.companyName || "-");
-                        } else if (p.name) {
-                            names.push(p.name);
-                        }
-                    } else if (p.name) {
-                        names.push(p.name);
-                    }
+                            names.push(pDoc.data().name || pDoc.data().companyName || "-");
+                        } else if (p.name) names.push(p.name);
+                    } else if (p.name) names.push(p.name);
                 }
-                
                 if (names.length > 0) {
                     enrichedData.applicantNames = names.join(", ");
                     nameSourceFound = true;
-                    console.log("✅ Güncel Sahip (applicantNames) relatedParty üzerinden alındı:", enrichedData.applicantNames);
                 }
-            } catch (e) {
-                console.error("Related party fetch error:", e);
-            }
+            } catch (e) { console.error("Related party fetch error:", e); }
         }
     }
 
-    // IP Kaydı Verilerini İşle (Görsel, Tarih vb.)
+    // IP Kaydı Verilerini İşle
     if (ipRecord) {
-        // Görsel URL
         const clean = (val) => (val ? String(val).trim() : "");
         enrichedData.markImageUrl = clean(ipRecord.brandImageUrl) || clean(ipRecord.trademarkImage) || clean(ipRecord.publicImageUrl) || "";
 
-        // 3. FALLBACK: IP Kaydı Sahipleri
-        // Eğer ne taskOwner ne de relatedParty varsa, dosyanın orijinal sahibini kullan.
         if (!nameSourceFound) {
             try {
                 const rawApplicants = ipRecord.applicants || [];
@@ -2447,40 +2424,29 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
                 for (const app of rawApplicants) {
                     if (app.id) {
                         const pDoc = await adminDb.collection("persons").doc(app.id).get();
-                        if (pDoc.exists) {
-                            const pData = pDoc.data();
-                            namesList.push(pData.name || pData.companyName || "-");
-                        }
+                        if (pDoc.exists) namesList.push(pDoc.data().name || pDoc.data().companyName || "-");
                     }
                 }
                 if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
-            } catch (e) { console.error("Applicant name fetch error:", e); }
+            } catch (e) { }
         }
 
-        // Sınıflar
         if (ipRecord.goodsAndServicesByClass && Array.isArray(ipRecord.goodsAndServicesByClass)) {
-            enrichedData.classNumbers = ipRecord.goodsAndServicesByClass
-                .map(item => item.classNo)
-                .filter(Boolean)
-                .join(", ");
+            enrichedData.classNumbers = ipRecord.goodsAndServicesByClass.map(item => item.classNo).filter(Boolean).join(", ");
         }
-
-        // Başvuru Tarihi Formatlama
+        
         const formatDate = (val) => {
             if (!val) return "-";
             const date = (val.toDate) ? val.toDate() : new Date(val);
-            if (isNaN(date.getTime())) return "-";
-            return date.toLocaleDateString("tr-TR");
+            return isNaN(date.getTime()) ? "-" : date.toLocaleDateString("tr-TR");
         };
         enrichedData.applicationDate = formatDate(ipRecord.applicationDate);
     }
-    // -------------------------------------------
 
     // --- ŞABLON SEÇİMİ ---
     let template = null, templateId = null, hasTemplate = false;
     try {
       const currentTaskType = String(after.taskType || "");
-
       if (currentTaskType) {
         const rulesSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task_completion_epats")
@@ -2491,7 +2457,6 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         if (!rulesSnap.empty) {
           const rule = rulesSnap.docs[0].data();
           templateId = rule?.templateId || null;
-          
           if (templateId) {
             const tSnap = await adminDb.collection("mail_templates").doc(templateId).get();
             if (tSnap.exists) {
@@ -2501,25 +2466,17 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
           }
         }
       }
-    } catch (e) {
-      console.warn("Template kuralı aranırken hata:", e?.message || e);
-    }
+    } catch (e) { console.warn("Template kuralı aranırken hata:", e); }
 
     // --- ALICILARI BELİRLE ---
-    
-    // --- GÜNCELLEME: taskOwner string ise diziye çevir (Alıcı Belirleme İçin) ---
-    // Bu kısım, veritabanında "ID" string olarak kayıtlıysa onu ["ID"] dizisine çevirir.
     let rawOwner = after.taskOwner;
-    if (typeof rawOwner === 'string') {
-        rawOwner = [rawOwner];
-    }
+    if (typeof rawOwner === 'string') rawOwner = [rawOwner];
     const ownerIds = Array.isArray(rawOwner) ? rawOwner.filter(Boolean) : [];
 
     let toRecipients = [], ccRecipients = [], usedSource = null;
 
     if (ownerIds.length > 0) {
       usedSource = "taskOwner";
-      // Artık ownerIds bir dizi olduğu için bu fonksiyon sorunsuz çalışır
       const r = await findRecipientsFromPersonsRelated(ownerIds);
       toRecipients = r.to;
       ccRecipients = r.cc;
@@ -2539,36 +2496,22 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         const txSnap = await adminDb.collection("ipRecords").doc(relatedIpId).collection("transactions").doc(relatedTxId).get();
         if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
       }
-      if (txTypeForCc == null && after.taskType != null) {
-        txTypeForCc = after.taskType;
-      }
+      if (txTypeForCc == null && after.taskType != null) txTypeForCc = after.taskType;
+      
       if (txTypeForCc != null) {
         const extra = await getCcFromEvrekaListByTransactionType(txTypeForCc);
-        const allCcEmails = [...(ccRecipients || []), ...(extra || [])];
-        ccRecipients = dedupe(allCcEmails);
+        ccRecipients = dedupe([...(ccRecipients || []), ...(extra || [])]);
       }
-    } catch (e) {
-      console.warn("CC listesi genişletilirken hata:", e?.message || e);
-    }
+    } catch (e) { console.warn("CC listesi genişletilirken hata:", e); }
 
-    // --- İÇERİK OLUŞTURMA VE DEĞİŞKEN EŞLEŞTİRME ---
+    // --- İÇERİK OLUŞTURMA ---
     let subject = "", body = "";
-    
     if (hasTemplate) {
-      // 1. Konu Ayrımı
-      // Mail Başlığı (Dış): Varsa 'mailSubject' (Örn: {{appNo}} - Başvuru), yoksa 'subject' kullanılır.
       let rawEmailSubject = String(template.mailSubject || template.subject || "");
-      
-      // İç Konu (Kutu): Şablonun orijinal konusu (subject) - Örn: "Marka Yayım Kararı"
-      // Bu kısım mailin içinde gri kutuda görünecek.
       let rawInnerSubject = String(template.subject || "");
-      
-      // 2. Gövde (Body)
       let rawBody = String(template.body || "");
-      
       const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
 
-      // TARİH FORMATLAYICI
       const formatTrDate = (val) => {
         if (!val) return new Date().toLocaleDateString("tr-TR");
         const d = (val && val.toDate) ? val.toDate() : new Date(val);
@@ -2577,14 +2520,12 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       
       const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
 
-      // PARAMETRELER
       const parameters = {
         muvekkil_adi: "Değerli Müvekkilimiz",
         proje_adi: ipTitle,
         relatedIpRecordTitle: ipTitle,
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
-        
         applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         markName: ipRecord?.title || ipRecord?.markName || "-",
         markImageUrl: enrichedData.markImageUrl,
@@ -2592,27 +2533,20 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
-        
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
       };
       
-      // 3. Değişkenleri Yerleştir
       const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      subject = replaceVars(rawEmailSubject);
+      const innerSubjectResolved = replaceVars(rawInnerSubject);
+      let resolvedBody = replaceVars(rawBody);
 
-      subject = replaceVars(rawEmailSubject);           // Mailin Dış Konusu
-      const innerSubjectResolved = replaceVars(rawInnerSubject); // İç Konu (Kutu)
-      let resolvedBody = replaceVars(rawBody);          // Gövde
-
-      // 4. [AKILLI ENJEKSİYON] Konu Kutusunu Gövdeye Ekle
-      // Mail içeriğine konu başlığını şık bir kutu içinde ekler.
       if (innerSubjectResolved) {
           const innerSubjectHtml = `
             <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
                 <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
             </div>
           `;
-
-          // HTML body varsa içine (<body> etiketinden sonraya), yoksa en başa ekle
           if (resolvedBody.toLowerCase().includes("<body")) {
               body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
           } else {
@@ -2623,15 +2557,19 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
-// Statü Belirleme
+    // Statü Belirleme
     const coreMissing = [];
     if ((toRecipients.length + ccRecipients.length) === 0) coreMissing.push("recipients");
     if (!hasTemplate) coreMissing.push("mailTemplate");
     const finalStatus = coreMissing.length ? "missing_info" : "awaiting_client_approval";
 
+    // --- [DÜZELTME BAŞLANGICI] ---
+    // URL kontrolü (main.js 'url' olarak kaydediyor, index.js 'downloadURL' bekliyordu)
+    const validUrl = epatsDoc?.url || epatsDoc?.downloadURL || null;
+
     const epatsAttachment = {
       storagePath: epatsDoc?.storagePath || null,
-      downloadURL: epatsDoc?.downloadURL || null,
+      downloadURL: validUrl, // Düzeltilmiş URL
       fileName:    epatsDoc?.name || "epats.pdf",
     };
 
@@ -2653,11 +2591,25 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       notificationType: "marka",
       taskType: after.taskType || null, 
       source: usedSource,
-      epatsAttachment,
+      
+      epatsAttachment, // Mail gönderimi için ek (attachment)
+
+      // [YENİ EKLENEN ALANLAR] - UI (Liste ve Modal) için gerekli alanlar
+      documentUrl: validUrl, // Listede linkin görünmesi için
+      documentName: epatsAttachment.fileName,
+      documentSource: "EPATS (Manuel)", // Modalda 'Ek Kaynağı' alanının dolması için
+      files: validUrl ? [{
+          url: validUrl,
+          name: epatsAttachment.fileName,
+          storagePath: epatsAttachment.storagePath,
+          type: 'application/pdf'
+      }] : [],
+
       taskOwner: ownerIds,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+    // --- [DÜZELTME SONU] ---
 
     await adminDb.collection("mail_notifications").add(notificationDoc);
     console.log(`Bildirim '${finalStatus}' olarak oluşturuldu. TaskType: ${after.taskType}`);
