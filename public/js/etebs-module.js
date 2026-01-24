@@ -631,6 +631,48 @@ updateTabBadge() {
         }
     }
 
+    async matchWithIPRecords() {
+    console.log("🔍 ETEBS Eşleştirme Motoru Başlatılıyor...");
+    
+    // 1. Portföy verilerinin yüklü olduğundan emin ol
+    // Eğer PortfolioDataManager yüklü değilse yükle veya bulk-upload-manager'dan al
+    const allRecords = await ipRecordsService.getAllRecords();
+    const records = allRecords.success ? allRecords.data : [];
+
+    if (records.length === 0) {
+        console.warn("⚠️ Eşleştirme için portföy kaydı bulunamadı.");
+        return;
+    }
+
+    // 2. Mevcut bildirimleri tara ve eşleştir
+    this.notifications = this.notifications.map(notification => {
+        // Zaten eşleşmişse atla
+        if (notification.matched) return notification;
+
+        // dosyaNo veya applicationNo üzerinden ara
+        const searchKey = notification.dosyaNo || notification.evrakNo;
+        if (!searchKey) return notification;
+
+        // RecordMatcher'ı kullan (Sınıfın global veya import edildiğini varsayıyoruz)
+        const matcher = new RecordMatcher();
+        const matchResult = matcher.findMatch(searchKey, records);
+
+        if (matchResult) {
+            console.log(`✅ ETEBS Anlık Eşleşme: ${searchKey} -> ${matchResult.record.title}`);
+            return {
+                ...notification,
+                matched: true,
+                matchedRecordId: matchResult.record.id,
+                matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record)
+            };
+        }
+
+        return notification;
+    });
+
+    console.log("✅ Eşleştirme işlemi tamamlandı.");
+}
+
     async refreshNotifications() {
         const tokenInput = document.getElementById('etebsTokenInput');
         if (tokenInput && tokenInput.value.trim()) {
@@ -699,8 +741,13 @@ displayNotifications() {
         const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
         const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
         
-        const matchedNotifications = remainingNotifications.filter(n => n.matched);
-        const unmatchedNotifications = remainingNotifications.filter(n => !n.matched);
+        const matchedNotifications = remainingNotifications.filter(n => 
+        n.matched === true || (n.matchedRecordId && n.matchedRecordId !== "")
+        );
+
+        const unmatchedNotifications = remainingNotifications.filter(n => 
+            !n.matched && (!n.matchedRecordId || n.matchedRecordId === "")
+        );
 
         // Listeleri Render Et
         this.renderNotificationsList(matchedList, matchedNotifications, 'matched');
