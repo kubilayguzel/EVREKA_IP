@@ -2,7 +2,8 @@
 
 import { taskService, ipRecordsService, personService, accrualService, transactionTypeService, storage, db } from '../../firebase-config.js';
 import { ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+// 👇 GÜNCELLEME 1: Eksik importlar eklendi (collection, query, where, getDocs)
+import { doc, updateDoc, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 export class TaskUpdateDataManager {
     
@@ -59,23 +60,17 @@ export class TaskUpdateDataManager {
         if (!path) return; // Path yoksa işlem yapma
         
         // URL encoded karakterleri çöz (Örn: %20 -> Boşluk)
-        // Firebase bazen encoded path'i bulamayabilir
         const decodedPath = decodeURIComponent(path);
-        
         const storageRef = ref(storage, decodedPath);
         
         try {
             await deleteObject(storageRef);
             console.log('Dosya Storage\'dan silindi:', decodedPath);
         } catch (error) {
-            // Eğer dosya zaten yoksa (object-not-found), bunu bir hata olarak görme
-            // ve işleme devam et (böylece veritabanından da silinebilsin).
             if (error.code === 'storage/object-not-found') {
-                console.warn('Dosya Storage\'da bulunamadı (zaten silinmiş olabilir), veritabanı temizleniyor...', decodedPath);
-                return; // Başarılı say
+                console.warn('Dosya Storage\'da bulunamadı, veritabanı temizleniyor...', decodedPath);
+                return; 
             }
-            
-            // Başka bir hataysa (yetki vs.) fırlat
             console.error('Dosya silme hatası:', error);
             throw error;
         }
@@ -100,22 +95,61 @@ export class TaskUpdateDataManager {
         );
     }
 
-    // --- IP RECORD GÜNCELLEME (BAŞVURU NO VS.) ---
+    // --- IP RECORD GÜNCELLEME ---
     async updateIpRecord(recordId, data) {
         return await ipRecordsService.updateRecord(recordId, data);
     }
 
     // --- BÜLTEN DETAY ÇEKME ---
     async fetchBulletinData(bulletinId) {
-        // Bu metodunuz TaskDataManager'da vardı, buraya taşıyoruz
-        // Eğer backend veya ayrı bir servis kullanıyorsanız oradan çağrılmalı
-        // Şimdilik placeholder
         console.warn('Bulletin data fetch not implemented completely');
         return null;
     }
+
     // --- TRANSACTION GÜNCELLEME ---
     async updateTransaction(recordId, transactionId, data) {
         const txRef = doc(db, 'ipRecords', recordId, 'transactions', transactionId);
         return await updateDoc(txRef, data);
+    }
+
+    // 👇 GÜNCELLEME 2: EKSİK OLAN METOT EKLENDİ 👇
+    async findTransactionIdByTaskId(recordId, taskId) {
+        console.log(`🔎 [DataManager] Transaction Aranıyor... Record: ${recordId}, Task: ${taskId}`);
+
+        try {
+            // 1. ipRecords Koleksiyonunda Ara
+            const q = query(
+                collection(db, 'ipRecords', recordId, 'transactions'),
+                where('triggeringTaskId', '==', String(taskId))
+            );
+            
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                const foundId = snapshot.docs[0].id;
+                console.log(`   ✅ [DataManager] BULUNDU! Transaction ID: ${foundId}`);
+                return foundId;
+            }
+            
+            // 2. Bulunamazsa suits (Dava) Koleksiyonunda Ara
+            console.log(`   ⚠️ [DataManager] ipRecords içinde bulunamadı, 'suits'e bakılıyor...`);
+            const qSuit = query(
+                collection(db, 'suits', recordId, 'transactions'),
+                where('triggeringTaskId', '==', String(taskId))
+            );
+            const snapshotSuit = await getDocs(qSuit);
+
+            if (!snapshotSuit.empty) {
+                const foundId = snapshotSuit.docs[0].id;
+                console.log(`   ✅ [DataManager] BULUNDU! (Dava) Transaction ID: ${foundId}`);
+                return foundId;
+            }
+            
+            console.warn("   ❌ [DataManager] Transaction bulunamadı.");
+            return null;
+
+        } catch (error) {
+            console.error("   🔥 [DataManager] Transaction arama hatası:", error);
+            return null;
+        }
     }
 }
