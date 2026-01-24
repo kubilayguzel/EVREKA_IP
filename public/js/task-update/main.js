@@ -1,13 +1,14 @@
 import { authService, auth, generateUUID } from '../../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal } from '../layout-loader.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// ✅ EKLENDİ: Tarih dönüşümü için gerekli
-import { Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; 
+
+import { Timestamp, arrayUnion} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; 
 import { showNotification } from '../../utils.js';
 
 import { TaskUpdateDataManager } from './TaskUpdateDataManager.js';
 import { TaskUpdateUIManager } from './TaskUpdateUIManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
+
 
 class TaskUpdateController {
     constructor() {
@@ -571,6 +572,31 @@ class TaskUpdateController {
         if (res.success) {
             const recordId = this.selectedIpRecordId;
             const taskType = String(this.taskData.taskType);
+
+            // Eğer bir EPATS dosyası varsa ve bu iş bir Transaction'a bağlıysa, dosyayı oraya da ekle
+            if (this.uploadedEpatsFile && this.taskData.transactionId && recordId) {
+                try {
+                    // Transaction doküman formatı
+                    const docToAdd = {
+                        name: this.uploadedEpatsFile.name || 'EPATS Evrakı',
+                        url: this.uploadedEpatsFile.url,
+                        downloadURL: this.uploadedEpatsFile.url, // Portföy tarafı genelde bunu bekler
+                        type: 'application/pdf', 
+                        uploadedAt: this.uploadedEpatsFile.uploadedAt || new Date().toISOString(),
+                        // Varsa ek meta veriler
+                        turkpatentEvrakNo: this.uploadedEpatsFile.turkpatentEvrakNo || null,
+                        documentDate: this.uploadedEpatsFile.documentDate || null
+                    };
+
+                    await this.dataManager.updateTransaction(
+                        recordId,
+                        this.taskData.transactionId,
+                        { documents: arrayUnion(docToAdd) } // Mevcut listeye ekle (varsa üzerine yazmaz)
+                    );
+                    console.log("✅ EPATS evrakı işlem (transaction) geçmişine eklendi.");
+                } catch (err) {
+                    console.error("❌ Transaction dosya güncelleme hatası:", err);
+                }
 
             // Sahip Değişimi
             const ownerChangeTypes = ['3', '5', '18'];
