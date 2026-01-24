@@ -165,7 +165,7 @@ export class TaskSubmitHandler {
             // 7. Transaksiyon Ekleme
             // NOT: Eğer yukarıda bülten kaydını dönüştürdüysek, taskData.relatedIpRecordId artık yeni ID'dir.
             if (taskData.relatedIpRecordId) {
-                await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state);
+                await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state, taskData.documents);
             }
 
             // 8. TAHAKKUK VE FİNANSAL İŞLEMLER
@@ -767,7 +767,8 @@ export class TaskSubmitHandler {
 
 
     // E) PORTFOLYO GEÇMİŞİ
-    async _addTransactionToPortfolio(recordId, taskType, taskId, state) {
+    // --- [GÜNCELLEME: taskDocuments parametresi eklendi] ---
+    async _addTransactionToPortfolio(recordId, taskType, taskId, state, taskDocuments = []) {
         let hierarchy = 'parent';
         let extraData = {};
         const tId = String(taskType.id);
@@ -780,6 +781,15 @@ export class TaskSubmitHandler {
             }
         }
 
+        // Doküman formatını hazırla (Hem 'url' hem 'downloadURL' ekliyoruz, garanti olsun)
+        const formattedDocs = (taskDocuments || []).map(d => ({
+            name: d.name,
+            url: d.url,
+            downloadURL: d.url, // Portföy detay sayfası genelde bunu bekler
+            type: d.type,
+            uploadedAt: d.uploadedAt
+        }));
+
         const transactionData = {
             type: taskType.id,
             description: `${taskType.name} işlemi.`,
@@ -787,6 +797,7 @@ export class TaskSubmitHandler {
             triggeringTaskId: String(taskId),
             createdAt: Timestamp.now(), 
             timestamp: new Date().toISOString(),
+            documents: formattedDocs, // --- [GÜNCELLEME: Dokümanlar eklendi] ---
             ...extraData
         };
 
@@ -796,7 +807,7 @@ export class TaskSubmitHandler {
         try {
             const transactionsRef = collection(db, collectionName, recordId, 'transactions');
             await addDoc(transactionsRef, transactionData);
-            console.log(`✅ Transaction eklendi: ${collectionName}/${recordId}/transactions`);
+            console.log(`✅ Transaction eklendi (Dosyalı): ${collectionName}/${recordId}/transactions`);
         } catch (error) {
             console.error(`Transaction ekleme hatası (${collectionName}):`, error);
         }
