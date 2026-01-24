@@ -1,6 +1,6 @@
 // js/etebs-module.js
 // ETEBS Tebligatları Yönetim Modülü
-import { etebsService, etebsAutoProcessor, firebaseServices, authService } from '../firebase-config.js';
+import { etebsService, etebsAutoProcessor, firebaseServices, authService, ipRecordsService } from '../firebase-config.js';
 import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
