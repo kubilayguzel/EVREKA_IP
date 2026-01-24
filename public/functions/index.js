@@ -425,8 +425,7 @@ export const etebsProxyV2 = onRequest(
                     const docData = {
                         evrakNo: docNo,
                         belgeAciklamasi,
-                        dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
-                        
+                        dosyaNo: notification.DOSYA_NO ? String(notification.DOSYA_NO).trim() : (notification.dosyaNo ? String(notification.dosyaNo).trim() : null),
                         dosyaTuru: notification.DOSYA_TURU || notification.dosyaTuru || null,
                         uygulamaKonmaTarihi: notification.UYGULAMAYA_KONMA_TARIHI || notification.uygulamayaKonmaTarihi || null,
                         belgeTarihi: notification.BELGE_TARIHI || notification.belgeTarihi || null,
