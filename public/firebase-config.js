@@ -16,6 +16,8 @@ from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+import { RecordMatcher } from './js/indexing/record-matcher.js';
+
 
 // --- Firebase App Initialization ---
 // 1. TEST/Geliştirme Ortamı (Mevcut projeniz)
