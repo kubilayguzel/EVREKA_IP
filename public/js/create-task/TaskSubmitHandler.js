@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc, collection, addDoc, setDoc, runTransaction, Tim
 import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
 import { getSelectedNiceClasses } from '../nice-classification.js'; 
 import { addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
+import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 export class TaskSubmitHandler {
     constructor(dataManager, uiManager) {
@@ -190,12 +191,25 @@ export class TaskSubmitHandler {
     // ============================================================
     // YARDIMCI METOTLAR
     // ============================================================
+    async _resolveImageUrl(path) {
+        if (!path) return null;
+        if (/^https?:\/\//i.test(path)) return path;
+
+        try {
+            const storage = getStorage();
+            const url = await getDownloadURL(ref(storage, String(path)));
+            return url;
+        } catch (e) {
+            console.warn('⚠️ getDownloadURL başarısız, path olduğu gibi bırakılıyor:', e);
+            // Public mirror fallback (isteğe bağlı, create-portfolio dosyasındaki gibi)
+            return `https://kubilayguzel.github.io/EVREKA_IP/public/${String(path).replace(/^\/+/, '')}`;
+        }
+    }
 
     /**
      * GÜVENLİ VERSİYON: Bülten kaydını (Third Party) gerçek IP Record'a dönüştürür.
      * UI hatalarını önlemek için boş array ve default değerler titizlikle atanır.
      */
-
     async _createRecordFromBulletin(bulletinRecord) {
         try {
             const now = new Date().toISOString();
@@ -248,9 +262,19 @@ export class TaskSubmitHandler {
             // 4. Tarih Formatlama
             const appDate = bulletinRecord.applicationDate || bulletinRecord.adDate || null;
 
-            // 5. Görsel Yolu (Varsa ham path'i de sakla)
-            const brandImageUrl = bulletinRecord.imageUrl || bulletinRecord.image || null;
-            const imagePath = bulletinRecord.imagePath || null;
+            // 5. Görsel Yolu (Tüm varyasyonları kontrol et ve URL'i çözümle)
+            const rawImageSource = bulletinRecord.imagePath || 
+                                   bulletinRecord.imageUrl || 
+                                   bulletinRecord.image || 
+                                   bulletinRecord.brandImageUrl || 
+                                   bulletinRecord.publicImageUrl || 
+                                   null;
+
+            // URL çözümleme (Storage path -> Download URL)
+            const brandImageUrl = await this._resolveImageUrl(rawImageSource);
+            
+            // Eğer kaynak bir http linki değilse (yani storage path ise) imagePath olarak sakla
+            const imagePath = (rawImageSource && !/^https?:\/\//i.test(rawImageSource)) ? rawImageSource : null;
 
             // 6. Veri Objesini Oluştur (Referans dosya ile birebir aynı yapı)
             const newRecordData = {
