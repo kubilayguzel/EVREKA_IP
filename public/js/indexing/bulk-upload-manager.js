@@ -578,7 +578,6 @@ export class BulkIndexingModule {
     }
 
     setupRealtimeListener() {
-        // ETEBS yüklemeleri için realtime listener
         if (!this.currentUser) return;
         
         const q = query(
@@ -588,11 +587,25 @@ export class BulkIndexingModule {
         );
 
         this.unsubscribe = onSnapshot(q, (snapshot) => {
-            this.uploadedFiles = snapshot.docs.map(doc => ({
+            const files = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 uploadedAt: doc.data().uploadedAt ? doc.data().uploadedAt.toDate() : new Date()
             }));
+
+            files.forEach(file => {
+                // Eğer kayıt eşleşmemişse ve servisten gelen bir dosyaNo varsa eşleştirmeyi dene
+                if (!file.matchedRecordId && file.status === 'pending' && file.dosyaNo) {
+                    const matchResult = this.matcher.findMatch(file.dosyaNo, this.allRecords);
+                    if (matchResult) {
+                        file.matchedRecordId = matchResult.record.id;
+                        file.matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record) + ` - ${matchResult.record.title}`;
+                        file.recordOwnerType = matchResult.record.recordOwnerType || 'self';
+                    }
+                }
+            });
+
+            this.uploadedFiles = files;
             this.updateUI();
         });
     }
