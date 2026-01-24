@@ -57,29 +57,24 @@ export class BulkIndexingModule {
     async init() {
     try {
         this.currentUser = authService.getCurrentUser();
-        if (!this.currentUser) {
-            console.error('Kullanıcı oturum açmamış');
-            return;
-        }
+        if (!this.currentUser) return;
 
-        // 1. ÖNCE portföy ve işlem tiplerini tam olarak yükle
-        console.log('⏳ Veriler yükleniyor...');
+        // 1. ÖNCE VERİLERİ YÜKLE VE BEKLE
         await this.loadAllData();
         
-        // 2. Veriler (this.allRecords) hazır olduktan sonra dinleyiciyi başlat
-        // Bu sayede matcher dolu bir listeyle kıyaslama yapmaya başlar
-        this.setupRealtimeListener();
+        // 2. VERİLERİN DOLU OLDUĞUNDAN EMİN OLUNCA DİNLEYİCİYİ BAŞLAT
+        if (this.allRecords && this.allRecords.length > 0) {
+            console.log(`✅ Matcher için ${this.allRecords.length} kayıt hazır.`);
+            this.setupRealtimeListener();
+        } else {
+            console.warn("⚠️ Portföy boş, veriler gelene kadar bekleniyor...");
+            // Alternatif: allRecords dolana kadar bekleyen bir mekanizma
+        }
 
-        // 3. Diğer UI kurulumlarını yap
         this.setupEventListeners();
-        
-        // İlk yüklemede UI'ı bir kez zorla güncelle (allRecords yüklendiği için)
         this.updateUI();
-        
-        console.log('✅ BulkIndexingModule initialized. Portföy kaydı:', this.allRecords.length);
     } catch (error) {
-        console.error('BulkIndexingModule initialization error:', error);
-        showNotification('Modül başlatılamadı: ' + error.message, 'error');
+        console.error('Initialization error:', error);
     }
 }
 
@@ -603,10 +598,13 @@ export class BulkIndexingModule {
         }
     }
 
-    setupRealtimeListener() {
+    // public/js/indexing/bulk-upload-manager.js içindeki fonksiyon
+
+setupRealtimeListener() {
     if (!this.currentUser) return;
     
-    // Sadece mevcut kullanıcıya ait bekleyen veya işlenmiş dosyaları çek
+    console.log("📡 Firestore dinleyicisi kuruluyor...");
+
     const q = query(
         collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION),
         where('userId', '==', this.currentUser.uid),
@@ -614,6 +612,11 @@ export class BulkIndexingModule {
     );
 
     this.unsubscribe = onSnapshot(q, (snapshot) => {
+        // MATCHING İÇİN ALLRECORDS KONTROLÜ
+        if (!this.allRecords || this.allRecords.length === 0) {
+            console.warn("⚠️ Portföy kayıtları (allRecords) henüz yüklenmedi veya boş. Eşleşme denemesi atlanıyor.");
+        }
+
         const files = snapshot.docs.map(doc => {
             const data = doc.data();
             let fileObj = {
@@ -622,23 +625,30 @@ export class BulkIndexingModule {
                 uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : new Date()
             };
 
-            // KRİTİK NOKTA: Eğer dosya pending ise ve dosyaNo varsa matcher'ı çalıştır
-            // matchedRecordId veritabanında boş olsa bile burada anlık olarak doldurulur
-            if (fileObj.dosyaNo && this.allRecords.length > 0) {
-                const matchResult = this.matcher.findMatch(fileObj.dosyaNo, this.allRecords);
+            // Eşleşme denemesi
+            // unindexed_pdfs tablosundaki alan 'dosyaNo' veya 'applicationNo' olabilir
+            const searchKey = fileObj.dosyaNo || fileObj.applicationNo;
+
+            if (searchKey && this.allRecords.length > 0 && !fileObj.matchedRecordId) {
+                console.log(`🔍 Eşleşme deneniyor: ${searchKey}`);
+                const matchResult = this.matcher.findMatch(searchKey, this.allRecords);
                 
                 if (matchResult) {
+                    console.log(`✅ EŞLEŞME BAŞARILI: ${searchKey} -> ${matchResult.record.title}`);
                     fileObj.matchedRecordId = matchResult.record.id;
                     fileObj.matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record);
                     fileObj.recordOwnerType = matchResult.record.recordOwnerType || 'self';
+                } else {
+                    console.log(`❌ Eşleşme bulunamadı: ${searchKey}`);
                 }
+            } else if (!searchKey) {
+                console.warn(`⚠️ Dosya ID ${fileObj.id} için 'dosyaNo' alanı boş!`, data);
             }
+
             return fileObj;
         });
 
         this.uploadedFiles = files;
-        
-        // UI'ı güncellemeden önce verileri 'matched' ve 'unmatched' olarak ayırır
         this.updateUI(); 
     });
 }
