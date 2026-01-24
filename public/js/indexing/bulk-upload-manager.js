@@ -59,22 +59,18 @@ export class BulkIndexingModule {
         this.currentUser = authService.getCurrentUser();
         if (!this.currentUser) return;
 
-        // 1. ÖNCE VERİLERİ YÜKLE VE BEKLE
+        // 1. Önce portföyü yükle ve bekle
         await this.loadAllData();
         
-        // 2. VERİLERİN DOLU OLDUĞUNDAN EMİN OLUNCA DİNLEYİCİYİ BAŞLAT
-        if (this.allRecords && this.allRecords.length > 0) {
-            console.log(`✅ Matcher için ${this.allRecords.length} kayıt hazır.`);
+        // 2. Veriler hazır olduğunda dinleyiciyi başlat
+        if (this.allRecords.length > 0) {
             this.setupRealtimeListener();
-        } else {
-            console.warn("⚠️ Portföy boş, veriler gelene kadar bekleniyor...");
-            // Alternatif: allRecords dolana kadar bekleyen bir mekanizma
         }
 
         this.setupEventListeners();
         this.updateUI();
     } catch (error) {
-        console.error('Initialization error:', error);
+        console.error('Init hatası:', error);
     }
 }
 
@@ -654,34 +650,20 @@ setupRealtimeListener() {
 }
 
     updateUI() {
-    // 1. Temel filtreleme: Silinmemiş tüm dosyalar
     const allFiles = this.uploadedFiles.filter(f => f.status !== 'removed');
-
-    // 2. Sekme mantığına göre listeleri ayrıştır
-    // Eşleşenler: Matcher tarafından bulunanlar veya önceden eşleşenler (İndekslenmemiş olanlar)
-    const matchedFiles = allFiles.filter(f => f.matchedRecordId && f.status !== 'indexed');
     
-    // Eşleşmeyenler: Hiçbir şekilde kaydı bulunamayanlar (İndekslenmemiş olanlar)
-    const unmatchedFiles = allFiles.filter(f => !f.matchedRecordId && f.status !== 'indexed');
-    
-    // İndekslenenler: İşlemi tamamlanmış olanlar
+    // Anlık olarak matcher tarafından eşleştirilenleri de 'matched' say
+    const matchedFiles = allFiles.filter(f => (f.matchedRecordId || f.autoMatched) && f.status !== 'indexed');
+    const unmatchedFiles = allFiles.filter(f => (!f.matchedRecordId && !f.autoMatched) && f.status !== 'indexed');
     const indexedFiles = allFiles.filter(f => f.status === 'indexed');
 
-    // 3. UI Listelerini Render Et
-    // 'allFilesList' genellikle 'Tümü' sekmesidir, burada tüm aktif (indekslenmemiş) dosyalar görünmeli
-    const activeFiles = allFiles.filter(f => f.status !== 'indexed');
-    this.renderFileList('allFilesList', activeFiles); 
-    
+    this.renderFileList('allFilesList', allFiles.filter(f => f.status !== 'indexed'));
     this.renderFileList('unmatchedFilesList', unmatchedFiles);
     this.renderFileList('indexedFilesList', indexedFiles);
 
-    // 4. Rozetleri (Badge) Güncelle
-    // Rozet isimleri HTML'deki id'ler ile uyumlu olmalıdır
-    this.setBadge('allCount', activeFiles.length); // Toplam bekleyen (Eşleşen + Eşleşmeyen)
+    this.setBadge('allCount', matchedFiles.length + unmatchedFiles.length);
     this.setBadge('unmatchedCount', unmatchedFiles.length);
     this.setBadge('indexedCount', indexedFiles.length);
-    
-    console.log(`📊 UI Güncellendi: Toplam Bekleyen=${activeFiles.length}, Eşleşen=${matchedFiles.length}, Eşleşmeyen=${unmatchedFiles.length}`);
 }
 
     setBadge(id, count) {
