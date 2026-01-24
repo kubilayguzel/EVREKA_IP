@@ -1,4 +1,6 @@
 import { RELATED_PARTY_REQUIRED, TASK_IDS, asId } from './TaskConstants.js';
+// ✅ EKLENDİ: Sınıf verisini doğrudan çeken fonksiyonu import ediyoruz
+import { getSelectedNiceClasses } from '../nice-classification.js';
 
 export class TaskValidator {
     constructor() {
@@ -26,11 +28,18 @@ export class TaskValidator {
                 // 1. Marka Adı
                 const brandText = document.getElementById('brandExampleText')?.value?.trim();
             
-                // 2. Sınıf Seçimi
-                const niceContainer = document.getElementById('selectedNiceClasses');
-                const domClassCount = niceContainer 
-                    ? niceContainer.querySelectorAll('.selected-class-item, .selected-item, .selected-item-row').length 
-                    : 0;
+                // 2. Sınıf Seçimi (GÜNCELLENDİ)
+                // DOM saymak yerine doğrudan veriyi kontrol ediyoruz
+                let hasClasses = false;
+                try {
+                    const classes = getSelectedNiceClasses ? getSelectedNiceClasses() : [];
+                    hasClasses = Array.isArray(classes) && classes.length > 0;
+                } catch (e) {
+                    console.warn("Sınıf kontrol hatası:", e);
+                    // Fallback: DOM kontrolü (Daha geniş kapsamlı)
+                    const container = document.getElementById('selectedNiceClasses');
+                    hasClasses = container && container.children.length > 0 && !container.querySelector('.empty-state');
+                }
                 
                 // 3. Başvuru Sahibi
                 const applicantContainer = document.getElementById('selectedApplicantsList');
@@ -57,7 +66,7 @@ export class TaskValidator {
                 checks = {
                     'Atanan Kişi': !!assignedTo,
                     'Marka Adı': !!brandText,
-                    'Sınıf Seçimi': domClassCount > 0,
+                    'Sınıf Seçimi': hasClasses, // ✅ Güncellendi
                     'Başvuru Sahibi': domApplicantCount > 0,
                     'Menşe/Ülke': hasCountrySelection
                 };
@@ -71,20 +80,12 @@ export class TaskValidator {
                 const hasIpRecord = !!state.selectedIpRecord;
                 const assignedTo = document.getElementById('assignedTo')?.value;
                 
-                // --- GÜNCELLEME BAŞLANGICI ---
-                // Unvan (79), Nevi (80) ve Adres (82) değişikliği işlemleri için özel kural
                 const tIdStr = asId(selectedTaskType?.id);
                 const isSpecialTask = ['79', '80', '82'].includes(tIdStr);
                 
-                // Sahip seçilmiş mi?
                 const hasOwner = selectedOwners && selectedOwners.length > 0;
-
-                // Eğer özel işlemse: Varlık VEYA Sahip seçimi yeterli. 
-                // Diğer işlemlerde: Varlık seçimi zorunlu.
                 const isAssetOrOwnerValid = isSpecialTask ? (hasIpRecord || hasOwner) : hasIpRecord;
-                // --- GÜNCELLEME SONU ---
                 
-                // İlgili Taraf Zorunluluğu
                 const needsRelated = RELATED_PARTY_REQUIRED.has(tIdStr);
                 
                 const partyContainer = document.getElementById('relatedPartyList');
@@ -94,7 +95,7 @@ export class TaskValidator {
                 checks = {
                     'Atanan Kişi': !!assignedTo,
                     'İş Başlığı': !!taskTitle,
-                    'Varlık/Sahip Seçimi': isAssetOrOwnerValid, // Güncellendi
+                    'Varlık/Sahip Seçimi': isAssetOrOwnerValid,
                     'İlgili Taraf': !needsRelated || hasRelated
                 };
 
@@ -106,7 +107,7 @@ export class TaskValidator {
 
         // --- DEBUG RAPORU ---
         if (!isComplete) {
-            console.warn('🔒 BUTON KİLİTLİ - Eksik Alanlar:', checks); // checks objesini direkt bastıralım
+            console.warn('🔒 BUTON KİLİTLİ - Eksik Alanlar:', checks); 
         } else {
             if (this.saveBtn.getAttribute('data-log-sent') !== 'true') {
                 console.log('✅ TÜM KOŞULLAR SAĞLANDI. BUTON AÇIK.');
