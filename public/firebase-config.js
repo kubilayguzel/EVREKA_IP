@@ -1675,8 +1675,7 @@ async getRecentUnindexedDocuments(limitCount = 50) {
         console.error("Veritabanı Okuma Hatası:", error);
         return [];
     }
-}
-
+},
 
 async processNotifications(notifications, userId) {
         const processedNotifications = [];
