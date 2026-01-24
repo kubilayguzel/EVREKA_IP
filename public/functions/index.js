@@ -427,21 +427,21 @@ export const etebsProxyV2 = onRequest(
                         belgeAciklamasi,
                         dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
                         
-                        // --- EKLENMESİ GEREKEN YENİ ALANLAR ---
                         dosyaTuru: notification.DOSYA_TURU || notification.dosyaTuru || null,
                         uygulamaKonmaTarihi: notification.UYGULAMAYA_KONMA_TARIHI || notification.uygulamayaKonmaTarihi || null,
                         belgeTarihi: notification.BELGE_TARIHI || notification.belgeTarihi || null,
                         ilgiliVekil: notification.ILGILI_VEKIL || notification.ilgiliVekil || null,
                         tebligTarihi: notification.TEBLIG_TARIHI || notification.tebligTarihi || null,
                         tebellugeden: notification.TEBELLUGEDEN || notification.tebellugeden || null,
-                        // --------------------------------------
 
-                        fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`, // Veya yeni token'lı URL yapınız
+                        // DÜZELTİLEN SATIR:
+                        fileUrl: firebaseUrl, // Yukarıda oluşturduğunuz token'lı güvenli URL'yi buraya veriyoruz
+                        
                         filePath: storagePath,
                         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
                         userId,
                         status: 'pending',
-                        unindexedPdfId: docNo, // Evrak numarası artık benzersiz ID'miz
+                        unindexedPdfId: docNo,
                         downloadSuccess: true
                     };
 
