@@ -65,12 +65,13 @@ export class RecordMatcher {
      * @private
      */
     _normalize(val) {
-    if (!val) return '';
-    // Sadece rakamları bırakır, hiçbir parçayı bölmez veya sıfır silmez.
-    // "2017/099562" -> "2017099562"
-    // "2017/99562"  -> "201799562" (Padding farkı varsa yine de bulur)
-    return String(val).replace(/\D/g, '').trim();
-}
+        if (!val) return '';
+        // Sadece rakamları bırakır, başındaki etkisiz sıfırları temizler
+        // "2017/099562" -> "201799562"
+        return String(val)
+            .replace(/\D/g, '') // Rakam dışı her şeyi sil
+            .replace(/^0+/, ''); // Sadece en baştaki sıfırları temizle
+    }
 
     /**
      * UI'da gösterilecek formatı hazırlar
