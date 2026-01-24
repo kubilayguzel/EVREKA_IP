@@ -290,6 +290,17 @@ export const etebsProxyV2 = onRequest(
         else if (listResult.DAILY_NOTIFICATIONSResult) notifications = listResult.DAILY_NOTIFICATIONSResult;
         else if (listResult.notifications) notifications = listResult.notifications;
 
+        // --- 🔥 DÜZELTME: LİSTE TEKİLLEŞTİRME (DEDUPLICATION) ---
+        // API bazen aynı evrakı çift döndürebiliyor, bu da gereksiz işlem ve log kirliliği yaratıyor.
+        const uniqueMap = new Map();
+        notifications.forEach(item => {
+            const docNo = String(item.EVRAK_NO || item.evrakNo || '').trim();
+            if (docNo && !uniqueMap.has(docNo)) {
+                uniqueMap.set(docNo, item);
+            }
+        });
+        notifications = Array.from(uniqueMap.values());
+
         console.log(`📊 ${notifications.length} tebligat bulundu.`);
 
         const savedDocuments = [];
@@ -406,9 +417,8 @@ export const etebsProxyV2 = onRequest(
                     // 3. İstenilen formatta URL'yi oluştur
                     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
 
-                    let targetRef;
-                    if (!existingQuery.empty) targetRef = existingQuery.docs[0].ref;
-                    else targetRef = adminDb.collection('unindexed_pdfs').doc();
+                    // Döküman ID'si olarak doğrudan evrak numarasını kullanıyoruz
+                    const targetRef = adminDb.collection('unindexed_pdfs').doc(docNo);
 
                     const docData = {
                         evrakNo: docNo,
@@ -429,7 +439,7 @@ export const etebsProxyV2 = onRequest(
                         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
                         userId,
                         status: 'pending',
-                        unindexedPdfId: targetRef.id,
+                        unindexedPdfId: docNo, // Evrak numarası artık benzersiz ID'miz
                         downloadSuccess: true
                     };
 
