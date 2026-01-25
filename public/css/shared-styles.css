@@ -37,6 +37,7 @@ body {
     background: #1e3c72; /* Koyu mavi */
     color: white;
     display: flex;
+    overflow: hidden;
     flex-direction: column;
     transition: width 0.3s ease;
     height: 100vh;
@@ -63,7 +64,8 @@ body {
 
 .sidebar-nav {
     flex-grow: 1;
-    overflow-y: hidden; /* İçerik taşarsa kaydırma çubuğu */
+    min-height: 0;        /* flex içinde overflow’un çalışması için kritik */
+    overflow-y: auto;     /* taşarsa sol menüde scroll */
     padding: 20px 0;
 }
 
