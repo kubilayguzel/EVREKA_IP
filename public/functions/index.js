@@ -968,8 +968,16 @@ export const sendEmailNotificationV2 = onCall(
         ? (overrideSubject || `Hatırlatma: ${notificationData.subject || ""}`) 
         : (overrideSubject || notificationData.subject || "");
     
+    // Standart Resmi Hatırlatma Metni
+    const defaultReminderBody = `
+        <p>Sayın İlgili,</p>
+        <p>Bu e-posta ile, tarafınıza daha önce iletilen bildirimi hatırlatmak ve konuya ilişkin sizden geri dönüş beklediğimizi iletmek isteriz.</p>
+        <br>
+        <p>Saygılarımızla,<br><strong>EVREKA GROUP</strong></p>
+    `;
+
     let htmlBody = isReminder 
-        ? (overrideBody ? stripBody(overrideBody) : `<p>Hatırlatma...</p>`) 
+        ? (overrideBody ? stripBody(overrideBody) : defaultReminderBody) 
         : (overrideBody ? stripBody(overrideBody) : notificationData.body || "");
 
     if (footerItems.length > 0) {
