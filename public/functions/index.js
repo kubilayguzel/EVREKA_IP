@@ -1033,19 +1033,39 @@ export const sendEmailNotificationV2 = onCall(
 
     if (recordId) {
         try {
-            const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
-            const allRules = settingsDoc.exists ? settingsDoc.data() : {};
-            let rawRule = allRules[currentChildTypeId];
             let parentContexts = ["1"];
             
-            if (rawRule && Array.isArray(rawRule.values)) parentContexts = rawRule.values.map(v => v.stringValue);
-            else if (typeof rawRule === 'string') parentContexts = [rawRule];
-            else if (Array.isArray(rawRule)) parentContexts = rawRule.map(String); // [2, 20] gibi array gelirse
+            // --- [GÜNCELLEME 1: DİNAMİK ROTA ÖNCELİĞİ] ---
+            // Eğer bildirim oluşturulurken 'dynamicParentContext' belirlendiyse (Örn: 24 -> 3),
+            // veritabanındaki kuralları yok say ve doğrudan bu ID'yi kullan.
+            if (notificationData.dynamicParentContext) {
+                parentContexts = [String(notificationData.dynamicParentContext)];
+                console.log(`📌 [THREAD] Dinamik Rota (Bildirimden): ${parentContexts[0]}`);
+            } 
+            else {
+                // Dinamik rota yoksa veritabanındaki kurallara bak (Standart Akış)
+                const settingsDoc = await db.doc("mailThreads/transactionTypeMatch").get();
+                const allRules = settingsDoc.exists ? settingsDoc.data() : {};
+                let rawRule = allRules[currentChildTypeId];
+                
+                if (rawRule) {
+                    if (rawRule === "tbd") {
+                        // Kural 'tbd' ama dynamicContext yoksa mecburen self (kendi ID'si)
+                        parentContexts = [currentChildTypeId];
+                    } else if (Array.isArray(rawRule.values)) {
+                        parentContexts = rawRule.values.map(v => v.stringValue);
+                    } else if (typeof rawRule === 'string') {
+                        parentContexts = [rawRule];
+                    } else if (Array.isArray(rawRule)) {
+                        parentContexts = rawRule.map(String);
+                    }
+                }
+            }
+            // ---------------------------------------------
 
-            // 🔥 [DÜZELTME 1] parentContexts içindeki "1"leri "2"ye çevir
-            // Böylece arama yaparken ve kaydederken asla "1" kullanmayacak.
+            // "1" (Eski Başvuru) -> "2" (Yeni Başvuru) Normalizasyonu (Her zaman geçerli)
             parentContexts = parentContexts.map(ctx => (ctx === "1" ? "2" : ctx));
-            // Tekrarları temizle (hem 1 hem 2 varsa sadece 2 kalsın)
+            // Tekrarları temizle
             parentContexts = [...new Set(parentContexts)];
 
             console.log(`🔍 İşlem: ${currentChildTypeId}, Dosya: ${recordId}, Adaylar (Normalized): ${JSON.stringify(parentContexts)}`);
@@ -1996,40 +2016,37 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             const settingsDoc = await adminDb.collection("mailThreads").doc("transactionTypeMatch").get();
             if (settingsDoc.exists) {
                 const allRules = settingsDoc.data();
-                const rawRule = allRules[currentSubTypeId] || allRules[Number(currentSubTypeId)];
-              
-            if (rawRule) {
+                let rawRule = allRules[currentSubTypeId] || allRules[Number(currentSubTypeId)];
+                
+                // --- [GÜNCELLEME 2: 24, 25, 40 İÇİN ZORUNLU PARENT ARAMA] ---
+                const forceDynamicTypes = ["24", "25", "40"];
+                if (forceDynamicTypes.includes(String(currentSubTypeId))) {
+                    rawRule = "tbd"; 
+                }
+                
+                if (rawRule) {
                     if (rawRule === "tbd") {
-                        // 1. Durum: Tip 19 ve 20 için ÖZEL MANTIK (Self/ThirdParty kontrolü)
+                        // A) Tip 19 ve 20 için ÖZEL MANTIK (Self/ThirdParty)
                         if (["19", "20"].includes(currentSubTypeId)) {
-                            // Kaydın sahibi biz miyiz? (Self vs Third Party)
                             const isSelf = ipRecordData?.recordOwnerType === 'self';
-                            
-                            if (isSelf) {
-                                // Self (Portföy) ise -> "2" (Başvuru) ile eşleşsin
-                                potentialTargetTypes = ["2"];
-                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}, Self) -> Hedef: 2`);
-                            } else {
-                                // Third Party (Rakip) ise -> "20" (İtiraz) ile eşleşsin
-                                potentialTargetTypes = ["20"];
-                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}, ThirdParty) -> Hedef: 20`);
-                            }
+                            potentialTargetTypes = isSelf ? ["2"] : ["20"];
+                            console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}, ${isSelf?'Self':'3rd'}) -> Hedef: ${potentialTargetTypes[0]}`);
                         }
-                        // 2. Durum: Diğer Tipler (25, 40 vb.) için PARENT ARAMA MANTIĞI
+                        // B) Diğerleri (24, 25, 40 vb.) için PARENT ARAMA
                         else {
                             if (parentTxnData && parentTxnData.type) {
-                                const pType = String(parentTxnData.type);
+                                const pType = String(parentTxnData.type); // Örn: "3"
                                 potentialTargetTypes = [pType];
                                 console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}) -> Parent Bulundu, Hedef: ${pType}`);
                             } else {
-                                // Parent yoksa mecburen kendi içine (izole) dön
+                                // Parent yoksa mecburen self
                                 potentialTargetTypes = [currentSubTypeId];
-                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}) -> Parent YOK, Hedef: Self (${currentSubTypeId})`);
+                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}) -> Parent YOK, Hedef: Self`);
                             }
                         }
                     } 
                     else {
-                        // 3. Durum: Standart Sabit Kurallar (Mevcut mantık)
+                        // Standart Sabit Kurallar
                         let mappedTypes = [];
                         if (Array.isArray(rawRule)) mappedTypes = rawRule.map(String);
                         else if (typeof rawRule === 'string') mappedTypes = [rawRule];
@@ -2041,6 +2058,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         }
                     }
                 }
+                // -------------------------------------------------------------
             }
         } catch (e) { console.warn("Mapping hatası:", e); }
     }
@@ -2253,6 +2271,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       sourceDocumentId: docId || null,
       notificationType: notificationType || "marka",
       taskType: templateSearchType || null,
+      dynamicParentContext: namingTargetType, // Hesaplanan hedef (Örn: "3" olarak kaydedilecek)
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
       epatsAttachment, 
