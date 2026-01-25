@@ -1997,16 +1997,48 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             if (settingsDoc.exists) {
                 const allRules = settingsDoc.data();
                 const rawRule = allRules[currentSubTypeId] || allRules[Number(currentSubTypeId)];
-                
-                if (rawRule) {
-                    let mappedTypes = [];
-                    if (Array.isArray(rawRule)) mappedTypes = rawRule.map(String);
-                    else if (typeof rawRule === 'string') mappedTypes = [rawRule];
-                    else if (rawRule.values && Array.isArray(rawRule.values)) mappedTypes = rawRule.values.map(v => v.stringValue || String(v));
+              
+            if (rawRule) {
+                    if (rawRule === "tbd") {
+                        // 1. Durum: Tip 19 ve 20 için ÖZEL MANTIK (Self/ThirdParty kontrolü)
+                        if (["19", "20"].includes(currentSubTypeId)) {
+                            // Kaydın sahibi biz miyiz? (Self vs Third Party)
+                            const isSelf = ipRecordData?.recordOwnerType === 'self';
+                            
+                            if (isSelf) {
+                                // Self (Portföy) ise -> "2" (Başvuru) ile eşleşsin
+                                potentialTargetTypes = ["2"];
+                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}, Self) -> Hedef: 2`);
+                            } else {
+                                // Third Party (Rakip) ise -> "20" (İtiraz) ile eşleşsin
+                                potentialTargetTypes = ["20"];
+                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}, ThirdParty) -> Hedef: 20`);
+                            }
+                        }
+                        // 2. Durum: Diğer Tipler (25, 40 vb.) için PARENT ARAMA MANTIĞI
+                        else {
+                            if (parentTxnData && parentTxnData.type) {
+                                const pType = String(parentTxnData.type);
+                                potentialTargetTypes = [pType];
+                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}) -> Parent Bulundu, Hedef: ${pType}`);
+                            } else {
+                                // Parent yoksa mecburen kendi içine (izole) dön
+                                potentialTargetTypes = [currentSubTypeId];
+                                console.log(`🔀 Mapping 'tbd' (Tip ${currentSubTypeId}) -> Parent YOK, Hedef: Self (${currentSubTypeId})`);
+                            }
+                        }
+                    } 
+                    else {
+                        // 3. Durum: Standart Sabit Kurallar (Mevcut mantık)
+                        let mappedTypes = [];
+                        if (Array.isArray(rawRule)) mappedTypes = rawRule.map(String);
+                        else if (typeof rawRule === 'string') mappedTypes = [rawRule];
+                        else if (rawRule.values && Array.isArray(rawRule.values)) mappedTypes = rawRule.values.map(v => v.stringValue || String(v));
 
-                    if (mappedTypes.length > 0) {
-                        potentialTargetTypes = mappedTypes;
-                        console.log(`🔀 Mapping Uygulandı: ${JSON.stringify(potentialTargetTypes)}`);
+                        if (mappedTypes.length > 0) {
+                            potentialTargetTypes = mappedTypes;
+                            console.log(`🔀 Mapping Uygulandı: ${JSON.stringify(potentialTargetTypes)}`);
+                        }
                     }
                 }
             }
