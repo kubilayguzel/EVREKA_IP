@@ -166,7 +166,10 @@ async indexNotification(token, notification) {
         if (unindexedDoc) {
             showNotification('Evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
             const pdfId = unindexedDoc.id;
-            setTimeout(() => window.open(`indexing-detail.html?pdfId=${pdfId}`, '_blank'), 500);
+            setTimeout(() => {
+            window.location.href = `indexing-detail.html?pdfId=${pdfId}`;
+            }, 500);
+
             return;
         } else {
              // 3. Hiçbir yerde yoksa, BATCH işleminde indirilemediğini varsay.
