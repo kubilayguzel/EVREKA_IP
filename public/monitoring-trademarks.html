@@ -514,6 +514,12 @@
             </div>
           </div>
 
+
+<div class="form-group">
+  <label for="searchMarkNameInput">Aranacak Marka Adı:</label>
+  <input type="text" class="form-control" id="searchMarkNameInput" placeholder="Boş bırakırsanız marka adı kullanılır...">
+  <small class="form-text text-muted">Bu alan doluysa, aramada marka adı yerine buradaki ifade kullanılır.</small>
+</div>
           <div class="form-group">
             <label for="brandTextSearchInput">Aranacak İbareler:</label>
             <div class="input-group">
@@ -1085,6 +1091,53 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
       const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer');
       const niceClassSearchList = document.getElementById('niceClassSearchList');
       const modalTrademarkImage = document.getElementById('modalTrademarkImage');
+      const searchMarkNameInput = document.getElementById('searchMarkNameInput');
+
+      let modalOriginalPrimaryName = '';
+      const normText = (s) => (s || '').toString().trim().toLowerCase();
+
+      const refreshPermanentBrandTerm = () => {
+          if (!brandTextSearchList) return;
+          const override = (searchMarkNameInput?.value || '').trim();
+          const permanent = (override || modalOriginalPrimaryName || '').trim();
+          if (!permanent) return;
+
+          // Eski kalıcı öğeyi kaldır
+          brandTextSearchList.querySelectorAll('li.permanent-item').forEach(li => li.remove());
+
+          // Override varsa, orijinal marka adını listeden temizle (kalıcı olmayanlardan)
+          if (override && modalOriginalPrimaryName) {
+              const originalNorm = normText(modalOriginalPrimaryName);
+              brandTextSearchList.querySelectorAll('li').forEach(li => {
+                  if (li.classList.contains('permanent-item')) return;
+                  const txt = li.querySelector('.list-item-text')?.textContent || '';
+                  if (normText(txt) === originalNorm) li.remove();
+              });
+          }
+
+          // Boş uyarısını kaldır
+          const emptyItem = brandTextSearchList.querySelector('.list-group-item.text-muted');
+          if (emptyItem) emptyItem.remove();
+
+          // Zaten varsa kalıcı yap, yoksa ekle
+          let existingLi = null;
+          brandTextSearchList.querySelectorAll('li').forEach(li => {
+              const txt = li.querySelector('.list-item-text')?.textContent || '';
+              if (normText(txt) === normText(permanent)) existingLi = li;
+          });
+          if (existingLi) {
+              existingLi.classList.add('permanent-item');
+          } else {
+              addListItem(brandTextSearchList, permanent, true);
+          }
+      };
+
+      if (searchMarkNameInput) {
+          searchMarkNameInput.addEventListener('input', () => {
+              refreshPermanentBrandTerm();
+          });
+      }
+
       
       // Nice Sınıfı kutularını dinamik olarak oluştur
       for (let i = 1; i <= 45; i++) {
@@ -1125,7 +1178,11 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
                   modalTrademarkImage.src = imageUrl;
 
                   // Mevcut arama kriterlerini yükle
-                  const permanentBrandText = [currentSelectedItem.title || currentSelectedItem.brandText || ''].filter(Boolean);
+                  modalOriginalPrimaryName = (currentSelectedItem.title || currentSelectedItem.markName || currentSelectedItem.brandText || '').trim();
+                  const overrideSearchName = (currentSelectedItem.searchMarkName || '').trim();
+                  if (searchMarkNameInput) searchMarkNameInput.value = overrideSearchName;
+
+                  const permanentBrandText = [(overrideSearchName || modalOriginalPrimaryName)].filter(Boolean);
                   const permanentNiceClasses = (() => {
                       const classes = [];
                       if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
@@ -1142,8 +1199,13 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
                   const existingBrandTextSearch = currentSelectedItem.brandTextSearch || [];
                   const existingNiceClassSearch = currentSelectedItem.niceClassSearch || [];
 
-                  populateList(brandTextSearchList, existingBrandTextSearch, permanentBrandText);
+                  const filteredBrandTextSearch = overrideSearchName
+                      ? existingBrandTextSearch.filter(t => normText(t) !== normText(modalOriginalPrimaryName))
+                      : existingBrandTextSearch;
+
+                  populateList(brandTextSearchList, filteredBrandTextSearch, permanentBrandText);
                   populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses);
+                  refreshPermanentBrandTerm();
 
                   // Modal'ı göster
                   $('#editCriteriaModal').modal('show');
@@ -1219,9 +1281,11 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
 
           const brandTextArray = Array.from(brandTextSearchList.querySelectorAll('.list-item-text')).map(el => el.textContent);
           const niceClassArray = Array.from(niceClassSearchList.querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent)).filter(n => !isNaN(n));
+          const searchMarkNameValue = (searchMarkNameInput?.value || '').trim();
 
           try {
               const res = await monitoringService.updateMonitoringItem(currentSelectedItem.id, {
+                  searchMarkName: searchMarkNameValue,
                   brandTextSearch: brandTextArray,
                   niceClassSearch: niceClassArray
               });
@@ -1231,6 +1295,7 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
                   // Veriyi yerel olarak da güncelle
                   const index = allMonitoringData.findIndex(item => item.id === currentSelectedItem.id);
                   if (index !== -1) {
+                      allMonitoringData[index].searchMarkName = searchMarkNameValue;
                       allMonitoringData[index].brandTextSearch = brandTextArray;
                       allMonitoringData[index].niceClassSearch = niceClassArray;
                   }
