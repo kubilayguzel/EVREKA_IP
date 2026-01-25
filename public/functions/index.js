@@ -4223,10 +4223,19 @@ export const performTrademarkSimilaritySearch = onCall(
           });
 
           // 1. Aranacak TÜM terimleri belirle (Ana Marka + Alternatifler)
-          const primaryName = (monitoredMark.markName || monitoredMark.title || '').trim();
+          const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
+          const overrideName = (monitoredMark.searchMarkName || '').trim();
+          const primaryName = (overrideName || originalName).trim();
           
           // brandTextSearch dizisini güvenli bir şekilde al
-          const alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+          let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+          
+          // Override varsa, orijinal marka adını alternatiflerden çıkar (arama dışı bırak)
+          const normText = (s) => (s || '').toString().trim().toLowerCase();
+          if (overrideName && originalName) {
+              const originalNorm = normText(originalName);
+              alternatives = alternatives.filter(t => normText(t) !== originalNorm);
+          }
           
           const searchTerms = [
               primaryName, 
@@ -4512,8 +4521,15 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       // Batch içindeki markaları işle
       for (const monitoredMark of batch) {
         
-        const primaryName = (monitoredMark.markName || monitoredMark.title || '').trim();
-        const alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+        const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
+        const overrideName = (monitoredMark.searchMarkName || '').trim();
+        const primaryName = (overrideName || originalName).trim();
+        let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+        const normText = (s) => (s || '').toString().trim().toLowerCase();
+        if (overrideName && originalName) {
+            const originalNorm = normText(originalName);
+            alternatives = alternatives.filter(t => normText(t) !== originalNorm);
+        }
         const searchTerms = [primaryName, ...alternatives].filter(t => t && t.trim().length > 0);
         const uniqueResultsMap = new Map();
 
