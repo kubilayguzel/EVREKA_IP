@@ -698,12 +698,11 @@ setupRealtimeListener() {
                 </button>
 
                 ${file.status === 'pending' ? `
-                    <a href="indexing-detail.html?pdfId=${file.id}" 
-                       class="btn btn-light btn-sm pdf-action-btn" 
-                       title="İndeksle"
-                       style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit;">
+                    <button class="btn btn-light btn-sm pdf-action-btn" 
+                            title="İndeksle"
+                            onclick="window.location.href='indexing-detail.html?pdfId=${file.id}'">
                         <i class="fas fa-check"></i>
-                    </a>
+                    </button>
                 ` : ''}
 
                 <button class="btn btn-light btn-sm pdf-action-btn pdf-action-danger" title="Sil"
