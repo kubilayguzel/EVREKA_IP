@@ -27,7 +27,7 @@ import {
     deleteObject 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-import { showNotification } from '../../utils.js';
+import { showNotification, debounce } from '../../utils.js';
 import { FilenameParser } from './filename-parser.js';
 import { RecordMatcher } from './record-matcher.js';
 
@@ -46,6 +46,14 @@ export class BulkIndexingModule {
         this.allTransactionTypes = [];
         this.uploadedFilesMap = new Map(); 
         this.selectedRecordManual = null;
+
+        // Manuel aramada async sonuçların birbiriyle yarışmasını engellemek için
+        this._manualSearchSeq = 0;
+
+        // UI'daki inline onclick'ler (örn. dosya sil) bu referansa bakıyor
+        if (typeof window !== 'undefined') {
+            window.indexingModule = this;
+        }
 
         // Servisleri Başlat
         this.parser = new FilenameParser();
@@ -170,7 +178,10 @@ export class BulkIndexingModule {
         const recordSearchContainer = document.getElementById('searchResultsContainerManual');
         
         if (recordSearchInput) {
-            recordSearchInput.addEventListener('input', (e) => this.searchRecords(e.target.value, 'manual'));
+            recordSearchInput.addEventListener(
+                'input',
+                debounce((e) => this.searchRecords(e.target.value, 'manual'), 300)
+            );
             // Blur gecikmeli olsun ki tıklama algılansın
             recordSearchInput.addEventListener('blur', () => {
                 setTimeout(() => { 
@@ -248,23 +259,54 @@ export class BulkIndexingModule {
         this.checkFormCompleteness();
     }
 
-    searchRecords(query, tabContext) {
+    async searchRecords(query, tabContext) {
         const containerId = 'searchResultsContainerManual';
         const container = document.getElementById(containerId);
 
         if (!container) return;
-        if (query.length < 2) {
+
+        const rawQuery = (query || '').trim();
+        if (rawQuery.length < 2) {
             container.style.display = 'none';
             return;
         }
 
+        // Çok kısa sorgularda Firestore tarafında minimum uzunluk var.
+        // Sadece numara araması gibi durumlarda (>=5 rakam) daha kısa sorguya izin ver.
+        const digitLen = rawQuery.replace(/\D/g, '').length;
+        if (rawQuery.length < 3 && digitLen < 5) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const seq = ++this._manualSearchSeq;
+        container.innerHTML = '<div style="padding:10px; color:#666;">Aranıyor...</div>';
+        container.style.display = 'block';
+
+        let filtered = [];
+        try {
+            const res = await ipRecordsService.searchRecords(rawQuery);
+            // Kullanıcı hızlı yazdıysa eski sonucu basma
+            if (seq !== this._manualSearchSeq) return;
+
+            if (res && res.success) {
+                filtered = res.data || [];
+            } else {
+                throw new Error(res?.error || 'Arama başarısız');
+            }
+        } catch (err) {
+            // Firestore araması başarısız olursa (permission/offline vb.) local listeden dene
+            const lowerQuery = rawQuery.toLowerCase();
+            filtered = (this.allRecords || []).filter(r => {
+                const title = (r.title || r.markName || '').toLowerCase();
+                const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
+                return title.includes(lowerQuery) || appNo.includes(lowerQuery);
+            });
+        }
+
+        if (seq !== this._manualSearchSeq) return;
+
         container.innerHTML = '';
-        const lowerQuery = query.toLowerCase();
-        
-        const filtered = this.allRecords.filter(r => 
-            (r.title && r.title.toLowerCase().includes(lowerQuery)) ||
-            (r.applicationNumber && r.applicationNumber.toLowerCase().includes(lowerQuery))
-        );
         
         if (filtered.length === 0) {
             container.innerHTML = '<div style="padding:10px; color:#666;">Kayıt bulunamadı.</div>';
@@ -281,10 +323,12 @@ export class BulkIndexingModule {
                 item.addEventListener('mouseleave', () => item.style.background = 'white');
 
                 const label = this.matcher.getDisplayLabel(record);
+                const title = record.title || record.markName || '(İsimsiz)';
+                const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
                 
                 item.innerHTML = `
-                    <div style="font-weight: 600; color: #1e3c72;">${record.title || '(İsimsiz)'}</div>
-                    <div style="font-size: 0.85em; color: #666;">${label} - ${record.applicationNumber}</div>
+                    <div style="font-weight: 600; color: #1e3c72;">${title}</div>
+                    <div style="font-size: 0.85em; color: #666;">${label} - ${appNo}</div>
                 `;
                 
                 item.addEventListener('click', (e) => {
@@ -306,7 +350,9 @@ export class BulkIndexingModule {
         if (inputElement) inputElement.value = ''; // Arama kutusunu temizle
         if (displayElement) {
             const label = this.matcher.getDisplayLabel(record);
-            displayElement.value = `${record.title} (${label}) - ${record.applicationNumber}`;
+            const title = record.title || record.markName || '(İsimsiz)';
+            const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
+            displayElement.value = `${title} (${label}) - ${appNo}`;
         }
 
         this.populateManualTransactionTypeSelect();
