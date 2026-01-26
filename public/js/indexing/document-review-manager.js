@@ -351,11 +351,10 @@ export class DocumentReviewManager {
         const childTypeId = childSelect.value;
         const parentTxId = parentSelect.value;
 
-        // --- DEBUG LOGLARI BAŞLANGICI ---
+        // --- DEBUG LOGLARI ---
         console.log("🔍 checkSpecialFields Çalıştı");
         console.log("👉 Seçilen Alt İşlem ID (Child):", childTypeId);
         console.log("👉 Seçilen Ana İşlem ID (Parent):", parentTxId);
-        // --------------------------------
 
         // 1. İtiraz Bölümü Kontrolü (Tip 27)
         const oppositionSection = document.getElementById('oppositionSection');
@@ -369,41 +368,37 @@ export class DocumentReviewManager {
         if (registrationSection) {
             let showRegistration = false;
 
-            // Kural: Alt İşlem 45 (Tescil Belgesi) İSE
+            // DURUM 1: Alt işlem doğrudan 45 (Tescil Belgesi) ise
             if (childTypeId === '45') {
-                console.log("✅ Alt işlem '45' (Tescil Belgesi) olarak algılandı. Ana işlem kontrol ediliyor...");
-
+                console.log("✅ DURUM 1: Alt işlem 45. Form açılıyor.");
+                showRegistration = true;
+            }
+            // DURUM 2 ve 3: Alt işlem 40 (Kabul/Tescil) ise ANA İŞLEMİ kontrol et
+            else if (childTypeId === '40') {
                 // Seçilen ana işlemin detaylarını bul
                 if (this.currentTransactions && parentTxId) {
                     const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
                     
                     if (parentTx) {
                         const parentType = String(parentTx.type);
-                        console.log("📄 Bulunan Ana İşlem Objesi:", parentTx);
-                        console.log("🆔 Ana İşlem Tipi (Parent Type):", parentType);
-                        
-                        // Ana işlem tiplerini kontrol et: 6 (Eşya Sınırlandırma) veya 17 (Vazgeçme)
+                        console.log("📄 Ana İşlem Tipi:", parentType);
+
+                        // Parent 6 (Eşya Sınırlandırma) VEYA Parent 17 (Vazgeçme) ise
                         if (parentType === '6' || parentType === '17') {
-                            console.log("✅ EŞLEŞME BAŞARILI! Ana işlem 6 veya 17. Form açılıyor.");
+                            console.log(`✅ DURUM 2/3: Alt işlem 40 ve Ana işlem ${parentType}. Form açılıyor.`);
                             showRegistration = true;
                         } else {
-                            console.warn("❌ EŞLEŞME OLMADI. Ana işlem tipi 6 veya 17 değil.");
+                            console.log(`ℹ️ Alt işlem 40 ama Ana işlem (${parentType}) 6 veya 17 değil.`);
                         }
-                    } else {
-                        console.error("⚠️ HATA: Seçilen Parent ID listede (currentTransactions) bulunamadı!", parentTxId);
                     }
-                } else {
-                    console.log("ℹ️ Ana işlem seçili değil veya liste boş.");
                 }
-            } else {
-                console.log("ℹ️ Seçilen alt işlem 45 değil, form açılmayacak.");
+            } 
+            else {
+                console.log("ℹ️ Alt işlem 40 veya 45 değil. Form kapalı.");
             }
 
             // Sonucu uygula
-            console.log("🏁 SONUÇ: Form Gösterilecek mi? ->", showRegistration);
             registrationSection.style.display = showRegistration ? 'block' : 'none';
-        } else {
-            console.error("🚨 HATA: HTML sayfasında 'registrationSection' ID'li element bulunamadı! Lütfen HTML'i kontrol edin.");
         }
     }
 
