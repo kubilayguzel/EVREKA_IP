@@ -410,7 +410,7 @@ export class TaskSubmitHandler {
         // SENARYO 3: Ertelenmiş Tahakkuk
         console.log('⏳ Tahakkuk verisi girilmedi. Özel ID (T-XX) ile görev açılıyor...');
 
-        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
+        let assignedUid = "dqk6yRN7Kwgf6HIJldLt9Uz77RU2"; 
         let assignedEmail = "selcanakoglu@evrekapatent.com";
 
         try {
