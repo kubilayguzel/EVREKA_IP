@@ -586,13 +586,17 @@ updateTabBadge() {
         }
 
         if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
-        if (!isSilent && window.SimpleLoadingController && typeof window.SimpleLoadingController.show === 'function') {
+        // ✅ Hemen göster (liste/DB beklemeden)
+        if (!isSilent && window.SimpleLoadingController?.show) {
+        this._listLoadingShownAt = performance.now();
         window.SimpleLoadingController.show({
-            text: 'Tebligatlar yükleniyor',
-            subtext: 'PDF bilgileri hazırlanıyor, lütfen bekleyin...'
+            text: 'ETEBS evrakları yükleniyor',
+            subtext: 'Listeler hazırlanıyor, lütfen bekleyin...'
         });
-        }
 
+        // ✅ Tarayıcıya 1 frame paint şansı ver ki animasyon hemen görünsün
+        await new Promise(requestAnimationFrame);
+        }
 
         // UI Temizliği
         this.notifications = [];
@@ -687,12 +691,17 @@ updateTabBadge() {
         } catch (error) {
             console.error('Liste Hatası:', error);
             if (!isSilent) this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
-        } finally {
+            } finally {
             this.setLoading(false);
-            if (!isSilent && window.SimpleLoadingController && typeof window.SimpleLoadingController.hide === 'function') {
-                window.SimpleLoadingController.hide();
+
+            // ✅ En az 250ms görünsün (çok hızlı işlemlerde “gözükmedi” hissini engeller)
+            if (!isSilent && window.SimpleLoadingController?.hide) {
+                const elapsed = performance.now() - (this._listLoadingShownAt || 0);
+                const delay = Math.max(0, 250 - elapsed);
+                setTimeout(() => window.SimpleLoadingController.hide(), delay);
             }
         }
+
     }
 
     async matchWithIPRecords() {
