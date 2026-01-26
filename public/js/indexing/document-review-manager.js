@@ -139,48 +139,67 @@ export class DocumentReviewManager {
             displayInput.value = officialDate.toLocaleDateString('tr-TR');
         }
 
-    async loadData() {
-        try {
-            const docRef = doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId);
-            const docSnap = await getDoc(docRef);
-            if (!docSnap.exists()) throw new Error('PDF kaydı bulunamadı.');
-            
-            this.pdfData = { id: docSnap.id, ...docSnap.data() };
+        // public/js/indexing/document-review-manager.js dosyasındaki loadData metodunu bu şekilde güncelleyin:
 
-            // ==========================================================
-            // PDF'İ GÖRÜNTÜLEME (KRİTİK GÜNCELLEME)
-            // ==========================================================
-            const pdfViewerEl = document.getElementById('pdfViewer');
-            if (pdfViewerEl) {
-                // Veritabanındaki alana göre fileUrl veya downloadURL kullanılır
-                const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
-                if (pdfUrl) {
-                    pdfViewerEl.src = pdfUrl;
-                } else {
-                    console.warn("PDF URL'si bulunamadı. Lütfen veritabanını kontrol edin.");
-                }
-            }
+async loadData() {
+    try {
+        const docRef = doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) throw new Error('PDF kaydı bulunamadı.');
+        
+        this.pdfData = { id: docSnap.id, ...docSnap.data() };
+        console.log("📄 PDF Verisi Yüklendi:", this.pdfData); // Debug için
 
-            if (this.pdfData.matchedRecordId) {
-                await this.selectRecord(this.pdfData.matchedRecordId);
-            } else {
-                this.renderHeader();
-            }
-            
-            this.renderHeader();
-            // Artık runAnalysis() çağrısı yapılmıyor, PDF direkt yükleniyor.
-
-        } catch (error) {
-            console.error('Veri yükleme hatası:', error);
-            showNotification('Veri yükleme hatası: ' + error.message, 'error');
+        // 1. PDF Görüntüleyiciyi Set Et
+        const pdfViewerEl = document.getElementById('pdfViewer');
+        if (pdfViewerEl) {
+            const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
+            if (pdfUrl) pdfViewerEl.src = pdfUrl;
         }
+
+        // 2. Tebliğ Tarihini Otomatik Doldur
+        // ETEBS'den gelen veri 'tebligTarihi' veya 'tebligTarihiFormatted' olabilir
+        const rawTeblig = this.pdfData.tebligTarihi || this.pdfData.uygulamaKonmaTarihi;
+        if (rawTeblig) {
+            const dateInput = document.getElementById('detectedDate');
+            if (dateInput) {
+                // Tarih GG/AA/YYYY formatında geliyorsa YYYY-AA-GG formatına çevir (input[type="date"] için)
+                let formattedDate = rawTeblig;
+                if (typeof rawTeblig === 'string' && rawTeblig.includes('/')) {
+                    const parts = rawTeblig.split('/');
+                    if (parts.length === 3) formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+                dateInput.value = formattedDate;
+                
+                // Varsa son tarih hesaplamasını tetikle
+                if (this.updateCalculatedDeadline) this.updateCalculatedDeadline();
+            }
+        }
+
+        // 3. Eşleşen Kayıt Varsa Seçimi Yap
+        // Bu adım "Kayıt Bağlantısı" kutusunu otomatik dolduracaktır
+        if (this.pdfData.matchedRecordId) {
+            await this.selectRecord(this.pdfData.matchedRecordId);
+        } else {
+            this.renderHeader();
+        }
+
+    } catch (error) {
+        console.error('Veri yükleme hatası:', error);
+        showNotification('Veri yükleme hatası: ' + error.message, 'error');
     }
+}
 
     async selectRecord(recordId) {
         try {
             const result = await ipRecordsService.getRecordById(recordId);
             if (result.success) {
                 this.matchedRecord = result.data;
+
+            const manualSearchInput = document.getElementById('manualSearchInput');
+            if (manualSearchInput) {
+                manualSearchInput.value = this.matchedRecord.applicationNumber || this.matchedRecord.applicationNo || '';
+            }
 
                 // ==========================================================
                 // HİBRİT SAHİP BİLGİSİ ÇÖZÜMLEME (DOĞRUDAN İSİM VEYA ID)
