@@ -29,7 +29,7 @@ import {
 } from '../../utils.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
-const SELCAN_UID = '8A9HHfdKKNR3WKl6tCtJH5Khjkx1'; 
+const SELCAN_UID = 'dqk6yRN7Kwgf6HIJldLt9Uz77RU2'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 export class DocumentReviewManager {
@@ -218,13 +218,13 @@ async loadData() {
         }
 
         // 3. Eşleşen Kayıt Varsa Seçimi Yap
-        if (this.prefillRecordId) {
-            await this.selectRecord(this.prefillRecordId);
-        } else if (this.pdfData.matchedRecordId) {
-            await this.selectRecord(this.pdfData.matchedRecordId);
-        } else {
-            this.renderHeader();
-        }
+    if (this.prefillRecordId) {
+        await this.selectRecord(this.prefillRecordId);
+    } else if (this.pdfData.matchedRecordId) {
+        await this.selectRecord(this.pdfData.matchedRecordId);
+    } else {
+        this.renderHeader();
+    }
 
 
     } catch (error) {
