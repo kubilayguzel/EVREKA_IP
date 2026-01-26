@@ -3,6 +3,8 @@
 import { etebsService, etebsAutoProcessor, firebaseServices, authService, ipRecordsService } from '../firebase-config.js';
 import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import './simple-loading.js';
+
 
 // EKLENECEK KISIM (import'ların hemen altına):
 // Storage referansını initialize et
@@ -506,21 +508,21 @@ deactivateUploadMode() {
 // 🔄 GÜNCELLENECEK FONKSİYON (public/js/etebs-module.js)
 
 updateTabBadge() {
-    try {
-        const badge = document.querySelector('.tab-badge') || document.getElementById('totalBadge'); // ID değişebilir, kontrol edin
-        
-        // Artık mod ayrımı yapmaya gerek yok, hepsi notifications içinde.
-        // ETEBS veya Manuel fark etmeksizin toplam sayıyı göster.
-        if (badge) {
-            const count = this.notifications ? this.notifications.length : 0;
-            badge.textContent = count;
-            // Badge görünürlüğü (opsiyonel)
-            badge.style.display = count > 0 ? 'inline-block' : 'none'; 
-        }
-    } catch (error) {
-        console.error('❌ Error updating tab badge:', error);
+  try {
+    const badge = document.querySelector('.tab-badge') || document.getElementById('totalBadge');
+
+    if (badge) {
+      const list = Array.isArray(this.notifications) ? this.notifications : [];
+      const count = list.filter(n => String(n?.status || '').toLowerCase() !== 'indexed').length;
+
+      badge.textContent = count;
+      badge.style.display = count > 0 ? 'inline-block' : 'none';
     }
+  } catch (error) {
+    console.error('❌ Error updating tab badge:', error);
+  }
 }
+
 
     async loadSavedToken() {
         try {
@@ -571,6 +573,13 @@ updateTabBadge() {
 
         this.setLoading(true);
         if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
+        if (!isSilent && window.SimpleLoadingController && typeof window.SimpleLoadingController.show === 'function') {
+        window.SimpleLoadingController.show({
+            text: 'Tebligatlar yükleniyor',
+            subtext: 'PDF bilgileri hazırlanıyor, lütfen bekleyin...'
+        });
+        }
+
 
         // UI Temizliği
         this.notifications = [];
@@ -667,6 +676,9 @@ updateTabBadge() {
             if (!isSilent) this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
         } finally {
             this.setLoading(false);
+            if (!isSilent && window.SimpleLoadingController && typeof window.SimpleLoadingController.hide === 'function') {
+                window.SimpleLoadingController.hide();
+            }
         }
     }
 
