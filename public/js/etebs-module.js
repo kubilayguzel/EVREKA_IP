@@ -69,6 +69,26 @@ constructor() {
     this.bindTabEvents();
 }
 
+// Tarihi input[type="date"] için yyyy-MM-dd formatına çevirir
+toYMD(raw) {
+    if (!raw) return '';
+    let d = raw;
+
+    // Firestore Timestamp
+    if (d && typeof d.toDate === 'function') d = d.toDate();
+    // {seconds: ...} gibi objeler
+    else if (d && d.seconds) d = new Date(d.seconds * 1000);
+
+    if (!(d instanceof Date)) d = new Date(d);
+    if (isNaN(d.getTime())) return '';
+
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+
 // public/js/etebs-module.js
 
 async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs') {
@@ -166,12 +186,27 @@ async indexNotification(token, notification) {
         if (unindexedDoc) {
             showNotification('Evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
             const pdfId = unindexedDoc.id;
+
+            // Dosya no (Kayıt Ara’da otomatik yazılacak)
+            const q = notification.dosyaNo || notification.evrakNo || '';
+
+            // Eşleşen kayıt id (seçili kayıt otomatik set edilecek)
+            const recordId = notification.matchedRecordId || '';
+
+            // Tebliğ tarihi (date input için yyyy-MM-dd)
+            const deliveryDate = this.toYMD(notification.tebligTarihi || notification.belgeTarihi || notification.uploadedAt);
+
             setTimeout(() => {
-            window.location.href = `indexing-detail.html?pdfId=${pdfId}`;
+                window.location.href =
+                    `indexing-detail.html?pdfId=${encodeURIComponent(pdfId)}` +
+                    `&q=${encodeURIComponent(q)}` +
+                    `&recordId=${encodeURIComponent(recordId)}` +
+                    `&deliveryDate=${encodeURIComponent(deliveryDate)}`;
             }, 500);
 
             return;
-        } else {
+        }
+        else {
              // 3. Hiçbir yerde yoksa, BATCH işleminde indirilemediğini varsay.
             showNotification('Bu evrak sistemde kayıtlı değil. Batch işleminde indirme başarısız olmuş olabilir.', 'error');
             return;
