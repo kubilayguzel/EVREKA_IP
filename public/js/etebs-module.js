@@ -776,53 +776,73 @@ autoSwitchTab(matchedCount, unmatchedCount) {
         console.error('❌ Error in auto tab switch:', error);
     }
 }
+
 displayNotifications() {
+  // Önceki render kuyruğu varsa iptal et (peş peşe çağrılınca flicker/çakışma olmasın)
+  if (this._displayNotificationsTimer) {
+    clearTimeout(this._displayNotificationsTimer);
+    this._displayNotificationsTimer = null;
+  }
+
+  const total = Array.isArray(this.filteredNotifications) ? this.filteredNotifications.length : 0;
+  const shouldShow = !!window.SimpleLoadingController?.show && total > 0;
+
+  if (shouldShow) {
+    window.SimpleLoadingController.show({
+      text: 'Listeler hazırlanıyor',
+      subtext: 'Eşleşen / Eşleşmeyen / İndekslenen listeleri güncelleniyor...'
+    });
+  }
+
+  // Loader'ın ekranda görünmesi için render'ı bir sonraki tick'e bırak
+  this._displayNotificationsTimer = setTimeout(() => {
     try {
-        const matchedList = document.getElementById('matchedNotificationsList');
-        const unmatchedList = document.getElementById('unmatchedNotificationsList');
-        const indexedList = document.getElementById('indexedNotificationsList'); // ✅ YENİ
-        
-        if (!matchedList || !unmatchedList || !indexedList) return;
+      const matchedList = document.getElementById('matchedNotificationsList');
+      const unmatchedList = document.getElementById('unmatchedNotificationsList');
+      const indexedList = document.getElementById('indexedNotificationsList');
 
-        // Filtreleme Mantığı:
-        // 1. İndekslenenler: status === 'indexed'
-        // 2. Eşleşenler: matched === true VE status !== 'indexed'
-        // 3. Eşleşmeyenler: matched === false VE status !== 'indexed'
+      if (!matchedList || !unmatchedList || !indexedList) return;
 
-        const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
-        const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
-        
-        const matchedNotifications = remainingNotifications.filter(n => 
+      const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
+      const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
+
+      const matchedNotifications = remainingNotifications.filter(n =>
         n.matched === true || (n.matchedRecordId && n.matchedRecordId !== "")
-        );
+      );
 
-        const unmatchedNotifications = remainingNotifications.filter(n => 
-            !n.matched && (!n.matchedRecordId || n.matchedRecordId === "")
-        );
+      const unmatchedNotifications = remainingNotifications.filter(n =>
+        !n.matched && (!n.matchedRecordId || n.matchedRecordId === "")
+      );
 
-        // Listeleri Render Et
-        this.renderNotificationsList(matchedList, matchedNotifications, 'matched');
-        this.renderNotificationsList(unmatchedList, unmatchedNotifications, 'unmatched');
-        this.renderNotificationsList(indexedList, indexedNotifications, 'indexed'); // ✅ YENİ
+      // Listeleri Render Et
+      this.renderNotificationsList(matchedList, matchedNotifications, 'matched');
+      this.renderNotificationsList(unmatchedList, unmatchedNotifications, 'unmatched');
+      this.renderNotificationsList(indexedList, indexedNotifications, 'indexed');
 
-        // Badges Güncelle
-        const updateBadge = (id, count) => {
-            const el = document.getElementById(id);
-            if(el) el.textContent = count;
-        };
+      // Badges Güncelle
+      const updateBadge = (id, count) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = count;
+      };
 
-        updateBadge('matchedTabBadge', matchedNotifications.length);
-        updateBadge('unmatchedTabBadge', unmatchedNotifications.length);
-        updateBadge('indexedTabBadge', indexedNotifications.length); // ✅ YENİ
+      updateBadge('matchedTabBadge', matchedNotifications.length);
+      updateBadge('unmatchedTabBadge', unmatchedNotifications.length);
+      updateBadge('indexedTabBadge', indexedNotifications.length);
 
-        // Otomatik Tab Geçişi (İndekslenenler hariç, odaklanılması gereken işlere yönlendirir)
-        this.autoSwitchTab(matchedNotifications.length, unmatchedNotifications.length);
+      // Otomatik Tab Geçişi
+      this.autoSwitchTab(matchedNotifications.length, unmatchedNotifications.length);
 
     } catch (error) {
-        console.error('Error displaying notifications:', error);
-    }
-}
+      console.error('Error displaying notifications:', error);
+    } finally {
+      this._displayNotificationsTimer = null;
 
+      if (shouldShow && window.SimpleLoadingController?.hide) {
+        window.SimpleLoadingController.hide();
+      }
+    }
+  }, 0);
+}
 
     // 6. renderNotificationsList fonksiyonunu güncelleyin (değişiklik yok ama kontrol için)
     renderNotificationsList(container, notifications, isMatched) {
