@@ -577,6 +577,14 @@ updateTabBadge() {
         const user = authService?.auth?.currentUser;
 
         this.setLoading(true);
+        if (!isSilent && window.SimpleLoadingController?.show) {
+        window.SimpleLoadingController.show({
+            text: 'ETEBS evrakları yükleniyor',
+            subtext: 'Lütfen bekleyin...'
+        });
+        await new Promise(requestAnimationFrame);
+        }
+
         if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
         if (!isSilent && window.SimpleLoadingController && typeof window.SimpleLoadingController.show === 'function') {
         window.SimpleLoadingController.show({
@@ -643,7 +651,7 @@ updateTabBadge() {
             // ADIM 2: Veritabanından son durumu çek ve göster
             if (!isSilent) this.updateStatusMessage('Listeleniyor...');
             
-            await new Promise((r) => setTimeout(r, 1000));
+            await new Promise((r) => setTimeout(r, 200));
 
             const dbRecords = await etebsService.getRecentUnindexedDocuments(50);
 
