@@ -313,20 +313,28 @@ bindEvents() {
             if (fetchBtn) {
                 // DÜZELTME: Event objesinin isSilent yerine geçmesini engellemek için arrow function kullanıyoruz
                 fetchBtn.addEventListener('click', async (e) => {
-                    e.preventDefault(); // Sayfanın yenilenmesini engelle
-                    
-                    // 1. Kullanıcının girdiği token'ı alıp hafızaya kaydet
-                    const tokenInput = document.getElementById('etebsTokenInput');
-                    if (tokenInput && tokenInput.value.trim()) {
-                        localStorage.setItem('etebs_token', tokenInput.value.trim());
-                    }
-                    
-                    // 2. Fonksiyonu açıkça 'false' (Sessiz mod KAPALI) olarak çağır
-                    // Böylece ekranda "Yükleniyor..." veya Hata mesajlarını görebileceksiniz.
-                    await this.fetchNotifications(false, true);
-                });
-            }
+                e.preventDefault();
 
+                const tokenInput = document.getElementById('etebsTokenInput');
+                if (tokenInput && tokenInput.value.trim()) {
+                    localStorage.setItem('etebs_token', tokenInput.value.trim());
+                }
+
+                // ✅ 1) HEMEN göster (daha fetch başlamadan)
+                if (window.SimpleLoadingController?.show) {
+                    window.SimpleLoadingController.show({
+                    text: 'ETEBS evrakları yükleniyor',
+                    subtext: 'Listeler hazırlanıyor...'
+                    });
+
+                    // ✅ 2) Tarayıcıya 1 frame “paint” şansı ver
+                    await new Promise(requestAnimationFrame);
+                }
+
+                await this.fetchNotifications(false, true);
+                });
+
+            }
 
             // Refresh notifications
             const refreshBtn = document.getElementById('refreshNotificationsBtn');
