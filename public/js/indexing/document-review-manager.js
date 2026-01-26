@@ -357,23 +357,25 @@ export class DocumentReviewManager {
             oppositionSection.style.display = (childTypeId === '27') ? 'block' : 'none';
         }
 
-        // 2. Tescil Formu Kontrolü (YENİ MANTIK)
-        // Kural: Ana İşlem Tipi 6 veya 17 İSE VE Seçilen Alt İşlem 40 İSE -> Formu Aç
+        // 2. Tescil ve Eşya Listesi Formu Kontrolü
         const registrationSection = document.getElementById('registrationSection');
         
         if (registrationSection) {
             let showRegistration = false;
 
-            // Öncelikle alt işlem tipinin 40 olup olmadığına bakıyoruz
-            if (childTypeId === '40') {
-                // Seçilen ana işlemin detaylarını bul (currentTransactions listesinden)
+            // Kural: Alt İşlem 45 (Tescil Belgesi) İSE -> Ana İşlem Tipini Kontrol Et
+            // GÜNCELLEME: ID 40 yerine 45 kullanıldı.
+            if (childTypeId === '45') {
+                // Seçilen ana işlemin detaylarını bul
                 if (this.currentTransactions && parentTxId) {
                     const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
                     
                     if (parentTx) {
-                        // Ana işlemin tipini string'e çevirip kontrol et
                         const parentType = String(parentTx.type);
                         
+                        // Ana işlem tiplerini kontrol et:
+                        // 6: Eşya Sınırlandırma
+                        // 17: Vazgeçme
                         if (parentType === '6' || parentType === '17') {
                             showRegistration = true;
                         }
