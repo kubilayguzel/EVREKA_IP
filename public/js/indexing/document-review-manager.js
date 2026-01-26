@@ -35,6 +35,10 @@ const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 export class DocumentReviewManager {
     constructor() {
         this.pdfId = new URLSearchParams(window.location.search).get('pdfId');
+        const params = new URLSearchParams(window.location.search);
+        this.prefillRecordId = params.get('recordId');     // seçili kayıt
+        this.prefillQuery = params.get('q');               // kayıt ara
+        this.prefillDeliveryDate = params.get('deliveryDate'); // tebliğ tarihi (yyyy-MM-dd)
         this.currentUser = null;
         this.pdfData = null;
         this.matchedRecord = null;
@@ -43,6 +47,22 @@ export class DocumentReviewManager {
         this.allTransactionTypes = []; 
         this.init();
     }
+
+    toYMD(raw) {
+    if (!raw) return '';
+    let d = raw;
+
+    if (d && typeof d.toDate === 'function') d = d.toDate();
+    else if (d && d.seconds) d = new Date(d.seconds * 1000);
+
+    if (!(d instanceof Date)) d = new Date(d);
+    if (isNaN(d.getTime())) return '';
+
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
 
     async init() {
         if (!this.pdfId) return;
@@ -150,6 +170,27 @@ async loadData() {
         this.pdfData = { id: docSnap.id, ...docSnap.data() };
         console.log("📄 PDF Verisi Yüklendi:", this.pdfData); // Debug için
 
+        // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
+        const dateInput = document.getElementById('detectedDate');
+        if (dateInput) {
+            const ymd =
+                this.prefillDeliveryDate ||
+                this.toYMD(this.pdfData?.belgeTarihi) ||
+                this.toYMD(this.pdfData?.uploadedAt);
+
+            if (ymd) dateInput.value = ymd;
+        }
+
+        // 2) "Kayıt Ara" input'unu doldurup arat
+        const searchInput = document.getElementById('manualSearchInput');
+        if (searchInput && this.prefillQuery) {
+            searchInput.value = this.prefillQuery;
+
+            // gerçekten "aranmış" olsun istiyorsan:
+            await this.handleManualSearch(this.prefillQuery);
+        }
+
+
         // 1. PDF Görüntüleyiciyi Set Et
         const pdfViewerEl = document.getElementById('pdfViewer');
         if (pdfViewerEl) {
@@ -177,12 +218,14 @@ async loadData() {
         }
 
         // 3. Eşleşen Kayıt Varsa Seçimi Yap
-        // Bu adım "Kayıt Bağlantısı" kutusunu otomatik dolduracaktır
-        if (this.pdfData.matchedRecordId) {
+        if (this.prefillRecordId) {
+            await this.selectRecord(this.prefillRecordId);
+        } else if (this.pdfData.matchedRecordId) {
             await this.selectRecord(this.pdfData.matchedRecordId);
         } else {
             this.renderHeader();
         }
+
 
     } catch (error) {
         console.error('Veri yükleme hatası:', error);
