@@ -197,27 +197,8 @@ async loadData() {
             const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
             if (pdfUrl) pdfViewerEl.src = pdfUrl;
         }
-
-        // 2. Tebliğ Tarihini Otomatik Doldur
-        // ETEBS'den gelen veri 'tebligTarihi' veya 'tebligTarihiFormatted' olabilir
-        const rawTeblig = this.pdfData.tebligTarihi || this.pdfData.uygulamaKonmaTarihi;
-        if (rawTeblig) {
-            const dateInput = document.getElementById('detectedDate');
-            if (dateInput) {
-                // Tarih GG/AA/YYYY formatında geliyorsa YYYY-AA-GG formatına çevir (input[type="date"] için)
-                let formattedDate = rawTeblig;
-                if (typeof rawTeblig === 'string' && rawTeblig.includes('/')) {
-                    const parts = rawTeblig.split('/');
-                    if (parts.length === 3) formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                }
-                dateInput.value = formattedDate;
-                
-                // Varsa son tarih hesaplamasını tetikle
-                if (this.updateCalculatedDeadline) this.updateCalculatedDeadline();
-            }
-        }
-
-        // 3. Eşleşen Kayıt Varsa Seçimi Yap
+ 
+        // 2. Eşleşen Kayıt Varsa Seçimi Yap
     if (this.prefillRecordId) {
         await this.selectRecord(this.prefillRecordId);
     } else if (this.pdfData.matchedRecordId) {
