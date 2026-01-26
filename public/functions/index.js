@@ -2243,9 +2243,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
     const isSensitiveTask = triggeringTaskType ? SENSITIVE_TASK_TYPES.includes(triggeringTaskType) : false;
 
-    const finalStatus = missingFields.length > 0 
-        ? "missing_info" 
-        : (isEvaluationRequired ? "evaluation_pending" : "awaiting_client_approval");
+    const finalStatus = missingFields.length > 0
+      ? "missing_info"
+      : (isSensitiveTask ? "evaluation_pending" : "awaiting_client_approval");
+
 
     console.log(`📊 Durum Belirleme:`, {
         missingFields,
