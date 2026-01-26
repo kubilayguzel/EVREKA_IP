@@ -27,6 +27,7 @@ import {
     TURKEY_HOLIDAYS,
     generateUUID 
 } from '../../utils.js';
+import '../simple-loading.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 const SELCAN_UID = 'dqk6yRN7Kwgf6HIJldLt9Uz77RU2'; 
@@ -162,6 +163,13 @@ export class DocumentReviewManager {
         // public/js/indexing/document-review-manager.js dosyasındaki loadData metodunu bu şekilde güncelleyin:
 
 async loadData() {
+    if (window.SimpleLoadingController && typeof window.SimpleLoadingController.show === 'function') {
+        window.SimpleLoadingController.show({
+            text: 'PDF yükleniyor',
+            subtext: 'Belge hazırlanıyor, lütfen bekleyin...'
+        });
+        }
+
     try {
         const docRef = doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId);
         const docSnap = await getDoc(docRef);
@@ -194,8 +202,27 @@ async loadData() {
         // 1. PDF Görüntüleyiciyi Set Et
         const pdfViewerEl = document.getElementById('pdfViewer');
         if (pdfViewerEl) {
-            const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
-            if (pdfUrl) pdfViewerEl.src = pdfUrl;
+        const onLoaded = () => {
+            if (window.SimpleLoadingController && typeof window.SimpleLoadingController.hide === 'function') {
+            window.SimpleLoadingController.hide();
+            }
+            pdfViewerEl.removeEventListener('load', onLoaded);
+        };
+
+        pdfViewerEl.addEventListener('load', onLoaded);
+
+        const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
+        if (pdfUrl) {
+            pdfViewerEl.src = pdfUrl;
+        } else {
+            if (window.SimpleLoadingController && typeof window.SimpleLoadingController.hide === 'function') {
+            window.SimpleLoadingController.hide();
+            }
+        }
+        } else {
+        if (window.SimpleLoadingController && typeof window.SimpleLoadingController.hide === 'function') {
+            window.SimpleLoadingController.hide();
+        }
         }
  
         // 2. Eşleşen Kayıt Varsa Seçimi Yap
