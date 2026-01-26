@@ -392,6 +392,9 @@
             window.etebsManager = new ETEBSManager();
             window.epatsUiManager = new EpatsUiManager();
 
+            // ✅ Manuel işlemdeki kayıt araması ve "Manuel İşlemi Kaydet" akışı bu modülde.
+            window.indexingModule = new BulkIndexingModule();
+
             // 1. Ana Tab Geçişleri
 
             const navBtns = document.querySelectorAll('.nav-btn.tab-btn');
