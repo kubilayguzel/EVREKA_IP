@@ -130,47 +130,38 @@ export class PortfolioUpdateManager {
     }
 
 
-    handleTransactionTypeChange() {
-        if (!this.elements.childTransactionType || !this.elements.registryEditorSection) return;
+handleTransactionTypeChange() {
+    if (!this.elements.childTransactionType || !this.elements.registryEditorSection) return;
 
-        const selectedOption = this.elements.childTransactionType.options[this.elements.childTransactionType.selectedIndex];
-        const childTypeId = String(this.elements.childTransactionType.value);
-        const typeText = selectedOption ? selectedOption.text.toLowerCase() : '';
+    const childTypeId = String(this.elements.childTransactionType.value);
+    
+    // Parent tipi elementini HTML'den çekiyoruz
+    const parentTypeEl = document.getElementById('parentProcessType');
+    const parentTypeId = parentTypeEl ? String(parentTypeEl.value) : '';
 
-        // Parent İşlem Tipini Al (Giriş stratejisinden veya state'den)
-        const parentTypeElement = document.getElementById('parentProcessType');
-        const parentTypeId = parentTypeElement ? String(parentTypeElement.value) : '';
+    // Koşul kontrolü
+    const isRegistry = childTypeId === '45' || 
+                      (childTypeId === '40' && (parentTypeId === '6' || parentTypeId === '17'));
 
-        /**
-         * GÜNCELLEME MANTIĞI:
-         * 1. Tip 45 ise her zaman aç (Mevcut yapı).
-         * 2. Tip 40 ise; Parent 17 (Tescil Kararı) veya 6 (Yenileme) ise aç.
-         */
-        const isRegistry = childTypeId === '45' || 
-                          (childTypeId === '40' && (parentTypeId === '17' || parentTypeId === '6')) ||
-                          typeText.includes('tescil belgesi');
-
-        if (isRegistry) {
-            // Formu (Registry Editor) göster
-            this.elements.registryEditorSection.style.display = 'block';
-            
-            const r = this.state.recordData;
-            if (r && r.goodsAndServicesByClass) {
-                const formatted = r.goodsAndServicesByClass.map(g => 
-                    `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
-                );
-                
-                setTimeout(() => {
-                    if (typeof setSelectedNiceClasses === 'function') {
-                        setSelectedNiceClasses(formatted);
-                    }
-                }, 100);
-            }
-        } else {
-            // Koşullar sağlanmazsa formu gizle
-            this.elements.registryEditorSection.style.display = 'none';
+    if (isRegistry) {
+        this.elements.registryEditorSection.style.display = 'block';
+        
+        // Mevcut verileri Nice editörüne setleme mantığı (Kodunuzun devamındaki kısım)
+        const r = this.state.recordData;
+        if (r && r.goodsAndServicesByClass) {
+            const formatted = r.goodsAndServicesByClass.map(g => 
+                `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`
+            );
+            setTimeout(() => {
+                if (typeof setSelectedNiceClasses === 'function') {
+                    setSelectedNiceClasses(formatted);
+                }
+            }, 100);
         }
+    } else {
+        this.elements.registryEditorSection.style.display = 'none';
     }
+}
 
     initDatePickers() {
         if (typeof flatpickr !== 'undefined') {
