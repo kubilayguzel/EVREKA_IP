@@ -591,19 +591,25 @@ export const ipRecordsService = {
     },
     async searchRecords(searchTerm) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
-        if (!searchTerm || searchTerm.length < 3) return { success: true, data: [] };
+        if (!searchTerm || searchTerm.trim().length < 3) return { success: true, data: [] };
 
         try {
-            const term = searchTerm.toLowerCase();
+            const termRaw = searchTerm.trim();
+            const term = termRaw.toLowerCase();
             
-            // ÖNCE: Uygulama Numarası ile Tam Eşleşme Sorgusu (Çok Hızlıdır)
-            const appNoQuery = query(collection(db, 'ipRecords'), 
-                                    where("applicationNumber", "==", searchTerm.trim()), 
-                                    limit(5));
-            const appSnap = await getDocs(appNoQuery);
-            
-            if (!appSnap.empty) {
-                return { success: true, data: appSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+            // ÖNCE: Numaralar ile Tam Eşleşme Sorguları (Çok Hızlıdır)
+            // Not: Firestore OR sorgusu olmadığından sırayla deneriz.
+            const exactFields = ['applicationNumber', 'applicationNo', 'wipoIR', 'aripoIR', 'dosyaNo', 'fileNo'];
+            for (const field of exactFields) {
+                try {
+                    const qExact = query(collection(db, 'ipRecords'), where(field, '==', termRaw), limit(5));
+                    const snapExact = await getDocs(qExact);
+                    if (!snapExact.empty) {
+                        return { success: true, data: snapExact.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+                    }
+                } catch (e) {
+                    // Bazı alanlar şema dışı olabilir ya da index/permission sorunları yaşanabilir; sessizce devam et.
+                }
             }
 
             // SONRA: Eğer numara değilse, mevcut "fetch 500" mantığını 
@@ -622,10 +628,19 @@ export const ipRecordsService = {
             const results = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                const title = (data.title || '').toLowerCase();
-                const appNo = (data.applicationNumber || '').toLowerCase();
+                const title = (data.title || data.markName || '').toLowerCase();
+                const nos = [
+                    data.applicationNumber,
+                    data.applicationNo,
+                    data.wipoIR,
+                    data.aripoIR,
+                    data.dosyaNo,
+                    data.fileNo
+                ].filter(Boolean).map(v => String(v).toLowerCase());
 
-                if (title.includes(term) || appNo.includes(term)) {
+                const noHit = nos.some(v => v.includes(term));
+
+                if (title.includes(term) || noHit) {
                     results.push({ id: doc.id, ...data });
                 }
             });
