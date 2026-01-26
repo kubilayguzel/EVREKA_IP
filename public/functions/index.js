@@ -28,6 +28,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin
 import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from './utils.js';
 import { ImageRun } from 'docx';
 import { v4 as uuidv4 } from "uuid";
+import { PDFDocument } from 'pdf-lib';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -197,55 +198,44 @@ function joinNumericKeyObject(obj) {
     .join('');
 }
 
-function extractBase64(downloadRawData) {
-  // Dokümana göre tipik alan: DownloadDocumentResult: [ { BASE64: "..." } ]
+// --- YENİ HELPER: Tüm parçaları liste olarak döner ---
+function extractAllAttachments(downloadRawData) {
+  // Dokümana göre ana düğüm: DownloadDocumentResult
   let node = downloadRawData?.DownloadDocumentResult ?? downloadRawData;
+  const documents = [];
 
-  // 1) Node direkt STRING ise -> string key'leri "0,1,2..." gibi görünür; base64 bu olabilir
-  if (typeof node === 'string' && node.length > 0) return node;
-
-  // 2) Array ise ilk elemandan BASE64 al
-  if (Array.isArray(node)) {
-    const first = node[0];
-
-    if (first?.BASE64 && typeof first.BASE64 === 'string') return first.BASE64;
-    if (typeof first === 'string' && first.length > 0) return first;
-
-    // first numeric-key object olabilir
-    if (first && typeof first === 'object') {
-      const joined = joinNumericKeyObject(first);
-      if (joined) return joined;
-    }
-  }
-
-  // 3) Object ise BASE64 veya numeric-key join
-  if (node && typeof node === 'object') {
-    if (typeof node.BASE64 === 'string') return node.BASE64;
-
-    const joined = joinNumericKeyObject(node);
+  // Yardımcı: Tek bir objeden Base64 çıkarma
+  const extractFromObject = (obj) => {
+    if (!obj) return null;
+    if (typeof obj === 'string') return obj; // Direkt string ise
+    
+    // 1. Standart BASE64 alanı
+    if (obj.BASE64 && typeof obj.BASE64 === 'string') return obj.BASE64;
+    
+    // 2. Parçalanmış numeric keys (0, 1, 2...) kontrolü
+    const joined = joinNumericKeyObject(obj);
     if (joined) return joined;
+
+    return null;
+  };
+
+  // Eğer dizi ise (Dizi = Üst Yazı + Ekler)
+  if (Array.isArray(node)) {
+    node.forEach(item => {
+      const b64 = extractFromObject(item);
+      const desc = item.BELGE_ACIKLAMASI || item.belgeAciklamasi || "Ek";
+      if (b64) documents.push({ base64: b64, description: desc });
+    });
+  } 
+  // Eğer tek obje ise
+  else if (typeof node === 'object') {
+    const b64 = extractFromObject(node);
+    const desc = node.BELGE_ACIKLAMASI || node.belgeAciklamasi || "Ana Doküman";
+    if (b64) documents.push({ base64: b64, description: desc });
   }
 
-  // 4) Son çare: tüm objede BASE64 alanını dolaşarak ara
-  const stack = [downloadRawData];
-  const seen = new Set();
-
-  while (stack.length) {
-    const cur = stack.pop();
-    if (!cur || typeof cur !== 'object') continue;
-    if (seen.has(cur)) continue;
-    seen.add(cur);
-
-    if (typeof cur.BASE64 === 'string') return cur.BASE64;
-
-    for (const v of Object.values(cur)) {
-      if (v && typeof v === 'object') stack.push(v);
-    }
-  }
-
-  return null;
+  return documents;
 }
-
 
 // ETEBS API Proxy Function (Toptan Kayıt Modeli)
 // functions/index.js (GÜNCELLENMİŞ ETEBS PROXY)
@@ -362,63 +352,85 @@ export const etebsProxyV2 = onRequest(
                       }
                     }
 
-                    // --- 🔥 DÜZELTME: PATLAMIŞ VERİ (EXPLODED OBJECT) ONARIMI ---
-                    let base64Data = null;
-
-                    // 1) Standart Hata Kontrolü (005'i önemsemiyoruz => skip)
+                    // --- 🔥 DÜZELTME: ÇOKLU DOSYA BİRLEŞTİRME VE KAYDETME ---
+                    
+                    // 1) Standart Hata Kontrolü
                     if (downloadRawData?.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
                       if (downloadRawData.IslemSonucKod === '005') {
-                        // kullanıcı istedi: 005'i önemsemeyelim
                         downloadFailures.push({ docNo, reason: 'SKIP: 005 (daha önce indirildi)' });
                         return;
                       }
                       throw new Error(`API Hatası: ${downloadRawData.IslemSonucAck} (${downloadRawData.IslemSonucKod})`);
                     }
 
-                    // 2) Base64'ı robust şekilde çıkar (string/array/object/numeric-key hepsi)
-                    base64Data = extractBase64(downloadRawData);
+                    // 2) Tüm parçaları (Üst yazı + Ekler) liste olarak al
+                    const documentParts = extractAllAttachments(downloadRawData);
 
-                    if (!base64Data || typeof base64Data !== 'string' || base64Data.length < 50) {
-                      // Çok kısa stringler genelde base64 değildir; kontrollü hata
-                      const hintKeys = (() => {
-                        try {
-                          const node = downloadRawData?.DownloadDocumentResult ?? downloadRawData;
-                          if (node && typeof node === 'object') return Object.keys(node).slice(0, 20);
-                          return [];
-                        } catch { return []; }
-                      })();
-
-                      console.error(`❌ [${docNo}] BASE64 okunamadı. HintKeys:`, hintKeys);
-                      downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı.' });
-                      return;
+                    if (!documentParts || documentParts.length === 0) {
+                        console.error(`❌ [${docNo}] BASE64 verisi bulunamadı.`);
+                        downloadFailures.push({ docNo, reason: 'BASE64 verisi okunamadı.' });
+                        return;
                     }
 
-                    const pdfBuffer = Buffer.from(base64Data, 'base64');
+                    let finalPdfBuffer;
+
+                    try {
+                        // A) Birden fazla parça varsa BİRLEŞTİR (MERGE)
+                        if (documentParts.length > 1) {
+                            console.log(`🧩 [${docNo}] ${documentParts.length} parça birleştiriliyor...`);
+                            
+                            const mergedPdf = await PDFDocument.create();
+
+                            for (const part of documentParts) {
+                                if (!part.base64) continue;
+                                // Base64 -> Buffer
+                                const partBuffer = Buffer.from(part.base64, 'base64');
+                                // PDF Load
+                                const partDoc = await PDFDocument.load(partBuffer);
+                                // Sayfaları Kopyala
+                                const copiedPages = await mergedPdf.copyPages(partDoc, partDoc.getPageIndices());
+                                // Yeni PDF'e Ekle
+                                copiedPages.forEach((page) => mergedPdf.addPage(page));
+                            }
+
+                            // Birleşmiş PDF'i oluştur
+                            const mergedBytes = await mergedPdf.save();
+                            finalPdfBuffer = Buffer.from(mergedBytes);
+                        } 
+                        // B) Tek parça ise direkt al
+                        else {
+                            finalPdfBuffer = Buffer.from(documentParts[0].base64, 'base64');
+                        }
+
+                    } catch (mergeError) {
+                        console.error(`❌ [${docNo}] PDF Birleştirme Hatası:`, mergeError);
+                        downloadFailures.push({ docNo, reason: 'PDF birleştirme hatası: ' + mergeError.message });
+                        return;
+                    }
+
+                    // --- KAYDETME ---
                     const fileName = `${docNo}_document.pdf`;
                     const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
                     const bucket = admin.storage().bucket();
                     const file = bucket.file(storagePath);
 
-                    // 1. Yeni bir benzersiz token oluşturun
                     const downloadToken = uuidv4();
 
-                    // 2. Dosyayı kaydederken token'ı metadata'ya ekleyin
-                    await file.save(pdfBuffer, { 
+                    await file.save(finalPdfBuffer, { 
                         contentType: 'application/pdf',
                         metadata: { 
                             metadata: { 
                                 originalName: belgeAciklamasi,
-                                firebaseStorageDownloadTokens: downloadToken // Erişim için kritik alan
+                                firebaseStorageDownloadTokens: downloadToken,
+                                mergedCount: documentParts.length // Kaç dosya birleşti bilgisi
                             } 
                         }
                     });
 
-                    // 3. Firebase Storage API formatına uygun, token içeren URL'yi oluşturun
-                    // Path kısmının encode edilmesi (slashların %2F olması) zorunludur.
+                    // URL oluşturma (Mevcut kodunuzun devamı buradan sonra aynen kalabilir)
                     const encodedPath = encodeURIComponent(storagePath);
                     const firebaseUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
-
-
+                    
                     // Döküman ID'si olarak doğrudan evrak numarasını kullanıyoruz
                     const targetRef = adminDb.collection('unindexed_pdfs').doc(docNo);
 
