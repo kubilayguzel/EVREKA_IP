@@ -343,10 +343,46 @@ export class DocumentReviewManager {
     }
 
     checkSpecialFields() {
-        const childTypeId = document.getElementById('detectedType').value;
+        const childSelect = document.getElementById('detectedType');
+        const parentSelect = document.getElementById('parentTransactionSelect');
+        
+        if (!childSelect || !parentSelect) return;
+
+        const childTypeId = childSelect.value;
+        const parentTxId = parentSelect.value;
+
+        // 1. İtiraz Bölümü Kontrolü (Tip 27)
         const oppositionSection = document.getElementById('oppositionSection');
-        if (childTypeId === '27') oppositionSection.style.display = 'block';
-        else oppositionSection.style.display = 'none';
+        if (oppositionSection) {
+            oppositionSection.style.display = (childTypeId === '27') ? 'block' : 'none';
+        }
+
+        // 2. Tescil Formu Kontrolü (YENİ MANTIK)
+        // Kural: Ana İşlem Tipi 6 veya 17 İSE VE Seçilen Alt İşlem 40 İSE -> Formu Aç
+        const registrationSection = document.getElementById('registrationSection');
+        
+        if (registrationSection) {
+            let showRegistration = false;
+
+            // Öncelikle alt işlem tipinin 40 olup olmadığına bakıyoruz
+            if (childTypeId === '40') {
+                // Seçilen ana işlemin detaylarını bul (currentTransactions listesinden)
+                if (this.currentTransactions && parentTxId) {
+                    const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
+                    
+                    if (parentTx) {
+                        // Ana işlemin tipini string'e çevirip kontrol et
+                        const parentType = String(parentTx.type);
+                        
+                        if (parentType === '6' || parentType === '17') {
+                            showRegistration = true;
+                        }
+                    }
+                }
+            }
+
+            registrationSection.style.display = showRegistration ? 'block' : 'none';
+        }
     }
 
     async handleSave() {
