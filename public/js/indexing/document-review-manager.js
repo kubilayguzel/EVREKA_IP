@@ -362,70 +362,29 @@ async loadData() {
     }
 
     checkSpecialFields() {
-        const childSelect = document.getElementById('detectedType');
-        const parentSelect = document.getElementById('parentTransactionSelect');
+        // 1. Değerleri alırken hata almamak için optional chaining (?.) kullanın
+        const childType = document.getElementById('detectedType')?.value;
+        const parentType = document.getElementById('parentProcessType')?.value;
         
-        if (!childSelect || !parentSelect) return;
-
-        const childTypeId = String(childSelect.value);
-        const parentTxId = String(parentSelect.value);
-
-        // --- DEBUG: Seçilen Değerler ---
-        console.log("🔍 checkSpecialFields Tetiklendi");
-        console.log(`👉 Alt İşlem (Child): ${childTypeId}`);
-        console.log(`👉 Ana İşlem (Parent ID): ${parentTxId}`);
-
-        // 1. İtiraz Bölümü Kontrolü (Tip 27)
-        const oppositionSection = document.getElementById('oppositionSection');
-        if (oppositionSection) {
-            oppositionSection.style.display = (childTypeId === '27') ? 'block' : 'none';
+        // 2. KRİTİK HATA DÜZELTMESİ: 'registrationSection' yerine HTML'deki gerçek ID olan 'registry-editor-section'ı kullanın
+        const regSection = document.getElementById('registry-editor-section');
+        
+        if (!regSection) {
+            console.warn("⚠️ 'registry-editor-section' ID'li element HTML'de bulunamadı!");
+            return;
         }
 
-        // 2. Tescil ve Eşya Listesi Formu Kontrolü
-        const registrationSection = document.getElementById('registrationSection');
-        
-        if (registrationSection) {
-            let showRegistration = false;
+        // 3. İSTEDİĞİNİZ MANTIK: 
+        // Alt işlem 45 ise her zaman aç.
+        // Alt işlem 40 ise; parent 6 veya 17 ise aç.
+        const shouldShow = childType === '45' || 
+                        (childType === '40' && (parentType === '6' || parentType === '17'));
 
-            // DURUM A: Alt işlem doğrudan 45 (Tescil Belgesi)
-            if (childTypeId === '45') {
-                console.log("✅ KURAL EŞLEŞTİ: Alt işlem 45 (Tescil Belgesi). Form açılıyor.");
-                showRegistration = true;
-            }
-            // DURUM B: Alt işlem 40 (Kabul) ise Ana İşlemi Kontrol Et
-            else if (childTypeId === '40') {
-                console.log("ℹ️ Alt işlem 40 (Kabul). Ana işlem kontrol ediliyor...");
-
-                if (this.currentTransactions && parentTxId) {
-                    // Ana işlemi listeden bul (Güvenli ID karşılaştırması)
-                    const parentTx = this.currentTransactions.find(t => String(t.id) === parentTxId);
-                    
-                    if (parentTx) {
-                        const parentType = String(parentTx.type);
-                        console.log(`📄 Bulunan Ana İşlem Tipi: ${parentType}`);
-
-                        // 6: Eşya Sınırlandırma, 17: Vazgeçme
-                        if (parentType === '6' || parentType === '17') {
-                            console.log(`✅ KURAL EŞLEŞTİ: Ana işlem tipi ${parentType}. Form açılıyor.`);
-                            showRegistration = true;
-                        } else {
-                            console.warn(`❌ EŞLEŞME YOK: Ana işlem tipi (${parentType}) 6 veya 17 değil.`);
-                        }
-                    } else {
-                        console.error("🚨 HATA: Seçilen ana işlem (ID: " + parentTxId + ") bellekteki listede bulunamadı!");
-                        console.log("Mevcut Liste:", this.currentTransactions);
-                    }
-                } else {
-                    console.warn("⚠️ Ana işlem seçili değil veya liste boş.");
-                }
-            } else {
-                console.log("ℹ️ Alt işlem 40 veya 45 değil. Form kapalı kalacak.");
-            }
-
-            // Görünürlüğü ayarla
-            registrationSection.style.display = showRegistration ? 'block' : 'none';
+        if (shouldShow) {
+            regSection.style.display = 'block';
+            console.log(`✅ Tescil editörü açıldı. (Child: ${childType}, Parent: ${parentType})`);
         } else {
-            console.error("🚨 KRİTİK HATA: HTML sayfasında 'registrationSection' ID'li element yok!");
+            regSection.style.display = 'none';
         }
     }
 
