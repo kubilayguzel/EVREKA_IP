@@ -176,6 +176,7 @@ export class BulkIndexingModule {
     setupManualTransactionListeners() {
         const recordSearchInput = document.getElementById('recordSearchInputManual');
         const recordSearchContainer = document.getElementById('searchResultsContainerManual');
+        const clearSelectedBtn = document.getElementById('clearSelectedRecordManual');
         
         if (recordSearchInput) {
             recordSearchInput.addEventListener(
@@ -187,6 +188,14 @@ export class BulkIndexingModule {
                 setTimeout(() => { 
                     if (recordSearchContainer) recordSearchContainer.style.display = 'none'; 
                 }, 200);
+            });
+        }
+
+        // Seçili kaydı kaldır (Create Task > İşleme Konu Varlık davranışı)
+        if (clearSelectedBtn) {
+            clearSelectedBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearSelectedRecordManual();
             });
         }
 
@@ -345,17 +354,91 @@ export class BulkIndexingModule {
         this.selectedRecordManual = record;
         
         const inputElement = document.getElementById('recordSearchInputManual');
-        const displayElement = document.getElementById('selectedRecordDisplayManual');
         
         if (inputElement) inputElement.value = ''; // Arama kutusunu temizle
-        if (displayElement) {
-            const label = this.matcher.getDisplayLabel(record);
-            const title = record.title || record.markName || '(İsimsiz)';
-            const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
-            displayElement.value = `${title} (${label}) - ${appNo}`;
-        }
+
+        // Seçili kayıt kartını göster
+        this.renderSelectedRecordCardManual(record);
 
         this.populateManualTransactionTypeSelect();
+        this.checkFormCompleteness();
+    }
+
+    async renderSelectedRecordCardManual(record) {
+        const emptyEl = document.getElementById('selectedRecordEmptyManual');
+        const containerEl = document.getElementById('selectedRecordContainerManual');
+        const labelEl = document.getElementById('selectedRecordLabelManual');
+        const numberEl = document.getElementById('selectedRecordNumberManual');
+        const imgEl = document.getElementById('selectedRecordImageManual');
+        const phEl = document.getElementById('selectedRecordPlaceholderManual');
+
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (containerEl) containerEl.style.display = 'block';
+
+        const title = record.title || record.markName || record.name || '(İsimsiz)';
+        const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || record.dosyaNo || record.fileNo || '-';
+
+        if (labelEl) labelEl.textContent = title;
+        if (numberEl) numberEl.textContent = appNo;
+
+        // Görsel sıfırla
+        if (imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
+        if (phEl) {
+            phEl.style.display = 'flex';
+            phEl.innerHTML = '<i class="fas fa-image" style="font-size: 24px;"></i>';
+        }
+
+        try {
+            const imageUrl = await this._resolveRecordImageUrl(record);
+            if (imageUrl && imgEl) {
+                imgEl.src = imageUrl;
+                imgEl.style.display = 'block';
+                if (phEl) phEl.style.display = 'none';
+            }
+        } catch (err) {
+            console.warn('Manuel kayıt görseli çözümlenemedi:', err);
+        }
+    }
+
+    async _resolveRecordImageUrl(record) {
+        const potentialPath = record.imagePath || record.brandImageUrl || record.image || record.logo || record.imageUrl;
+        if (!potentialPath) return null;
+
+        if (typeof potentialPath === 'string' && (potentialPath.startsWith('http') || potentialPath.startsWith('data:'))) {
+            return potentialPath;
+        }
+
+        // Storage path ise çöz (örn: "images/..." veya "logos/..." gibi)
+        try {
+            const storageRef = ref(firebaseServices.storage, potentialPath);
+            return await getDownloadURL(storageRef);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    clearSelectedRecordManual() {
+        this.selectedRecordManual = null;
+
+        const emptyEl = document.getElementById('selectedRecordEmptyManual');
+        const containerEl = document.getElementById('selectedRecordContainerManual');
+        const labelEl = document.getElementById('selectedRecordLabelManual');
+        const numberEl = document.getElementById('selectedRecordNumberManual');
+        const imgEl = document.getElementById('selectedRecordImageManual');
+        const phEl = document.getElementById('selectedRecordPlaceholderManual');
+
+        if (containerEl) containerEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
+
+        if (labelEl) labelEl.textContent = '';
+        if (numberEl) numberEl.textContent = '';
+        if (imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
+        if (phEl) {
+            phEl.style.display = 'flex';
+            phEl.innerHTML = '<i class="fas fa-image" style="font-size: 24px;"></i>';
+        }
+
+        // İşlem türü seçiminde kullanıcı isterse aynı kalsın; ama submit butonu kapanmalı
         this.checkFormCompleteness();
     }
 
@@ -534,7 +617,6 @@ export class BulkIndexingModule {
         // Inputları Temizle
         const inputs = [
             'recordSearchInputManual', 
-            'selectedRecordDisplayManual', 
             'manualTransactionDeliveryDate', 
             'manualTransactionNotes',
             'filesManual'
@@ -548,8 +630,8 @@ export class BulkIndexingModule {
         const select = document.getElementById('specificManualTransactionType');
         if (select) select.selectedIndex = 0;
 
-        // Değişkenleri Sıfırla
-        this.selectedRecordManual = null;
+        // Seçili kaydı temizle (kartı da kapatır)
+        this.clearSelectedRecordManual();
         this.uploadedFilesMap.set('manual-indexing-pane', []);
         
         // Listeyi Temizle
