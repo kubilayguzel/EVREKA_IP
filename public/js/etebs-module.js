@@ -59,14 +59,11 @@ function showNotification(message, type = 'info') {
 export class ETEBSManager {
 constructor() {
     this.currentMode = 'etebs';
-
-    // Notifications state
     this.notifications = [];
     this.filteredNotifications = [];
     this.isLoading = false;
-
     this.isInitialized = false;
-
+    this._listLoadingShownAt = 0;
     this.bindEvents();
     this.bindTabEvents();
 }
