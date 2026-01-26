@@ -348,13 +348,13 @@ export class DocumentReviewManager {
         
         if (!childSelect || !parentSelect) return;
 
-        const childTypeId = childSelect.value;
-        const parentTxId = parentSelect.value;
+        const childTypeId = String(childSelect.value);
+        const parentTxId = String(parentSelect.value);
 
-        // --- DEBUG LOGLARI ---
-        console.log("🔍 checkSpecialFields Çalıştı");
-        console.log("👉 Seçilen Alt İşlem ID (Child):", childTypeId);
-        console.log("👉 Seçilen Ana İşlem ID (Parent):", parentTxId);
+        // --- DEBUG: Seçilen Değerler ---
+        console.log("🔍 checkSpecialFields Tetiklendi");
+        console.log(`👉 Alt İşlem (Child): ${childTypeId}`);
+        console.log(`👉 Ana İşlem (Parent ID): ${parentTxId}`);
 
         // 1. İtiraz Bölümü Kontrolü (Tip 27)
         const oppositionSection = document.getElementById('oppositionSection');
@@ -368,37 +368,45 @@ export class DocumentReviewManager {
         if (registrationSection) {
             let showRegistration = false;
 
-            // DURUM 1: Alt işlem doğrudan 45 (Tescil Belgesi) ise
+            // DURUM A: Alt işlem doğrudan 45 (Tescil Belgesi)
             if (childTypeId === '45') {
-                console.log("✅ DURUM 1: Alt işlem 45. Form açılıyor.");
+                console.log("✅ KURAL EŞLEŞTİ: Alt işlem 45 (Tescil Belgesi). Form açılıyor.");
                 showRegistration = true;
             }
-            // DURUM 2 ve 3: Alt işlem 40 (Kabul/Tescil) ise ANA İŞLEMİ kontrol et
+            // DURUM B: Alt işlem 40 (Kabul) ise Ana İşlemi Kontrol Et
             else if (childTypeId === '40') {
-                // Seçilen ana işlemin detaylarını bul
+                console.log("ℹ️ Alt işlem 40 (Kabul). Ana işlem kontrol ediliyor...");
+
                 if (this.currentTransactions && parentTxId) {
-                    const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
+                    // Ana işlemi listeden bul (Güvenli ID karşılaştırması)
+                    const parentTx = this.currentTransactions.find(t => String(t.id) === parentTxId);
                     
                     if (parentTx) {
                         const parentType = String(parentTx.type);
-                        console.log("📄 Ana İşlem Tipi:", parentType);
+                        console.log(`📄 Bulunan Ana İşlem Tipi: ${parentType}`);
 
-                        // Parent 6 (Eşya Sınırlandırma) VEYA Parent 17 (Vazgeçme) ise
+                        // 6: Eşya Sınırlandırma, 17: Vazgeçme
                         if (parentType === '6' || parentType === '17') {
-                            console.log(`✅ DURUM 2/3: Alt işlem 40 ve Ana işlem ${parentType}. Form açılıyor.`);
+                            console.log(`✅ KURAL EŞLEŞTİ: Ana işlem tipi ${parentType}. Form açılıyor.`);
                             showRegistration = true;
                         } else {
-                            console.log(`ℹ️ Alt işlem 40 ama Ana işlem (${parentType}) 6 veya 17 değil.`);
+                            console.warn(`❌ EŞLEŞME YOK: Ana işlem tipi (${parentType}) 6 veya 17 değil.`);
                         }
+                    } else {
+                        console.error("🚨 HATA: Seçilen ana işlem (ID: " + parentTxId + ") bellekteki listede bulunamadı!");
+                        console.log("Mevcut Liste:", this.currentTransactions);
                     }
+                } else {
+                    console.warn("⚠️ Ana işlem seçili değil veya liste boş.");
                 }
-            } 
-            else {
-                console.log("ℹ️ Alt işlem 40 veya 45 değil. Form kapalı.");
+            } else {
+                console.log("ℹ️ Alt işlem 40 veya 45 değil. Form kapalı kalacak.");
             }
 
-            // Sonucu uygula
+            // Görünürlüğü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
+        } else {
+            console.error("🚨 KRİTİK HATA: HTML sayfasında 'registrationSection' ID'li element yok!");
         }
     }
 
