@@ -492,7 +492,7 @@ class PortfolioController {
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
 
             // Başvuru Tarihi (Key değişti ve filterable eklendi)
-            { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px', filterable: true },
+            { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '140px', filterable: true, inputType: 'date' },
 
             // Durum (Key değişti ve filterable eklendi)
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
