@@ -468,8 +468,21 @@ export class PortfolioDataManager {
             // Kolon Filtreleme
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
-                const itemVal = String(item[key] || '').toLowerCase();
-                if (!itemVal.includes(val.toLowerCase())) return false;
+
+                let filterVal = val.toLowerCase();
+                let itemVal = String(item[key] || '').toLowerCase();
+
+                // TARİH FORMATI DÜZELTMESİ
+                // Input date (YYYY-MM-DD) verir, Verimiz (DD.MM.YYYY) formatında
+                if (key === 'formattedApplicationDate' && val.includes('-')) {
+                    const parts = val.split('-'); // [2024, 05, 15]
+                    if (parts.length === 3) {
+                        // 15.05.2024 formatına çevir
+                        filterVal = `${parts[2]}.${parts[1]}.${parts[0]}`;
+                    }
+                }
+
+                if (!itemVal.includes(filterVal)) return false;
             }
             return true;
         });
