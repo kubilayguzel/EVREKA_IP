@@ -1174,3 +1174,32 @@ body.modal-open {
     object-fit: contain;
     padding: 8px;
 }
+
+/* --- Menu Badge (Bildirim Sayısı) Stili --- */
+.menu-badge {
+    background-color: #ef4444; /* Kırmızı */
+    color: white;
+    font-size: 0.75rem; /* 12px */
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 9999px; /* Tam yuvarlak köşeler */
+    margin-left: auto; /* Sağa yasla */
+    min-width: 20px;
+    text-align: center;
+    display: none; /* Varsayılan olarak gizli, sayı varsa JS ile açılacak */
+    line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Aktif link üzerindeyse rengi uyumlu olsun */
+.sidebar-nav-item.active .menu-badge,
+.accordion-content a.active .menu-badge {
+    border: 1px solid white;
+}
+
+/* Link iç yapısını düzenle (Badge'i sağa itmek için) */
+.sidebar-nav-item, .accordion-content a {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+}
