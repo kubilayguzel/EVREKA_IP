@@ -1148,67 +1148,103 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
         niceClassSelectionContainer.appendChild(box);
       }
       
-      // Modalı açma
-      editCriteriaBtn.addEventListener('click', () => {
+      // Modalı açma (GÜNCELLENMİŞ)
+      editCriteriaBtn.addEventListener('click', async () => { // async eklendi
           if (selectedMonitoringItems.size === 1) {
               const selectedId = Array.from(selectedMonitoringItems)[0];
-              currentSelectedItem = allMonitoringData.find(item => item.id === selectedId);
+              
+              // 1. Ham veriyi bul
+              const rawItem = allMonitoringData.find(item => item.id === selectedId);
 
-              if (currentSelectedItem) {
-                  // Modal'daki bilgileri doldur
-                  document.getElementById('modalTrademarkName').textContent = currentSelectedItem.title || currentSelectedItem.markName || '-';
-                  document.getElementById('modalApplicationNo').textContent = currentSelectedItem.applicationNumber || currentSelectedItem.applicationNo || '-';
-                  document.getElementById('modalOwner').textContent = getOwnerNames(currentSelectedItem);
-                  const niceClassesInTable = (() => {
-                      const classes = new Set();
-                      if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
-                          currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
-                              if (classItem.classNo !== null && classItem.classNo !== undefined) {
-                                  classes.add(String(classItem.classNo));
-                              }
-                          });
+              if (rawItem) {
+                  // Yükleniyor durumunu göster
+                  const originalBtnText = editCriteriaBtn.innerHTML;
+                  editCriteriaBtn.disabled = true;
+                  editCriteriaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Yükleniyor...';
+
+                  try {
+                      // 2. IP Kaydı verilerini çekerek zenginleştir (Resim, sahip vb. için)
+                      const enrichedItems = await enrichItemsWithIpRecords([rawItem]);
+                      currentSelectedItem = enrichedItems[0]; // Artık dolu veri
+
+                      // 3. Modal alanlarını doldur
+                      document.getElementById('modalTrademarkName').textContent = currentSelectedItem.title || currentSelectedItem.markName || '-';
+                      document.getElementById('modalApplicationNo').textContent = currentSelectedItem.applicationNumber || currentSelectedItem.applicationNo || '-';
+                      document.getElementById('modalOwner').textContent = getOwnerNames(currentSelectedItem);
+                      
+                      // Nice Sınıfları (Hem IP kaydından hem arama kriterinden birleştir)
+                      const niceClassesInTable = (() => {
+                          const classes = new Set();
+                          // Portföyden gelen sınıflar
+                          if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
+                              currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
+                                  if (classItem.classNo !== null && classItem.classNo !== undefined) {
+                                      classes.add(String(classItem.classNo));
+                                  }
+                              });
+                          }
+                          // Eğer yukarıdan gelmediyse veya ek olarak niceClasses alanından
+                          if (currentSelectedItem.niceClasses) {
+                              const extras = Array.isArray(currentSelectedItem.niceClasses) ? currentSelectedItem.niceClasses : [currentSelectedItem.niceClasses];
+                              extras.forEach(c => classes.add(String(c)));
+                          }
+                          return Array.from(classes).map(c => parseInt(c)).filter(n => !isNaN(n)).sort((a,b) => a-b).join(', ');
+                      })();
+                      document.getElementById('modalNiceClass').textContent = niceClassesInTable || '-';
+
+                      // Görseli Ayarla
+                      const imgEl = document.getElementById('modalTrademarkImage');
+                      if (currentSelectedItem.brandImageUrl && currentSelectedItem.brandImageUrl.trim() !== '') {
+                          let imageUrl = currentSelectedItem.brandImageUrl;
+                          // Eğer tam URL değilse Firebase URL'i yap
+                          if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                              imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
+                          }
+                          imgEl.src = imageUrl;
+                          imgEl.style.display = 'block';
+                      } else {
+                          imgEl.style.display = 'none';
                       }
-                      return Array.from(classes).sort((a,b) => a-b).join(', ');
-                  })();
-                  document.getElementById('modalNiceClass').textContent = niceClassesInTable || '-';
 
-                  const imageUrl = currentSelectedItem.brandImageUrl && currentSelectedItem.brandImageUrl.startsWith('http')
-                    ? currentSelectedItem.brandImageUrl
-                    : `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(currentSelectedItem.brandImageUrl)}?alt=media`;
-                  modalTrademarkImage.src = imageUrl;
+                      // 4. Mevcut arama kriterlerini yükle (Orijinal kodun devamı)
+                      modalOriginalPrimaryName = (currentSelectedItem.title || currentSelectedItem.markName || currentSelectedItem.brandText || '').trim();
+                      const overrideSearchName = (currentSelectedItem.searchMarkName || '').trim();
+                      if (searchMarkNameInput) searchMarkNameInput.value = overrideSearchName;
 
-                  // Mevcut arama kriterlerini yükle
-                  modalOriginalPrimaryName = (currentSelectedItem.title || currentSelectedItem.markName || currentSelectedItem.brandText || '').trim();
-                  const overrideSearchName = (currentSelectedItem.searchMarkName || '').trim();
-                  if (searchMarkNameInput) searchMarkNameInput.value = overrideSearchName;
+                      const permanentBrandText = [(overrideSearchName || modalOriginalPrimaryName)].filter(Boolean);
+                      const permanentNiceClasses = (() => {
+                          const classes = [];
+                          if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
+                              currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
+                                  if (classItem.classNo !== null && classItem.classNo !== undefined) {
+                                      classes.push(String(classItem.classNo));
+                                  }
+                              });
+                          }
+                          return classes;
+                      })();
 
-                  const permanentBrandText = [(overrideSearchName || modalOriginalPrimaryName)].filter(Boolean);
-                  const permanentNiceClasses = (() => {
-                      const classes = [];
-                      if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
-                          currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
-                              if (classItem.classNo !== null && classItem.classNo !== undefined) {
-                                  classes.push(String(classItem.classNo));
-                              }
-                          });
-                      }
-                      return classes;
-                  })();
+                      const existingBrandTextSearch = currentSelectedItem.brandTextSearch || [];
+                      const existingNiceClassSearch = currentSelectedItem.niceClassSearch || [];
 
-                  // Veritabanındaki brandTextSearch ve niceClassSearch alanlarını da al
-                  const existingBrandTextSearch = currentSelectedItem.brandTextSearch || [];
-                  const existingNiceClassSearch = currentSelectedItem.niceClassSearch || [];
+                      const filteredBrandTextSearch = overrideSearchName
+                          ? existingBrandTextSearch.filter(t => normText(t) !== normText(modalOriginalPrimaryName))
+                          : existingBrandTextSearch;
 
-                  const filteredBrandTextSearch = overrideSearchName
-                      ? existingBrandTextSearch.filter(t => normText(t) !== normText(modalOriginalPrimaryName))
-                      : existingBrandTextSearch;
+                      populateList(brandTextSearchList, filteredBrandTextSearch, permanentBrandText);
+                      populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses);
+                      refreshPermanentBrandTerm();
 
-                  populateList(brandTextSearchList, filteredBrandTextSearch, permanentBrandText);
-                  populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses);
-                  refreshPermanentBrandTerm();
+                      // Modal'ı göster
+                      $('#editCriteriaModal').modal('show');
 
-                  // Modal'ı göster
-                  $('#editCriteriaModal').modal('show');
+                  } catch (e) {
+                      console.error("Modal verisi yüklenirken hata:", e);
+                      alert("Veri yüklenemedi, lütfen tekrar deneyin.");
+                  } finally {
+                      editCriteriaBtn.disabled = false;
+                      editCriteriaBtn.innerHTML = originalBtnText;
+                  }
               }
           }
       });
