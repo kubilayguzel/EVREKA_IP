@@ -470,8 +470,7 @@ class PortfolioController {
         // STANDART KOLONLAR
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' }, // 1
-            { key: 'toggle', width: '40px' }, // 2
-            { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' }
+            { key: 'toggle', width: '40px' } // 2
         ];
 
         if (tab !== 'trademark') {
@@ -497,8 +496,10 @@ class PortfolioController {
             // Durum (Key değişti ve filterable eklendi)
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
 
-            // Başvuru Sahibi (filterable eklendi)
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true },
+            // Başvuru Sahibi
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true }, 
+
+            { key: 'formattedNiceClasses', label: 'Nice', sortable: true, width: '80px', filterable: true },
 
             { key: 'actions', label: 'İşlemler', width: '280px' }
         );
