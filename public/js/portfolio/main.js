@@ -497,9 +497,9 @@ class PortfolioController {
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
 
             // Başvuru Sahibi
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true }, 
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true, width: '200px' }, 
 
-            { key: 'formattedNiceClasses', label: 'Nice', sortable: true, width: '80px', filterable: true },
+            { key: 'formattedNiceClasses', label: 'Nice', sortable: true, width: '140px', filterable: true },
 
             { key: 'actions', label: 'İşlemler', width: '280px' }
         );
