@@ -38,27 +38,48 @@ export class PortfolioRenderer {
         }
     }
 
-    renderHeaders(columns) {
+    renderHeaders(columns, activeFilters = {}) {
         const headerRow = document.getElementById('portfolioTableHeaderRow');
-        const filterRow = document.getElementById('portfolioTableFilterRow');
-        if (!headerRow) return;
+        const thead = headerRow ? headerRow.parentElement : null;
+
+        if (!headerRow || !thead) return;
 
         headerRow.innerHTML = '';
-        if (filterRow) filterRow.innerHTML = '';
+
+        // Filtre satırını kontrol et veya oluştur
+        let filterRow = document.getElementById('portfolioTableFilterRow');
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'portfolioTableFilterRow';
+            filterRow.style.backgroundColor = '#f8f9fa';
+            thead.appendChild(filterRow);
+        }
+        filterRow.innerHTML = '';
 
         columns.forEach(col => {
+            // 1. Üst Başlık
             const th = document.createElement('th');
             if (col.width) th.style.width = col.width;
-            
             th.className = col.sortable ? 'sortable-header inactive' : '';
             if (col.sortable) th.dataset.column = col.key;
-            
             th.textContent = col.label || '';
-            
-            if (col.isCheckbox) {
-                th.innerHTML = '<input type="checkbox" id="selectAllCheckbox">';
-            }
+            if (col.isCheckbox) th.innerHTML = '<input type="checkbox" id="selectAllCheckbox">';
             headerRow.appendChild(th);
+
+            // 2. Filtre Inputu
+            const filterTh = document.createElement('th');
+            filterTh.style.padding = '5px';
+            if (col.filterable) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control form-control-sm column-filter';
+                input.placeholder = 'Ara...';
+                input.dataset.key = col.key;
+                input.value = activeFilters[col.key] || '';
+                input.style.width = '100%';
+                filterTh.appendChild(input);
+            }
+            filterRow.appendChild(filterTh);
         });
     }
 
