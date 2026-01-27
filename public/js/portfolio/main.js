@@ -20,7 +20,7 @@ class PortfolioController {
             currentPage: 1,
             selectedRecords: new Set()
         };
-
+        this.filterDebounceTimer = null;
         this.init();
     }
 
@@ -66,6 +66,7 @@ class PortfolioController {
 
             this.setupPagination();
             this.setupEventListeners();
+            this.setupFilterListeners();
             this.setupImageHover();
         } catch (e) {
             console.error('Init hatası:', e);
@@ -139,6 +140,25 @@ class PortfolioController {
         element.style.top = `${top}px`;
     }
 
+    setupFilterListeners() {
+        const thead = document.querySelector('.portfolio-table thead');
+        if (thead) {
+            thead.addEventListener('input', (e) => {
+                if (e.target.classList.contains('column-filter')) {
+                    const key = e.target.dataset.key;
+                    const value = e.target.value;
+
+                    clearTimeout(this.filterDebounceTimer);
+                    this.filterDebounceTimer = setTimeout(() => {
+                        this.state.columnFilters[key] = value;
+                        this.state.currentPage = 1;
+                        this.render();
+                    }, 300);
+                }
+            });
+        }
+    }
+
     setupPagination() {
         this.pagination = new Pagination({
             containerId: 'paginationContainer',
@@ -160,6 +180,7 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
+                this.state.columnFilters = {};
                 this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
@@ -360,7 +381,7 @@ class PortfolioController {
 
     render() {
         const cols = this.getColumnsForTab(this.state.activeTab);
-        this.renderer.renderHeaders(cols);
+        this.renderer.renderHeaders(cols, this.state.columnFilters);eaders(cols);
 
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
@@ -457,25 +478,29 @@ class PortfolioController {
             columns.push({ key: 'type', label: 'Tür', sortable: true, width: '130px' });
         }
 
-        // Başlık (200px'e sabitlendi)
-        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' });
+        // Başlık
+        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px', filterable: true });
 
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
+            // ... (görsel, menşe, ülke kısımları aynı kalıyor) ...
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' });
             columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '140px' });
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '130px' });
         }
 
         columns.push(
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
-            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' },
-            
-            // Başvuru Sahibi: ESNEK (Genişlik yok, kalan tüm alanı kaplayacak)
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
-            
-            // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '280px' } // 280px'e çıkarıldı
+
+            // Başvuru Tarihi (Key değişti ve filterable eklendi)
+            { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px', filterable: true },
+
+            // Durum (Key değişti ve filterable eklendi)
+            { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
+
+            // Başvuru Sahibi (filterable eklendi)
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true },
+
+            { key: 'actions', label: 'İşlemler', width: '280px' }
         );
 
         return columns;
