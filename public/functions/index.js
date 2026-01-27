@@ -51,15 +51,15 @@ async function loadMailerSA() {
 
 // ✅ Göndermeye yetkili kişiler
 const ALLOWED_SENDERS = new Set([
-  "alikucuksahin@evrekapatent.com",
-  "bekirguven@evrekapatent.com",
-  "kubilayguzel@evrekapatent.com",
-  "erhankocabacak@evrekapatent.com",
-  "selcanakoglu@evrekapatent.com",
-  "hukuk@evrekapatent.com",
-  "beyzasevinc@evrekapatent.com",
-  "yigitdemirtas@evrekapatent.com",
-  "rumeysatimurlenk@evrekapatent.com"
+  "alikucuksahin@evrekagroup.com",
+  "bekirguven@evrekagroup.com",
+  "kubilayguzel@evrekagroup.com",
+  "erhankocabacak@evrekagroup.com",
+  "selcanakoglu@evrekagroup.com",
+  "hukuk@evrekagroup.com",
+  "beyzasevinc@evrekagroup.com",
+  "yigitdemirtas@evrekagroup.com",
+  "rumeysatimurlenk@evrekagroup.com"
 ]);
 
 // 📧 Gmail API ile "kullanıcının adına" gönderim
