@@ -4,6 +4,7 @@ import { etebsService, etebsAutoProcessor, firebaseServices, authService, ipReco
 import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import './simple-loading.js';
+import Pagination from './pagination.js';
 
 
 // EKLENECEK KISIM (import'ların hemen altına):
@@ -67,6 +68,16 @@ constructor() {
     this.bindEvents();
     this.bindTabEvents();
     this.initializeBadgeCount();
+    this.paginations = {
+            matched: null,
+            unmatched: null,
+            indexed: null
+        };
+    this.pagedData = {
+            matched: [],
+            unmatched: [],
+            indexed: []
+        };
 }
 
 // Sayfa yüklendiğinde sadece sayacı güncellemek için yeni fonksiyon
@@ -96,7 +107,7 @@ constructor() {
             console.warn('ETEBS sayaç güncelleme hatası:', error);
         }
     }
-    
+
 // Tarihi input[type="date"] için yyyy-MM-dd formatına çevirir
 toYMD(raw) {
     if (!raw) return '';
@@ -828,73 +839,110 @@ autoSwitchTab(matchedCount, unmatchedCount) {
     }
 }
 
-    displayNotifications() {
-    // peş peşe çağrılınca timer çakışmasın
-    if (this._displayNotificationsTimer) {
-        clearTimeout(this._displayNotificationsTimer);
-        this._displayNotificationsTimer = null;
-    }
+    setupPagination(type, dataList, listContainerId) {
+        // HTML'de pagination container ID'si şöyle olmalı: {type}Pagination
+        // Örn: matchedPagination, unmatchedPagination, indexedPagination
+        const paginationContainerId = `${type}Pagination`;
+        
+        // Eğer pagination daha önce oluşturulmuşsa güncelle, yoksa yeni oluştur
+        if (this.paginations[type]) {
+            // Pagination sınıfı güncelleme yaparken callback'i tekrar çağırmaz, manuel çağırmamız gerekebilir.
+            // Ancak Pagination.js yapınıza göre update() çağrıldığında render tetikleniyorsa sorun yok.
+            // Mevcut Pagination yapınızda update() sadece sayıları güncelliyor olabilir.
+            
+            // En temiz yöntem: Eskiyi yok et, yenisini kur (veri değiştiği için)
+            this.paginations[type].destroy(); 
+        }
 
-    const total = Array.isArray(this.filteredNotifications) ? this.filteredNotifications.length : 0;
-    const canUseLoader = !!window.SimpleLoadingController?.show;
-
-    if (canUseLoader && total > 0) {
-        this._listLoadingShownAt = performance.now();
-        window.SimpleLoadingController.show({
-        text: 'Listeler hazırlanıyor',
-        subtext: 'Eşleşen / Eşleşmeyen / İndekslenen listeleri güncelleniyor...'
+        // Yeni Pagination Başlat
+        this.paginations[type] = new Pagination({
+            containerId: paginationContainerId,
+            itemsPerPage: 10, // Sayfa başına 10 öğe
+            showItemsPerPageSelector: true,
+            onPageChange: (currentPage, itemsPerPage) => {
+                // Sayfalanmış veriyi hesapla
+                const start = (currentPage - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageItems = dataList.slice(start, end);
+                
+                // İlgili container'a bas
+                const listContainer = document.getElementById(listContainerId);
+                this.renderNotificationsList(listContainer, pageItems, type);
+            },
+            strings: {
+                noResults: 'Kayıt bulunamadı',
+                itemsInfo: 'Toplam {total} kayıt'
+            }
         });
+
+        // İlk veriyi yükle
+        this.paginations[type].update(dataList.length);
+        
+        // İlk sayfa verisini manuel render et (Pagination init olduğunda otomatik çağırmıyorsa)
+        const initialItems = dataList.slice(0, 10);
+        const listContainer = document.getElementById(listContainerId);
+        this.renderNotificationsList(listContainer, initialItems, type);
     }
 
-    // Loader'ın show class'ı (10ms) eklenebilsin diye 30ms sonra render
-    this._displayNotificationsTimer = setTimeout(() => {
-        try {
-        const matchedList = document.getElementById('matchedNotificationsList');
-        const unmatchedList = document.getElementById('unmatchedNotificationsList');
-        const indexedList = document.getElementById('indexedNotificationsList');
-
-        if (!matchedList || !unmatchedList || !indexedList) return;
-
-        const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
-        const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
-
-        const matchedNotifications = remainingNotifications.filter(n =>
-            n.matched === true || (n.matchedRecordId && n.matchedRecordId !== "")
-        );
-
-        const unmatchedNotifications = remainingNotifications.filter(n =>
-            !n.matched && (!n.matchedRecordId || n.matchedRecordId === "")
-        );
-
-        this.renderNotificationsList(matchedList, matchedNotifications, 'matched');
-        this.renderNotificationsList(unmatchedList, unmatchedNotifications, 'unmatched');
-        this.renderNotificationsList(indexedList, indexedNotifications, 'indexed');
-
-        const updateBadge = (id, count) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = count;
-        };
-        updateBadge('matchedTabBadge', matchedNotifications.length);
-        updateBadge('unmatchedTabBadge', unmatchedNotifications.length);
-        updateBadge('indexedTabBadge', indexedNotifications.length);
-
-        this.autoSwitchTab(matchedNotifications.length, unmatchedNotifications.length);
-
-        } catch (e) {
-        console.error('Error displaying notifications:', e);
-        } finally {
-        this._displayNotificationsTimer = null;
-
-        // en az 250ms görünsün ki kullanıcı fark etsin
-        if (canUseLoader && window.SimpleLoadingController?.hide) {
-            const elapsed = performance.now() - (this._listLoadingShownAt || 0);
-            const delay = Math.max(0, 250 - elapsed);
-            setTimeout(() => window.SimpleLoadingController.hide(), delay);
+    displayNotifications() {
+        if (this._displayNotificationsTimer) {
+            clearTimeout(this._displayNotificationsTimer);
+            this._displayNotificationsTimer = null;
         }
+
+        const total = Array.isArray(this.filteredNotifications) ? this.filteredNotifications.length : 0;
+        const canUseLoader = !!window.SimpleLoadingController?.show;
+
+        if (canUseLoader && total > 0) {
+            this._listLoadingShownAt = performance.now();
+            window.SimpleLoadingController.show({
+                text: 'Listeler hazırlanıyor',
+                subtext: 'Sayfalama uygulanıyor...'
+            });
         }
-    }, 30);
+
+        this._displayNotificationsTimer = setTimeout(() => {
+            try {
+                // 1. Verileri Kategorize Et
+                const indexedNotifications = this.filteredNotifications.filter(n => n.status === 'indexed');
+                const remainingNotifications = this.filteredNotifications.filter(n => n.status !== 'indexed');
+
+                const matchedNotifications = remainingNotifications.filter(n =>
+                    n.matched === true || (n.matchedRecordId && n.matchedRecordId !== "")
+                );
+
+                const unmatchedNotifications = remainingNotifications.filter(n =>
+                    !n.matched && (!n.matchedRecordId || n.matchedRecordId === "")
+                );
+
+                // 2. Rozetleri (Badge) Güncelle
+                const updateBadge = (id, count) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = count;
+                };
+                updateBadge('matchedTabBadge', matchedNotifications.length);
+                updateBadge('unmatchedTabBadge', unmatchedNotifications.length);
+                updateBadge('indexedTabBadge', indexedNotifications.length);
+
+                // 3. Pagination Kurulumu ve İlk Render
+                this.setupPagination('matched', matchedNotifications, 'matchedNotificationsList');
+                this.setupPagination('unmatched', unmatchedNotifications, 'unmatchedNotificationsList');
+                this.setupPagination('indexed', indexedNotifications, 'indexedNotificationsList');
+
+                this.autoSwitchTab(matchedNotifications.length, unmatchedNotifications.length);
+
+            } catch (e) {
+                console.error('Error displaying notifications:', e);
+            } finally {
+                this._displayNotificationsTimer = null;
+                if (canUseLoader && window.SimpleLoadingController?.hide) {
+                    const elapsed = performance.now() - (this._listLoadingShownAt || 0);
+                    const delay = Math.max(0, 250 - elapsed);
+                    setTimeout(() => window.SimpleLoadingController.hide(), delay);
+                }
+            }
+        }, 30);
     }
-
 
     // 6. renderNotificationsList fonksiyonunu güncelleyin (değişiklik yok ama kontrol için)
     renderNotificationsList(container, notifications, isMatched) {
