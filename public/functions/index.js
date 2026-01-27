@@ -2143,10 +2143,37 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             
         } catch (err) { console.error("❌ Konu belirleme hatası:", err); }
     }
+
   // ---------------------------------------------------------------------------------------
     // [GÜNCELLENDİ v13] İÇERİK OLUŞTURMA & AKILLI HTML ENJEKSİYONU
     // ---------------------------------------------------------------------------------------
     if (template && client) {
+
+      // Eğer işlem tipi 40 ise ve bir Parent İşlem (parentTxnData) varsa;
+      // Veritabanındaki şablonda "bodyX" ve "subjectX" alanlarını ara (Örn: body4, subject4).
+      
+      if (templateSearchType === "40" && parentTxnData && parentTxnData.type) {
+          const pType = String(parentTxnData.type); // Örn: "4", "3", "20"
+          
+          const dynamicSubjectKey = `subject${pType}`; // Örn: subject4
+          const dynamicBodyKey = `body${pType}`;       // Örn: body4
+          
+          // Eğer şablon dökümanında bu özel alanlar varsa, varsayılanların üzerine yaz
+          if (template[dynamicSubjectKey] && template[dynamicBodyKey]) {
+              console.log(`🔀 Dinamik Şablon Kullanılıyor: Tip 40 -> Parent ${pType} (${dynamicSubjectKey}, ${dynamicBodyKey})`);
+              
+              template.subject = template[dynamicSubjectKey];
+              template.body = template[dynamicBodyKey];
+              
+              // İsteğe bağlı: mailSubject alanı varsa onu da ezebiliriz
+              if (template[`mailSubject${pType}`]) {
+                  template.mailSubject = template[`mailSubject${pType}`];
+              }
+          } else {
+              console.log(`ℹ️ Dinamik Şablon Bulunamadı (Parent ${pType}), varsayılan 40 şablonu kullanılıyor.`);
+          }
+      }
+
       // 1. Alt işlemin orijinal konusunu sakla
       let childSubjectRaw = String(template.subject || "");
       
