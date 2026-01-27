@@ -1,6 +1,6 @@
 // js/layout-loader.js
 import {personService , authService, db } from '../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Global cache değişkenleri
 let layoutCache = null;
@@ -163,6 +163,7 @@ export async function loadSharedLayout(options = {}) {
         if (sidebarNav) {
             renderMenu(sidebarNav, user.role || 'user');
             setupFastMenuInteractions();
+            setupMenuBadges();
         }
 
         // Logout event
@@ -285,30 +286,89 @@ function renderMenu(container, userRole) { // currentPage parametresi kaldırıl
             linkClass += ` ${item.specialClass}`;
         }
 
+        // renderMenu fonksiyonu içinde...
+
         if (hasSubItems) {
             const accordionHtml = `
                 <div class="accordion">
                     <div class="accordion-header"> <span class="nav-icon"><i class="${item.icon}"></i></span>
                         <span>${item.text}</span>
-                    </div>
+                        </div>
                     <div class="accordion-content">
                         ${item.subItems.map(subItem => `
-                            <a href="${subItem.link}" class="${subItem.specialClass || ''}">${subItem.text}</a> `).join('')}
+                            <a href="${subItem.link}" class="${subItem.specialClass || ''}" id="menu-link-${subItem.id}">
+                                <span>${subItem.text}</span>
+                                <span class="menu-badge" id="badge-${subItem.id}">0</span>
+                            </a> `).join('')}
                     </div>
                 </div>
             `;
             container.innerHTML += accordionHtml;
         } else {
             const singleLinkHtml = `
-                <a href="${item.link}" class="${linkClass}" ${item.disabled ? 'style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                <a href="${item.link}" class="${linkClass}" id="menu-link-${item.id}" ${item.disabled ? 'style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                     <span class="nav-icon"><i class="${item.icon}"></i></span>
                     <span>${item.text}</span>
+                    <span class="menu-badge" id="badge-${item.id}">0</span>
                 </a>
             `;
             container.innerHTML += singleLinkHtml;
         }
     });
 }
+
+// === BADGE (BİLDİRİM SAYISI) YÖNETİMİ ===
+function setupMenuBadges() {
+    console.log("🔔 Menü bildirim sayıları dinleniyor...");
+
+    // 1. Tetiklenen Görevler (triggered-tasks)
+    // Şart: Status = 'awaiting_client_approval' (Müvekkil Onayı Bekleyenler)
+    try {
+        const tasksQuery = query(
+            collection(db, "tasks"),
+            where("status", "==", "awaiting_client_approval")
+        );
+
+        onSnapshot(tasksQuery, (snapshot) => {
+            updateBadgeUI('triggered-tasks', snapshot.size);
+        }, (error) => {
+            console.error("Badge hatası (tasks):", error);
+        });
+    } catch (e) { console.error("Tasks query setup error:", e); }
+
+    // 2. Müvekkil Bildirimleri (client-notifications)
+    // Şart: Gönderilmemiş mailler. Genelde 'awaiting_client_approval', 'missing_info' veya 'evaluation_pending'
+    try {
+        const notificationsQuery = query(
+            collection(db, "mail_notifications"),
+            where("status", "in", ["awaiting_client_approval", "missing_info", "evaluation_pending"])
+        );
+
+        onSnapshot(notificationsQuery, (snapshot) => {
+            updateBadgeUI('client-notifications', snapshot.size);
+        }, (error) => {
+            console.error("Badge hatası (notifications):", error);
+        });
+    } catch (e) { console.error("Notifications query setup error:", e); }
+}
+
+// UI Güncelleme Yardımcısı
+function updateBadgeUI(menuId, count) {
+    const badgeEl = document.getElementById(`badge-${menuId}`);
+    if (badgeEl) {
+        badgeEl.textContent = count;
+        // Sayı 0 ise gizle, değilse göster
+        badgeEl.style.display = count > 0 ? 'inline-block' : 'none';
+        
+        // Opsiyonel: Eğer sayı arttıysa küçük bir animasyon eklenebilir
+        if (count > 0) {
+            badgeEl.style.animation = 'none';
+            badgeEl.offsetHeight; /* trigger reflow */
+            badgeEl.style.animation = 'pulse 0.5s';
+        }
+    }
+}
+
 function setupMenuInteractions(currentPage) {
     // Event delegation kullan - daha performanslı
     const sidebar = document.querySelector('.sidebar-nav');
