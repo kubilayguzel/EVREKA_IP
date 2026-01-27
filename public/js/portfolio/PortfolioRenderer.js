@@ -133,9 +133,6 @@ export class PortfolioRenderer {
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
             <td class="toggle-cell text-center">${caret}</td>
             
-            <td>
-                ${isChild ? '' : `<div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div>`}
-            </td>
         `;
 
         if (!isTrademarkTab) {
@@ -157,6 +154,9 @@ export class PortfolioRenderer {
         html += `<td>${isChild ? '' : this.getStatusBadge(record)}</td>`;
         
         html += `<td><small title="${applicantText}">${applicantText}</small></td>`;
+        // YENİ: Nice Sınıfları
+        const niceText = record.formattedNiceClasses || '-';
+        html += `<td title="${niceText}">${niceText}</td>`;
         html += `<td>${actions}</td>`;
 
         tr.innerHTML = html;
