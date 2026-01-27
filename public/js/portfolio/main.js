@@ -381,7 +381,7 @@ class PortfolioController {
 
     render() {
         const cols = this.getColumnsForTab(this.state.activeTab);
-        this.renderer.renderHeaders(cols, this.state.columnFilters);eaders(cols);
+        this.renderer.renderHeaders(cols, this.state.columnFilters);
 
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
