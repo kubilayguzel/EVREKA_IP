@@ -66,8 +66,37 @@ constructor() {
     this._listLoadingShownAt = 0;
     this.bindEvents();
     this.bindTabEvents();
+    this.initializeBadgeCount();
 }
 
+// Sayfa yüklendiğinde sadece sayacı güncellemek için yeni fonksiyon
+    async initializeBadgeCount() {
+        try {
+            // Bekleyen (status='pending') evrakları sorgula
+            const q = query(
+                collection(firebaseServices.db, 'unindexed_pdfs'),
+                where('status', '==', 'pending')
+            );
+            
+            // Veriyi çek
+            const snapshot = await getDocs(q);
+            const count = snapshot.size;
+
+            // HTML'deki Badge elementini bul (Hem class hem ID kontrolü)
+            // Genelde tab butonunun içindeki .tab-badge veya #totalBadge elementidir
+            const badge = document.querySelector('.tab-badge') || document.getElementById('totalBadge');
+            
+            if (badge) {
+                badge.textContent = count;
+                // Sayı 0'dan büyükse göster, yoksa gizle
+                badge.style.display = count > 0 ? 'inline-block' : 'none';
+                console.log(`🔔 ETEBS Sayaç Başlatıldı: ${count}`);
+            }
+        } catch (error) {
+            console.warn('ETEBS sayaç güncelleme hatası:', error);
+        }
+    }
+    
 // Tarihi input[type="date"] için yyyy-MM-dd formatına çevirir
 toYMD(raw) {
     if (!raw) return '';
