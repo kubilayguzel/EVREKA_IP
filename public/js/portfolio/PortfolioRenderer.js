@@ -71,12 +71,25 @@ export class PortfolioRenderer {
             filterTh.style.padding = '5px';
             if (col.filterable) {
                 const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'form-control form-control-sm column-filter';
-                input.placeholder = 'Ara...';
+                // Tip belirleme (Varsayılan text)
+                input.type = col.inputType || 'text';
+                
+                input.className = 'form-control column-filter';
+                // STİL İYİLEŞTİRMELERİ:
+                input.style.width = '100%';
+                input.style.fontSize = '14px';      // Yazı biraz daha büyük
+                input.style.padding = '8px 12px';   // İç boşluk arttırıldı
+                input.style.borderRadius = '8px';   // Köşeler yumuşatıldı
+                input.style.border = '1px solid #ced4da';
+                input.style.height = '38px';        // Tıklama alanı büyütüldü
+
+                // Sadece text ise placeholder ekle
+                if (input.type === 'text') {
+                    input.placeholder = '🔍 Ara...';
+                }
+
                 input.dataset.key = col.key;
                 input.value = activeFilters[col.key] || '';
-                input.style.width = '100%';
                 filterTh.appendChild(input);
             }
             filterRow.appendChild(filterTh);
