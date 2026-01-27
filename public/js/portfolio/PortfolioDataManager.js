@@ -1,6 +1,7 @@
 // public/js/portfolio/PortfolioDataManager.js
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
 import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { STATUSES } from '../../utils.js';
 
 // Concurrency Helper
 async function pLimit(items, concurrency, fn) {
@@ -72,7 +73,9 @@ export class PortfolioDataManager {
             const rawData = Array.isArray(result.data) ? result.data : [];
             this.allRecords = rawData.map(record => ({
                 ...record,
-                formattedApplicantName: this._resolveApplicantName(record)
+                formattedApplicantName: this._resolveApplicantName(record),
+                formattedApplicationDate: this._fmtDate(record.applicationDate),
+                statusText: this._resolveStatusText(record)
             }));
             this._buildWipoGroups();
         }
@@ -86,7 +89,9 @@ export class PortfolioDataManager {
                 // Veriyi yerel değişkene işle
                 this.allRecords = result.data.map(record => ({
                     ...record,
-                    formattedApplicantName: this._resolveApplicantName(record)
+                    formattedApplicantName: this._resolveApplicantName(record),
+                    formattedApplicationDate: this._fmtDate(record.applicationDate),
+                    statusText: this._resolveStatusText(record)
                 }));
                 this._buildWipoGroups();
                 // Arayüze haber ver
@@ -106,6 +111,22 @@ export class PortfolioDataManager {
             }).filter(Boolean).join(', ');
         }
         return record.applicantName || '-';
+    }
+
+    _resolveStatusText(record) {
+        const rawStatus = record.status;
+        if (!rawStatus) return '-';
+
+        if (record.type && STATUSES[record.type]) {
+            const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
+            if (statusObj) return statusObj.text;
+        }
+
+        for (const type in STATUSES) {
+            const found = STATUSES[type].find(s => s.value === rawStatus);
+            if (found) return found.text;
+        }
+        return rawStatus;
     }
 
     getRecordById(id) {
@@ -439,6 +460,12 @@ export class PortfolioDataManager {
                     if (!searchStr.includes(s)) return false;
                 }
             }
+            for (const [key, val] of Object.entries(columnFilters)) {
+                if (!val) continue;
+                const itemVal = String(item[key] || '').toLowerCase();
+                if (!itemVal.includes(val.toLowerCase())) return false;
+            }
+            // Kolon Filtreleme
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
                 const itemVal = String(item[key] || '').toLowerCase();
