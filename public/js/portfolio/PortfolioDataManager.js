@@ -75,6 +75,7 @@ export class PortfolioDataManager {
                 ...record,
                 formattedApplicantName: this._resolveApplicantName(record),
                 formattedApplicationDate: this._fmtDate(record.applicationDate),
+                formattedNiceClasses: this._formatNiceClasses(record),
                 statusText: this._resolveStatusText(record)
             }));
             this._buildWipoGroups();
@@ -91,6 +92,7 @@ export class PortfolioDataManager {
                     ...record,
                     formattedApplicantName: this._resolveApplicantName(record),
                     formattedApplicationDate: this._fmtDate(record.applicationDate),
+                    formattedNiceClasses: this._formatNiceClasses(record),
                     statusText: this._resolveStatusText(record)
                 }));
                 this._buildWipoGroups();
@@ -407,6 +409,31 @@ export class PortfolioDataManager {
         if (!code) return 'Karar Bekleniyor';
         const typeInfo = this.transactionTypesMap.get(String(code));
         return typeInfo ? (typeInfo.alias || typeInfo.name) : 'Karar Bekleniyor';
+    }
+
+    // YENİ: Nice sınıflarını formatlayan yardımcı metot
+    _formatNiceClasses(record) {
+        const classes = new Set();
+        
+        // 1. niceClasses array'inden gelenler (örn: ["09", "35"])
+        if (Array.isArray(record.niceClasses)) {
+            record.niceClasses.forEach(c => classes.add(parseInt(c)));
+        }
+        
+        // 2. goodsAndServicesByClass içinden gelenler (örn: [{classNo: "42", ...}])
+        if (Array.isArray(record.goodsAndServicesByClass)) {
+            record.goodsAndServicesByClass.forEach(item => {
+                if (item.classNo) classes.add(parseInt(item.classNo));
+            });
+        }
+
+        if (classes.size === 0) return '-';
+        
+        // Küçükten büyüğe sırala ve aralarına virgül koy
+        return Array.from(classes)
+            .sort((a, b) => a - b)
+            .map(c => c < 10 ? `0${c}` : c) // 9 yerine 09 yazsın istersen
+            .join(', ');
     }
 
     _fmtDate(val) {
