@@ -11,7 +11,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 import { initializeFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue,
-collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager,onSnapshot }
+collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager,onSnapshot, or }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
@@ -1003,12 +1003,21 @@ export const taskService = {
         }
     },
     async getTasksForUser(userId) {
-        if (!isFirebaseAvailable) return { success: true, data: [] };
         try {
-            const q = query(collection(db, "tasks"), where("assignedTo_uid", "==", userId), orderBy("createdAt", "desc"));
-            const querySnapshot = await getDocs(q);
-            return { success: true, data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+            // GÜNCELLEME: Hem taskOwner listesinde olanları HEM DE assignedTo_uid eşleşenleri getir
+            const q = query(
+                collection(db, "tasks"),
+                or(
+                    where("taskOwner", "array-contains", userId), // Kullanıcı işin sahibi ise
+                    where("assignedTo_uid", "==", userId)         // Kullanıcıya iş atanmışsa
+                )
+            );
+            
+            const snapshot = await getDocs(q);
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            return { success: true, data };
         } catch (error) {
+            console.error("Kullanıcı görevleri çekilemedi:", error);
             return { success: false, error: error.message };
         }
     },
