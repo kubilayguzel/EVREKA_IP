@@ -1349,6 +1349,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
     try {
       // 1) Kural & Şablon (bulunamazsa bile fallback içerik oluşturacağız)
       let template = null;
+      let templateId = null;
+
       try {
         const rulesSnapshot = await db
           .collection("template_rules")
@@ -1360,9 +1362,11 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
         if (!rulesSnapshot.empty) {
           const rule = rulesSnapshot.docs[0].data();
-          const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
+          templateId = rule.templateId || null;
+
+          const templateSnapshot = await adminDb.collection("mail_templates").doc(templateId).get();
           if (templateSnapshot.exists) template = templateSnapshot.data();
-          else console.warn(`⚠️ Şablon bulunamadı: ${rule.templateId}`);
+          else console.warn(`⚠️ Şablon bulunamadı: ${templateId}`);
         } else {
           console.warn("⚠️ Kural bulunamadı (template_rules).");
         }
@@ -1406,24 +1410,77 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
       // 3) ŞABLON/İÇERİK — Şablon yoksa da boş bırakma (missing_info olmasın diye fallback oluştur)
       if (template) {
-        subject = String(template.subject || "");
-        body = String(template.body || "");
+      subject = String(template.subject || "");
 
-        const applicationNo =
-          newDocument.applicationNumber ||
-          newDocument.applicationNo ||
-          newDocument.appNo ||
-          "";
+      // Varsayılan: body
+      let rawBody = String(template.body || "");
 
-        const parameters = {
-          ...newDocument,
-          muvekkil_adi: newDocument.clientName || newDocument.ownerName || "Değerli Müvekkil",
-          basvuru_no: applicationNo,
-        };
+      // ✅ SADECE tmpl_50_document için body1/body2 seçimi
+      if (String(templateId || "") === "tmpl_50_document") {
+        // recordOwnerType tespiti: önce ipRecords'tan bak
+        const recordId =
+          newDocument.relatedIpRecordId ||
+          newDocument.matchedRecordId ||
+          newDocument.ipRecordId ||
+          null;
 
-        subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-        body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-      } else {
+        let detectedType = null; // 'self' | 'third_party'
+
+        let ipRecordData = null;
+        if (recordId) {
+          try {
+            const ipSnap = await adminDb.collection("ipRecords").doc(recordId).get();
+            if (ipSnap.exists) ipRecordData = ipSnap.data() || {};
+          } catch (e) {
+            console.warn("ipRecords okunamadı:", e);
+          }
+        }
+
+        const dbType = ipRecordData?.recordOwnerType
+          ? String(ipRecordData.recordOwnerType).trim().toLowerCase()
+          : null;
+
+        if (dbType === "self" || dbType === "third_party") {
+          detectedType = dbType;
+        } else {
+          // DB'de yoksa: müvekkil(clientId) applicant mı? -> self, değilse third_party
+          const clientId = String(newDocument.clientId || "").trim();
+          const apps = Array.isArray(ipRecordData?.applicants) ? ipRecordData.applicants : [];
+          const isClientApplicant =
+            clientId && apps.length > 0
+              ? apps.some((a) => String(a?.id || a?.personId || "").trim() === clientId)
+              : false;
+
+          detectedType = isClientApplicant ? "self" : "third_party";
+        }
+
+        // body seç
+        if (detectedType === "self" && template.body1 && String(template.body1).trim() !== "") {
+          rawBody = String(template.body1);
+        } else if (detectedType === "third_party" && template.body2 && String(template.body2).trim() !== "") {
+          rawBody = String(template.body2);
+        }
+      }
+
+      body = rawBody;
+
+      const applicationNo =
+        newDocument.applicationNumber ||
+        newDocument.applicationNo ||
+        newDocument.appNo ||
+        "";
+
+      const parameters = {
+        ...newDocument,
+        muvekkil_adi: newDocument.clientName || newDocument.ownerName || "Değerli Müvekkil",
+        basvuru_no: applicationNo,
+      };
+
+      subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+    }
+
+      else {
         // Temel fallback içerik
         subject = `[${notificationType.toUpperCase()}] Yeni Evrak`;
         body = [
@@ -1469,8 +1526,8 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
         relatedIpRecordId: newDocument.relatedIpRecordId || null,
         associatedTaskId: null,
         associatedTransactionId: null,
+        templateId: templateId || null,
 
-        templateId: template ? (template.id || template.templateId || null) : null,
         notificationType,
         source: "document_index",
         missingFields,
