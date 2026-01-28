@@ -2656,6 +2656,58 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       let rawEmailSubject = String(template.mailSubject || template.subject || "");
       let rawInnerSubject = String(template.subject || "");
       let rawBody = String(template.body || "");
+
+      // 2. Portföy Tipini Belirle
+      let ownerType = null;
+
+      console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${recordId}`);
+
+      if (ipRecordData) {
+          if (ipRecordData.recordOwnerType) {
+              // Veritabanından gelen değeri temizle ve küçült
+              ownerType = String(ipRecordData.recordOwnerType).trim().toLowerCase();
+              console.log(`📊 DB Verisi (ipRecords): recordOwnerType = "${ipRecordData.recordOwnerType}" -> Algılanan: "${ownerType}"`);
+          } else {
+              console.log(`⚠️ UYARI: ipRecords/${recordId} belgesinde 'recordOwnerType' alanı BOŞ veya YOK!`);
+          }
+      } else {
+          console.log(`⚠️ HATA: 'ipRecordData' okunamadı (Record ID: ${recordId}). İlişkili dosya bulunamadı.`);
+      }
+
+      // Fallback: Eğer tip DB'de yoksa, Müvekkil eşleşmesiyle tahmin et
+      if (!ownerType && ipRecordData && client) {
+          const applicants = ipRecordData.applicants || [];
+          const isClientApplicant = applicants.some(app => String(app.id) === String(client.id));
+          if (isClientApplicant) {
+              ownerType = 'self';
+              console.log("🧩 Otomatik Tespit: Müvekkil, başvuru sahipleri arasında bulundu -> 'self' varsayıldı.");
+          } else {
+              // Risk almamak için third_party demiyoruz, varsayılanda bırakıyoruz
+              console.log("ℹ️ Otomatik Tespit: Müvekkil başvuru sahibi değil. Tip belirlenemedi.");
+          }
+      }
+
+      // 3. Şablon Seçimi ve Kontrolü
+      if (ownerType === 'self') {
+          if (template.body1) {
+              rawBody = String(template.body1);
+              console.log("✅ BAŞARILI: 'self' tipi için 'body1' şablonu seçildi.");
+          } else {
+              console.log("❌ EKSİK ŞABLON: Dosya 'self' ama Mail Şablonunda 'body1' alanı yok! Varsayılan 'body' kullanılıyor.");
+          }
+      } 
+      else if (ownerType === 'third_party') {
+          if (template.body2) {
+              rawBody = String(template.body2);
+              console.log("✅ BAŞARILI: 'third_party' tipi için 'body2' şablonu seçildi.");
+          } else {
+              console.log("❌ EKSİK ŞABLON: Dosya 'third_party' ama Mail Şablonunda 'body2' alanı yok! Varsayılan 'body' kullanılıyor.");
+          }
+      } 
+      else {
+          console.log(`ℹ️ STANDART AKIŞ: ownerType '${ownerType}' olduğu (veya bulunamadığı) için varsayılan 'body' kullanılıyor.`);
+      }
+
       const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
 
       const formatTrDate = (val) => {
