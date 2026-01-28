@@ -1782,7 +1782,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 decisionAnalysis.statusText = "LEHİMİZE (Rakip Reddedildi)";
                 decisionAnalysis.statusColor = "#237804";
                 decisionAnalysis.isLawsuitRequired = false;
-                decisionAnalysis.summaryText = "Rakip başvurunun reddedilmesine karar verilmiştir. Karar lehimizedir.";
+                decisionAnalysis.summaryText = "Başvuru sahibi markasının reddedilmesine karar verilmiştir. Karar lehimizedir.";
             }
         }
 
