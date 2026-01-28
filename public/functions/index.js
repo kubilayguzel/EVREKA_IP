@@ -93,7 +93,7 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, inRep
 
   const compiled = await streamTransport.sendMail({
     ...mailOptions,
-    from: `"${mailOptions.fromName || "IPGATE"}" <${userEmail}>`,
+    from: `"${mailOptions.fromName || "IPGate - EVREKA GROUP"}" <${userEmail}>`,
     sender: undefined,
     replyTo: mailOptions.replyTo || userEmail
   });
@@ -1127,7 +1127,7 @@ export const sendEmailNotificationV2 = onCall(
     // =================================================================
 
     const mailOptions = {
-      fromName: "IPGATE",
+      fromName: "IPGate - EVREKA GROUP",
       replyTo: userEmail,
       to, cc, 
       subject: finalSubject, 
@@ -4873,7 +4873,7 @@ async function createProfessionalReport(ownerName, matches) {
   }
 
   return new Document({
-    creator: "IPGATE",
+    creator: "IPGate - EVREKA GROUP",
     description: `${ownerName} Marka Benzerlik Raporu`,
     title: `Marka Benzerlik Raporu`,
     sections: [{
