@@ -2308,10 +2308,17 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         finalStatus
     });
 
+   
+    // 1. URL Belirleme: Yeni sistem 'fileUrl', eski sistem 'downloadURL' kullanıyor. İkisini de kontrol et.
+    const fileUrlToUse = after.fileUrl || after.downloadURL || null;
+
+    // 2. Dosya Adı Belirleme: 'fileName' yoksa 'name', o da yoksa varsayılan isim.
+    const fileNameToUse = after.fileName || after.name || "epats_document.pdf";
+
     const epatsAttachment = {
       storagePath: after.storagePath || null,
-      downloadURL: after.downloadURL || null,
-      fileName: after.name || "epats_document.pdf",
+      downloadURL: fileUrlToUse, // Artık doğru URL buraya gelecek
+      fileName: fileNameToUse,
     };
 
     // EK DOSYA (Dilekçe) HAZIRLIĞI
