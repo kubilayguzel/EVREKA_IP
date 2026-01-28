@@ -35,6 +35,49 @@ export class PersonUIManager {
         }
     }
 
+    // ... mevcut kodların altına, class kapanış parantezinden } önce ekleyin ...
+
+    async deletePerson(id) {
+        // Kullanıcıya tekrar sormaya gerek yok, HTML tarafında confirm yaptık.
+        // Ancak güvenlik için firebase-config'den personService'i kullanmalıyız.
+        
+        try {
+            // Eğer dosyanın başında import edilmediyse dinamik import kullanabiliriz
+            // veya dosya başında import { personService } from '../../firebase-config.js'; olduğundan emin olun.
+            
+            // Yükleniyor efekti (Opsiyonel, basitçe tabloyu flu yapabiliriz)
+            const tableBody = document.getElementById('personsTableBody');
+            if(tableBody) tableBody.style.opacity = '0.5';
+
+            // personService'i çağır
+            // NOT: Bu dosyada personService import edilmemiş olabilir. 
+            // Garanti olması için global window.personService veya dinamik import kullanıyorum:
+            
+            let service = window.personService; 
+            if (!service) {
+                const module = await import('../../firebase-config.js');
+                service = module.personService;
+            }
+
+            const result = await service.deletePerson(id);
+
+            if (result.success) {
+                // Başarılıysa listeyi yenile
+                await this.loadPersons();
+                // Varsa bildirim göster
+                if(window.showNotification) window.showNotification('Kişi başarıyla silindi.', 'success');
+            } else {
+                alert("Silme işlemi başarısız: " + result.error);
+                if(tableBody) tableBody.style.opacity = '1';
+            }
+        } catch (error) {
+            console.error("Silme hatası:", error);
+            alert("Bir hata oluştu: " + error.message);
+            const tableBody = document.getElementById('personsTableBody');
+            if(tableBody) tableBody.style.opacity = '1';
+        }
+    }
+
     filterPersons(query) {
         const term = query.toLowerCase().trim();
         
