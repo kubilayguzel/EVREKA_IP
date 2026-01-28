@@ -1,11 +1,10 @@
 // js/etebs-module.js
 // ETEBS Tebligatları Yönetim Modülü
 import { etebsService, etebsAutoProcessor, firebaseServices, authService, ipRecordsService } from '../firebase-config.js';
-import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import './simple-loading.js';
 import Pagination from './pagination.js';
-
+import { collection, query, where, getDocs, getDocsFromServer, getDocsFromCache, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // EKLENECEK KISIM (import'ların hemen altına):
 // Storage referansını initialize et
@@ -90,7 +89,14 @@ constructor() {
             );
             
             // Veriyi çek
-            const snapshot = await getDocs(q);
+            let snapshot;
+            try {
+            snapshot = await getDocsFromServer(q);
+            } catch (e) {
+            console.warn("initializeBadgeCount: server fetch fail, cache fallback:", e);
+            snapshot = await getDocsFromCache(q);
+            }
+
             const count = snapshot.size;
 
             // HTML'deki Badge elementini bul (Hem class hem ID kontrolü)
@@ -610,139 +616,147 @@ updateTabBadge() {
     }
 
     async fetchNotifications(isSilent = false, triggerServerSync = false) {
+  if (this.isLoading) return;
 
-        if (this.isLoading) return;
+  const token = localStorage.getItem('etebs_token');
+  const user = authService?.auth?.currentUser;
 
-        const token = localStorage.getItem('etebs_token');
-        const user = authService?.auth?.currentUser;
+  this.setLoading(true);
 
-        this.setLoading(true);
-        if (!isSilent && window.SimpleLoadingController?.show) {
-        window.SimpleLoadingController.show({
-            text: 'ETEBS evrakları yükleniyor',
-            subtext: 'Lütfen bekleyin...'
-        });
-        await new Promise(requestAnimationFrame);
+  // Loading UI
+  if (!isSilent && window.SimpleLoadingController?.show) {
+    this._listLoadingShownAt = performance.now();
+    window.SimpleLoadingController.show({
+      text: 'ETEBS evrakları yükleniyor',
+      subtext: 'Listeler hazırlanıyor, lütfen bekleyin...'
+    });
+    await new Promise(requestAnimationFrame);
+  }
+
+  if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
+
+  // UI Temizliği (hemen göster)
+  this.notifications = [];
+  this.filteredNotifications = [];
+  this.displayNotifications();
+
+  // Küçük yardımcı: kayıtları uygulayıp ekranı güncelle
+  const applyRecords = async (records, { skipToast = false } = {}) => {
+    this.notifications = records || [];
+    this.filteredNotifications = records || [];
+
+    // Marka eşleştirmelerini çalıştır
+    if (this.notifications.length > 0) {
+      try {
+        if (typeof this.runBrandMatchingIfAvailable === 'function') {
+          await this.runBrandMatchingIfAvailable();
+        } else if (typeof this.matchWithIPRecords === 'function') {
+          await this.matchWithIPRecords();
         }
-
-        if (!isSilent) this.updateStatusMessage('Veriler yükleniyor...');
-        // ✅ Hemen göster (liste/DB beklemeden)
-        if (!isSilent && window.SimpleLoadingController?.show) {
-        this._listLoadingShownAt = performance.now();
-        window.SimpleLoadingController.show({
-            text: 'ETEBS evrakları yükleniyor',
-            subtext: 'Listeler hazırlanıyor, lütfen bekleyin...'
-        });
-
-        // ✅ Tarayıcıya 1 frame paint şansı ver ki animasyon hemen görünsün
-        await new Promise(requestAnimationFrame);
-        }
-
-        // UI Temizliği
-        this.notifications = [];
-        this.filteredNotifications = [];
-        this.displayNotifications();
-
-        try {
-        // ADIM 1: Token varsa backend tetikle (fire-and-forget)
-            if (triggerServerSync && token && user) {
-                if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
-                try {
-                    // --- ORTAM BELİRLEME (DİNAMİK) ---
-                    // firebase-config.js dosyasındaki mantığı buraya uyguluyoruz
-                    const hostname = window.location.hostname;
-                    const isTestEnv = (
-                        hostname === "localhost" || 
-                        hostname === "127.0.0.1" || 
-                        hostname.includes("ip-manager-production-aab4b") ||
-                        hostname.includes("github.io")
-                    );
-
-                    // Ortama göre Proje ID seç
-                    const projectId = isTestEnv ? "ip-manager-production-aab4b" : "ipgate-31bd2";
-                    const region = 'europe-west1';
-                    
-                    // URL oluştur
-                    const functionUrl = `https://${region}-${projectId}.cloudfunctions.net/etebsProxyV2`;
-
-                    console.log(`🚀 Algılanan Ortam: ${isTestEnv ? 'TEST' : 'CANLI (PROD)'}`);
-                    console.log(`🔗 Hedef URL: ${functionUrl}`);
-
-                    // İstek at (Fetch)
-                    fetch(functionUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            action: 'CHECK_LIST_ONLY',
-                            token: token,
-                            userId: user.uid
-                        })
-                    })
-                    .then(response => {
-                         if (!response.ok) {
-                            console.warn(`Arka plan sync sunucu hatası: ${response.status}`);
-                        } else {
-                            console.log("Arka plan sync isteği başarıyla gönderildi.");
-                        }
-                    })
-                    .catch(e => console.warn("Arka plan sync ağ hatası:", e));
-
-                } catch (e) { console.warn("Backend tetikleme atlandı:", e); }
-            }
-
-            // ADIM 2: Veritabanından son durumu çek ve göster
-            if (!isSilent) this.updateStatusMessage('Listeleniyor...');
-            
-            await new Promise((r) => setTimeout(r, 200));
-
-            const dbRecords = await etebsService.getRecentUnindexedDocuments(50);
-
-            // ✅ GÜNCELLEME: Kayıt olsun veya olmasın listeyi her zaman güncelle
-            this.notifications = dbRecords || [];
-            this.filteredNotifications = dbRecords || [];
-
-            // Marka eşleştirmelerini çalıştır
-            if (this.notifications.length > 0) {
-                try {
-                    if (typeof this.runBrandMatchingIfAvailable === 'function') {
-                        await this.runBrandMatchingIfAvailable();
-                    } else if (typeof this.matchWithIPRecords === 'function') {
-                        await this.matchWithIPRecords();
-                    }
-                } catch (e) { console.warn('Brand matching hatası:', e); }
-            }
-
-            // İstatistikleri ve Görünümü Güncelle
-            this.updateStatistics();
-            this.displayNotifications();
-            
-            // ✅ ÖNEMLİ: Bölümü her zaman göster (Boş olsa bile)
-            this.showNotificationsSection();
-
-            if (dbRecords && dbRecords.length > 0) {
-                if (!isSilent) this.showSuccess(`Veritabanından ${dbRecords.length} evrak listelendi.`);
-            } else {
-                if (!isSilent) this.showInfo("Henüz listelenecek evrak bulunamadı.");
-                // hideNotificationsSection() ARTIK ÇAĞRILMIYOR
-            }
-
-        } catch (error) {
-            console.error('Liste Hatası:', error);
-            if (!isSilent) this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
-            } finally {
-            this.setLoading(false);
-
-            // ✅ En az 250ms görünsün (çok hızlı işlemlerde “gözükmedi” hissini engeller)
-            if (!isSilent && window.SimpleLoadingController?.hide) {
-                const elapsed = performance.now() - (this._listLoadingShownAt || 0);
-                const delay = Math.max(0, 250 - elapsed);
-                setTimeout(() => window.SimpleLoadingController.hide(), delay);
-            }
-        }
-
+      } catch (e) {
+        console.warn('Brand matching hatası:', e);
+      }
     }
+
+    this.updateStatistics();
+    this.displayNotifications();
+    this.showNotificationsSection();
+
+    if (!skipToast && !isSilent) {
+      if (records && records.length > 0) {
+        this.showSuccess(`Veritabanından ${records.length} evrak listelendi.`);
+      } else {
+        this.showInfo("Henüz listelenecek evrak bulunamadı.");
+      }
+    }
+  };
+
+  // DB okuma: server zorla + fallback
+  const fetchDbRecords = async () => {
+    // 1) Servis "server" opsiyonu destekliyorsa kullan
+    try {
+      return await etebsService.getRecentUnindexedDocuments(50, { source: "server" });
+    } catch (_) {
+      // 2) Servis opsiyon desteklemiyorsa eski imza ile dene
+      return await etebsService.getRecentUnindexedDocuments(50);
+    }
+  };
+
+  try {
+    // ADIM 1: Token varsa backend tetikle (fire-and-forget)
+    if (triggerServerSync && token && user) {
+      if (!isSilent) this.updateStatusMessage('Sunucu ile senkronize ediliyor...');
+
+      try {
+        const hostname = window.location.hostname;
+        const isTestEnv = (
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          hostname.includes("ip-manager-production-aab4b") ||
+          hostname.includes("github.io")
+        );
+
+        const projectId = isTestEnv ? "ip-manager-production-aab4b" : "ipgate-31bd2";
+        const region = 'europe-west1';
+        const functionUrl = `https://${region}-${projectId}.cloudfunctions.net/etebsProxyV2`;
+
+        console.log(`🚀 Algılanan Ortam: ${isTestEnv ? 'TEST' : 'CANLI (PROD)'}`);
+        console.log(`🔗 Hedef URL: ${functionUrl}`);
+
+        // Fire-and-forget
+        fetch(functionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'CHECK_LIST_ONLY',
+            token: token,
+            userId: user.uid
+          })
+        })
+        .then(res => {
+          if (!res.ok) console.warn(`Arka plan sync sunucu hatası: ${res.status}`);
+          else console.log("Arka plan sync isteği başarıyla gönderildi.");
+        })
+        .catch(e => console.warn("Arka plan sync ağ hatası:", e));
+
+      } catch (e) {
+        console.warn("Backend tetikleme atlandı:", e);
+      }
+    }
+
+    // ADIM 2: Veritabanından son durumu çek ve göster (SERVER öncelikli)
+    if (!isSilent) this.updateStatusMessage('Listeleniyor...');
+
+    // ❌ 200ms bekleme yerine: hemen server fetch + ardından kısa refresh
+    const dbRecords = await fetchDbRecords();
+    await applyRecords(dbRecords);
+
+    // ✅ Sync gecikmesine / stale cache’e karşı: 1.5sn sonra bir kez daha server’dan tazele
+    clearTimeout(this._etebsRefreshTimer);
+    this._etebsRefreshTimer = setTimeout(async () => {
+      try {
+        const fresh = await fetchDbRecords();
+        await applyRecords(fresh, { skipToast: true }); // ikinci yenilemede toast yok
+      } catch (e) {
+        console.warn("ETEBS ikinci refresh başarısız:", e);
+      }
+    }, 1500);
+
+  } catch (error) {
+    console.error('Liste Hatası:', error);
+    if (!isSilent) this.showError('Liste alınırken hata oluştu: ' + (error?.message || error));
+  } finally {
+    this.setLoading(false);
+
+    // En az 250ms görünsün (çok hızlı işlemlerde “gözükmedi” hissini engeller)
+    if (!isSilent && window.SimpleLoadingController?.hide) {
+      const elapsed = performance.now() - (this._listLoadingShownAt || 0);
+      const delay = Math.max(0, 250 - elapsed);
+      setTimeout(() => window.SimpleLoadingController.hide(), delay);
+    }
+  }
+}
+
 
     async matchWithIPRecords() {
     console.log("🔍 ETEBS Eşleştirme Motoru Başlatılıyor...");
