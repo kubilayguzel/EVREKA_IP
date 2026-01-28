@@ -1941,28 +1941,53 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
     const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
-    // Client bilgisini ve değerlendirme durumunu belirle
-    if (after.clientId) {
-        const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
-        if (clientSnapshot.exists) {
-            client = clientSnapshot.data();
-            isEvaluationRequired = client.is_evaluation_required === true;
-            console.log(`👤 Client bulundu: ${client.name || client.companyName}, Değerlendirme Gerekli: ${isEvaluationRequired}`);
+// --- GÜNCELLENMİŞ CLIENT TESPİT MANTIĞI ---
+
+    let targetClientId = after.clientId;
+
+    // 1. Adım: Dokümanda Client ID yoksa, İlişkili Görevden (Task) bulmaya çalış
+    if (!targetClientId && fetchedTaskData) {
+        // A) Task içinde explicit clientId var mı?
+        if (fetchedTaskData.clientId) {
+            targetClientId = fetchedTaskData.clientId;
+            console.log(`🎯 Client ID, Task.clientId alanından alındı: ${targetClientId}`);
         }
-    } else if (applicants.length > 0 && applicants[0].id) {
-        const clientSnapshot = await adminDb.collection("persons").doc(applicants[0].id).get();
-        if (clientSnapshot.exists) {
-            client = clientSnapshot.data();
-            isEvaluationRequired = client.is_evaluation_required === true;
-            console.log(`👤 Client (applicant'tan): ${client.name || client.companyName}, Değerlendirme Gerekli: ${isEvaluationRequired}`);
-        } else {
-            client = { name: applicants[0].name, id: applicants[0].id };
-            console.log(`👤 Client (applicant'tan - basit): ${client.name}`);
+        // B) Yoksa, Task Owner (Görev Sahibi) kim? (Third Party için kritik nokta burası)
+        else if (fetchedTaskData.taskOwner) {
+            const owners = Array.isArray(fetchedTaskData.taskOwner) ? fetchedTaskData.taskOwner : [fetchedTaskData.taskOwner];
+            if (owners.length > 0 && owners[0]) {
+                targetClientId = owners[0];
+                console.log(`🎯 Client ID, Task.taskOwner alanından alındı: ${targetClientId}`);
+            }
         }
     }
 
+    // 2. Adım: Hala bulunamadıysa Applicant'a bak (Self portföyler için standart yöntem)
+    if (!targetClientId && applicants.length > 0 && applicants[0].id) {
+        targetClientId = applicants[0].id;
+        console.log(`🎯 Client ID, Applicant bilgisinden alındı: ${targetClientId}`);
+    }
+
+    // 3. Adım: ID bulunduysa veritabanından ayarları çek
+    if (targetClientId) {
+        const clientSnapshot = await adminDb.collection("persons").doc(targetClientId).get();
+        if (clientSnapshot.exists) {
+            client = clientSnapshot.data();
+            isEvaluationRequired = client.is_evaluation_required === true;
+            console.log(`👤 Client Detayı: ${client.name || client.companyName} | Değerlendirme Gerekli mi: ${isEvaluationRequired}`);
+        } else {
+            console.log(`⚠️ ID (${targetClientId}) var ama Persons tablosunda kayıt bulunamadı.`);
+        }
+    }
+
+    // 4. Adım: Hiçbir şekilde DB kaydı bulunamadıysa, Applicant ismini "Client" gibi kullan (Fallback)
+    if (!client && applicants.length > 0) {
+        client = { name: applicants[0].name, id: applicants[0].id };
+        console.log(`👤 Client DB'de bulunamadı, Applicant ismi kullanılıyor: ${client.name}`);
+    }
+    
     if (!client) {
-        console.log(`⚠️ Client bilgisi bulunamadı!`);
+        console.log(`⚠️ HATA: Client bilgisi hiçbir kaynaktan bulunamadı!`);
     }
 
     // --- ŞABLON EŞLEŞTİRME ---
