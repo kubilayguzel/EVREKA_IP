@@ -120,7 +120,7 @@ export class TaskDetailManager {
     }
 
     // =========================================================================
-    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ
+    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (GÜNCELLENDİ)
     // =========================================================================
     async _renderEvaluationEditor(task) {
         this.showLoading();
@@ -128,10 +128,86 @@ export class TaskDetailManager {
             const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
             const db = getFirestore();
             
+            // Mail bildirimini çek
             const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
 
+            // --- 1. EKLİ DOSYALARI HAZIRLA ---
+            let attachmentsHtml = '';
+            const attachments = [];
+
+            // A) EPATS Belgesi
+            if (mail.epatsAttachment && (mail.epatsAttachment.downloadURL || mail.epatsAttachment.url)) {
+                attachments.push({
+                    name: mail.epatsAttachment.fileName || 'EPATS Belgesi.pdf',
+                    url: mail.epatsAttachment.downloadURL || mail.epatsAttachment.url,
+                    icon: 'fa-file-pdf',
+                    color: 'text-danger',
+                    label: 'RESMİ EPATS BELGESİ'
+                });
+            }
+
+            // B) Ek Belge (Örn: İtiraz Dilekçesi)
+            if (mail.supplementaryAttachment && (mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url)) {
+                attachments.push({
+                    name: mail.supplementaryAttachment.fileName || 'Ek Belge',
+                    url: mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url,
+                    icon: 'fa-paperclip',
+                    color: 'text-primary',
+                    label: 'EK DOSYA (Dilekçe vb.)'
+                });
+            }
+
+            // C) Genel Dosyalar Listesi
+            if (mail.files && Array.isArray(mail.files)) {
+                mail.files.forEach(f => {
+                    const fUrl = f.url || f.downloadURL;
+                    // Mükerrer göstermemek için URL kontrolü
+                    const isDuplicate = attachments.some(existing => existing.url === fUrl);
+                    
+                    if (fUrl && !isDuplicate) {
+                        attachments.push({
+                            name: f.name || f.fileName || 'Dosya',
+                            url: fUrl,
+                            icon: 'fa-file-alt',
+                            color: 'text-secondary',
+                            label: 'EKLENTİ'
+                        });
+                    }
+                });
+            }
+
+            // D) HTML Bloğunu Oluştur
+            if (attachments.length > 0) {
+                const filesList = attachments.map(file => `
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex align-items-center justify-content-between p-2 bg-white border rounded shadow-sm h-100">
+                            <div class="d-flex align-items-center overflow-hidden">
+                                <i class="fas ${file.icon} ${file.color} fa-2x mr-3"></i>
+                                <div class="text-truncate">
+                                    <small class="text-muted font-weight-bold d-block" style="font-size: 0.7rem;">${file.label}</small>
+                                    <span class="text-dark font-weight-bold text-truncate d-block" style="max-width: 200px;" title="${file.name}">${file.name}</span>
+                                </div>
+                            </div>
+                            <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 ml-2">
+                                <i class="fas fa-eye mr-1"></i>Görüntüle
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+
+                attachmentsHtml = `
+                    <div class="mb-3 p-3 bg-light border rounded" style="border-left: 4px solid #17a2b8 !important;">
+                        <label class="text-info small font-weight-bold text-uppercase mb-2"><i class="fas fa-paperclip mr-1"></i>Bu Maile Eklenecek Dosyalar</label>
+                        <div class="row">
+                            ${filesList}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // --- 2. ANA HTML ---
             this.container.innerHTML = `
                 <div class="card shadow-sm border-primary">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -140,9 +216,11 @@ export class TaskDetailManager {
                     </div>
                     <div class="card-body bg-light">
                         <div class="alert alert-info py-2 small mb-3">
-                            <i class="fas fa-info-circle mr-1"></i> Mail içeriği aşağıda görsel olarak sunulmuştur. Metinlerin üzerine tıklayarak doğrudan düzenleme yapabilirsiniz.
+                            <i class="fas fa-info-circle mr-1"></i> Mail içeriği aşağıda sunulmuştur. Metinleri düzenleyebilir ve ekli dosyaları kontrol edebilirsiniz.
                         </div>
                         
+                        ${attachmentsHtml}
+
                         <div class="form-group bg-white p-3 border rounded shadow-sm mb-3">
                             <label class="text-muted small font-weight-bold text-uppercase">Mail Konusu</label>
                             <input type="text" class="form-control border-0 font-weight-bold p-0" style="font-size: 1.1rem; height: auto;" value="${mail.subject}" readonly>
