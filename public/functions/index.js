@@ -2402,6 +2402,11 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     const after  = change.after.data() || {};
     const taskId = event.params.taskId;
 
+    if (String(after.taskType) === "66") {
+        console.log(`ℹ️ Task ${taskId} (Tip 66 - Değerlendirme) tamamlandı ancak bildirim oluşturulmadı (Zaten var olanı güncelledi).`);
+        return null;
+    }
+
     // Sadece "Completed" statüsüne geçişte çalış
     const becameCompleted = before.status !== "completed" && after.status === "completed";
     
