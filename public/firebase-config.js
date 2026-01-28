@@ -1634,59 +1634,87 @@ export const etebsService = {
         }
     },
 
-    // public/firebase-config.js içinde ilgili fonksiyonu bul ve değiştir:
+async getRecentUnindexedDocuments(limitCount = 50, opts = {}) {
+  try {
+    const database = window.db || this.db || db;
+    if (!database) return [];
 
-async getRecentUnindexedDocuments(limitCount = 50) {
-    try {
-        const database = window.db || this.db || db;
-        if (!database) return [];
+    const source = (opts?.source || "server").toLowerCase(); 
+    // default önerim: server. İsterseniz "default" yapabilirsiniz.
 
-        const pdfsRef = collection(database, 'unindexed_pdfs');
-        const q = query(pdfsRef, orderBy('uploadedAt', 'desc'), limit(limitCount));
-        const querySnapshot = await getDocs(q);
+    const pdfsRef = collection(database, 'unindexed_pdfs');
+    const q = query(pdfsRef, orderBy('uploadedAt', 'desc'), limit(limitCount));
 
-        // HATA DÜZELTME: ipRecordsService içinde 'getAllRecords' yok, 'getRecords' var.
-        const allRecordsResult = await ipRecordsService.getRecords(); 
-        const portfolioRecords = allRecordsResult.success ? allRecordsResult.data : [];
-        
-        // Matcher sınıfını kullan
-        const matcher = new RecordMatcher();
-        const documents = [];
+    let querySnapshot;
 
-        querySnapshot.forEach((d) => {
-            const data = d.data();
-            
-            // Anlık Eşleştirme
-            const searchKey = data.dosyaNo || data.evrakNo;
-            let matchedData = { matched: false, matchedRecordId: null };
-
-            if (searchKey && portfolioRecords.length > 0) {
-                const matchResult = matcher.findMatch(searchKey, portfolioRecords);
-                if (matchResult) {
-                    matchedData = {
-                        matched: true,
-                        matchedRecordId: matchResult.record.id,
-                        matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record)
-                    };
-                }
-            }
-
-            documents.push({
-                ...data,
-                id: d.id,
-                ...matchedData,
-                EVRAK_NO: data.evrakNo,
-                DOSYA_NO: data.dosyaNo,
-                status: data.status || 'pending'
-            });
-        });
-
-        return documents;
-    } catch (error) {
-        console.error("Veritabanı Okuma Hatası:", error);
-        return [];
+    if (source === "cache") {
+      // İsteğe bağlı: sadece cache
+      querySnapshot = await getDocsFromCache(q);
+    } else if (source === "default") {
+      // Firebase'in default davranışı (bazen cache dönebilir)
+      querySnapshot = await getDocs(q);
+    } else {
+      // ✅ Öncelik: server → hata olursa cache fallback
+      try {
+        querySnapshot = await getDocsFromServer(q);
+      } catch (e) {
+        console.warn("getRecentUnindexedDocuments: server fetch fail, cache fallback:", e);
+        querySnapshot = await getDocsFromCache(q);
+      }
     }
+
+    // ---- Portfolio Records: TTL cache (stale fetch'i değil, performansı iyileştirir) ----
+    // Çok sık liste yenileniyorsa ipRecords'u her seferinde çekmeyelim.
+    const now = Date.now();
+    const ttlMs = 60 * 1000; // 60 sn
+    if (!this._portfolioCache) this._portfolioCache = { ts: 0, records: [] };
+
+    let portfolioRecords = this._portfolioCache.records;
+
+    if (!portfolioRecords?.length || (now - this._portfolioCache.ts) > ttlMs) {
+      const allRecordsResult = await ipRecordsService.getRecords();
+      portfolioRecords = allRecordsResult.success ? (allRecordsResult.data || []) : [];
+      this._portfolioCache = { ts: now, records: portfolioRecords };
+    }
+
+    const matcher = new RecordMatcher();
+
+    const documents = querySnapshot.docs.map((docSnap) => {
+      const data = docSnap.data() || {};
+
+      const searchKey = data.dosyaNo || data.evrakNo;
+      let matchedData = { matched: false, matchedRecordId: null };
+
+      if (searchKey && portfolioRecords.length > 0) {
+        const matchResult = matcher.findMatch(searchKey, portfolioRecords);
+        if (matchResult) {
+          matchedData = {
+            matched: true,
+            matchedRecordId: matchResult.record?.id || null,
+            matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record)
+          };
+        }
+      }
+
+      const normalizedStatus = String(data.status || 'pending').trim().toLowerCase();
+
+      return {
+        ...data,
+        id: docSnap.id,
+        ...matchedData,
+        EVRAK_NO: data.evrakNo,
+        DOSYA_NO: data.dosyaNo,
+        status: normalizedStatus
+      };
+    });
+
+    return documents;
+  } catch (error) {
+    console.error("Veritabanı Okuma Hatası:", error);
+    return [];
+  }
 },
+
 
 async processNotifications(notifications, userId) {
         const processedNotifications = [];
