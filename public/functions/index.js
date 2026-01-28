@@ -2226,48 +2226,90 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         } catch (err) { console.error("❌ Konu belirleme hatası:", err); }
     }
 
-  // ---------------------------------------------------------------------------------------
-    // [GÜNCELLENDİ v13] İÇERİK OLUŞTURMA & AKILLI HTML ENJEKSİYONU
+    // ---------------------------------------------------------------------------------------
+    // [GÜNCELLEME v16] ŞABLON SEÇİMİ (SELF / THIRD PARTY / DİNAMİK TİP 40)
     // ---------------------------------------------------------------------------------------
     if (template && client) {
 
-      // Eğer işlem tipi 40 ise ve bir Parent İşlem (parentTxnData) varsa;
-      // Veritabanındaki şablonda "bodyX" ve "subjectX" alanlarını ara (Örn: body4, subject4).
-      
+      // --- A) Tip 40 için Özel Dinamik Mantık (Parent'a göre şekillenir) ---
       if (templateSearchType === "40" && parentTxnData && parentTxnData.type) {
-          const pType = String(parentTxnData.type); // Örn: "4", "3", "20"
+          const pType = String(parentTxnData.type);
+          const dynamicSubjectKey = `subject${pType}`;
+          const dynamicBodyKey = `body${pType}`;
           
-          const dynamicSubjectKey = `subject${pType}`; // Örn: subject4
-          const dynamicBodyKey = `body${pType}`;       // Örn: body4
-          
-          // Eğer şablon dökümanında bu özel alanlar varsa, varsayılanların üzerine yaz
           if (template[dynamicSubjectKey] && template[dynamicBodyKey]) {
-              console.log(`🔀 Dinamik Şablon Kullanılıyor: Tip 40 -> Parent ${pType} (${dynamicSubjectKey}, ${dynamicBodyKey})`);
-              
+              console.log(`🔀 Dinamik Şablon (Tip 40): ${dynamicBodyKey} kullanılıyor.`);
               template.subject = template[dynamicSubjectKey];
               template.body = template[dynamicBodyKey];
               
-              // İsteğe bağlı: mailSubject alanı varsa onu da ezebiliriz
               if (template[`mailSubject${pType}`]) {
                   template.mailSubject = template[`mailSubject${pType}`];
               }
-          } else {
-              console.log(`ℹ️ Dinamik Şablon Bulunamadı (Parent ${pType}), varsayılan 40 şablonu kullanılıyor.`);
           }
       }
 
-      // 1. Alt işlemin orijinal konusunu sakla
+      // 1. Varsayılan Değerler
+      let rawBody = String(template.body || ""); // Ana body (Varsayılan)
+      let detectedType = "unknown"; 
+
+      console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${recordId}`);
+
+      // --- B) PORTFÖY TİPİ BELİRLEME (SELF / THIRD_PARTY) ---
+      // Öncelik: Veritabanı Kaydı
+      const dbType = ipRecordData?.recordOwnerType ? String(ipRecordData.recordOwnerType).trim().toLowerCase() : null;
+
+      if (dbType === 'third_party') {
+          detectedType = 'third_party';
+      } 
+      else if (dbType === 'self') {
+          detectedType = 'self';
+      } 
+      else {
+          // DB'de tip yoksa -> Otomatik Tespit (Fallback)
+          // Müvekkil (client) ile Başvuru Sahibi (applicants) eşleşmesine bak
+          const apps = ipRecordData?.applicants || [];
+          const isClientApplicant = (client && apps.length > 0) 
+              ? apps.some(app => String(app.id || app.personId) === String(client.id)) 
+              : false;
+          
+          // Eşleşme varsa 'self', yoksa 'third_party' (rakip) kabul et
+          detectedType = isClientApplicant ? 'self' : 'third_party'; 
+          console.log(`🧩 Otomatik Tespit: DB Type '${dbType}' geçersiz. Müvekkil Eşleşmesi: ${isClientApplicant} -> Algılanan: ${detectedType}`);
+      }
+
+      console.log(`📊 FINAL OWNER TYPE: ${detectedType}`);
+
+      // --- C) İÇERİK SEÇİMİ (BODY1 vs BODY2) ---
+      if (detectedType === 'third_party') {
+          // Karşı Taraf Dosyası -> body2 kullan (Varsa)
+          if (template.body2 && template.body2.trim() !== "") {
+              rawBody = String(template.body2);
+              console.log("✅ SEÇİLEN ŞABLON: 'body2' (Third Party)");
+          } else {
+              console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Çünkü 'body2' alanı boş.");
+          }
+      }
+      else if (detectedType === 'self') {
+          // Kendi Dosyamız -> body1 kullan (Varsa)
+          if (template.body1 && template.body1.trim() !== "") {
+              rawBody = String(template.body1);
+              console.log("✅ SEÇİLEN ŞABLON: 'body1' (Self)");
+          } else {
+              console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Çünkü 'body1' alanı boş.");
+          }
+      }
+      else {
+           console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Tip belirlenemedi.");
+      }
+
+      // --- D) Konu Başlığı ve İçerik İşleme (Mevcut Mantık) ---
       let childSubjectRaw = String(template.subject || "");
-      
-      // 2. Mail Başlığı (Varsayılan olarak child, varsa Parent/Thread ile ezilir)
       subject = childSubjectRaw;
       if (parentTemplateSubject) {
           subject = String(parentTemplateSubject);
       }
 
-      // 3. Mail Gövdesi (Ham hali)
-      let rawBody = String(template.body || "");
-      
+      // Parametreleri Hazırla
       const parameters = {
         ...client, ...after, ...ipRecordData, ...fetchedTaskData, 
         muvekkil_adi: "Değerli Müvekkilimiz",
@@ -2295,42 +2337,35 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         basvuru_no: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-"
       };
 
-      // 4. Değişkenleri Yerleştir
+      // Değişkenleri Yerleştir
       const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
 
       subject = replaceVars(subject);
       const childSubjectResolved = replaceVars(childSubjectRaw);
       let resolvedBody = replaceVars(rawBody);
 
-      // 5. [AKILLI ENJEKSİYON] Konu Kutusunu Ekleme
-      // parentTemplateSubject kullanıldıysa VE konular farklıysa ekle
+      // Konu Kutusu Enjeksiyonu
       if (parentTemplateSubject && subject.trim() !== childSubjectResolved.trim()) {
-          
           const innerSubjectHtml = `
             <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
                 <strong style="color: #1a73e8;">KONU:</strong> ${childSubjectResolved}
             </div>
           `;
 
-          // EĞER HTML BODY VARSA: Kutuyu <body> etiketinin hemen içine yerleştir.
-          // Böylece sendEmailNotificationV2 içindeki stripBody fonksiyonu bunu silmez.
           if (resolvedBody.toLowerCase().includes("<body")) {
               body = resolvedBody.replace(/<body[^>]*>/i, (match) => {
                   return match + innerSubjectHtml;
               });
               console.log("✅ Kutu BODY etiketinin içine enjekte edildi.");
-          } 
-          // EĞER SADECE METİN veya P ETİKETLERİ VARSA: En başa ekle.
-          else {
+          } else {
               body = innerSubjectHtml + resolvedBody;
               console.log("✅ Kutu içeriğin en başına eklendi.");
           }
-
       } else {
           body = resolvedBody;
       }
       
-      // 6. [SON ÇARE ID DÜZELTME]
+      // ID Düzeltme (Son Çare)
       if (typeof forcedThreadId !== 'undefined' && forcedThreadId) {
           namingTargetType = forcedThreadId;
       }
