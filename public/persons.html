@@ -75,6 +75,7 @@
         import { loadSharedLayout } from './js/layout-loader.js';
         import { PersonModalManager } from './js/components/PersonModalManager.js';
         import { PersonUIManager } from './js/persons/PersonUIManager.js';
+        import { authService, auth, deletePerson } from './public/firebase-config.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             // 1. Ortak Layout Yükle
@@ -108,7 +109,7 @@
                     modal.open(id);
                 } else if (target.classList.contains('delete-btn')) {
                     if(confirm('Bu kişiyi sistemden silmek istediğinizden emin misiniz?')) {
-                        ui.deletePerson(personId);
+                        ui.deletePerson(Id);
                     }
                 }
             });
