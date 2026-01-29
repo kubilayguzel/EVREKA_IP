@@ -66,24 +66,33 @@ export class DocumentReviewManager {
 }
 
     async init() {
-        if (!this.pdfId) return;
-        
-        // [DÜZELTME 1] URL Parametrelerini Temizle (Böylece geri gelindiğinde veya yenilendiğinde eski veri kalmaz)
-        if (window.history.replaceState) {
-            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?pdfId=" + this.pdfId;
-            window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+        // [KRİTİK DÜZELTME] 1. Her açılışta URL parametrelerini taze olarak al
+        const params = new URLSearchParams(window.location.search);
+        this.pdfId = params.get('pdfId');
+        this.prefillRecordId = params.get('recordId');
+        this.prefillQuery = params.get('q');
+        this.prefillDeliveryDate = params.get('deliveryDate');
+
+        // [KRİTİK DÜZELTME] 2. Önceki işlemden kalan verileri RAM'den sil (Reset State)
+        this.matchedRecord = null;
+        this.pdfData = null;
+        this.currentTransactions = [];
+        this.analysisResult = null;
+
+        // [KRİTİK DÜZELTME] 3. Arama kutusunu fiziksel olarak temizle
+        const searchInput = document.getElementById('manualSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.removeAttribute('data-temp'); // Varsa kalıntıları sil
+        }
+
+        if (!this.pdfId) {
+            console.error("PDF ID bulunamadı.");
+            return;
         }
 
         this.currentUser = authService.getCurrentUser();
         this.setupEventListeners();
-        
-        // [DÜZELTME 2] Manuel Arama Kutusunun Otomatik Dolmasını Engelle
-        const searchInput = document.getElementById('manualSearchInput');
-        if (searchInput) {
-            searchInput.setAttribute('autocomplete', 'off');
-            searchInput.value = ''; // Başlangıçta temizle
-        }
-
         await this.loadTransactionTypes();
         await this.loadData();
     }
