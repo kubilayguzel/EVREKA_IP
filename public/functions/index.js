@@ -1731,17 +1731,46 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         enrichedData.markImageUrl = clean(ipRecordData.brandImageUrl) || clean(ipRecordData.trademarkImage) || clean(ipRecordData.publicImageUrl) || "";
         enrichedData.applicationDate = formatDate(ipRecordData.applicationDate);
 
+        // [GÜNCELLEME] BAŞVURU SAHİBİ ÇÖZÜMLEME (HYBRID: DB + DIRECT NAME)
         try {
             const namesList = [];
             const apps = ipRecordData.applicants || applicants || [];
+            
             for (const app of apps) {
-                if (app.id) {
-                    const pDoc = await adminDb.collection("persons").doc(app.id).get();
-                    if (pDoc.exists) namesList.push(pDoc.data().name || pDoc.data().companyName || "-");
-                } else if (app.name) namesList.push(app.name);
+                // 1. Durum: Veri doğrudan metin ise
+                if (typeof app === 'string') {
+                    namesList.push(app);
+                }
+                // 2. Durum: Veri nesne ise
+                else if (typeof app === 'object' && app !== null) {
+                    let resolvedName = null;
+
+                    // A) ID varsa veritabanından çekmeyi dene
+                    if (app.id) {
+                        const pDoc = await adminDb.collection("persons").doc(app.id).get();
+                        if (pDoc.exists) {
+                            resolvedName = pDoc.data().name || pDoc.data().companyName;
+                        }
+                    }
+
+                    // B) Veritabanında yoksa (örn: bulletin_holder...) veya ID yoksa, 
+                    // nesnenin üzerindeki 'name' alanını kullan
+                    if (!resolvedName && app.name) {
+                        resolvedName = app.name;
+                    }
+
+                    if (resolvedName) {
+                        namesList.push(resolvedName);
+                    }
+                }
             }
-            if (namesList.length > 0) enrichedData.applicantNames = namesList.join(", ");
-        } catch (e) {}
+            
+            if (namesList.length > 0) {
+                enrichedData.applicantNames = namesList.join(", ");
+            }
+        } catch (e) {
+            console.warn("Applicant name resolve error:", e);
+        }
 
         const extractClassNo = (val) => String(val).match(/\d+/)?.[0] || "";
         if (ipRecordData.goodsAndServicesByClass && Array.isArray(ipRecordData.goodsAndServicesByClass)) {
