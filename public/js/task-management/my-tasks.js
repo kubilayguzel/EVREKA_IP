@@ -462,8 +462,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch(e) { if(loader) loader.hide(); showNotification('Beklenmeyen hata.', 'error'); }
         }
 
-        // --- [YENİ] Tahakkuk Tamamlama Mantığı ---
-        openCompleteAccrualModal(taskId) {
+        // --- [GÜNCELLENDİ] Tahakkuk Tamamlama Mantığı ---
+        // Bu fonksiyonu async yaptık ki parent task veritabanından çekilebilsin
+        async openCompleteAccrualModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
 
@@ -474,11 +475,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.completeTaskFormManager.reset();
                 
                 let epatsDoc = null;
-                if (task.details?.epatsDocument) epatsDoc = task.details.epatsDocument;
+
+                // 1. Önce kendi üzerindeki belgeye bak
+                if (task.details?.epatsDocument) {
+                    epatsDoc = task.details.epatsDocument;
+                } 
+                // 2. Yoksa ve bir üst işe bağlıysa (Parent Task)
                 else if (task.relatedTaskId) {
-                    const parent = this.allTasks.find(t => t.id === task.relatedTaskId);
-                    if (parent?.details?.epatsDocument) epatsDoc = parent.details.epatsDocument;
+                    // A) Önce eldeki listede ara
+                    let parent = this.allTasks.find(t => t.id === task.relatedTaskId);
+                    
+                    // B) Listede yoksa (başkasına atanmış olabilir), veritabanından tekil olarak çek
+                    if (!parent) {
+                        try {
+                            const parentRef = doc(db, 'tasks', String(task.relatedTaskId));
+                            const parentSnap = await getDoc(parentRef);
+                            if (parentSnap.exists()) {
+                                parent = parentSnap.data();
+                            }
+                        } catch (e) {
+                            console.warn('Parent task fetch error:', e);
+                        }
+                    }
+                    
+                    // Parent bulunduysa belgesini al
+                    if (parent?.details?.epatsDocument) {
+                        epatsDoc = parent.details.epatsDocument;
+                    }
                 }
+                
+                // Form yöneticisine belgeyi gönder
                 this.completeTaskFormManager.showEpatsDoc(epatsDoc);
             }
 
