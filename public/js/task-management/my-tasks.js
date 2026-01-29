@@ -280,8 +280,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 if (btn.classList.contains('view-btn') || btn.dataset.action === 'view') {
                     this.showTaskDetailModal(taskId);
-                } else if (btn.classList.contains('edit-btn') || btn.dataset.action === 'edit') {
-                    window.location.href = `task-update.html?id=${taskId}`;
+                    } else if (btn.classList.contains('edit-btn') || btn.dataset.action === 'edit') {
+                    // [GÜNCELLEME] Görev tipini kontrol et
+                    const task = this.allTasks.find(t => t.id === taskId);
+                    
+                    // Eğer iş tipi '53' (Tahakkuk Oluşturma) ise merkezi modalı aç
+                    if (task && String(task.taskType) === '53') {
+                        console.log('💰 Tahakkuk düzenleme modalı açılıyor:', taskId);
+                        this.accrualFormManager.openForTask(taskId);
+                    } else {
+                        // Diğer tüm işler için standart güncelleme sayfasına git
+                        window.location.href = `task-update.html?id=${taskId}`;
+                    }
                 } else if (btn.classList.contains('add-accrual-btn')) {
                     this.showCreateAccrualModal(taskId);
                 }
