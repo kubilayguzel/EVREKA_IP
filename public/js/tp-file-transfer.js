@@ -981,6 +981,7 @@ function renderOwnerResults(items) {
         <th>Tescil No</th>
         <th>Durumu</th>
         <th>Nice Sınıfları</th>
+        <th>Vekil</th> </tr>
       </tr>
     </thead>
     <tbody></tbody>
@@ -1002,6 +1003,7 @@ function renderOwnerResults(items) {
       <td>${item.registrationNumber || ''}</td>
       <td>${item.status || ''}</td>
       <td>${item.niceClasses || ''}</td>
+      <td>${item.attorneyName || item.agentInfo || ''}</td>
     `;
     
     return row;
@@ -1213,6 +1215,7 @@ function appendBatchToTable(batchItems) {
       <td>${item.registrationNumber || ''}</td>
       <td>${item.status || ''}</td>
       <td>${item.niceClasses || ''}</td>
+      <td>${item.attorneyName || item.agentInfo || ''}</td>
     `;
     
     fragment.appendChild(row);
