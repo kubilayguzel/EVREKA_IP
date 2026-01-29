@@ -1923,7 +1923,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 decisionAnalysis.statusText = "ALEYHİMİZE (İtirazımız Reddedildi)";
                 decisionAnalysis.statusColor = "#d32f2f";
                 decisionAnalysis.isLawsuitRequired = true;
-                decisionAnalysis.summaryText = "Yaptığımız itiraz reddedilmiştir. Karşı taraf tescil alacaktır. Dava açma hakkımız vardır.";
+                decisionAnalysis.summaryText = " Yaptığımız itiraz nihai olarak reddedilmiştir. Karşı taraf markası için tescil süreci devam edecektir. Bu noktadan sonra YİDK kararının iptali ve markanın tescil edilmesi halinde hükümsüzlüğü talepli, yukarıda belirtilen tarihe kadar dava açma hakkınız bulunmaktadır. ";
             }
         }
     } 
