@@ -672,6 +672,19 @@ async function buildNotificationAttachments(db, notificationData) {
         });
     }
 
+    // [YENİ EKLENEN KISIM] 4) Task Üzerindeki Diğer Belgeler (documents dizisi)
+    if (notificationData?.taskAttachments && Array.isArray(notificationData.taskAttachments)) {
+        console.log(`📎 [ATTACH] Ekstra ${notificationData.taskAttachments.length} belge ekleniyor...`);
+        for (const doc of notificationData.taskAttachments) {
+            let storagePath = doc.storagePath || pathFromURL(doc.url || doc.downloadURL);
+            await addAsAttachmentOrLink({
+                storagePath,
+                downloadURL: doc.url || doc.downloadURL,
+                fileName: doc.name || "belge.pdf"
+            });
+        }
+    }
+
     return result;
   } catch (err) {
     console.error("❌ [ATTACH] Genel hata:", err);
@@ -2921,6 +2934,32 @@ if (hasTemplate) {
       fileName:    epatsDoc?.name || "epats.pdf",
     };
 
+    // [YENİ] Task üzerindeki diğer belgeleri topla ('documents' dizisi)
+    const taskAttachments = [];
+    if (after.documents && Array.isArray(after.documents)) {
+        after.documents.forEach(doc => {
+            taskAttachments.push({
+                name: doc.name || "ek_belge.pdf",
+                url: doc.url || doc.downloadURL,
+                storagePath: doc.storagePath,
+                type: 'application/pdf' // Varsayılan
+            });
+        });
+    }
+
+    // UI'da (Files listesinde) görünecek tüm dosyaları birleştir (EPATS + Diğerleri)
+    const allUiFiles = [];
+    if (validUrl) {
+        allUiFiles.push({
+            url: validUrl,
+            name: epatsAttachment.fileName,
+            storagePath: epatsAttachment.storagePath,
+            type: 'application/pdf'
+        });
+    }
+    // Diğer belgeleri de UI listesine ekle
+    taskAttachments.forEach(d => allUiFiles.push(d));
+
     const notificationDoc = {
       toList: dedupe(toRecipients),
       ccList: dedupe(ccRecipients),
@@ -2940,18 +2979,15 @@ if (hasTemplate) {
       taskType: after.taskType || null, 
       source: usedSource,
       
-      epatsAttachment, // Mail gönderimi için ek (attachment)
+      epatsAttachment, // Ana EPATS belgesi
+      taskAttachments, // [YENİ EKLENDİ] Ek belgeler listesi (Mail gönderimi için)
 
-      // [YENİ EKLENEN ALANLAR] - UI (Liste ve Modal) için gerekli alanlar
-      documentUrl: validUrl, // Listede linkin görünmesi için
+      // UI ve Portal için gerekli alanlar
+      documentUrl: validUrl, 
       documentName: epatsAttachment.fileName,
-      documentSource: "EPATS (Manuel)", // Modalda 'Ek Kaynağı' alanının dolması için
-      files: validUrl ? [{
-          url: validUrl,
-          name: epatsAttachment.fileName,
-          storagePath: epatsAttachment.storagePath,
-          type: 'application/pdf'
-      }] : [],
+      documentSource: "EPATS (Manuel)", 
+      
+      files: allUiFiles, // [GÜNCELLENDİ] Hem EPATS hem diğer belgeleri içerir
 
       taskOwner: ownerIds,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
