@@ -67,8 +67,23 @@ export class DocumentReviewManager {
 
     async init() {
         if (!this.pdfId) return;
+        
+        // [DÜZELTME 1] URL Parametrelerini Temizle (Böylece geri gelindiğinde veya yenilendiğinde eski veri kalmaz)
+        if (window.history.replaceState) {
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?pdfId=" + this.pdfId;
+            window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+        }
+
         this.currentUser = authService.getCurrentUser();
         this.setupEventListeners();
+        
+        // [DÜZELTME 2] Manuel Arama Kutusunun Otomatik Dolmasını Engelle
+        const searchInput = document.getElementById('manualSearchInput');
+        if (searchInput) {
+            searchInput.setAttribute('autocomplete', 'off');
+            searchInput.value = ''; // Başlangıçta temizle
+        }
+
         await this.loadTransactionTypes();
         await this.loadData();
     }
@@ -234,6 +249,9 @@ async loadData() {
         this.renderHeader();
     }
 
+    if (this.pdfData.status === 'indexed') {
+                showNotification('⚠️ DİKKAT: Bu belge daha önce indekslenmiş!', 'warning');
+    }
 
     } catch (error) {
         console.error('Veri yükleme hatası:', error);
@@ -421,11 +439,6 @@ async loadData() {
         const childTypeId = String(childSelect.value);
         const parentTxId = String(parentSelect.value);
 
-        // --- DEBUG: Seçilen Değerler ---
-        console.log("🔍 checkSpecialFields Tetiklendi");
-        console.log(`👉 Alt İşlem (Child): ${childTypeId}`);
-        console.log(`👉 Ana İşlem (Parent ID): ${parentTxId}`);
-
         // 1. İtiraz Bölümü Kontrolü (Tip 27)
         const oppositionSection = document.getElementById('oppositionSection');
         if (oppositionSection) {
@@ -435,48 +448,31 @@ async loadData() {
         // 2. Tescil ve Eşya Listesi Formu Kontrolü
         const registrationSection = document.getElementById('registrationSection');
         
+        // Element varsa işlem yap, yoksa sessizce geç
         if (registrationSection) {
             let showRegistration = false;
 
             // DURUM A: Alt işlem doğrudan 45 (Tescil Belgesi)
             if (childTypeId === '45') {
-                console.log("✅ KURAL EŞLEŞTİ: Alt işlem 45 (Tescil Belgesi). Form açılıyor.");
                 showRegistration = true;
             }
             // DURUM B: Alt işlem 40 (Kabul) ise Ana İşlemi Kontrol Et
             else if (childTypeId === '40') {
-                console.log("ℹ️ Alt işlem 40 (Kabul). Ana işlem kontrol ediliyor...");
-
                 if (this.currentTransactions && parentTxId) {
-                    // Ana işlemi listeden bul (Güvenli ID karşılaştırması)
                     const parentTx = this.currentTransactions.find(t => String(t.id) === parentTxId);
                     
                     if (parentTx) {
                         const parentType = String(parentTx.type);
-                        console.log(`📄 Bulunan Ana İşlem Tipi: ${parentType}`);
-
                         // 6: Eşya Sınırlandırma, 17: Vazgeçme
                         if (parentType === '6' || parentType === '17') {
-                            console.log(`✅ KURAL EŞLEŞTİ: Ana işlem tipi ${parentType}. Form açılıyor.`);
                             showRegistration = true;
-                        } else {
-                            console.warn(`❌ EŞLEŞME YOK: Ana işlem tipi (${parentType}) 6 veya 17 değil.`);
                         }
-                    } else {
-                        console.error("🚨 HATA: Seçilen ana işlem (ID: " + parentTxId + ") bellekteki listede bulunamadı!");
-                        console.log("Mevcut Liste:", this.currentTransactions);
                     }
-                } else {
-                    console.warn("⚠️ Ana işlem seçili değil veya liste boş.");
                 }
-            } else {
-                console.log("ℹ️ Alt işlem 40 veya 45 değil. Form kapalı kalacak.");
             }
-
+            
             // Görünürlüğü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
-        } else {
-            console.error("🚨 KRİTİK HATA: HTML sayfasında 'registrationSection' ID'li element yok!");
         }
     }
 
