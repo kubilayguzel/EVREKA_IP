@@ -7501,6 +7501,51 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
       } catch (error) {
         console.error("Error creating accrual task:", error);
       }
+
+      // --- [YENİ] ANA İŞİN SAHİBİNİ GÜNCELLEME (RE-ASSIGNMENT) ---
+      // İş Açık statüsüne geçtiğinde, veritabanındaki kurala göre asıl sorumluya atama yap.
+      try {
+          const currentTaskType = String(after.taskType); 
+          
+          // 1. Kuralı Çek
+          const ruleRef = adminDb.collection('taskAssignments').doc(currentTaskType);
+          const ruleSnap = await ruleRef.get();
+
+          if (ruleSnap.exists) {
+              const ruleData = ruleSnap.data();
+              
+              // "assigneeIds" listesindeki ilk kişiyi al (Genel Sorumlu)
+              const targetAssigneeId = (ruleData.assigneeIds && ruleData.assigneeIds.length > 0) 
+                  ? ruleData.assigneeIds[0] 
+                  : null;
+
+              // Eğer yeni bir sorumlu varsa ve mevcut sorumludan farklıysa güncelle
+              if (targetAssigneeId && targetAssigneeId !== after.assignedTo_uid) {
+                  
+                  // Kullanıcı emailini bul
+                  let targetEmail = "";
+                  const userSnap = await adminDb.collection('users').doc(targetAssigneeId).get();
+                  if (userSnap.exists) targetEmail = userSnap.data().email;
+
+                  console.log(`🔄 İş Açıldı: Görev (Tip ${currentTaskType}) yeniden atanıyor -> ${targetEmail}`);
+
+                  // Ana işi güncelle
+                  await adminDb.collection('tasks').doc(taskId).update({
+                      assignedTo_uid: targetAssigneeId,
+                      assignedTo_email: targetEmail,
+                      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                      history: admin.firestore.FieldValue.arrayUnion({
+                          action: `İş açıldı ve kural gereği yeniden atandı: ${targetEmail}`,
+                          timestamp: new Date().toISOString(),
+                          userEmail: 'system'
+                      })
+                  });
+              }
+          }
+      } catch (reassignErr) {
+          console.error("❌ Re-assignment hatası:", reassignErr);
+      }
+
     }
     return null;
   }
