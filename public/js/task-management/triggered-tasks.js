@@ -393,20 +393,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async handleUpdateStatus() {
             if (!this.currentTaskForStatusChange) return;
-            const newStatus = document.getElementById('newTriggeredTaskStatus').value;
             
+            // [DEĞİŞİKLİK 1] const yerine let kullanıyoruz ki değiştirebilelim
+            let newStatus = document.getElementById('newTriggeredTaskStatus').value;
+            
+            // [DEĞİŞİKLİK 2] Kritik Müdahale:
+            // Eğer kullanıcı "Müvekkil Onayı - Açıldı" seçeneğini seçtiyse,
+            // bunu arka planda "open" (Açık) olarak değiştiriyoruz.
+            // Böylece backend tarafındaki tahakkuk ve atama otomasyonları tetiklenir.
+            if (newStatus === 'client_approval_opened') {
+                console.log('🔄 Statü "Müvekkil Onayı - Açıldı" seçildi, otomasyon için "Açık" (open) olarak gönderiliyor.');
+                newStatus = 'open';
+            }
+
             try {
-                // Burada taskService.updateTask çağrılır
-                // (Önceki kodunuzdaki mantık aynen buraya taşınacak)
                 await taskService.updateTask(this.currentTaskForStatusChange.id, {
                     status: newStatus,
                     history: arrayUnion({
-                        action: `Durum değiştirildi: ${newStatus}`,
+                        action: `Durum değiştirildi: ${newStatus} (Müvekkil Onayı ile)`,
                         timestamp: new Date().toISOString(),
                         userEmail: this.currentUser.email
                     })
                 });
-                showNotification('Durum güncellendi.', 'success');
+                showNotification('Durum güncellendi ve işleme alındı.', 'success');
                 this.closeModal('changeTriggeredTaskStatusModal');
                 await this.loadAllData();
             } catch (e) {
