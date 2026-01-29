@@ -1143,9 +1143,10 @@ createNotificationHTML(notification, listType) {
                 
                 <div class="pdf-actions ml-3">
                     ${indexButton}
-                    <button class="pdf-action-btn btn-success notification-action-btn" 
-                        data-action="show" 
-                        data-evrak-no="${notification.evrakNo}" 
+                    <button class="pdf-action-btn btn-success notification-action-btn"
+                        data-action="show"
+                        data-pdf-id="${notification.id}"
+                        data-evrak-no="${notification.evrakNo}"
                         title="Önizle / İndir">
                         <i class="fas fa-eye"></i>
                     </button>
