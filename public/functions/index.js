@@ -5948,6 +5948,10 @@ function domParseFn() {
         out.ownerAddress = ps.slice(2).join(' ') || null;
       }
       else if (label.includes('rüçhan bilgileri')) out.priorityInfo = val;
+      else if (label.includes('vekil bilgileri')) {
+        const ps = Array.from(cell.querySelectorAll('p')).map(txt).filter(Boolean);
+        out.agentInfo = ps.join(' - '); // İsim ve Firma bilgisini birleştirir
+      }
     } else if (tds.length === 4) {
       const label1 = txt(tds[0]).toLowerCase(), value1 = dashToEmpty(txt(tds[1]));
       const label2 = txt(tds[2]).toLowerCase(), value2 = dashToEmpty(txt(tds[3]));
