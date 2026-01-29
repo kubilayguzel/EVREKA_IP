@@ -211,57 +211,86 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo, sourceType = 'etebs'
     return uploadResults;
 }
 
-// ===== indexNotification fonksiyonu (Sadece Firebase'e bakar) =====
+// ===== indexNotification fonksiyonu (pdfId öncelikli, güvenli) =====
 async indexNotification(token, notification) {
-    try {
-        showNotification('Evrak indeksleme sayfasına yönlendiriliyor...', 'info');
-        
-        // 1. Kayıtlı (unindexed_pdfs) var mı?
-        let unindexedDoc = await this.findUnindexedDocument(notification.evrakNo);
-        
-        if (!unindexedDoc) {
-             // 2. etebs_documents (yedek) var mı?
-             let etebsDoc = await this.findETEBSDocument(notification.evrakNo);
-             if (etebsDoc) {
-                // Kopyala ve yönlendir
-                unindexedDoc = await this.copyToUnindexedPdfs(etebsDoc.data);
-             }
-        }
-        
-        if (unindexedDoc) {
-            showNotification('Evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
-            const pdfId = unindexedDoc.id;
+  try {
+    showNotification('Evrak indeksleme sayfasına yönlendiriliyor...', 'info');
 
-            // Dosya no (Kayıt Ara’da otomatik yazılacak)
-            const q = notification.dosyaNo || notification.evrakNo || '';
+    // ✅ 1) Doğru anahtar: pdfId (unindexed_pdfs doc id)
+    const pdfId = notification?.id || notification?.pdfId || null;
 
-            // Eşleşen kayıt id (seçili kayıt otomatik set edilecek)
-            const recordId = notification.matchedRecordId || '';
+    let unindexedDoc = null;
 
-            // Tebliğ tarihi (date input için yyyy-MM-dd)
-            const deliveryDate = this.toYMD(notification.tebligTarihi || notification.belgeTarihi || notification.uploadedAt);
-
-            setTimeout(() => {
-                window.location.href =
-                    `indexing-detail.html?pdfId=${encodeURIComponent(pdfId)}` +
-                    `&q=${encodeURIComponent(q)}` +
-                    `&recordId=${encodeURIComponent(recordId)}` +
-                    `&deliveryDate=${encodeURIComponent(deliveryDate)}`;
-            }, 500);
-
-            return;
-        }
-        else {
-             // 3. Hiçbir yerde yoksa, BATCH işleminde indirilemediğini varsay.
-            showNotification('Bu evrak sistemde kayıtlı değil. Batch işleminde indirme başarısız olmuş olabilir.', 'error');
-            return;
-        }
-
-    } catch (error) {
-        console.error('Index error:', error);
-        showNotification('İndeksleme sırasında hata oluştu.', 'error');
+    if (pdfId) {
+      // unindexed_pdfs/{pdfId} var mı?
+      const snap = await getDoc(doc(firebaseServices.db, 'unindexed_pdfs', pdfId));
+      if (snap.exists()) {
+        unindexedDoc = { id: snap.id, data: snap.data() };
+      } else {
+        console.warn('❗ unindexed_pdfs dokümanı bulunamadı. pdfId=', pdfId);
+      }
     }
+
+    // ✅ 2) (Opsiyonel) Geriye dönük uyumluluk:
+    // Eğer bildirimde id yoksa, eski yöntemle evrakNo araması yap.
+    if (!unindexedDoc) {
+      const evrakNo = notification?.evrakNo || null;
+      if (evrakNo) {
+        // ⚠️ Bu yöntem çoklu/boş evrakNo’da hataya açık; mümkünse tamamen kaldırın.
+        unindexedDoc = await this.findUnindexedDocument(evrakNo);
+      }
+    }
+
+    // ✅ 3) Hâlâ yoksa etebs_documents fallback
+    if (!unindexedDoc) {
+      const evrakNo = notification?.evrakNo || null;
+      if (evrakNo) {
+        const etebsDoc = await this.findETEBSDocument(evrakNo);
+        if (etebsDoc) {
+          // Kopyala ve yönlendir (kopyalanan dokümanın id’si ile)
+          unindexedDoc = await this.copyToUnindexedPdfs(etebsDoc.data);
+        }
+      }
+    }
+
+    if (!unindexedDoc) {
+      showNotification(
+        'Bu evrak sistemde kayıtlı değil. Batch işleminde indirme başarısız olmuş olabilir.',
+        'error'
+      );
+      return;
+    }
+
+    showNotification('Evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
+
+    const finalPdfId = unindexedDoc.id;
+
+    // Dosya no (Kayıt Ara’da otomatik yazılacak)
+    const q = notification?.dosyaNo || notification?.evrakNo || '';
+
+    // Eşleşen kayıt id (seçili kayıt otomatik set edilecek) - yoksa boş gönder
+    const recordId = notification?.matchedRecordId || '';
+
+    // Tebliğ tarihi (date input için yyyy-MM-dd)
+    const deliveryDate = this.toYMD(
+      notification?.tebligTarihi || notification?.belgeTarihi || notification?.uploadedAt
+    );
+
+    // ✅ recordId/q/deliveryDate boşsa bile URL temiz kalsın diye encode ediyoruz
+    setTimeout(() => {
+      window.location.href =
+        `indexing-detail.html?pdfId=${encodeURIComponent(finalPdfId)}` +
+        `&q=${encodeURIComponent(q)}` +
+        `&recordId=${encodeURIComponent(recordId)}` +
+        `&deliveryDate=${encodeURIComponent(deliveryDate)}`;
+    }, 200);
+
+  } catch (error) {
+    console.error('Index error:', error);
+    showNotification('İndeksleme sırasında hata oluştu.', 'error');
+  }
 }
+
 
 // ===== showNotificationPDF fonksiyonu (Sadece Firebase'e bakar) =====
 async showNotificationPDF(token, notification) {
@@ -978,17 +1007,25 @@ autoSwitchTab(matchedCount, unmatchedCount) {
 
         // Bind action buttons
         container.querySelectorAll('.notification-action-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const action = e.target.closest('.notification-action-btn').dataset.action;
-                const evrakNo = e.target.closest('.notification-action-btn').dataset.evrakNo;
-                const notification = notifications.find(n => n.evrakNo === evrakNo);
-                
-                if (notification) {
-                    this.handleNotificationAction(action, notification);
-                }
-            });
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const el = e.target.closest('.notification-action-btn');
+            const action = el.dataset.action;
+            const pdfId = el.dataset.pdfId;
+
+            // ✅ evrakNo yerine id ile bul
+            const notification = notifications.find(n => String(n.id) === String(pdfId));
+
+            if (!notification) {
+            console.warn("❗ Notification bulunamadı. pdfId=", pdfId);
+            return;
+            }
+
+            this.handleNotificationAction(action, notification);
         });
+        });
+
     }
 
 createNotificationHTML(notification, listType) {
@@ -1047,7 +1084,17 @@ createNotificationHTML(notification, listType) {
             statusBadge = `<span class="match-status matched" title="${recordName}"><i class="fas fa-link"></i> ${recordName}</span>`;
             
             // İndeksle butonu aktif
-            indexButton = `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
+            indexButton = `
+                <button
+                    class="pdf-action-btn btn-primary notification-action-btn"
+                    data-action="index"
+                    data-pdf-id="${notification.id}"
+                    data-evrak-no="${notification.evrakNo || ''}"
+                    title="İndeksle"
+                >
+                    <i class="fas fa-edit"></i>
+                </button>`;
+
         } 
         // Eşleşmeyenler
         else {
@@ -1056,7 +1103,17 @@ createNotificationHTML(notification, listType) {
             statusBadge = '<span class="match-status unmatched"><i class="fas fa-times"></i> Eşleşmedi</span>';
             
             // İndeksle butonu aktif
-            indexButton = `<button class="pdf-action-btn btn-primary notification-action-btn" data-action="index" data-evrak-no="${notification.evrakNo}" title="İndeksle"><i class="fas fa-edit"></i></button>`;
+            indexButton = `
+                <button
+                    class="pdf-action-btn btn-primary notification-action-btn"
+                    data-action="index"
+                    data-pdf-id="${notification.id}"
+                    data-evrak-no="${notification.evrakNo || ''}"
+                    title="İndeksle"
+                >
+                    <i class="fas fa-edit"></i>
+                </button>`;
+
         }
 
         // 4. HTML ÇIKTISI (KART TASARIMI)
