@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         init() {
             this.taskDetailManager = new TaskDetailManager('modalBody');
             this.accrualFormManager = new AccrualFormManager('createMyTaskAccrualFormContainer', 'myTaskAcc');
+            this.completeTaskFormManager = new AccrualFormManager('completeAccrualFormContainer', 'comp');
             
             this.initializePagination();
 
@@ -99,6 +100,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
+                if (this.completeTaskFormManager) {
+                    this.completeTaskFormManager.allPersons = this.allPersons;
+                    this.completeTaskFormManager.render();
+                }
 
                 this.processData();
 
