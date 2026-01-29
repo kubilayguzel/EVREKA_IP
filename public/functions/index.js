@@ -2743,110 +2743,138 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     } catch (e) { console.warn("CC listesi genişletilirken hata:", e); }
 
 // --- İÇERİK OLUŞTURMA ---
-    let subject = "", body = "";
-    if (hasTemplate) {
-      let rawEmailSubject = String(template.mailSubject || template.subject || "");
-      let rawInnerSubject = String(template.subject || "");
-      
-      // 1. Varsayılanı Ayarla
-      let rawBody = String(template.body || ""); 
-      let detectedType = "unknown"; 
+let subject = "", body = "";
+if (hasTemplate) {
+  let rawEmailSubject = String(template.mailSubject || template.subject || "");
+  let rawInnerSubject = String(template.subject || "");
 
-      // ---------------------------------------------------------
-      // [GÜNCELLEME] PORTFÖY TİPİ VE ŞABLON SEÇİMİ (LOGLU)
-      // ---------------------------------------------------------
-      console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${after.relatedIpRecordId || 'Bilinmiyor'}`);
+  // 1. Varsayılanı Ayarla
+  let rawBody = String(template.body || "");
+  let detectedType = "unknown";
 
-      // A) TİP BELİRLEME
-      const dbType = ipRecordData?.recordOwnerType ? String(ipRecordData.recordOwnerType).trim().toLowerCase() : null;
+  // ---------------------------------------------------------
+  // PORTFÖY TİPİ VE ŞABLON SEÇİMİ (CRASH FIX + normalize)
+  // ---------------------------------------------------------
+  console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${after.relatedIpRecordId || 'Bilinmiyor'}`);
 
-      if (dbType === 'third_party') {
-          detectedType = 'third_party';
-      } 
-      else if (dbType === 'self') {
-          detectedType = 'self';
-      } 
-      else {
-          // DB'de tip yoksa Müvekkil (client) ile Başvuru Sahibi (applicants) eşleşmesine bak
-          const apps = ipRecordData?.applicants || [];
-          // Not: 'client' nesnesinin bu kapsamda tanımlı olduğundan emin olun
-          const isClientApplicant = (client && apps.length > 0) 
-              ? apps.some(app => String(app.id || app.personId) === String(client.id)) 
-              : false;
-          
-          detectedType = isClientApplicant ? 'self' : 'third_party'; // Eşleşme yoksa rakip (third_party) varsay
-          console.log(`🧩 Otomatik Tespit: DB Type '${dbType}' geçersiz. Müvekkil Eşleşmesi: ${isClientApplicant} -> Algılanan: ${detectedType}`);
-      }
+  const normalizeOwnerType = (v) => {
+    const s = String(v || "").trim().toLowerCase();
+    if (!s) return null;
+    const n = s.replace(/[\s-]+/g, "_"); // "third party" -> "third_party"
+    if (["self", "own", "portfolio", "my", "muvekkil", "müvekkil"].includes(n)) return "self";
+    if ([
+      "third_party", "thirdparty", "third", "opponent", "rakip",
+      "karsi_taraf", "karşı_taraf", "karsitaraf", "karşıtaraf"
+    ].includes(n)) return "third_party";
+    return n;
+  };
 
-      console.log(`📊 FINAL OWNER TYPE: ${detectedType}`);
+  // ✅ Öncelik: task/doküman üzerindeki type -> ipRecord üzerindeki type -> applicants fallback
+  const docType = normalizeOwnerType(
+    after.recordOwnerType || after.ownerType || after.portfolioType || null
+  );
 
-      // B) İÇERİK SEÇİMİ
-      if (detectedType === 'third_party') {
-          if (template.body2 && template.body2.trim() !== "") {
-              rawBody = String(template.body2);
-              console.log("✅ SEÇİLEN ŞABLON: 'body2' (Third Party)");
-          } else {
-              console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Çünkü 'body2' alanı boş.");
-          }
-      }
-      else if (detectedType === 'self') {
-          if (template.body1 && template.body1.trim() !== "") {
-              rawBody = String(template.body1);
-              console.log("✅ SEÇİLEN ŞABLON: 'body1' (Self)");
-          } else {
-              console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Çünkü 'body1' alanı boş.");
-          }
-      }
-      else {
-           console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Tip belirlenemedi.");
-      }
-      
-      const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
+  const dbType = normalizeOwnerType(
+    ipRecord?.recordOwnerType || ipRecord?.ownerType || ipRecord?.portfolioType || null
+  );
 
-      const formatTrDate = (val) => {
-        if (!val) return new Date().toLocaleDateString("tr-TR");
-        const d = (val && val.toDate) ? val.toDate() : new Date(val);
-        return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
-      };
-      
-      const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
+  detectedType = docType || dbType || "unknown";
 
-      const parameters = {
-        muvekkil_adi: "Değerli Müvekkilimiz",
-        proje_adi: ipTitle,
-        relatedIpRecordTitle: ipTitle,
-        is_basligi: after.title || "",
-        epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
-        applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
-        markName: ipRecord?.title || ipRecord?.markName || "-",
-        markImageUrl: enrichedData.markImageUrl,
-        applicantNames: enrichedData.applicantNames,
-        classNumbers: enrichedData.classNumbers,
-        applicationDate: enrichedData.applicationDate,
-        transactionDate: transactionDateStr,
-        basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
-      };
-      
-      const replaceVars = (str) => str.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-      subject = replaceVars(rawEmailSubject);
-      const innerSubjectResolved = replaceVars(rawInnerSubject);
-      let resolvedBody = replaceVars(rawBody);
+  // applicants fallback (client değişkeni yoksa bile güvenli)
+  if (detectedType !== "self" && detectedType !== "third_party") {
+    const apps = Array.isArray(ipRecord?.applicants) ? ipRecord.applicants : [];
+    const clientId = String(after.clientId || ipRecord?.clientId || "").trim();
 
-      if (innerSubjectResolved) {
-          const innerSubjectHtml = `
-            <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
-                <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
-            </div>
-          `;
-          if (resolvedBody.toLowerCase().includes("<body")) {
-              body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
-          } else {
-              body = innerSubjectHtml + resolvedBody;
-          }
+    const isClientApplicant =
+      clientId && apps.length > 0
+        ? apps.some(app => String(app?.id || app?.personId || "").trim() === clientId)
+        : false;
+
+    detectedType = isClientApplicant ? "self" : "third_party";
+    console.log(`🧩 Fallback ownerType: applicants kontrolü -> ${detectedType}`);
+  }
+
+  console.log("🧭 FINAL OWNER TYPE", {
+    relatedIpRecordId: after.relatedIpRecordId || null,
+    docType,
+    dbType,
+    detectedType,
+  });
+
+  // B) İÇERİK SEÇİMİ (tmpl_50_document için body1/body2)
+  // İsterseniz bu koşulu kaldırıp her template için de uygulayabilirsiniz,
+  // ama sizde kural tmpl_50_document özelinde olduğu için burada o şekilde bıraktım.
+  if (templateId === "tmpl_50_document") {
+    if (detectedType === "third_party") {
+      if (template.body2 && String(template.body2).trim() !== "") {
+        rawBody = String(template.body2);
+        console.log("✅ SEÇİLEN ŞABLON: 'body2' (Third Party)");
       } else {
-          body = resolvedBody;
+        console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body2 boş.");
       }
+    } else if (detectedType === "self") {
+      if (template.body1 && String(template.body1).trim() !== "") {
+        rawBody = String(template.body1);
+        console.log("✅ SEÇİLEN ŞABLON: 'body1' (Self)");
+      } else {
+        console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body1 boş.");
+      }
+    } else {
+      console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Tip belirlenemedi.");
     }
+  } else {
+    // diğer template’ler için default body
+    console.log(`ℹ️ Template ${templateId} için varsayılan body kullanılıyor.`);
+  }
+
+  const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
+
+  const formatTrDate = (val) => {
+    if (!val) return new Date().toLocaleDateString("tr-TR");
+    const d = (val && val.toDate) ? val.toDate() : new Date(val);
+    return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
+  };
+
+  const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
+
+  const parameters = {
+    muvekkil_adi: "Değerli Müvekkilimiz",
+    proje_adi: ipTitle,
+    relatedIpRecordTitle: ipTitle,
+    is_basligi: after.title || "",
+    epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
+    applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
+    markName: ipRecord?.title || ipRecord?.markName || "-",
+    markImageUrl: enrichedData.markImageUrl,
+    applicantNames: enrichedData.applicantNames,
+    classNumbers: enrichedData.classNumbers,
+    applicationDate: enrichedData.applicationDate,
+    transactionDate: transactionDateStr,
+    basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
+  };
+
+  const replaceVars = (str) =>
+    String(str || "").replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+
+  subject = replaceVars(rawEmailSubject);
+  const innerSubjectResolved = replaceVars(rawInnerSubject);
+  let resolvedBody = replaceVars(rawBody);
+
+  if (innerSubjectResolved) {
+    const innerSubjectHtml = `
+      <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
+        <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
+      </div>
+    `;
+    if (resolvedBody.toLowerCase().includes("<body")) {
+      body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
+    } else {
+      body = innerSubjectHtml + resolvedBody;
+    }
+  } else {
+    body = resolvedBody;
+  }
+}
 
     // Statü Belirleme
     const coreMissing = [];
