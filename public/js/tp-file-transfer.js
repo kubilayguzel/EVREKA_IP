@@ -60,7 +60,7 @@ let currentOwnerResults = []; // CSV export için
 let personModalManager = null;
 
 // --- Extension ID ---
-const EXTENSION_ID = 'kemjjkdjhijodjmmfpmlnhhnfaojndgn';
+const EXTENSION_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
 
 // ===============================
 // INITIALIZATION
