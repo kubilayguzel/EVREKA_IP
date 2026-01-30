@@ -53,7 +53,38 @@
                         </select>
                     </div>
                 </div>
-                
+                <ul class="nav nav-tabs mb-3" id="mainTaskTabs" role="tablist" style="border-bottom: 2px solid #e9ecef;">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="tab-active" data-tab="active" href="#" style="font-weight: 600; color: #495057;">
+                            <i class="fas fa-briefcase mr-2"></i>Aktif İşler
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-completed" data-tab="completed" href="#" style="font-weight: 600; color: #6c757d;">
+                            <i class="fas fa-check-circle mr-2"></i>Biten / Kapatılan İşler
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-accrual" data-tab="accrual" href="#" style="font-weight: 600; color: #6c757d;">
+                            <i class="fas fa-file-invoice-dollar mr-2"></i>Tahakkuk İşleri
+                        </a>
+                    </li>
+                </ul>
+
+                <div id="accrualSubTabsContainer" style="display: none; margin-bottom: 20px; padding-left: 20px;">
+                    <ul class="nav nav-pills" id="accrualSubTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="subtab-accrual-active" data-subtab="active" href="#" style="font-size: 0.9rem;">
+                                <i class="fas fa-hourglass-half mr-1"></i>Bekleyen Tahakkuklar
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="subtab-accrual-completed" data-subtab="completed" href="#" style="font-size: 0.9rem;">
+                                <i class="fas fa-check-double mr-1"></i>Tamamlanan Tahakkuklar
+                            </a>
+                        </li>
+                    </ul>
+                </div>
                 <div class="table-container">
                     <table class="tasks-table" id="taskManagementTable">
                         <thead>
