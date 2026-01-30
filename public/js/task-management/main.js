@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.completeTaskFormManager = null;
             this.taskDetailManager = null;
 
+            this.activeMainTab = 'active'; // Varsayılan ana sekme
+            this.activeSubTab = 'active';  // Varsayılan alt sekme
+
             // Statü Çevirileri
             this.statusDisplayMap = {
                 'open': 'Açık',
@@ -214,39 +217,60 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            // İlk yüklemede tüm veriyi göster ve varsayılan sıralamayı uygula
-            this.handleSearch(document.getElementById('searchInput')?.value || '');
+            this.handleSearch();
         }
 
         // --- ARAMA ve FİLTRELEME ---
         handleSearch(query) {
-            // 1. Arama Metnini Al (Parametre yoksa inputtan oku)
+            // 1. Arama Metnini Al
             const searchInput = document.getElementById('searchInput');
             const searchValue = (query !== undefined ? query : (searchInput?.value || '')).toLowerCase();
 
-            // 2. Seçili Filtreyi Al
-            const statusFilter = document.getElementById('statusFilter');
-            const selectedStatus = statusFilter ? statusFilter.value : 'all';
-
-            // 3. İki Kriteri Birlikte Filtrele (VE Mantığı)
+            // 2. Filtreleme Mantığı
             this.filteredData = this.processedData.filter(item => {
-                // A) Metin Eşleşmesi
-                // Türkçe karakter duyarlı arama için toLocaleLowerCase kullanıyoruz
-                const itemSearchString = item.searchString.toLocaleLowerCase('tr'); 
-                const matchesSearch = !searchValue || itemSearchString.includes(searchValue);
+                // A) Metin Araması
+                const matchesSearch = !searchValue || item.searchString.toLocaleLowerCase('tr').includes(searchValue);
+                
+                // B) Tab Filtresi (Kritik Kısım)
+                let matchesTab = false;
+                
+                // İş "Bitti" mi? (Tamamlandı, İptal, Kapatıldı vb.)
+                const isFinished = ['completed', 'cancelled', 'client_approval_closed', 'client_no_response_closed'].includes(item.status);
+                
+                // İş "Tahakkuk" (Tip 53) mu?
+                const isAccrualTask = String(item.taskType) === '53';
 
-                // B) Statü Eşleşmesi
-                // Eğer 'all' seçiliyse her şeyi kabul et, değilse statü birebir tutmalı
-                const matchesStatus = (selectedStatus === 'all' || item.status === selectedStatus);
+                if (this.activeMainTab === 'active') {
+                    // 1. AKTİF İŞLER SEKMESİ:
+                    // Tahakkuk OLMAYAN ve Henüz BİTMEMİŞ işler
+                    matchesTab = !isAccrualTask && !isFinished;
+                } 
+                else if (this.activeMainTab === 'completed') {
+                    // 2. BİTEN İŞLER SEKMESİ:
+                    // Tahakkuk OLMAYAN ve BİTMİŞ işler
+                    matchesTab = !isAccrualTask && isFinished;
+                } 
+                else if (this.activeMainTab === 'accrual') {
+                    // 3. TAHAKKUK İŞLERİ SEKMESİ:
+                    // Sadece Tip 53 olanlar
+                    if (isAccrualTask) {
+                        // Alt Tab Kontrolü
+                        if (this.activeSubTab === 'active') {
+                            matchesTab = !isFinished; // Bekleyen Tahakkuklar
+                        } else {
+                            matchesTab = isFinished;  // Tamamlanan Tahakkuklar
+                        }
+                    }
+                }
 
-                return matchesSearch && matchesStatus;
+                return matchesSearch && matchesTab;
             });
 
-            // 4. Sıralamayı Koru ve Tabloyu Çiz
+            // 3. Sıralama ve Render
             this.sortData();
 
             if (this.pagination) {
-                this.pagination.reset(); // Sayfayı başa al
+                this.pagination.reset();
                 this.pagination.update(this.filteredData.length);
             }
             
@@ -400,6 +424,54 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- EVENT LISTENERS ---
         setupStaticEventListeners() {
+            // 👇 1. ANA SEKMELERİN TIKLANMASI 👇
+            const mainTabs = document.querySelectorAll('#mainTaskTabs .nav-link');
+            const subTabContainer = document.getElementById('accrualSubTabsContainer');
+
+            mainTabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    // Görsel Güncelleme (Hepsini pasif yap, tıklananı aktif yap)
+                    mainTabs.forEach(t => {
+                        t.classList.remove('active');
+                        t.style.color = '#6c757d';
+                    });
+                    e.currentTarget.classList.add('active');
+                    e.currentTarget.style.color = '#495057';
+
+                    // Mantıksal Güncelleme
+                    this.activeMainTab = e.currentTarget.dataset.tab;
+
+                    // Eğer "Tahakkuk" sekmesi ise alt sekmeleri göster
+                    if (this.activeMainTab === 'accrual') {
+                        subTabContainer.style.display = 'block';
+                    } else {
+                        subTabContainer.style.display = 'none';
+                    }
+
+                    // Listeyi Yenile
+                    this.handleSearch();
+                });
+            });
+
+            // 👇 2. ALT SEKMELERİN TIKLANMASI 👇
+            const subTabs = document.querySelectorAll('#accrualSubTabs .nav-link');
+            subTabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+
+                    // Görsel Güncelleme
+                    subTabs.forEach(t => t.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+
+                    // Mantıksal Güncelleme
+                    this.activeSubTab = e.currentTarget.dataset.subtab;
+
+                    // Listeyi Yenile
+                    this.handleSearch();
+                });
+            });
             // Arama Kutusu (Modern Yapı)
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
