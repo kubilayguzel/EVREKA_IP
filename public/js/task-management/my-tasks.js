@@ -177,16 +177,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            this.filteredData = [...this.processedData];
-            
-            // İlk açılışta sırala
-            this.sortData();
-
-            if (this.pagination) {
-                this.pagination.update(this.filteredData.length);
-            }
-
-            this.renderTasks();
+            const currentQuery = document.getElementById('taskSearchInput')?.value || '';
+            this.handleSearch(currentQuery);
+           
         }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
@@ -310,7 +303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.handleSearch(currentQuery);
                 });
             });
-            
+
             document.getElementById('taskSearchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
             document.getElementById('statusFilter').addEventListener('change', () => {
                 const query = document.getElementById('taskSearchInput').value;
