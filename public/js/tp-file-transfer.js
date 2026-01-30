@@ -942,6 +942,29 @@ function renderSingleResult(payload) {
 function renderOwnerResults(items) {
   if (!items?.length) return;
   
+  // 👇👇👇 [DEBUG LOGLAMA BAŞLANGICI] 👇👇👇
+  console.log('🛑 [DEBUG ANALİZİ] 🛑');
+  try {
+      const firstItem = items[0];
+      
+      // 1. Vekil verisi gelmiş mi?
+      console.log('👉 [1] Backend\'den Gelen Vekil Verisi:', 
+          firstItem.attorneyName ? `"${firstItem.attorneyName}"` : 
+          firstItem.agentInfo ? `"${firstItem.agentInfo}"` : '(BOŞ/UNDEFINED)');
+      
+      // 2. Ham veri (varsa) ne durumda?
+      if (firstItem._debugRaw) {
+          console.log('👉 [2] Satırın Ham İçeriği (Colon Ayracı: | ):');
+          console.log(firstItem._debugRaw);
+          console.log('💡 İPUCU: Ham içerikte vekil adı görüyorsanız ancak [1]\'de (BOŞ) yazıyorsa, backend tarafındaki kolon indeksi (get(8)) yanlıştır.');
+      } else {
+          console.log('👉 [2] Ham veri (_debugRaw) bulunamadı. Backend güncellemesi deploy edilmemiş olabilir.');
+      }
+  } catch (err) {
+      console.error('Debug sırasında hata:', err);
+  }
+  // 👆👆👆 [DEBUG LOGLAMA BİTİŞİ] 👆👆👆
+
   console.log('🔄 renderOwnerResults başladı:', items.length, 'kayıt');
   const startTime = performance.now();
   
@@ -981,7 +1004,7 @@ function renderOwnerResults(items) {
         <th>Tescil No</th>
         <th>Durumu</th>
         <th>Nice Sınıfları</th>
-        <th>Vekil</th> </tr>
+        <th>Vekil</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -1003,7 +1026,7 @@ function renderOwnerResults(items) {
       <td>${item.registrationNumber || ''}</td>
       <td>${item.status || ''}</td>
       <td>${item.niceClasses || ''}</td>
-      <td>${item.attorneyName || item.agentInfo || ''}</td>
+      <td style="font-size: 0.9em; color: #666;">${item.attorneyName || item.agentInfo || '-'}</td>
     `;
     
     return row;
