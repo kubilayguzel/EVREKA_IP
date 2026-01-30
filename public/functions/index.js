@@ -2573,6 +2573,11 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         return null;
     }
 
+    if (String(after.taskType) === "53") {
+        console.log(`ℹ️ Task ${taskId} (Tip 53 - Tahakkuk) tamamlandı. Müvekkil bildirimi oluşturulmuyor.`);
+        return null; 
+    }
+
     // Sadece "Completed" statüsüne geçişte çalış
     const becameCompleted = before.status !== "completed" && after.status === "completed";
     
