@@ -520,6 +520,8 @@ function findDetailButton(tr) {
 // ============================================================
 // GÜÇLENDİRİLMİŞ PARSE FONKSİYONU (Yedekli Okuma)
 // ============================================================
+// content_script.js - parseDetailsFromOpenDialog Güncellemesi
+
 async function parseDetailsFromOpenDialog(dialogRoot) {
   console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
   
@@ -549,7 +551,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   try {
     // --- 2. ETAP: Tablo Taraması ---
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
-    console.log('🔍 Toplam tablo sayısı:', allTables.length);
     
     for (const table of allTables) {
       const headers = table.querySelectorAll('th, .MuiTableCell-head');
@@ -560,32 +561,28 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 
       // A) MAL VE HİZMETLER TABLOSU
       if (headerTexts.some(h => h.includes('Sınıf')) && 
-          headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet') || h.includes('Emtia'))) {
-        
-        console.log('✅ Mal ve Hizmetler tablosu bulundu');
-        for (const row of rows) {
-          const cells = row.querySelectorAll('td, .MuiTableCell-body');
-          if (cells.length >= 2) {
-            const classNoText = cells[0].textContent.trim();
-            const goodsText = cells[1].textContent.trim();
-            const classNo = parseInt(classNoText, 10);
-            
-            if (!isNaN(classNo) && goodsText.length > 0) {
-              // Alt alta yazılan maddeleri temizle
-              const items = goodsText.split(/\n+/).map(i => i.trim()).filter(Boolean).map(i => i.replace(/\s+/g, ' '));
-              data.goodsAndServices.push({ classNo, items });
-            }
+          headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
+          // ... (Mevcut mal/hizmet kodu aynen kalabilir) ...
+          for (const row of rows) {
+             const cells = row.querySelectorAll('td, .MuiTableCell-body');
+             if (cells.length >= 2) {
+                 const classNo = parseInt(cells[0].textContent.trim(), 10);
+                 const goodsText = cells[1].textContent.trim();
+                 if (!isNaN(classNo) && goodsText.length > 0) {
+                     const items = goodsText.split(/\n+/).map(i => i.trim()).filter(Boolean);
+                     data.goodsAndServices.push({ classNo, items });
+                 }
+             }
           }
-        }
       }
       // B) İŞLEM GEÇMİŞİ
       else if (headerTexts.some(h => h.includes('Tarih')) && headerTexts.some(h => h.includes('İşlem'))) {
+         // ... (Mevcut işlem geçmişi kodu) ...
          for (const row of rows) {
              const cells = row.querySelectorAll('td');
-             if (cells.length >= 3) { // En az 3 hücre gerekli
+             if (cells.length >= 3) {
                  const dateT = cells[0].textContent.trim();
                  const opT = cells[2].textContent.trim();
-                 // Tarih formatı kontrolü
                  if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateT)) {
                      data.transactions.push({ date: dateT, description: opT });
                  }
@@ -596,41 +593,39 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
       else {
         for (const row of rows) {
           const cells = row.querySelectorAll('td, .MuiTableCell-body');
-          // 4 Hücreli (Key-Val-Key-Val)
-          if (cells.length === 4) {
+          
+          // [YENİ] Vekil/Sahip Bilgileri (Colspan'lı yapı)
+          // HTML: <td>Vekil Bilgileri</td><td colspan="3"><p>AD</p><p>FİRMA</p></td>
+          if (cells.length === 2) {
+             const k = cells[0].textContent.trim();
+             const vCell = cells[1];
+             
+             // Eğer Vekil veya Sahip bilgisi ise ve içinde <p> etiketleri varsa
+             if ((k.includes('Vekil') || k.includes('Sahip')) && vCell.querySelector('p')) {
+                 const lines = Array.from(vCell.querySelectorAll('p'))
+                     .map(p => p.textContent.trim())
+                     .filter(Boolean);
+                 
+                 // İsim - Firma şeklinde birleştir
+                 const joinedVal = lines.join(' - ');
+                 if (joinedVal) data.fields[k] = joinedVal;
+                 
+             } else {
+                 // Standart Key-Value
+                 const v = vCell.textContent.trim();
+                 if(k && v && v !== '--') data.fields[k] = v;
+             }
+          }
+          // 4 Hücreli Standart (Key-Val-Key-Val)
+          else if (cells.length === 4) {
              const k1 = cells[0].textContent.trim(); const v1 = cells[1].textContent.trim();
              const k2 = cells[2].textContent.trim(); const v2 = cells[3].textContent.trim();
              if(k1 && v1 && v1 !== '--') data.fields[k1] = v1;
              if(k2 && v2 && v2 !== '--') data.fields[k2] = v2;
           }
-          // 2 Hücreli (Key-Val)
-          else if (cells.length === 2) {
-             const k = cells[0].textContent.trim(); const v = cells[1].textContent.trim();
-             if(k && v && v !== '--') data.fields[k] = v;
-          }
         }
       }
     }
-
-    // --- 3. ETAP: KURTARMA OPERASYONU (Fallback) ---
-    const fullText = dialogRoot.textContent || '';
-
-    // Tescil Tarihi Kurtarma
-    if (!data.fields['Tescil Tarihi']) {
-        // Örn: "Tescil Tarihi : 12.05.2023"
-        const tescilMatch = fullText.match(/Tescil\s*Tarihi\s*[:]?\s*(\d{2}\.\d{2}\.\d{4})/i);
-        if (tescilMatch) {
-            console.log('⚠️ Tescil Tarihi metinden kurtarıldı:', tescilMatch[1]);
-            data.fields['Tescil Tarihi'] = tescilMatch[1];
-        }
-    }
-    
-    // Tescil Numarası Kurtarma
-    if (!data.fields['Tescil Numarası']) {
-         const tescilNoMatch = fullText.match(/Tescil\s*Numarası\s*[:]?\s*(\d+)/i);
-         if (tescilNoMatch) data.fields['Tescil Numarası'] = tescilNoMatch[1];
-    }
-
   } catch (e) {
     console.error('❌ Parse hatası:', e);
   }
@@ -933,6 +928,14 @@ async function collectOwnerResultsWithDetails() {
       // Veriyi kaydet
       if (detail && isVerified) {
         base.details = detail.fields || {};
+        
+        // 👇 [YENİ] Detaydan gelen vekil bilgisini ana objeye ekle
+        if (base.details['Vekil Bilgileri']) {
+            base.attorneyName = base.details['Vekil Bilgileri'];
+            // Debug için log
+            console.log(`⚖️ Vekil Bulundu (${base.applicationNumber}):`, base.attorneyName);
+        }
+
         if (Array.isArray(detail.goodsAndServices)) base.goodsAndServicesByClass = detail.goodsAndServices;
         if (Array.isArray(detail.transactions)) base.transactions = detail.transactions;
         if (detail.imageDataUrl) {
