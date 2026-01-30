@@ -6572,7 +6572,7 @@ export const scrapeOwnerTrademarks = onCall(
           } catch {}
         }
 
-        // === SONUÇ İŞLEME / PARSE (role-öncelikli + iframe-aware) ===
+        // === SONUÇ İŞLEME / PARSE (role-öncelikli + iframe-aware + DEBUG) ===
         if (status === 'found') {
           logger.info('Veri çekiliyor...');
           await sleep(800);
@@ -6603,7 +6603,15 @@ export const scrapeOwnerTrademarks = onCall(
               if (list.length > 0) { trs = Array.from(list); usedSelector = sel; break; }
             }
 
-            const rows = trs.map(tr => {
+            const rows = trs.map((tr, index) => { // <-- Index eklendi
+              
+              // [DEBUG LOGLAMA] 1. Satırın ham metnini al
+              let debugRaw = null;
+              if (index === 0) {
+                  // Satırdaki tüm metni '|' ile birleştirir (Kolon ayrımı için ipucu)
+                  debugRaw = (tr.innerText || '').replace(/[\n\r]+/g, ' | '); 
+              }
+
               // Önce role’lü hücre
               const byRole = (role) => {
                 const el =
@@ -6624,6 +6632,10 @@ export const scrapeOwnerTrademarks = onCall(
               const registrationNo   = byRole('registrationNo')  || get(5) || get(4);
               const state            = byRole('state')           || get(6) || get(5);
               const niceText         = byRole('niceClasses')     || get(7) || get(6);
+              
+              // [VEKİL BİLGİSİ] 
+              // Nice sınıfları genellikle 7. veya 6. indekste olur. Vekil muhtemelen 8'dedir.
+              const attorneyName     = byRole('agentName') || byRole('attorneyName') || get(8) || '';
 
               const niceList = (niceText || '')
                 .split(/[^\d]+/)
@@ -6642,6 +6654,8 @@ export const scrapeOwnerTrademarks = onCall(
                 status: state,
                 niceClasses: niceText,
                 niceList,
+                attorneyName, // <-- Vekil verisi eklendi
+                _debugRaw: debugRaw, // <-- Debug verisi eklendi
                 imageUrl: img ? img.getAttribute('src') : '',
                 detailUrl: a ? a.getAttribute('href') : ''
               };
