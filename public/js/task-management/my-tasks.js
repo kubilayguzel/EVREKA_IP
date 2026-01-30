@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.processedData = [];
             this.filteredData = [];
+            this.activeTab = 'active';
 
             // Varsayılan Sıralama: Oluşturulma Tarihi (Yeniden eskiye)
             this.sortState = { key: 'createdAtObj', direction: 'desc' };
@@ -246,14 +247,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // my-tasks.js içindeki handleSearch metodunu bununla değiştirin:
+
         handleSearch(query) {
             const statusFilter = document.getElementById('statusFilter').value;
-            const lowerQuery = query.toLowerCase();
+            // query null veya undefined gelirse boş string kullan
+            const lowerQuery = (query || '').toLowerCase();
 
             this.filteredData = this.processedData.filter(item => {
+                // 1. Arama Metni Filtresi
                 const matchesSearch = !lowerQuery || item.searchString.includes(lowerQuery);
-                const matchesStatus = (statusFilter === 'all' || item.status === statusFilter);
-                return matchesSearch && matchesStatus;
+                
+                // 2. Dropdown Statü Filtresi
+                const matchesStatusFilter = (statusFilter === 'all' || item.status === statusFilter);
+
+                // 3. TAB FİLTRESİ (YENİ)
+                let matchesTab = false;
+                
+                // "completed" veya "cancelled" statüleri Bitenler tabına aittir.
+                const isFinished = item.status === 'completed' || item.status === 'cancelled';
+
+                if (this.activeTab === 'active') {
+                    // Aktif Tab: Bitmemiş ve İptal Edilmemiş işler
+                    matchesTab = !isFinished;
+                } else {
+                    // Biten Tab: Tamamlanan ve İptal Edilenler
+                    matchesTab = isFinished;
+                }
+
+                return matchesSearch && matchesStatusFilter && matchesTab;
             });
 
             this.sortData();
@@ -267,6 +289,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         setupEventListeners() {
+            // 👇 TAB DEĞİŞTİRME OLAYLARI 👇
+            document.querySelectorAll('#taskTabs .nav-link').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    // Görsel Güncelleme (Active sınıfını değiştir)
+                    document.querySelectorAll('#taskTabs .nav-link').forEach(t => {
+                        t.classList.remove('active');
+                        t.style.color = '#6c757d'; // Pasif renk
+                    });
+                    e.target.classList.add('active');
+                    e.target.style.color = '#495057'; // Aktif renk
+
+                    // Mantıksal Güncelleme
+                    this.activeTab = e.target.dataset.tab;
+                    
+                    // Mevcut arama kriteriyle listeyi yenile
+                    const currentQuery = document.getElementById('taskSearchInput').value;
+                    this.handleSearch(currentQuery);
+                });
+            });
+            
             document.getElementById('taskSearchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
             document.getElementById('statusFilter').addEventListener('change', () => {
                 const query = document.getElementById('taskSearchInput').value;
