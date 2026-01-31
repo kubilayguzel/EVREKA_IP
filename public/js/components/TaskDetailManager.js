@@ -1,4 +1,7 @@
 // public/js/components/TaskDetailManager.js
+import { getFirestore, doc, getDoc, updateDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const db = getFirestore();
 
 export class TaskDetailManager {
     /**
@@ -34,150 +37,173 @@ export class TaskDetailManager {
             </div>`;
     }
 
-    render(task, options = {}) {
+    async render(task, options = {}) {
         if (!this.container) return;
         if (!task) { this.showError('İş kaydı bulunamadı.'); return; }
 
-        // --- ID 66: DEĞERLENDİRME İŞİ KONTROLÜ ---
-        if (String(task.taskType) === '66') {
-            this._renderEvaluationEditor(task);
-            return;
-        }
+        // Yükleniyor göster (Asenkron işlemler olacağı için)
+        this.showLoading();
 
-        const { ipRecord, transactionType, assignedUser, accruals = [] } = options;
-
-        // --- Veri Hazırlığı ---
-        const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
-        const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
-        const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
-        const statusText = this.statusDisplayMap[task.status] || task.status;
-
-        const isCompleted = task.status === 'completed';
-        const statusColorClass = isCompleted ? 'text-success' : 'text-primary';
-
-        // --- [GÜNCELLEME 1] İLGİLİ TARAF BELİRLEME MANTIĞI (Fallback Ekli) ---
-        let relatedPartyTxt = null;
-
-        // 1. Öncelik: Task Details içindeki veriler
-        if (task.details) {
-            let parties = [];
-            if (task.details.relatedParty) {
-                parties.push(task.details.relatedParty);
-            } else if (Array.isArray(task.details.relatedParties)) {
-                parties = task.details.relatedParties;
+        try {
+            // --- ID 66: DEĞERLENDİRME İŞİ KONTROLÜ ---
+            if (String(task.taskType) === '66') {
+                await this._renderEvaluationEditor(task);
+                return;
             }
-            
-            if (parties.length > 0) {
-                relatedPartyTxt = parties.map(p => {
-                    if (typeof p === 'object') return p.name || p.companyName || '-';
-                    return p;
-                }).join(', ');
+
+            const { ipRecord, transactionType, assignedUser, accruals = [] } = options;
+
+            // --- Veri Hazırlığı ---
+            const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
+            const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
+            const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
+            const statusText = this.statusDisplayMap[task.status] || task.status;
+
+            const isCompleted = task.status === 'completed';
+            const statusColorClass = isCompleted ? 'text-success' : 'text-primary';
+
+            // --- [GÜNCELLEME] İLGİLİ TARAF BELİRLEME MANTIĞI (DB Fetch Ekli) ---
+            let relatedPartyTxt = null;
+
+            // 1. Öncelik: Task Details içindeki veriler
+            if (task.details) {
+                let parties = [];
+                if (task.details.relatedParty) {
+                    parties.push(task.details.relatedParty);
+                } else if (Array.isArray(task.details.relatedParties)) {
+                    parties = task.details.relatedParties;
+                }
+                
+                if (parties.length > 0) {
+                    relatedPartyTxt = parties.map(p => {
+                        if (typeof p === 'object') return p.name || p.companyName || '-';
+                        return p;
+                    }).join(', ');
+                }
             }
-        }
 
-        // 2. Öncelik: Eğer task içinde yoksa, IP Record (Applicant) bilgisi
-        if (!relatedPartyTxt || relatedPartyTxt === '-') {
-            if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
-                relatedPartyTxt = ipRecord.applicants.map(app => {
-                    // Applicant nesne ise ismini, string ise kendisini al
-                    if (typeof app === 'object') return app.name || app.companyName || app.id || '';
-                    return app;
-                }).filter(Boolean).join(', ');
+            // 2. Öncelik: Eğer task içinde yoksa, IP Record (Applicant) bilgisi
+            if ((!relatedPartyTxt || relatedPartyTxt === '-') && ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+                // Applicants dizisindeki ID'leri kullanarak Persons tablosundan isimleri çek
+                const applicantNames = [];
+                
+                for (const app of ipRecord.applicants) {
+                    // Eğer 'name' alanı zaten doluysa onu kullan
+                    if (app.name) {
+                        applicantNames.push(app.name);
+                    } 
+                    // 'id' varsa Persons tablosuna git
+                    else if (app.id) {
+                        try {
+                            const personDoc = await getDoc(doc(db, "persons", app.id));
+                            if (personDoc.exists()) {
+                                const pData = personDoc.data();
+                                applicantNames.push(pData.name || pData.companyName || '-');
+                            }
+                        } catch (e) {
+                            console.warn("Kişi bilgisi çekilemedi:", app.id, e);
+                        }
+                    }
+                }
+
+                if (applicantNames.length > 0) {
+                    relatedPartyTxt = applicantNames.join(', ');
+                }
             }
-        }
 
-        // 3. Sonuç yoksa varsayılan
-        if (!relatedPartyTxt) relatedPartyTxt = '-';
-        // -------------------------------------------------------------------
+            // 3. Sonuç yoksa varsayılan
+            if (!relatedPartyTxt) relatedPartyTxt = '-';
+            // -------------------------------------------------------------------
 
-        const accrualsHtml = this._generateAccrualsHtml(accruals);
-        const docsContent = this._generateDocsHtml(task);
+            const accrualsHtml = this._generateAccrualsHtml(accruals);
+            const docsContent = this._generateDocsHtml(task);
 
-        // --- Ana Şablon ---
-        const html = `
-            <div class="container-fluid px-1 py-2">
-                <div class="d-flex justify-content-between align-items-center p-3 mb-4 bg-light border rounded shadow-sm" style="border-left: 5px solid #1e3c72 !important;">
-                    <div>
-                        <h5 class="font-weight-bold text-dark mb-1">${task.title || 'Başlıksız Görev'}</h5>
-                        <small class="text-muted"><i class="fas fa-hashtag mr-1"></i>Task ID: ${task.id}</small>
-                    </div>
-                    <div class="text-right">
-                        <span class="badge badge-pill px-3 py-2 ${statusColorClass}" style="background-color: #e9ecef; font-size: 0.9rem;">
-                            ${statusText}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <h6 class="border-bottom pb-2 mb-3 text-success font-weight-bold">
-                        <i class="fas fa-user-friends mr-2"></i>MÜVEKKİL / İLGİLİ TARAF
-                    </h6>
-                    <div class="p-3 bg-white border rounded shadow-sm d-flex align-items-center">
-                        <div class="mr-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
-                            <i class="fas fa-user fa-lg"></i>
-                        </div>
+            // --- Ana Şablon ---
+            const html = `
+                <div class="container-fluid px-1 py-2">
+                    <div class="d-flex justify-content-between align-items-center p-3 mb-4 bg-light border rounded shadow-sm" style="border-left: 5px solid #1e3c72 !important;">
                         <div>
-                            <span class="d-block text-muted small font-weight-bold text-uppercase">Taraf Bilgisi</span>
-                            <span class="text-dark font-weight-bold" style="font-size: 1.1rem;">${relatedPartyTxt}</span>
+                            <h5 class="font-weight-bold text-dark mb-1">${task.title || 'Başlıksız Görev'}</h5>
+                            <small class="text-muted"><i class="fas fa-hashtag mr-1"></i>Task ID: ${task.id}</small>
+                        </div>
+                        <div class="text-right">
+                            <span class="badge badge-pill px-3 py-2 ${statusColorClass}" style="background-color: #e9ecef; font-size: 0.9rem;">
+                                ${statusText}
+                            </span>
                         </div>
                     </div>
-                </div>
 
-                <div class="mb-4">
-                    <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold">
-                        <i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER
-                    </h6>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="text-secondary small font-weight-bold mb-1">İLGİLİ DOSYA</label>
-                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
-                                <i class="fas fa-folder text-warning mr-3 fa-lg"></i>
-                                <span class="text-dark font-weight-bold text-truncate" title="${relatedRecordTxt}">${relatedRecordTxt}</span>
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3 text-success font-weight-bold">
+                            <i class="fas fa-user-friends mr-2"></i>MÜVEKKİL / İLGİLİ TARAF
+                        </h6>
+                        <div class="p-3 bg-white border rounded shadow-sm d-flex align-items-center">
+                            <div class="mr-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="fas fa-user fa-lg"></i>
+                            </div>
+                            <div>
+                                <span class="d-block text-muted small font-weight-bold text-uppercase">Taraf Bilgisi</span>
+                                <span class="text-dark font-weight-bold" style="font-size: 1.1rem;">${relatedPartyTxt}</span>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-secondary small font-weight-bold mb-1">İŞ TİPİ</label>
-                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
-                                <i class="fas fa-tasks text-info mr-3 fa-lg"></i>
-                                <span class="text-dark text-truncate" title="${taskTypeDisplay}">${taskTypeDisplay}</span>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold">
+                            <i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER
+                        </h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="text-secondary small font-weight-bold mb-1">İLGİLİ DOSYA</label>
+                                <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
+                                    <i class="fas fa-folder text-warning mr-3 fa-lg"></i>
+                                    <span class="text-dark font-weight-bold text-truncate" title="${relatedRecordTxt}">${relatedRecordTxt}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-secondary small font-weight-bold mb-1">İŞ TİPİ</label>
+                                <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
+                                    <i class="fas fa-tasks text-info mr-3 fa-lg"></i>
+                                    <span class="text-dark text-truncate" title="${taskTypeDisplay}">${taskTypeDisplay}</span>
+                                </div>
                             </div>
                         </div>
+                        <div class="row">
+                            <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">OPERASYONEL BİTİŞ</label>${this._formatDate(task.dueDate)}</div></div>
+                            <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">RESMİ BİTİŞ</label>${this._formatDate(task.officialDueDate)}</div></div>
+                            <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">ATANAN KİŞİ</label>${assignedName}</div></div>
+                        </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">OPERASYONEL BİTİŞ</label>${this._formatDate(task.dueDate)}</div></div>
-                        <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">RESMİ BİTİŞ</label>${this._formatDate(task.officialDueDate)}</div></div>
-                        <div class="col-md-4"><div class="p-2 border rounded bg-light h-100"><label class="small font-weight-bold d-block">ATANAN KİŞİ</label>${assignedName}</div></div>
+
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-folder-open mr-2"></i>BELGELER</h6>
+                        ${docsContent}
                     </div>
-                </div>
 
-                <div class="mb-4">
-                    <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-folder-open mr-2"></i>BELGELER</h6>
-                    ${docsContent}
-                </div>
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-coins mr-2"></i>BAĞLI TAHAKKUKLAR</h6>
+                        ${accrualsHtml}
+                    </div>
 
-                <div class="mb-4">
-                    <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-coins mr-2"></i>BAĞLI TAHAKKUKLAR</h6>
-                    ${accrualsHtml}
-                </div>
+                    <div class="mb-3">
+                         <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-align-left mr-2"></i>AÇIKLAMA & NOTLAR</h6>
+                         <div class="p-3 bg-light border rounded text-dark" style="min-height: 80px; white-space: pre-wrap;">${task.description || 'Açıklama girilmemiş.'}</div>
+                    </div>
+                </div>`;
 
-                <div class="mb-3">
-                     <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold"><i class="fas fa-align-left mr-2"></i>AÇIKLAMA & NOTLAR</h6>
-                     <div class="p-3 bg-light border rounded text-dark" style="min-height: 80px; white-space: pre-wrap;">${task.description || 'Açıklama girilmemiş.'}</div>
-                </div>
-            </div>`;
-
-        this.container.innerHTML = html;
+            this.container.innerHTML = html;
+        } catch (error) {
+            console.error("Render hatası:", error);
+            this.showError("Detaylar yüklenirken bir hata oluştu: " + error.message);
+        }
     }
 
     // =========================================================================
     //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (AYNEN KORUNDU)
     // =========================================================================
     async _renderEvaluationEditor(task) {
-        this.showLoading();
+        // Not: render fonksiyonu içinde showLoading() zaten çağrılıyor.
         try {
-            const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-            const db = getFirestore();
-            
             const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
@@ -282,9 +308,7 @@ export class TaskDetailManager {
 
     async _submitEvaluation(task) {
         const newBody = document.getElementById('eval-body-editor').innerHTML;
-        const { getFirestore, doc, updateDoc, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        const db = getFirestore();
-
+        
         try {
             const btn = document.getElementById('btn-save-eval');
             btn.disabled = true;
