@@ -1,42 +1,33 @@
 // public/js/portfolio/PortfolioDataManager.js
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
-import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// GÜNCEL IMPORT: collectionGroup, query, where EKLENDİ
+import { doc, getDoc, collection, getDocs, collectionGroup, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES } from '../../utils.js';
-
-// Concurrency Helper
-async function pLimit(items, concurrency, fn) {
-    const results = [];
-    const queue = [...items];
-    const workers = Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
-        while (queue.length) {
-            const item = queue.shift();
-            try {
-                const res = await fn(item);
-                if (res) results.push(res);
-            } catch (e) { console.error(e); }
-        }
-    });
-    await Promise.all(workers);
-    return results.flat();
-}
 
 export class PortfolioDataManager {
     constructor() {
         this.allRecords = [];
         this.objectionRows = [];
         this.litigationRows = [];
+        
+        // --- PERFORMANS İÇİN HARİTALAR (MAPS) ---
+        // O(1) erişim hızı sağlar, binlerce kayıtta döngüye girmeyi engeller.
         this.transactionTypesMap = new Map();
-        this.allPersons = [];
+        this.personsMap = new Map(); 
+        this.statusMap = new Map();  
+        
         this.allCountries = [];
-        this.taskCache = new Map(); // Task belgeleri için cache
-        this.txCache = new Map();
+        this.taskCache = new Map(); 
         this.wipoGroups = { parents: new Map(), children: new Map() };
+
+        // Durumları Haritala
+        this._buildStatusMap();
     }
 
     async loadInitialData() {
         await Promise.all([
             this.loadTransactionTypes(),
-            this.loadPersons(),
+            this.loadPersons(), // Kişileri çek ve haritala
             this.loadCountries()
         ]);
         return await this.loadRecords();
@@ -55,7 +46,15 @@ export class PortfolioDataManager {
 
     async loadPersons() {
         const result = await personService.getPersons();
-        if (result.success) this.allPersons = result.data || [];
+        if (result.success) {
+            const persons = result.data || [];
+            // Array'i Map'e çevir (HIZ OPTİMİZASYONU)
+            // Bu sayede 1000 kişiyi aramak için döngüye girmeyiz, direkt ID ile buluruz.
+            this.personsMap.clear();
+            persons.forEach(p => {
+                if(p.id) this.personsMap.set(p.id, p);
+            });
+        }
     }
 
     async loadCountries() {
@@ -66,28 +65,42 @@ export class PortfolioDataManager {
         } catch (e) { console.error("Ülke listesi hatası:", e); }
     }
 
+    // Durum listesini Map'e çevirir (HIZ OPTİMİZASYONU)
+    _buildStatusMap() {
+        this.statusMap.clear();
+        for (const type in STATUSES) {
+            if (Array.isArray(STATUSES[type])) {
+                STATUSES[type].forEach(s => {
+                    // Her durumu map'e ekle. Örn: 'filed' -> 'Başvuru Yapıldı'
+                    this.statusMap.set(s.value, s.text);
+                });
+            }
+        }
+    }
+
     // --- MAIN RECORDS ---
     async loadRecords() {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
             const rawData = Array.isArray(result.data) ? result.data : [];
+            
+            // Veriyi işlerken optimize edilmiş (Map kullanan) metodları kullanıyoruz
             this.allRecords = rawData.map(record => ({
                 ...record,
-                formattedApplicantName: this._resolveApplicantName(record),
+                formattedApplicantName: this._resolveApplicantName(record), // Artık çok hızlı
                 formattedApplicationDate: this._fmtDate(record.applicationDate),
                 formattedNiceClasses: this._formatNiceClasses(record),
-                statusText: this._resolveStatusText(record)
+                statusText: this._resolveStatusText(record) // Artık çok hızlı
             }));
+            
             this._buildWipoGroups();
         }
         return this.allRecords;
     }
 
     startListening(onDataReceived) {
-        // ipRecordsService üzerinden canlı dinleyiciyi başlat ve durdurma fonksiyonunu dön
         return ipRecordsService.subscribeToRecords((result) => {
             if (result.success) {
-                // Veriyi yerel değişkene işle
                 this.allRecords = result.data.map(record => ({
                     ...record,
                     formattedApplicantName: this._resolveApplicantName(record),
@@ -96,17 +109,18 @@ export class PortfolioDataManager {
                     statusText: this._resolveStatusText(record)
                 }));
                 this._buildWipoGroups();
-                // Arayüze haber ver
                 onDataReceived(this.allRecords);
             }
         });
     }
 
+    // OPTİMİZE EDİLDİ: Artık .find() yerine .get() kullanıyor
     _resolveApplicantName(record) {
         if (Array.isArray(record.applicants) && record.applicants.length > 0) {
             return record.applicants.map(app => {
                 if (app.id) {
-                    const person = this.allPersons.find(p => p.id === app.id);
+                    // Map üzerinden O(1) erişim (Anında bulur)
+                    const person = this.personsMap.get(app.id);
                     if (person) return person.name;
                 }
                 return app.name || '';
@@ -115,19 +129,16 @@ export class PortfolioDataManager {
         return record.applicantName || '-';
     }
 
+    // OPTİMİZE EDİLDİ: Artık döngü yerine Map kullanıyor
     _resolveStatusText(record) {
         const rawStatus = record.status;
         if (!rawStatus) return '-';
-
-        if (record.type && STATUSES[record.type]) {
-            const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
-            if (statusObj) return statusObj.text;
+        
+        // Önce Map'ten bak (Hızlı)
+        if (this.statusMap.has(rawStatus)) {
+            return this.statusMap.get(rawStatus);
         }
-
-        for (const type in STATUSES) {
-            const found = STATUSES[type].find(s => s.value === rawStatus);
-            if (found) return found.text;
-        }
+        
         return rawStatus;
     }
 
@@ -156,52 +167,7 @@ export class PortfolioDataManager {
         return this.wipoGroups.children.get(irNo) || [];
     }
 
-    // --- TASK DOCUMENT FETCHING ---
-    async _fetchTaskDocuments(taskId) {
-        if (!taskId) return [];
-        if (this.taskCache.has(taskId)) return this.taskCache.get(taskId);
-
-        try {
-            const taskDoc = await getDoc(doc(db, 'tasks', taskId));
-            if (!taskDoc.exists()) return [];
-            
-            const taskData = taskDoc.data();
-            const docs = [];
-
-            // 1. ePats Belgesi
-            if (taskData.details?.epatsDocument?.downloadURL) {
-                docs.push({
-                    fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
-                    fileUrl: taskData.details.epatsDocument.downloadURL,
-                    evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
-                    type: 'epats_document'
-                });
-            }
-
-            // 2. Task Documents Array
-            if (Array.isArray(taskData.documents)) {
-                taskData.documents.forEach(d => {
-                    const url = d.downloadURL || d.url || d.path;
-                    if (url) {
-                        docs.push({
-                            fileName: d.name || 'Task Belgesi',
-                            fileUrl: url,
-                            type: d.type || 'task_document'
-                        });
-                    }
-                });
-            }
-            
-            this.taskCache.set(taskId, docs);
-            return docs;
-        } catch (e) {
-            console.warn('Task doc fetch error:', e);
-            return [];
-        }
-    }
-
     // --- LITIGATION ---
-
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -229,80 +195,89 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- OBJECTIONS (HIZLANDIRILMIŞ) ---
+    // --- OBJECTIONS (HIZLANDIRILMIŞ & OPTİMİZE EDİLMİŞ) ---
     async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
+
         const PARENT_TYPES = ['7', '19', '20'];
 
-        const flatResults = await pLimit(this.allRecords, 20, async (record) => {
-            let transactions = [];
+        try {
+            // HIZLI SORGULAMA: collectionGroup
+            // Tüm veritabanındaki "transactions" koleksiyonlarını tek seferde tarar.
+            const q = query(
+                collectionGroup(db, 'transactions'), 
+                where('type', 'in', PARENT_TYPES)
+            );
             
-            // Transaction Cache Kontrolü
-            if (this.txCache.has(record.id)) {
-                transactions = this.txCache.get(record.id);
-            } else {
-                const res = await ipRecordsService.getTransactionsForRecord(record.id);
-                if (res.success && Array.isArray(res.transactions)) {
-                    transactions = res.transactions;
-                    this.txCache.set(record.id, transactions);
-                }
+            const snapshot = await getDocs(q);
+            
+            if (snapshot.empty) {
+                this.objectionRows = [];
+                return [];
             }
-            if (!transactions.length) return [];
 
-            const parents = transactions.filter(t => PARENT_TYPES.includes(String(t.type)) && (t.transactionHierarchy === 'parent' || !t.parentId));
+            const allTransactions = [];
+            
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                // Subcollection olduğu için parent'ın parent'ı ana kayıttır (ipRecord)
+                const parentRecordId = docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : null;
+                
+                if (parentRecordId) {
+                    allTransactions.push({
+                        ...data,
+                        id: docSnap.id,
+                        recordId: parentRecordId 
+                    });
+                }
+            });
+
+            // Sadece parent işlemleri al
+            const parents = allTransactions.filter(t => t.transactionHierarchy === 'parent' || !t.parentId);
             const childrenMap = {};
-            transactions.forEach(t => {
-                if (t.parentId) {
+            
+            // Varsa alt işlemleri eşleştir
+            allTransactions.forEach(t => {
+                if (t.parentId && t.transactionHierarchy === 'child') {
                     if (!childrenMap[t.parentId]) childrenMap[t.parentId] = [];
                     childrenMap[t.parentId].push(t);
                 }
             });
 
-            // --- PERFORMANS OPTİMİZASYONU: TASK BELGELERİNİ PARALEL ÇEK ---
-            const tasksToFetch = new Set();
-            
-            // Parent'ların Task ID'lerini topla
-            parents.forEach(p => {
-                if (p.triggeringTaskId && !this.taskCache.has(p.triggeringTaskId)) tasksToFetch.add(p.triggeringTaskId);
-            });
-            
-            // Child'ların Task ID'lerini topla
-            Object.values(childrenMap).flat().forEach(c => {
-                if (c.triggeringTaskId && !this.taskCache.has(c.triggeringTaskId)) tasksToFetch.add(c.triggeringTaskId);
-            });
-
-            // Hepsini aynı anda iste (Waterfall'ı engelle)
-            if (tasksToFetch.size > 0) {
-                await Promise.all(Array.from(tasksToFetch).map(id => this._fetchTaskDocuments(id)));
-            }
-            // -------------------------------------------------------------
-
             const localRows = [];
 
             for (const parent of parents) {
+                // Ana kaydı hafızadan bul
+                const record = this.allRecords.find(r => r.id === parent.recordId);
+                if (!record) continue;
+
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
-                
-                // Artık cache dolu olduğu için bu çağrılar beklemeden dönecek
-                const parentRow = await this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0);
+
+                // Satır verisini oluştur (HIZLI VERSİYON)
+                const parentRow = await this._createObjectionRowDataFast(record, parent, typeInfo, true, children.length > 0);
                 localRows.push(parentRow);
 
                 children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
-                    const childRow = await this._createObjectionRowData(record, child, childTypeInfo, false, false, parent.id);
+                    const childRow = await this._createObjectionRowDataFast(record, child, childTypeInfo, false, false, parent.id);
                     localRows.push(childRow);
                 }
             }
-            
-            return localRows;
-        });
 
-        this.objectionRows = flatResults;
-        return this.objectionRows;
+            this.objectionRows = localRows;
+            return this.objectionRows;
+
+        } catch (error) {
+            console.error("İtirazlar yüklenirken hata:", error);
+            return [];
+        }
     }
 
-    async _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
+    // Task belgesi çekmeyen HIZLI fonksiyon
+    // Eski versiyondaki _fetchTaskDocuments kaldırıldı.
+    async _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
         const docs = (tx.documents || []).map(d => ({
             fileName: d.name || 'Belge',
             fileUrl: d.url || d.downloadURL || d.path,
@@ -312,12 +287,6 @@ export class PortfolioDataManager {
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
-        // Task Belgeleri (Cache'den anında gelecek)
-        if (tx.triggeringTaskId) {
-            const taskDocs = await this._fetchTaskDocuments(tx.triggeringTaskId);
-            docs.push(...taskDocs);
-        }
-
         return {
             id: tx.id,
             recordId: record.id,
@@ -346,18 +315,6 @@ export class PortfolioDataManager {
         if(!records.length) return;
         const targetStatus = records[0].portfoyStatus === 'active' ? 'inactive' : 'active';
         await Promise.all(records.map(r => ipRecordsService.updateRecord(r.id, { portfoyStatus: targetStatus })));
-    }
-
-    prepareMonitoringData(record) {
-        const niceClasses = new Set();
-        if (Array.isArray(record.goodsAndServicesByClass)) record.goodsAndServicesByClass.forEach(c => niceClasses.add(Number(c.classNo)));
-        if (Array.isArray(record.niceClasses)) record.niceClasses.forEach(n => niceClasses.add(Number(n)));
-        const classes = Array.from(niceClasses).sort((a,b)=>a-b);
-        if (classes.some(n => n >= 1 && n <= 34) && !classes.includes(35)) classes.push(35);
-        return {
-            id: record.id, ipRecordId: record.id, applicationNumber: record.applicationNumber,
-            markName: record.title || record.brandText, niceClassSearch: classes, createdAt: new Date().toISOString()
-        };
     }
 
     // --- EXPORT ---
@@ -411,29 +368,18 @@ export class PortfolioDataManager {
         return typeInfo ? (typeInfo.alias || typeInfo.name) : 'Karar Bekleniyor';
     }
 
-    // YENİ: Nice sınıflarını formatlayan yardımcı metot
     _formatNiceClasses(record) {
         const classes = new Set();
-        
-        // 1. niceClasses array'inden gelenler (örn: ["09", "35"])
         if (Array.isArray(record.niceClasses)) {
             record.niceClasses.forEach(c => classes.add(parseInt(c)));
         }
-        
-        // 2. goodsAndServicesByClass içinden gelenler (örn: [{classNo: "42", ...}])
         if (Array.isArray(record.goodsAndServicesByClass)) {
             record.goodsAndServicesByClass.forEach(item => {
                 if (item.classNo) classes.add(parseInt(item.classNo));
             });
         }
-
         if (classes.size === 0) return '-';
-        
-        // Küçükten büyüğe sırala ve aralarına virgül koy
-        return Array.from(classes)
-            .sort((a, b) => a - b)
-            .map(c => c < 10 ? `0${c}` : c) // 9 yerine 09 yazsın istersen
-            .join(', ');
+        return Array.from(classes).sort((a, b) => a - b).map(c => c < 10 ? `0${c}` : c).join(', ');
     }
 
     _fmtDate(val) {
@@ -454,7 +400,7 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
-    // --- FILTERS (İTİRAZ ARAMA DAHİL) ---
+    // --- FILTERS ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
         if (typeFilter === 'litigation') sourceData = this.litigationRows;
@@ -470,8 +416,6 @@ export class PortfolioDataManager {
         return sourceData.filter(item => {
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();
-                
-                // İTİRAZ ÖZEL ARAMASI
                 if (typeFilter === 'objections') {
                     return (
                         (item.transactionTypeName && item.transactionTypeName.toLowerCase().includes(s)) ||
@@ -489,26 +433,12 @@ export class PortfolioDataManager {
             }
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
-                const itemVal = String(item[key] || '').toLowerCase();
-                if (!itemVal.includes(val.toLowerCase())) return false;
-            }
-            // Kolon Filtreleme
-            for (const [key, val] of Object.entries(columnFilters)) {
-                if (!val) continue;
-
                 let filterVal = val.toLowerCase();
                 let itemVal = String(item[key] || '').toLowerCase();
-
-                // TARİH FORMATI DÜZELTMESİ
-                // Input date (YYYY-MM-DD) verir, Verimiz (DD.MM.YYYY) formatında
                 if (key === 'formattedApplicationDate' && val.includes('-')) {
-                    const parts = val.split('-'); // [2024, 05, 15]
-                    if (parts.length === 3) {
-                        // 15.05.2024 formatına çevir
-                        filterVal = `${parts[2]}.${parts[1]}.${parts[0]}`;
-                    }
+                    const parts = val.split('-'); 
+                    if (parts.length === 3) filterVal = `${parts[2]}.${parts[1]}.${parts[0]}`;
                 }
-
                 if (!itemVal.includes(filterVal)) return false;
             }
             return true;
