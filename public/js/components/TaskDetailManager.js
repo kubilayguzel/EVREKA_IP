@@ -55,6 +55,25 @@ export class TaskDetailManager {
         const isCompleted = task.status === 'completed';
         const statusColorClass = isCompleted ? 'text-success' : 'text-primary';
 
+        // --- [YENİ] İLGİLİ TARAF BİLGİSİNİ HAZIRLA ---
+        let relatedPartyTxt = '-';
+        if (task.details) {
+            let parties = [];
+            if (task.details.relatedParty) {
+                parties.push(task.details.relatedParty);
+            } else if (Array.isArray(task.details.relatedParties)) {
+                parties = task.details.relatedParties;
+            }
+            
+            if (parties.length > 0) {
+                relatedPartyTxt = parties.map(p => {
+                    if (typeof p === 'object') return p.name || p.companyName || '-';
+                    return p;
+                }).join(', ');
+            }
+        }
+        // ---------------------------------------------
+
         const accrualsHtml = this._generateAccrualsHtml(accruals);
         const docsContent = this._generateDocsHtml(task);
 
@@ -78,18 +97,25 @@ export class TaskDetailManager {
                         <i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER
                     </h6>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="text-secondary small font-weight-bold mb-1">İLGİLİ DOSYA</label>
-                            <div class="d-flex align-items-center p-2 bg-white border rounded">
+                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
                                 <i class="fas fa-folder text-warning mr-3 fa-lg"></i>
-                                <span class="text-dark font-weight-bold">${relatedRecordTxt}</span>
+                                <span class="text-dark font-weight-bold text-truncate" title="${relatedRecordTxt}">${relatedRecordTxt}</span>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label class="text-secondary small font-weight-bold mb-1">İLGİLİ TARAF</label>
+                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
+                                <i class="fas fa-user-tag text-success mr-3 fa-lg"></i>
+                                <span class="text-dark font-weight-bold text-truncate" title="${relatedPartyTxt}">${relatedPartyTxt}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <label class="text-secondary small font-weight-bold mb-1">İŞ TİPİ</label>
-                            <div class="d-flex align-items-center p-2 bg-white border rounded">
+                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
                                 <i class="fas fa-tasks text-info mr-3 fa-lg"></i>
-                                <span class="text-dark">${taskTypeDisplay}</span>
+                                <span class="text-dark text-truncate" title="${taskTypeDisplay}">${taskTypeDisplay}</span>
                             </div>
                         </div>
                     </div>
@@ -120,7 +146,7 @@ export class TaskDetailManager {
     }
 
     // =========================================================================
-    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (GÜNCELLENDİ)
+    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (AYNEN KORUNDU)
     // =========================================================================
     async _renderEvaluationEditor(task) {
         this.showLoading();
@@ -128,16 +154,13 @@ export class TaskDetailManager {
             const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
             const db = getFirestore();
             
-            // Mail bildirimini çek
             const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
 
-            // --- 1. EKLİ DOSYALARI HAZIRLA ---
             let attachmentsHtml = '';
             const attachments = [];
 
-            // A) EPATS Belgesi
             if (mail.epatsAttachment && (mail.epatsAttachment.downloadURL || mail.epatsAttachment.url)) {
                 attachments.push({
                     name: mail.epatsAttachment.fileName || 'EPATS Belgesi.pdf',
@@ -148,7 +171,6 @@ export class TaskDetailManager {
                 });
             }
 
-            // B) Ek Belge (Örn: İtiraz Dilekçesi)
             if (mail.supplementaryAttachment && (mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url)) {
                 attachments.push({
                     name: mail.supplementaryAttachment.fileName || 'Ek Belge',
@@ -159,13 +181,10 @@ export class TaskDetailManager {
                 });
             }
 
-            // C) Genel Dosyalar Listesi
             if (mail.files && Array.isArray(mail.files)) {
                 mail.files.forEach(f => {
                     const fUrl = f.url || f.downloadURL;
-                    // Mükerrer göstermemek için URL kontrolü
                     const isDuplicate = attachments.some(existing => existing.url === fUrl);
-                    
                     if (fUrl && !isDuplicate) {
                         attachments.push({
                             name: f.name || f.fileName || 'Dosya',
@@ -178,7 +197,6 @@ export class TaskDetailManager {
                 });
             }
 
-            // D) HTML Bloğunu Oluştur
             if (attachments.length > 0) {
                 const filesList = attachments.map(file => `
                     <div class="col-md-6 mb-2">
@@ -207,7 +225,6 @@ export class TaskDetailManager {
                 `;
             }
 
-            // --- 2. ANA HTML ---
             this.container.innerHTML = `
                 <div class="card shadow-sm border-primary">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -218,21 +235,12 @@ export class TaskDetailManager {
                         <div class="alert alert-info py-2 small mb-3">
                             <i class="fas fa-info-circle mr-1"></i> Mail içeriği aşağıda sunulmuştur. Metinleri düzenleyebilir ve ekli dosyaları kontrol edebilirsiniz.
                         </div>
-                        
                         ${attachmentsHtml}
-
                         <div class="form-group bg-white p-3 border rounded shadow-sm mb-3">
                             <label class="text-muted small font-weight-bold text-uppercase">Mail Konusu</label>
                             <input type="text" class="form-control border-0 font-weight-bold p-0" style="font-size: 1.1rem; height: auto;" value="${mail.subject}" readonly>
                         </div>
-
-                        <div id="eval-body-editor" 
-                             contenteditable="true" 
-                             class="bg-white p-4 border rounded shadow-sm" 
-                             style="min-height: 500px; max-height: 700px; overflow-y: auto; outline: none; border: 1px solid #ced4da !important; background: white !important; color: #333 !important; font-family: Arial, sans-serif;">
-                            ${mail.body}
-                        </div>
-
+                        <div id="eval-body-editor" contenteditable="true" class="bg-white p-4 border rounded shadow-sm" style="min-height: 500px; max-height: 700px; overflow-y: auto; outline: none; border: 1px solid #ced4da !important; background: white !important; color: #333 !important; font-family: Arial, sans-serif;">${mail.body}</div>
                         <div class="text-right mt-4">
                             <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow-sm rounded-pill">
                                 <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Tamamla ve Onaya Gönder
@@ -241,7 +249,6 @@ export class TaskDetailManager {
                     </div>
                 </div>
             `;
-
             document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
         } catch (e) { 
             console.error("Evaluation render error:", e);
@@ -250,9 +257,7 @@ export class TaskDetailManager {
     }
 
     async _submitEvaluation(task) {
-        // Editör içeriğini ham HTML (innerHTML) olarak alıyoruz
         const newBody = document.getElementById('eval-body-editor').innerHTML;
-        
         const { getFirestore, doc, updateDoc, Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
         const db = getFirestore();
 
@@ -261,14 +266,12 @@ export class TaskDetailManager {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Kaydediliyor...';
 
-            // 1. Mail bildirimini güncellenmiş metinle "Müvekkil Onayı Bekliyor" statüsüne çek
             await updateDoc(doc(db, "mail_notifications", task.mail_notification_id), {
                 body: newBody,
                 status: "awaiting_client_approval",
                 updatedAt: Timestamp.now()
             });
 
-            // 2. Değerlendirme görevini (ID 66) tamamla
             await updateDoc(doc(db, "tasks", task.id), {
                 status: "completed",
                 updatedAt: Timestamp.now()
@@ -283,7 +286,7 @@ export class TaskDetailManager {
     }
 
     // =========================================================================
-    //  YARDIMCI METODLAR (Döküman, Tahakkuk, Format)
+    //  YARDIMCI METODLAR
     // =========================================================================
     _generateDocsHtml(task) {
         let content = '';
