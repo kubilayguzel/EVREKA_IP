@@ -49,8 +49,8 @@ export class TaskDetailManager {
 
             let { ipRecord, transactionType, assignedUser, accruals = [] } = options;
 
-            // --- GÜVENLİK AĞI: DB Fetch ---
-            if ((!ipRecord || !ipRecord.applicants) && task.relatedIpRecordId) {
+            // 1. ADIM: IP RECORD'U GARANTİLE (Veritabanından Taze Çek)
+            if (!ipRecord && task.relatedIpRecordId) {
                 try {
                     const ipDoc = await getDoc(doc(db, "ipRecords", task.relatedIpRecordId));
                     if (ipDoc.exists()) {
@@ -59,83 +59,101 @@ export class TaskDetailManager {
                 } catch (e) { console.warn("IP Record fetch error:", e); }
             }
 
-            // --- Veri Hazırlığı ---
-            const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
-            const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
-            const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
-            const statusText = this.statusDisplayMap[task.status] || task.status;
+            // 2. ADIM: MÜVEKKİL / İLGİLİ TARAF İSMİNİ ÇÖZÜMLE
+            // TaskUpdateDataManager mantığıyla aynı: ID'leri al -> Persons'dan sorgula -> İsimleri birleştir
+            let relatedPartyTxt = '-';
 
-            // --- MÜVEKKİL / İLGİLİ TARAF BELİRLEME ---
-            let relatedPartyTxt = null;
-
+            // A) Önce Task üzerindeki override bilgilerine bak
             if (task.details) {
                 let parties = [];
                 if (task.details.relatedParty) parties.push(task.details.relatedParty);
                 else if (Array.isArray(task.details.relatedParties)) parties = task.details.relatedParties;
                 
                 if (parties.length > 0) {
-                    relatedPartyTxt = parties.map(p => (typeof p === 'object' ? (p.name || p.companyName || '-') : p)).join(', ');
+                    // Eğer detaylarda isim zaten varsa direkt kullan
+                    const manualNames = parties.map(p => (typeof p === 'object' ? (p.name || p.companyName) : p)).filter(Boolean);
+                    if (manualNames.length > 0) relatedPartyTxt = manualNames.join(', ');
                 }
             }
 
+            // B) Eğer Task detayında yoksa, IP Record -> Applicants -> Persons Tablosu zincirini kur
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
-                const applicantNames = [];
-                for (const app of ipRecord.applicants) {
-                    if (app.name) applicantNames.push(app.name);
-                    else if (app.id) {
+                
+                // Tüm applicants için asenkron sorguları hazırla
+                const applicantPromises = ipRecord.applicants.map(async (app) => {
+                    // 1. İsim direkt obje üzerindeyse kullan
+                    if (app.name && app.name.trim() !== '') return app.name;
+                    
+                    // 2. ID varsa Persons tablosuna git
+                    if (app.id) {
                         try {
-                            const personDoc = await getDoc(doc(db, "persons", app.id));
-                            if (personDoc.exists()) {
-                                const pData = personDoc.data();
-                                applicantNames.push(pData.name || pData.companyName || '-');
+                            const personSnap = await getDoc(doc(db, "persons", app.id));
+                            if (personSnap.exists()) {
+                                const pData = personSnap.data();
+                                return pData.name || pData.companyName || null;
                             }
-                        } catch (e) { }
+                        } catch (err) {
+                            console.error(`Person fetch error for ID ${app.id}:`, err);
+                        }
                     }
+                    return null;
+                });
+
+                // Hepsini paralel çöz
+                const resolvedNames = await Promise.all(applicantPromises);
+                
+                // Geçerli (null olmayan) isimleri filtrele ve birleştir
+                const validNames = resolvedNames.filter(Boolean);
+                if (validNames.length > 0) {
+                    relatedPartyTxt = validNames.join(', ');
                 }
-                if (applicantNames.length > 0) relatedPartyTxt = applicantNames.join(', ');
             }
 
-            if (!relatedPartyTxt) relatedPartyTxt = '-';
+            // --- Diğer Verileri Hazırla ---
+            const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
+            const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
+            const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
+            const statusText = this.statusDisplayMap[task.status] || task.status;
 
             // --- HTML GENERATION ---
             const cardStyle = `
                 background: #ffffff; 
                 padding: 25px; 
-                border-radius: 15px; 
-                box-shadow: 0 5px 15px rgba(0,0,0,0.03); 
+                border-radius: 12px; 
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
                 margin-bottom: 20px; 
-                border: 1px solid #e1e8ed;
+                border: 1px solid #eaedf0;
             `;
             
             const titleStyle = `
                 font-size: 1.1em; 
-                color: #1e3c72; 
+                color: #2c3e50; 
                 margin-bottom: 20px; 
                 padding-bottom: 10px; 
-                border-bottom: 2px solid #f0f2f5; 
-                font-weight: 600;
+                border-bottom: 2px solid #f1f3f5; 
+                font-weight: 700;
                 display: flex; align-items: center;
             `;
 
             const labelStyle = `
                 display: block; 
-                margin-bottom: 5px; 
-                color: #6c757d; 
+                margin-bottom: 6px; 
+                color: #7f8c8d; 
                 font-weight: 600; 
-                font-size: 0.85em; 
+                font-size: 0.8rem; 
                 text-transform: uppercase; 
                 letter-spacing: 0.5px;
             `;
 
             const valueStyle = `
-                font-size: 1em; 
+                font-size: 1rem; 
                 font-weight: 500; 
-                color: #212529; 
+                color: #2c3e50; 
                 background: #f8f9fa; 
-                padding: 10px; 
-                border-radius: 8px; 
-                border: 1px solid #e9ecef;
-                min-height: 42px;
+                padding: 10px 12px; 
+                border-radius: 6px; 
+                border: 1px solid #dfe6e9;
+                min-height: 45px;
                 display: flex; align-items: center;
             `;
 
@@ -163,13 +181,13 @@ export class TaskDetailManager {
                 <div style="${cardStyle}; border-left: 5px solid #28a745;">
                     <h3 style="${titleStyle}"><i class="fas fa-user-friends mr-2 text-success"></i>İlgili Taraf / Müvekkil</h3>
                     
-                    <div class="p-3 bg-white border rounded shadow-sm d-flex align-items-center">
-                        <div class="mr-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; min-width:50px;">
-                            <i class="fas fa-user-tag fa-lg"></i>
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm mr-3" style="width: 50px; height: 50px; min-width:50px;">
+                            <i class="fas fa-user-tie fa-lg"></i>
                         </div>
                         <div>
-                            <span class="d-block text-muted small font-weight-bold text-uppercase">Dosya Sahibi</span>
-                            <span class="font-weight-bold text-dark" style="font-size: 1.2em;">${relatedPartyTxt}</span>
+                            <span class="d-block text-muted small font-weight-bold text-uppercase" style="letter-spacing: 0.5px;">Dosya Sahibi</span>
+                            <span class="font-weight-bold text-dark" style="font-size: 1.25rem;">${relatedPartyTxt}</span>
                         </div>
                     </div>
                 </div>
@@ -180,8 +198,8 @@ export class TaskDetailManager {
                     <div class="mb-4">
                         <label style="${labelStyle}">İLGİLİ VARLIK (DOSYA)</label>
                         <div class="p-3 bg-light border rounded d-flex align-items-center">
-                            <div class="bg-white p-2 rounded border shadow-sm mr-3">
-                                <i class="fas fa-folder fa-lg text-primary"></i>
+                            <div class="bg-white p-2 rounded border shadow-sm mr-3 text-primary">
+                                <i class="fas fa-folder fa-lg"></i>
                             </div>
                             <span class="font-weight-bold text-dark" style="font-size: 1.1em;">${relatedRecordTxt}</span>
                         </div>
@@ -350,7 +368,6 @@ export class TaskDetailManager {
 
     async _submitEvaluation(task) {
         const newBody = document.getElementById('eval-body-editor').innerHTML;
-        
         try {
             const btn = document.getElementById('btn-save-eval');
             btn.disabled = true;
