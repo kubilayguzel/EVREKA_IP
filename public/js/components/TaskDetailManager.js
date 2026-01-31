@@ -94,6 +94,30 @@ export class TaskDetailManager {
                 if (validNames.length > 0) relatedPartyTxt = validNames.join(', ');
             }
 
+            // C) Task Owner -> Persons Tablosu (relatedParties yoksa)
+            if ((!relatedPartyTxt || relatedPartyTxt === '-') && task.taskOwner) {
+                try {
+                    // taskOwner array veya string olabilir
+                    const ownerIds = Array.isArray(task.taskOwner) ? task.taskOwner : [task.taskOwner];
+                    const ownerPromises = ownerIds.map(async (ownerId) => {
+                        if (!ownerId) return null;
+                        try {
+                            const ownerSnap = await getDoc(doc(db, "persons", ownerId));
+                            if (ownerSnap.exists()) {
+                                const ownerData = ownerSnap.data();
+                                return ownerData.name || ownerData.companyName || null;
+                            }
+                        } catch (err) {}
+                        return null;
+                    });
+                    const ownerNames = await Promise.all(ownerPromises);
+                    const validOwnerNames = ownerNames.filter(Boolean);
+                    if (validOwnerNames.length > 0) relatedPartyTxt = validOwnerNames.join(', ');
+                } catch (err) {
+                    console.warn("Task owner fetch error:", err);
+                }
+            }
+
             // --- Veri Formatlama ---
             const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
             const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
