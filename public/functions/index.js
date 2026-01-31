@@ -54,6 +54,7 @@ const ALLOWED_SENDERS = new Set([
   "alikucuksahin@evrekagroup.com",
   "bekirguven@evrekagroup.com",
   "kubilayguzel@evrekagroup.com",
+  "kubilayguzel@evrekapatent.com",
   "erhankocabacak@evrekagroup.com",
   "selcanakoglu@evrekagroup.com",
   "hukuk@evrekagroup.com",
