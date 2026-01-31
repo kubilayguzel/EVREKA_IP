@@ -100,56 +100,59 @@ export class TaskDetailManager {
             const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
             const statusText = this.statusDisplayMap[task.status] || task.status;
 
-            // --- CSS STYLES (Belirgin Kartlar) ---
+            // --- CSS STYLES (Sade ve Temiz) ---
             const styles = {
-                container: `font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; background-color: #f8f9fa; padding: 20px;`,
+                container: `font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #344767; background-color: #f8f9fa; padding: 20px;`,
                 
-                // Kart: Beyaz, belirgin gölge, yuvarlak köşe
+                // Kart: Beyaz, sade, hafif gölgeli
                 card: `
                     background: #fff;
-                    border-radius: 12px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.1);
-                    margin-bottom: 24px;
-                    overflow: hidden; /* Kenarlık şeridi için */
-                    position: relative;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    margin-bottom: 20px;
+                    overflow: hidden;
                 `,
                 
-                // Başlık: Renkli ikonlu, daha büyük
+                // Başlık: Koyu gri, kalın, temiz
                 cardHeader: `
-                    padding: 16px 24px;
+                    padding: 15px 20px;
                     border-bottom: 1px solid #f0f0f0;
                     display: flex;
                     align-items: center;
-                    font-size: 1.1rem;
-                    font-weight: 700;
-                    color: #2c3e50;
+                    font-size: 1rem;
+                    font-weight: 600;
+                    color: #495057;
+                    background-color: #fff;
                 `,
 
                 cardBody: `
-                    padding: 24px;
+                    padding: 20px;
                 `,
                 
+                // Etiket: Küçük, gri
                 label: `
                     display: block;
                     font-size: 0.75rem;
-                    font-weight: 700;
+                    font-weight: 600;
                     text-transform: uppercase;
-                    color: #95a5a6;
-                    margin-bottom: 6px;
+                    color: #adb5bd;
+                    margin-bottom: 5px;
                     letter-spacing: 0.5px;
                 `,
                 
+                // Değer Kutusu: Hafif gri arka plan
                 valueBox: `
-                    background: #fdfdfd;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 8px;
-                    padding: 12px 16px;
-                    font-size: 0.95rem;
+                    background: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 6px;
+                    padding: 10px 15px;
+                    font-size: 0.9rem;
                     font-weight: 500;
-                    color: #2d3748;
+                    color: #343a40;
                     display: flex;
                     align-items: center;
-                    min-height: 48px;
+                    min-height: 42px;
                 `
             };
 
@@ -159,71 +162,59 @@ export class TaskDetailManager {
             const html = `
             <div style="${styles.container}">
                 
-                <div style="${styles.card} padding: 20px; border-left: 6px solid #2c3e50;">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h4 class="font-weight-bold text-dark mb-1" style="font-size: 1.4rem;">${task.title || 'Başlıksız Görev'}</h4>
-                            <div class="text-muted small d-flex align-items-center">
-                                <span class="badge badge-light border mr-2">ID: ${task.id}</span>
-                                <span><i class="far fa-clock mr-1"></i>${this._formatDate(task.createdAt)}</span>
-                            </div>
+                <div style="${styles.card} padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h5 class="mb-1" style="font-weight: 600; color: #343a40;">${task.title || 'Başlıksız Görev'}</h5>
+                        <div class="text-muted small">
+                            <span class="mr-3">ID: <strong>${task.id}</strong></span>
+                            <span><i class="far fa-clock mr-1"></i>${this._formatDate(task.createdAt)}</span>
                         </div>
-                        <span class="badge badge-pill px-3 py-2 text-white" style="font-size: 0.9rem; background-color: #2c3e50;">
-                            ${statusText}
-                        </span>
                     </div>
+                    <span class="badge badge-light border px-3 py-2 text-dark" style="font-size: 0.85rem; font-weight: 500;">
+                        ${statusText}
+                    </span>
                 </div>
 
-                <div style="${styles.card} border-top: 4px solid #27ae60;">
+                <div style="${styles.card}">
                     <div style="${styles.cardHeader}">
-                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:36px; height:36px;">
-                            <i class="fas fa-user-friends fa-sm"></i>
-                        </div>
-                        MÜVEKKİL / İLGİLİ TARAF
+                        <i class="fas fa-user-friends mr-2 text-secondary"></i> MÜVEKKİL / İLGİLİ TARAF
                     </div>
                     <div style="${styles.cardBody}">
-                        <div class="d-flex align-items-center p-3 rounded" style="background-color: #f0fff4; border: 1px solid #c6f6d5;">
-                            <i class="fas fa-user-tie text-success fa-2x mr-3"></i>
-                            <div>
-                                <span class="d-block text-success small font-weight-bold text-uppercase">Dosya Sahibi</span>
-                                <span class="font-weight-bold text-dark" style="font-size: 1.2rem;">${relatedPartyTxt}</span>
-                            </div>
+                        <div style="${styles.valueBox} background: #fff; border-left: 4px solid #adb5bd;">
+                            <span style="font-weight: 600; font-size: 1rem;">${relatedPartyTxt}</span>
                         </div>
                     </div>
                 </div>
 
-                <div style="${styles.card} border-top: 4px solid #3498db;">
+                <div style="${styles.card}">
                     <div style="${styles.cardHeader}">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:36px; height:36px;">
-                            <i class="fas fa-info fa-sm"></i>
-                        </div>
-                        GENEL BİLGİLER
+                        <i class="fas fa-info-circle mr-2 text-secondary"></i> GENEL BİLGİLER
                     </div>
                     <div style="${styles.cardBody}">
                         
                         <div class="mb-4">
                             <label style="${styles.label}">İLGİLİ VARLIK (DOSYA)</label>
-                            <div style="${styles.valueBox} border-left: 4px solid #3498db;">
-                                 <i class="fas fa-folder text-primary mr-3 fa-lg"></i>
-                                 <span style="font-size: 1.1rem; font-weight: 600;">${relatedRecordTxt}</span>
+                            <div style="${styles.valueBox}">
+                                 <i class="fas fa-folder text-muted mr-2"></i>
+                                 <span>${relatedRecordTxt}</span>
                             </div>
                         </div>
 
                         <div class="row">
-                            <div class="col-md-4 mb-4">
+                            <div class="col-md-4 mb-3">
                                 <label style="${styles.label}">İŞ TİPİ</label>
                                 <div style="${styles.valueBox}">${taskTypeDisplay}</div>
                             </div>
-                            <div class="col-md-4 mb-4">
+                            <div class="col-md-4 mb-3">
                                 <label style="${styles.label}">ATANAN KİŞİ</label>
                                 <div style="${styles.valueBox}">
-                                    <i class="fas fa-user-circle mr-2 text-secondary"></i>${assignedName}
+                                    <i class="fas fa-user-circle text-muted mr-2"></i>${assignedName}
                                 </div>
                             </div>
-                            <div class="col-md-4 mb-4">
+                            <div class="col-md-4 mb-3">
                                 <label style="${styles.label}">RESMİ BİTİŞ</label>
                                 <div style="${styles.valueBox}">
-                                    <i class="fas fa-calendar-alt mr-2 text-danger"></i>
+                                    <i class="far fa-calendar-alt text-muted mr-2"></i>
                                     <span class="${task.officialDueDate ? '' : 'text-muted'}">
                                         ${this._formatDate(task.officialDueDate)}
                                     </span>
@@ -233,29 +224,23 @@ export class TaskDetailManager {
 
                         <div>
                             <label style="${styles.label}">AÇIKLAMA</label>
-                            <div style="${styles.valueBox} height: auto; align-items: flex-start; min-height: 80px; white-space: pre-wrap; line-height: 1.6;">${task.description || 'Açıklama girilmemiş.'}</div>
+                            <div style="${styles.valueBox} height: auto; align-items: flex-start; min-height: 60px; white-space: pre-wrap; line-height: 1.5; color: #495057;">${task.description || 'Açıklama girilmemiş.'}</div>
                         </div>
                     </div>
                 </div>
 
-                <div style="${styles.card} border-top: 4px solid #f1c40f;">
+                <div style="${styles.card}">
                     <div style="${styles.cardHeader}">
-                        <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:36px; height:36px;">
-                            <i class="fas fa-folder-open fa-sm"></i>
-                        </div>
-                        BELGELER
+                        <i class="fas fa-paperclip mr-2 text-secondary"></i> BELGELER
                     </div>
                     <div style="${styles.cardBody}">
                         ${docsContent}
                     </div>
                 </div>
 
-                <div style="${styles.card} border-top: 4px solid #9b59b6; margin-bottom: 0;">
+                <div style="${styles.card} margin-bottom: 0;">
                     <div style="${styles.cardHeader}">
-                        <div class="text-white rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:36px; height:36px; background-color: #9b59b6;">
-                            <i class="fas fa-coins fa-sm"></i>
-                        </div>
-                        FİNANSAL HAREKETLER (TAHAKKUKLAR)
+                        <i class="fas fa-coins mr-2 text-secondary"></i> TAHAKKUKLAR
                     </div>
                     <div style="${styles.cardBody}">
                         ${accrualsHtml}
@@ -281,9 +266,6 @@ export class TaskDetailManager {
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
 
-            let attachmentsHtml = '';
-            // (Dosya listesi oluşturma kodu buraya gelecek - önceki versiyonla aynı)
-            
             this.container.innerHTML = `
                 <div class="card shadow-sm border-0">
                     <div class="card-header bg-white border-bottom">
@@ -320,30 +302,25 @@ export class TaskDetailManager {
     }
 
     // =========================================================================
-    //  YARDIMCI METODLAR (Modern Liste Görünümü)
+    //  YARDIMCI METODLAR (Sadeleştirilmiş)
     // =========================================================================
     _generateDocsHtml(task) {
         let items = [];
         const epatsDoc = task.details?.epatsDocument;
         const epatsUrl = epatsDoc?.downloadURL || epatsDoc?.url;
 
-        // EPATS: Kırmızı Vurgulu Satır
         if (epatsDoc && epatsUrl) {
             items.push(`
-                <div class="d-flex align-items-center justify-content-between p-3 mb-2 rounded bg-white border" style="border-left: 4px solid #e74c3c !important;">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-file-pdf text-danger fa-lg mr-3"></i>
-                        <div>
-                            <strong class="d-block text-dark" style="font-size: 0.95rem;">EPATS Belgesi</strong>
-                            <small class="text-muted">${epatsDoc.name || 'Resmi Evrak'}</small>
-                        </div>
+                <a href="${epatsUrl}" target="_blank" class="d-flex align-items-center p-3 mb-2 rounded text-decoration-none border bg-white">
+                    <i class="fas fa-file-pdf text-danger mr-3"></i>
+                    <div class="text-truncate">
+                        <span class="d-block text-dark font-weight-bold small">EPATS Belgesi</span>
+                        <span class="d-block text-muted small text-truncate">${epatsDoc.name}</span>
                     </div>
-                    <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-danger">Görüntüle</a>
-                </div>
+                </a>
             `);
         }
 
-        // Diğer Dosyalar
         let allFiles = [];
         const addFiles = (source) => {
             if (!source) return;
@@ -361,50 +338,36 @@ export class TaskDetailManager {
             if (fUrl && !seenUrls.has(fUrl)) {
                 seenUrls.add(fUrl);
                 items.push(`
-                    <div class="d-flex align-items-center justify-content-between p-3 mb-2 rounded bg-white border" style="border-left: 4px solid #f1c40f !important;">
-                        <div class="d-flex align-items-center overflow-hidden">
-                            <i class="fas fa-paperclip text-warning fa-lg mr-3"></i>
-                            <div class="text-truncate" style="max-width: 250px;">
-                                <strong class="d-block text-dark" style="font-size: 0.95rem;">Dosya</strong>
-                                <small class="text-muted text-truncate d-block">${file.name || 'Adsız'}</small>
-                            </div>
+                    <a href="${fUrl}" target="_blank" class="d-flex align-items-center p-3 mb-2 rounded text-decoration-none border bg-white">
+                        <i class="fas fa-paperclip text-muted mr-3"></i>
+                        <div class="text-truncate">
+                            <span class="d-block text-dark font-weight-bold small">${file.name || 'Dosya'}</span>
                         </div>
-                        <a href="${fUrl}" target="_blank" class="btn btn-sm btn-outline-secondary">İndir</a>
-                    </div>
+                    </a>
                 `);
             }
         });
 
-        return items.length ? items.join('') : `<div class="alert alert-light text-center text-muted small">Bu görevde ekli belge bulunmuyor.</div>`;
+        return items.length ? items.join('') : `<div class="text-muted small">Ekli belge bulunmuyor.</div>`;
     }
 
     _generateAccrualsHtml(accruals) {
-        if (!accruals || accruals.length === 0) return `<div class="alert alert-light text-center text-muted small">Bağlı tahakkuk bulunmuyor.</div>`;
+        if (!accruals || accruals.length === 0) return `<div class="text-muted small">Bağlı tahakkuk bulunmuyor.</div>`;
         return accruals.map(acc => {
-            let statusColor = '#f39c12'; // Bekliyor (Turuncu)
-            let statusText = 'Ödenmedi';
-            let icon = 'fa-clock';
-
-            if(acc.status === 'paid') { 
-                statusColor = '#27ae60'; statusText = 'Ödendi'; icon = 'fa-check-circle';
-            } else if(acc.status === 'cancelled') { 
-                statusColor = '#95a5a6'; statusText = 'İptal'; icon = 'fa-ban';
-            }
+            let color = 'text-warning';
+            let label = 'Ödenmedi';
+            if(acc.status === 'paid') { color = 'text-success'; label = 'Ödendi'; }
+            else if(acc.status === 'cancelled') { color = 'text-muted'; label = 'İptal'; }
 
             return `
-            <div class="d-flex justify-content-between align-items-center p-3 mb-2 rounded bg-white border" style="border-left: 4px solid ${statusColor} !important;">
-                <div class="d-flex align-items-center">
-                    <div class="mr-3 text-center" style="width: 40px;">
-                        <i class="fas ${icon} fa-lg" style="color: ${statusColor};"></i>
-                    </div>
-                    <div>
-                        <span class="d-block font-weight-bold text-dark">#${acc.id}</span>
-                        <small style="color: ${statusColor}; font-weight: 600;">${statusText}</small>
-                    </div>
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div>
+                    <span class="d-block font-weight-bold text-dark small">#${acc.id}</span>
+                    <span class="small ${color}">${label}</span>
                 </div>
                 <div class="text-right">
-                    <span class="d-block font-weight-bold text-dark" style="font-size: 1rem;">${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</span>
-                    <small class="text-muted">${this._formatDate(acc.createdAt)}</small>
+                    <span class="d-block font-weight-bold text-dark small">${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</span>
+                    <small class="text-muted" style="font-size: 10px;">${this._formatDate(acc.createdAt)}</small>
                 </div>
             </div>`;
         }).join('');
