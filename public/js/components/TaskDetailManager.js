@@ -96,27 +96,38 @@ export class TaskDetailManager {
 
             // C) Task Owner -> Persons Tablosu (relatedParties yoksa)
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && task.taskOwner) {
+                console.log("C aşaması başladı - taskOwner:", task.taskOwner);
                 try {
                     // taskOwner array veya string olabilir
                     const ownerIds = Array.isArray(task.taskOwner) ? task.taskOwner : [task.taskOwner];
+                    console.log("ownerIds:", ownerIds);
                     const ownerPromises = ownerIds.map(async (ownerId) => {
                         if (!ownerId) return null;
+                        console.log("Owner ID sorgulanıyor:", ownerId);
                         try {
                             const ownerSnap = await getDoc(doc(db, "persons", ownerId));
                             if (ownerSnap.exists()) {
                                 const ownerData = ownerSnap.data();
+                                console.log("Owner bulundu:", ownerData);
                                 return ownerData.name || ownerData.companyName || null;
+                            } else {
+                                console.log("Owner bulunamadı:", ownerId);
                             }
-                        } catch (err) {}
+                        } catch (err) {
+                            console.error("Owner fetch hatası:", err);
+                        }
                         return null;
                     });
                     const ownerNames = await Promise.all(ownerPromises);
+                    console.log("ownerNames:", ownerNames);
                     const validOwnerNames = ownerNames.filter(Boolean);
+                    console.log("validOwnerNames:", validOwnerNames);
                     if (validOwnerNames.length > 0) relatedPartyTxt = validOwnerNames.join(', ');
                 } catch (err) {
                     console.warn("Task owner fetch error:", err);
                 }
             }
+            console.log("Final relatedPartyTxt:", relatedPartyTxt);
 
             // --- Veri Formatlama ---
             const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
