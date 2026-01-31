@@ -7862,25 +7862,32 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
     const change = event.data;
     if (!change || !change.before || !change.after) return null;
 
-    const before = change.before.data();
-    const after = change.after.data();
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
+    // --- [DEBUG] STATÜ DEĞİŞİMİNİ LOGLA ---
+    // Bu satır sayesinde Firebase Console > Functions > Logs kısmında ne olup bittiğini göreceğiz.
+    console.log(`🔍 [DEBUG] Task ${taskId} güncellendi. Statü Geçişi: '${before.status}' -> '${after.status}'`);
+
     // Statü geçişini kontrol et
-    const wasAwaiting = before.status === 'awaiting_client_approval';
+    const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(before.status);
+    
     const isClosedOrNoResponse = [
         'client_approval_closed', 
         'client_no_response_closed'
     ].includes(after.status);
 
+    console.log(`🔍 [DEBUG] Koşul Sonucu: wasAwaiting=${wasAwaiting}, isClosed=${isClosedOrNoResponse}`);
+
     // Sadece bu geçişte çalış
     if (wasAwaiting && isClosedOrNoResponse) {
-        console.log(`🚫 Task ${taskId} reddedildi/kapandı (${after.status}). İlişkili transaction'lar temizleniyor...`);
+        console.log(`🚫 Task ${taskId} kapatıldı. İşlemler başlıyor...`);
 
         const batch = adminDb.batch();
         
+        // --- 1. TRANSACTION TEMİZLİĞİ ---
         try {
-            // ... (Mevcut Transaction Silme Kodları - Aynen Korunuyor) ...
             if (after.relatedIpRecordId) {
                 const transactionsRef = adminDb.collection('ipRecords').doc(after.relatedIpRecordId).collection('transactions');
                 const transactionSnapshot = await transactionsRef.where('triggeringTaskId', '==', taskId).get();
@@ -7899,18 +7906,18 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
                         });
                     }
                     await batch.commit();
-                    console.log(`✅ Temizlik Tamamlandı: Reddedilen işleme ait geçmiş kayıtları silindi.`);
+                    console.log(`✅ Temizlik Tamamlandı.`);
                 }
             }
         } catch (error) {
-            console.error("❌ Transaction temizliği sırasında hata:", error);
+            console.error("❌ Transaction temizliği hatası:", error);
         }
 
-        // --- [YENİ] MÜVEKKİLE "DOSYA KAPATILDI" BİLDİRİMİ ---
+        // --- 2. MÜVEKKİLE "DOSYA KAPATILDI" MAİLİ GÖNDERME ---
         try {
-            console.log(`🚫 Task ${taskId} kapatıldı. Müvekkile kapanış maili hazırlanıyor...`);
+            console.log(`📧 Kapanış bilgilendirme maili hazırlanıyor...`);
 
-            // A) Şablonu Çek (tmpl_clientInstruction_2)
+            // A) Şablonu Çek
             const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_clientInstruction_2").get();
             
             if (templateSnap.exists) {
@@ -7918,17 +7925,40 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
                 let subject = tmpl.subject || "{{relatedIpRecordTitle}} - Dosya Kapatıldı";
                 let body = tmpl.body || "<p>Talimatınız üzerine dosya kapatılmıştır.</p>";
 
-                // B) Değişkenleri Yerleştir
                 const relatedTitle = after.relatedIpRecordTitle || after.title || "Dosya";
                 subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
                 body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
 
-                // C) Alıcıları Belirle
+                // C) Alıcı Belirle (Geliştirilmiş Fallback)
                 let toList = [];
+                
+                // 1. Task Verisi
                 if (after.clientEmail) toList.push(after.clientEmail);
                 if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
-                
-                toList = [...new Set(toList.filter(Boolean))];
+
+                // 2. IP Kaydı ve Kişi Kartı
+                if (toList.length === 0 && after.relatedIpRecordId) {
+                    try {
+                        const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
+                        if(ipDoc.exists) {
+                            const ipData = ipDoc.data();
+                            const apps = ipData.applicants || [];
+                            
+                            for (const app of apps) {
+                                if (app.email) toList.push(app.email);
+                                else if (app.id) {
+                                    const personDoc = await adminDb.collection('persons').doc(app.id).get();
+                                    if (personDoc.exists && personDoc.data().email) {
+                                        toList.push(personDoc.data().email);
+                                    }
+                                }
+                            }
+                            if (toList.length === 0 && ipData.clientEmail) toList.push(ipData.clientEmail);
+                        }
+                    } catch (err) { console.error("Mail bulma hatası:", err); }
+                }
+
+                toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
 
                 // D) Bildirimi Oluştur
                 if (toList.length > 0) {
@@ -7938,19 +7968,20 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
                         subject: subject,
                         body: body,
                         status: "pending",
-                        
-                        // ZİNCİRLEME İÇİN KRİTİK ALANLAR:
                         notificationType: "general_notification",
-                        taskType: String(after.taskType), // Zinciri bulur
+                        taskType: String(after.taskType),
                         relatedIpRecordId: after.relatedIpRecordId,
                         associatedTaskId: taskId,
-                        
                         source: "auto_instruction_response",
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
                     });
                     console.log(`✅ [AUTO-REPLY] 'Dosya Kapatıldı' maili kuyruğa eklendi.`);
+                } else {
+                    console.warn(`⚠️ Alıcı bulunamadı (Task: ${taskId}). Mail gönderilemedi.`);
                 }
+            } else {
+                console.warn("⚠️ 'tmpl_clientInstruction_2' şablonu bulunamadı!");
             }
         } catch (mailErr) {
             console.error("❌ Kapanış maili hatası:", mailErr);
