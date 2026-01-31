@@ -50,27 +50,28 @@ class PortfolioController {
         }
 
         try {
-            // --- DÜZELTME: Verilerin yüklenmesini BEKLE ---
-            // loadInitialData artık kayıtları da (loadRecords) çekiyor ve bitene kadar bekliyor.
+            // Verilerin yüklenmesini BEKLE
             await this.dataManager.loadInitialData();
 
-            // Eğer sayfa özel bir tab ile açıldıysa onun verisini de yükle (örn: Dava/İtiraz)
+            // Ek verileri yükle
             if (this.state.activeTab === 'litigation') {
                 await this.dataManager.loadLitigationData();
             } else if (this.state.activeTab === 'objections') {
                 await this.dataManager.loadObjectionRows();
             }
 
-            // Veriler hafızada, tabloyu çiz
+            // DÜZELTME BURADA: Pagination'ı render'dan ÖNCE kurmalıyız
+            this.setupPagination(); 
+
+            // Şimdi tabloyu çizebiliriz (Artık this.pagination tanımlı)
             this.render();
 
-            // Listener'ı daha sonra başlat (Canlı güncellemeler için)
+            // Listener başlat
             this.unsubscribe = this.dataManager.startListening(() => {
                 console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
                 this.render();
             });
 
-            this.setupPagination();
             this.setupEventListeners();
             this.setupFilterListeners();
             this.setupImageHover();
@@ -79,7 +80,6 @@ class PortfolioController {
             console.error('Init hatası:', e);
             showNotification('Veriler yüklenirken hata oluştu', 'error');
         } finally {
-            // Render bittikten ve her şey hazır olduktan sonra loading'i kapat
             this.renderer.showLoading(false);
         }
     }
