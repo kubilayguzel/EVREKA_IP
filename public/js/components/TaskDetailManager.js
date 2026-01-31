@@ -49,8 +49,7 @@ export class TaskDetailManager {
 
             let { ipRecord, transactionType, assignedUser, accruals = [] } = options;
 
-            // --- GÜVENLİK AĞI: IP Record Yoksa veya Applicants Eksikse DB'den Çek ---
-            // Bu blok "Dosya Sahibi Gelmiyor" sorununu çözer.
+            // --- GÜVENLİK AĞI: DB Fetch ---
             if ((!ipRecord || !ipRecord.applicants) && task.relatedIpRecordId) {
                 try {
                     const ipDoc = await getDoc(doc(db, "ipRecords", task.relatedIpRecordId));
@@ -66,10 +65,9 @@ export class TaskDetailManager {
             const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
             const statusText = this.statusDisplayMap[task.status] || task.status;
 
-            // --- MÜVEKKİL / İLGİLİ TARAF BELİRLEME (DB Fetch ile Güçlendirilmiş) ---
+            // --- MÜVEKKİL / İLGİLİ TARAF BELİRLEME ---
             let relatedPartyTxt = null;
 
-            // 1. Task Details'den Bak
             if (task.details) {
                 let parties = [];
                 if (task.details.relatedParty) parties.push(task.details.relatedParty);
@@ -80,21 +78,18 @@ export class TaskDetailManager {
                 }
             }
 
-            // 2. IP Record Applicants'dan Bak (Kritik Düzeltme)
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
                 const applicantNames = [];
                 for (const app of ipRecord.applicants) {
-                    if (app.name) {
-                        applicantNames.push(app.name);
-                    } else if (app.id) {
-                        // İsim yoksa ID ile Persons tablosuna git
+                    if (app.name) applicantNames.push(app.name);
+                    else if (app.id) {
                         try {
                             const personDoc = await getDoc(doc(db, "persons", app.id));
                             if (personDoc.exists()) {
                                 const pData = personDoc.data();
                                 applicantNames.push(pData.name || pData.companyName || '-');
                             }
-                        } catch (e) { console.warn("Person fetch error:", e); }
+                        } catch (e) { }
                     }
                 }
                 if (applicantNames.length > 0) relatedPartyTxt = applicantNames.join(', ');
@@ -102,9 +97,7 @@ export class TaskDetailManager {
 
             if (!relatedPartyTxt) relatedPartyTxt = '-';
 
-            // --- HTML GENERATION (YENİ TASARIM DİLİ) ---
-            // Task Update sayfasındaki ".section-card" stiline benzer inline stil kullanıyoruz.
-            
+            // --- HTML GENERATION ---
             const cardStyle = `
                 background: #ffffff; 
                 padding: 25px; 
@@ -167,89 +160,77 @@ export class TaskDetailManager {
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-lg-7">
-                        
-                        <div style="${cardStyle}">
-                            <h3 style="${titleStyle}"><i class="fas fa-info-circle mr-2 text-primary"></i>Genel Bilgiler</h3>
-                            
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label style="${labelStyle}">İş Tipi</label>
-                                    <div style="${valueStyle}">${taskTypeDisplay}</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label style="${labelStyle}">Atanan Kişi</label>
-                                    <div style="${valueStyle}">
-                                        <i class="fas fa-user-circle mr-2 text-secondary"></i>${assignedName}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label style="${labelStyle}">Operasyonel Bitiş</label>
-                                    <div style="${valueStyle}">
-                                        <i class="far fa-clock mr-2 text-warning"></i>${this._formatDate(task.dueDate)}
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label style="${labelStyle}">Resmi Bitiş</label>
-                                    <div style="${valueStyle}">
-                                        <i class="fas fa-calendar-check mr-2 text-danger"></i>${this._formatDate(task.officialDueDate)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-0">
-                                <label style="${labelStyle}">Açıklama</label>
-                                <div style="${valueStyle}; height: auto; align-items: flex-start; min-height: 80px; white-space: pre-wrap;">${task.description || 'Açıklama girilmemiş.'}</div>
-                            </div>
+                <div style="${cardStyle}; border-left: 5px solid #28a745;">
+                    <h3 style="${titleStyle}"><i class="fas fa-user-friends mr-2 text-success"></i>İlgili Taraf / Müvekkil</h3>
+                    
+                    <div class="p-3 bg-white border rounded shadow-sm d-flex align-items-center">
+                        <div class="mr-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; min-width:50px;">
+                            <i class="fas fa-user-tag fa-lg"></i>
                         </div>
-
-                        <div style="${cardStyle}">
-                            <h3 style="${titleStyle}"><i class="fas fa-folder-open mr-2 text-warning"></i>Belgeler</h3>
-                            ${docsContent}
+                        <div>
+                            <span class="d-block text-muted small font-weight-bold text-uppercase">Dosya Sahibi</span>
+                            <span class="font-weight-bold text-dark" style="font-size: 1.2em;">${relatedPartyTxt}</span>
                         </div>
-
-                        <div style="${cardStyle}">
-                            <h3 style="${titleStyle}"><i class="fas fa-file-invoice-dollar mr-2 text-success"></i>Finansal Hareketler</h3>
-                            ${accrualsHtml}
-                        </div>
-
-                    </div>
-
-                    <div class="col-lg-5">
-                        
-                        <div style="${cardStyle}">
-                            <h3 style="${titleStyle}"><i class="fas fa-gem mr-2 text-info"></i>İlgili Varlık</h3>
-                            <div class="p-3 bg-light border rounded d-flex align-items-center">
-                                <div class="bg-white p-3 rounded-circle border shadow-sm mr-3">
-                                    <i class="fas fa-folder fa-lg text-primary"></i>
-                                </div>
-                                <div>
-                                    <small class="text-muted d-block font-weight-bold text-uppercase" style="font-size: 0.75rem;">Başvuru / Dosya No</small>
-                                    <span class="font-weight-bold text-dark" style="font-size: 1.1em;">${relatedRecordTxt}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="${cardStyle}; border-left: 5px solid #28a745;">
-                            <h3 style="${titleStyle}"><i class="fas fa-user-friends mr-2 text-success"></i>İlgili Taraf / Müvekkil</h3>
-                            
-                            <div class="p-3 bg-white border rounded shadow-sm">
-                                <div class="d-flex align-items-center mb-2">
-                                    <i class="fas fa-user-tag text-success mr-2"></i>
-                                    <span class="text-muted small font-weight-bold text-uppercase">Dosya Sahibi</span>
-                                </div>
-                                <div class="font-weight-bold text-dark" style="font-size: 1.15em; word-break: break-word;">
-                                    ${relatedPartyTxt}
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
+
+                <div style="${cardStyle}">
+                    <h3 style="${titleStyle}"><i class="fas fa-info-circle mr-2 text-primary"></i>Genel Bilgiler</h3>
+                    
+                    <div class="mb-4">
+                        <label style="${labelStyle}">İLGİLİ VARLIK (DOSYA)</label>
+                        <div class="p-3 bg-light border rounded d-flex align-items-center">
+                            <div class="bg-white p-2 rounded border shadow-sm mr-3">
+                                <i class="fas fa-folder fa-lg text-primary"></i>
+                            </div>
+                            <span class="font-weight-bold text-dark" style="font-size: 1.1em;">${relatedRecordTxt}</span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label style="${labelStyle}">İş Tipi</label>
+                            <div style="${valueStyle}">${taskTypeDisplay}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label style="${labelStyle}">Atanan Kişi</label>
+                            <div style="${valueStyle}">
+                                <i class="fas fa-user-circle mr-2 text-secondary"></i>${assignedName}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label style="${labelStyle}">Operasyonel Bitiş</label>
+                            <div style="${valueStyle}">
+                                <i class="far fa-clock mr-2 text-warning"></i>${this._formatDate(task.dueDate)}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label style="${labelStyle}">Resmi Bitiş</label>
+                            <div style="${valueStyle}">
+                                <i class="fas fa-calendar-check mr-2 text-danger"></i>${this._formatDate(task.officialDueDate)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-0">
+                        <label style="${labelStyle}">Açıklama</label>
+                        <div style="${valueStyle}; height: auto; align-items: flex-start; min-height: 80px; white-space: pre-wrap;">${task.description || 'Açıklama girilmemiş.'}</div>
+                    </div>
+                </div>
+
+                <div style="${cardStyle}">
+                    <h3 style="${titleStyle}"><i class="fas fa-folder-open mr-2 text-warning"></i>Belgeler</h3>
+                    ${docsContent}
+                </div>
+
+                <div style="${cardStyle}">
+                    <h3 style="${titleStyle}"><i class="fas fa-file-invoice-dollar mr-2 text-success"></i>Finansal Hareketler</h3>
+                    ${accrualsHtml}
+                </div>
+
             </div>`;
 
             this.container.innerHTML = html;
@@ -261,7 +242,7 @@ export class TaskDetailManager {
     }
 
     // =========================================================================
-    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (Aynen Korundu)
+    //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ
     // =========================================================================
     async _renderEvaluationEditor(task) {
         try {
@@ -269,13 +250,73 @@ export class TaskDetailManager {
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
 
-            // ... (Mevcut kodunuzdaki ekler mantığı aynen kalacak) ...
-            // Kodun okunabilirliği için burayı kısalttım, önceki cevaptaki mantık aynen çalışır.
-            // Özet: Attachments listesini oluştur ve HTML bas.
-            
             let attachmentsHtml = '';
-            // (Dosya listesi oluşturma kodu buraya gelecek - önceki versiyonla aynı)
-            
+            const attachments = [];
+
+            if (mail.epatsAttachment && (mail.epatsAttachment.downloadURL || mail.epatsAttachment.url)) {
+                attachments.push({
+                    name: mail.epatsAttachment.fileName || 'EPATS Belgesi.pdf',
+                    url: mail.epatsAttachment.downloadURL || mail.epatsAttachment.url,
+                    icon: 'fa-file-pdf',
+                    color: 'text-danger',
+                    label: 'RESMİ EPATS BELGESİ'
+                });
+            }
+
+            if (mail.supplementaryAttachment && (mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url)) {
+                attachments.push({
+                    name: mail.supplementaryAttachment.fileName || 'Ek Belge',
+                    url: mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url,
+                    icon: 'fa-paperclip',
+                    color: 'text-primary',
+                    label: 'EK DOSYA (Dilekçe vb.)'
+                });
+            }
+
+            if (mail.files && Array.isArray(mail.files)) {
+                mail.files.forEach(f => {
+                    const fUrl = f.url || f.downloadURL;
+                    const isDuplicate = attachments.some(existing => existing.url === fUrl);
+                    if (fUrl && !isDuplicate) {
+                        attachments.push({
+                            name: f.name || f.fileName || 'Dosya',
+                            url: fUrl,
+                            icon: 'fa-file-alt',
+                            color: 'text-secondary',
+                            label: 'EKLENTİ'
+                        });
+                    }
+                });
+            }
+
+            if (attachments.length > 0) {
+                const filesList = attachments.map(file => `
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex align-items-center justify-content-between p-2 bg-white border rounded shadow-sm h-100">
+                            <div class="d-flex align-items-center overflow-hidden">
+                                <i class="fas ${file.icon} ${file.color} fa-2x mr-3"></i>
+                                <div class="text-truncate">
+                                    <small class="text-muted font-weight-bold d-block" style="font-size: 0.7rem;">${file.label}</small>
+                                    <span class="text-dark font-weight-bold text-truncate d-block" style="max-width: 200px;" title="${file.name}">${file.name}</span>
+                                </div>
+                            </div>
+                            <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 ml-2">
+                                <i class="fas fa-eye mr-1"></i>Görüntüle
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+
+                attachmentsHtml = `
+                    <div class="mb-3 p-3 bg-light border rounded" style="border-left: 4px solid #17a2b8 !important;">
+                        <label class="text-info small font-weight-bold text-uppercase mb-2"><i class="fas fa-paperclip mr-1"></i>Bu Maile Eklenecek Dosyalar</label>
+                        <div class="row">
+                            ${filesList}
+                        </div>
+                    </div>
+                `;
+            }
+
             this.container.innerHTML = `
                 <div class="card shadow-sm border-primary">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -283,46 +324,68 @@ export class TaskDetailManager {
                         <span class="badge badge-light text-primary font-weight-bold">İŞ ID: ${task.id}</span>
                     </div>
                     <div class="card-body bg-light">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="fas fa-info-circle mr-1"></i> Mail içeriği aşağıda sunulmuştur. Metinleri düzenleyebilir ve ekli dosyaları kontrol edebilirsiniz.
+                        </div>
+                        ${attachmentsHtml}
                         <div class="form-group bg-white p-3 border rounded shadow-sm mb-3">
                             <label class="text-muted small font-weight-bold text-uppercase">Mail Konusu</label>
-                            <input type="text" class="form-control border-0 font-weight-bold p-0" value="${mail.subject}" readonly>
+                            <input type="text" class="form-control border-0 font-weight-bold p-0" style="font-size: 1.1rem; height: auto;" value="${mail.subject}" readonly>
                         </div>
-                        <div id="eval-body-editor" contenteditable="true" class="bg-white p-4 border rounded shadow-sm" style="min-height: 300px;">${mail.body}</div>
+                        <div id="eval-body-editor" contenteditable="true" class="bg-white p-4 border rounded shadow-sm" style="min-height: 500px; max-height: 700px; overflow-y: auto; outline: none; border: 1px solid #ced4da !important; background: white !important; color: #333 !important; font-family: Arial, sans-serif;">${mail.body}</div>
                         <div class="text-right mt-4">
                             <button id="btn-save-eval" class="btn btn-success btn-lg px-5 shadow-sm rounded-pill">
-                                <i class="fas fa-check-circle mr-2"></i>Onayla
+                                <i class="fas fa-check-circle mr-2"></i>Değerlendirmeyi Tamamla ve Onaya Gönder
                             </button>
                         </div>
                     </div>
                 </div>
             `;
             document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
-        } catch (e) { this.showError(e.message); }
+        } catch (e) { 
+            console.error("Evaluation render error:", e);
+            this.showError("Taslak yüklenirken hata oluştu: " + e.message); 
+        }
     }
 
     async _submitEvaluation(task) {
         const newBody = document.getElementById('eval-body-editor').innerHTML;
+        
         try {
             const btn = document.getElementById('btn-save-eval');
-            btn.disabled = true; btn.innerHTML = 'Kaydediliyor...';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Kaydediliyor...';
+
             await updateDoc(doc(db, "mail_notifications", task.mail_notification_id), {
-                body: newBody, status: "awaiting_client_approval", updatedAt: Timestamp.now()
+                body: newBody,
+                status: "awaiting_client_approval",
+                updatedAt: Timestamp.now()
             });
-            await updateDoc(doc(db, "tasks", task.id), { status: "completed", updatedAt: Timestamp.now() });
-            alert("Değerlendirme başarıyla kaydedildi."); window.location.reload();
-        } catch (e) { alert("Hata: " + e.message); }
+
+            await updateDoc(doc(db, "tasks", task.id), {
+                status: "completed",
+                updatedAt: Timestamp.now()
+            });
+
+            alert("Değerlendirme başarıyla kaydedildi. Mail 'Onay Bekliyor' listesine aktarıldı.");
+            window.location.reload();
+        } catch (e) { 
+            alert("Güncelleme sırasında bir hata oluştu: " + e.message); 
+            document.getElementById('btn-save-eval').disabled = false;
+        }
     }
 
     // =========================================================================
-    //  YARDIMCI METODLAR (Görünüm Güncellendi)
+    //  YARDIMCI METODLAR
     // =========================================================================
     _generateDocsHtml(task) {
         let content = '';
+        let hasContent = false;
         const epatsDoc = task.details?.epatsDocument;
         const epatsUrl = epatsDoc?.downloadURL || epatsDoc?.url;
 
-        // EPATS Kartı
         if (epatsDoc && epatsUrl) {
+            hasContent = true;
             content += `
             <div class="d-flex align-items-center justify-content-between p-3 mb-3 rounded" style="background-color: #fff0f6; border: 1px solid #f8ccde;">
                 <div class="d-flex align-items-center">
@@ -338,13 +401,13 @@ export class TaskDetailManager {
             </div>`;
         }
 
-        // Diğer Dosyalar
         let allFiles = [];
         const addFiles = (source) => {
             if (!source) return;
             if (Array.isArray(source)) allFiles.push(...source);
             else if (typeof source === 'object') allFiles.push(...Object.values(source));
         };
+
         if (task.details) { addFiles(task.details.documents); addFiles(task.details.files); }
         addFiles(task.files); addFiles(task.documents);
 
@@ -357,14 +420,15 @@ export class TaskDetailManager {
         });
 
         if (uniqueFiles.length > 0) {
+            hasContent = true;
             content += '<div class="row">';
             uniqueFiles.forEach(file => {
                 const fUrl = file.downloadURL || file.url || file.content;
                 content += `
-                <div class="col-12 mb-2">
-                    <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white h-100">
-                        <div class="d-flex align-items-center overflow-hidden">
-                            <i class="fas fa-paperclip text-secondary mr-3 ml-2"></i>
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm h-100">
+                        <div class="d-flex align-items-center text-truncate">
+                            <i class="fas fa-paperclip text-secondary mr-2"></i>
                             <span class="small font-weight-bold text-dark text-truncate">${file.name || 'Adsız Dosya'}</span>
                         </div>
                         <a href="${fUrl}" target="_blank" class="btn btn-sm btn-light border text-primary ml-2"><i class="fas fa-download"></i></a>
@@ -373,7 +437,7 @@ export class TaskDetailManager {
             });
             content += '</div>';
         }
-        return content || `<div class="text-center text-muted small py-3 bg-light rounded">Belge bulunmamaktadır.</div>`;
+        return hasContent ? content : `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Belge bulunmamaktadır.</div>`;
     }
 
     _generateAccrualsHtml(accruals) {
@@ -400,11 +464,17 @@ export class TaskDetailManager {
 
     _formatDate(dateVal) {
         if (!dateVal) return '-';
+        if (typeof dateVal === 'string' && dateVal.includes('-')) {
+            const parts = dateVal.split('T')[0].split('-'); 
+            if(parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`; 
+        }
         try { const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal); return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR'); } catch(e) { return '-'; }
     }
 
     _formatCurrency(amount, currency) {
-        if (Array.isArray(amount)) return amount.map(i => `${i.amount} ${i.currency}`).join(', ');
+        if (Array.isArray(amount)) {
+            return amount.map(item => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: item.currency || 'TRY' }).format(item.amount || 0)).join('<br>');
+        }
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
     }
 }
