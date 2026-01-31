@@ -7565,13 +7565,11 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
         });
 
         // --- 3. VERİ HAZIRLIĞI ---
-        const now = new Date().toISOString(); // String format: "2025-12-13T09:07..."
+        const now = new Date().toISOString(); 
         
-        // İşlemi yapan kullanıcı bilgileri (Frontend update sırasında updatedBy gönderiyorsa oradan al)
         const creatorUid = after.updatedBy_uid || after.updatedBy || 'system'; 
         const creatorEmail = after.updatedBy_email || 'system@evrekapatent.com';
 
-        const recordTitle = after.relatedIpRecordTitle || after.title || '';
         const originalType = after.taskTypeName || after.taskType || 'Bilinmiyor';
 
         const accrualTaskData = {
@@ -7581,44 +7579,19 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
           description: `"${after.title || ''}" işi oluşturuldu ancak tahakkuk verisi girilmedi. Lütfen finansal kaydı oluşturun.`,
           priority: 'high',
           status: 'pending',
-          
-          // Atama Bilgileri
           assignedTo_uid: assignedUid,
           assignedTo_email: assignedEmail,
-          
-          // İlişkiler
           relatedTaskId: taskId,
           relatedIpRecordId: after.relatedIpRecordId || null,
           relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
-
-          // Zamanlar (String Format)
           createdAt: now,
           updatedAt: now,
-
-          // Oluşturan Kişi (Map)
-          createdBy: {
-            uid: creatorUid,
-            email: creatorEmail
-          },
-
-          // Detaylar (Map)
-          details: {
-            source: 'automatic_accrual_assignment',
-            originalTaskType: originalType
-          },
-
-          // Tarihçe (Array içinde Map)
-          history: [
-            {
-              action: "İş oluşturuldu.",
-              timestamp: now,
-              userEmail: creatorEmail
-            }
-          ]
+          createdBy: { uid: creatorUid, email: creatorEmail },
+          details: { source: 'automatic_accrual_assignment', originalTaskType: originalType },
+          history: [{ action: "İş oluşturuldu.", timestamp: now, userEmail: creatorEmail }]
         };
 
         // --- 4. KAYIT ---
-        // Özel ID ile set ediyoruz
         await adminDb.collection('tasks').doc(newCustomId).set(accrualTaskData);
         console.log(`✅ Tahakkuk görevi başarıyla oluşturuldu: ${newCustomId}`);
         
@@ -7626,34 +7599,23 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
         console.error("Error creating accrual task:", error);
       }
 
-      // --- [YENİ] ANA İŞİN SAHİBİNİ GÜNCELLEME (RE-ASSIGNMENT) ---
-      // İş Açık statüsüne geçtiğinde, veritabanındaki kurala göre asıl sorumluya atama yap.
+      // --- 5. ANA İŞİN SAHİBİNİ GÜNCELLEME (RE-ASSIGNMENT) ---
       try {
           const currentTaskType = String(after.taskType); 
-          
-          // 1. Kuralı Çek
           const ruleRef = adminDb.collection('taskAssignments').doc(currentTaskType);
           const ruleSnap = await ruleRef.get();
 
           if (ruleSnap.exists) {
               const ruleData = ruleSnap.data();
-              
-              // "assigneeIds" listesindeki ilk kişiyi al (Genel Sorumlu)
-              const targetAssigneeId = (ruleData.assigneeIds && ruleData.assigneeIds.length > 0) 
-                  ? ruleData.assigneeIds[0] 
-                  : null;
+              const targetAssigneeId = (ruleData.assigneeIds && ruleData.assigneeIds.length > 0) ? ruleData.assigneeIds[0] : null;
 
-              // Eğer yeni bir sorumlu varsa ve mevcut sorumludan farklıysa güncelle
               if (targetAssigneeId && targetAssigneeId !== after.assignedTo_uid) {
-                  
-                  // Kullanıcı emailini bul
                   let targetEmail = "";
                   const userSnap = await adminDb.collection('users').doc(targetAssigneeId).get();
                   if (userSnap.exists) targetEmail = userSnap.data().email;
 
                   console.log(`🔄 İş Açıldı: Görev (Tip ${currentTaskType}) yeniden atanıyor -> ${targetEmail}`);
 
-                  // Ana işi güncelle
                   await adminDb.collection('tasks').doc(taskId).update({
                       assignedTo_uid: targetAssigneeId,
                       assignedTo_email: targetEmail,
@@ -7668,6 +7630,108 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
           }
       } catch (reassignErr) {
           console.error("❌ Re-assignment hatası:", reassignErr);
+      }
+
+      // --- [YENİ] MÜVEKKİLE "İŞLEM BAŞLATILIYOR" BİLDİRİMİ ---
+      // Bu bölüm, işi onayladıklarında otomatik olarak "Talimatınız alındı" maili gönderir.
+      try {
+          console.log(`📧 Task ${taskId} onaylandı. Müvekkil bilgilendirme maili hazırlanıyor...`);
+
+          // A) Şablonu Çek
+          const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_clientInstruction_1").get();
+          
+          if (templateSnap.exists) {
+              const tmpl = templateSnap.data();
+              let subject = tmpl.subject || "{{relatedIpRecordTitle}} - Talimatınız Alındı";
+              let body = tmpl.body || "<p>Talimatınız alınmıştır, işlem başlatılıyor.</p>";
+
+              // B) Değişkenleri Yerleştir
+              const relatedTitle = after.relatedIpRecordTitle || after.title || "Dosya";
+              subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
+              body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
+
+              // C) Alıcıları Belirle (Geliştirilmiş Logic)
+              let toList = [];
+              
+              // 1. Öncelik: Task üzerindeki veriler
+              if (after.clientEmail) toList.push(after.clientEmail);
+              if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
+              
+              // 2. Öncelik: IP Kaydı ve Kişi Kartı (Fallback)
+              // Eğer listede hala mail yoksa ve IP kaydı varsa veritabanına sor
+              if (toList.length === 0 && after.relatedIpRecordId) {
+                  try {
+                      const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
+                      if(ipDoc.exists) {
+                          const ipData = ipDoc.data();
+                          const apps = ipData.applicants || [];
+                          
+                          // Varsa IP kaydındaki applicant'ları tara
+                          for (const app of apps) {
+                              // A) Applicant objesi üzerinde direkt email var mı?
+                              if (app.email) {
+                                  toList.push(app.email);
+                              }
+                              // B) ID varsa Persons tablosuna git
+                              else if (app.id) {
+                                  const personDoc = await adminDb.collection('persons').doc(app.id).get();
+                                  if (personDoc.exists && personDoc.data().email) {
+                                      toList.push(personDoc.data().email);
+                                  }
+                              }
+                          }
+                          
+                          // C) Hala yoksa ipRecord üzerindeki 'clientEmail' alanına bak
+                          if (toList.length === 0 && ipData.clientEmail) {
+                              toList.push(ipData.clientEmail);
+                          }
+                      }
+                  } catch (err) {
+                      console.error("Müvekkil maili bulma hatası:", err);
+                  }
+              }
+
+              // Tekilleştirme ve Boşları Temizleme
+              toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
+
+              // Eğer Task üzerinde mail yoksa, IP Kaydına bak (Fallback)
+              if (toList.length === 0 && after.relatedIpRecordId) {
+                  const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
+                  if(ipDoc.exists) {
+                      const apps = ipDoc.data().applicants || [];
+                      // Applicants içinden email bulmaya çalış (Basit tarama)
+                      // Not: Burası karmaşık bir logic gerektirebilir, şimdilik basit tutuyoruz.
+                  }
+              }
+
+              // D) Bildirimi Kuyruğa Ekle
+              if (toList.length > 0) {
+                  await adminDb.collection("mail_notifications").add({
+                      toList: toList,
+                      ccList: [], 
+                      subject: subject,
+                      body: body,
+                      status: "pending", // Otomatik gönderim
+                      
+                      // THREADING İÇİN KRİTİK VERİLER:
+                      // Bu veriler sayesinde sistem mailThreads koleksiyonuna bakıp
+                      // önceki "Onay Bekliyor" mailinin devamına ekleyecektir.
+                      notificationType: "general_notification",
+                      taskType: String(after.taskType), // Örn: '20'. Bu ID ile zincir bulunur.
+                      relatedIpRecordId: after.relatedIpRecordId,
+                      associatedTaskId: taskId,
+                      
+                      source: "auto_instruction_response",
+                      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                  });
+                  console.log(`✅ [AUTO-REPLY] 'İşlem Başlatılıyor' maili kuyruğa eklendi.`);
+              } else {
+                  console.log(`⚠️ Müvekkil maili bulunamadığı için otomatik cevap gönderilemedi.`);
+              }
+          }
+      } catch (mailErr) {
+          console.error("❌ Müvekkil bilgilendirme maili hatası:", mailErr);
       }
 
     }
@@ -7789,7 +7853,6 @@ export const onTaskDeleteCleanup = onDocumentDeleted(
   }
 );
 
-
 export const cleanupTransactionOnClientRejection = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
@@ -7804,10 +7867,7 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
     const taskId = event.params.taskId;
 
     // Statü geçişini kontrol et
-    // Eski Statü: "Müvekkil Onayı Bekliyor"
     const wasAwaiting = before.status === 'awaiting_client_approval';
-    
-    // Yeni Statü: "Müvekkil Onayı Kapatıldı" VEYA "Müvekkil Cevaplamadı Kapatıldı"
     const isClosedOrNoResponse = [
         'client_approval_closed', 
         'client_no_response_closed'
@@ -7820,52 +7880,80 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
         const batch = adminDb.batch();
         
         try {
-            // Eğer task bir IP kaydına bağlıysa
+            // ... (Mevcut Transaction Silme Kodları - Aynen Korunuyor) ...
             if (after.relatedIpRecordId) {
-                // Alt koleksiyona erişim (Subcollection)
-                const transactionsRef = adminDb
-                    .collection('ipRecords')
-                    .doc(after.relatedIpRecordId)
-                    .collection('transactions');
-
-                // 1. Bu Task tarafından oluşturulan Ana Transaction'ı bul
-                const transactionSnapshot = await transactionsRef
-                    .where('triggeringTaskId', '==', taskId)
-                    .get();
+                const transactionsRef = adminDb.collection('ipRecords').doc(after.relatedIpRecordId).collection('transactions');
+                const transactionSnapshot = await transactionsRef.where('triggeringTaskId', '==', taskId).get();
 
                 if (!transactionSnapshot.empty) {
                     const deletedTransactionIds = [];
-
-                    // Ana transaction'ı silme listesine ekle
                     transactionSnapshot.forEach((doc) => {
-                        console.log(`📌 Silinecek Transaction Bulundu (ID: ${doc.id})`);
                         batch.delete(doc.ref);
                         deletedTransactionIds.push(doc.id);
                     });
 
-                    // 2. Eğer bu bir Parent ise, ona bağlı Child Transaction'ları da bul ve sil
                     if (deletedTransactionIds.length > 0) {
-                        // parentId'si silinen ID'lerden biri olanları bul
-                        // (Not: 'in' sorgusu en fazla 10 eleman alır, batch işlemleri için genelde yeterlidir)
-                        const childTransactionsSnapshot = await transactionsRef
-                            .where('parentId', 'in', deletedTransactionIds)
-                            .get();
-
+                        const childTransactionsSnapshot = await transactionsRef.where('parentId', 'in', deletedTransactionIds).get();
                         childTransactionsSnapshot.forEach((childDoc) => {
-                            console.log(`-- 🔗 Bağlı Child Transaction da siliniyor (ID: ${childDoc.id})`);
                             batch.delete(childDoc.ref);
                         });
                     }
-
-                    // İşlemi uygula
                     await batch.commit();
                     console.log(`✅ Temizlik Tamamlandı: Reddedilen işleme ait geçmiş kayıtları silindi.`);
-                } else {
-                    console.log(`ℹ️ Bu task (${taskId}) için silinecek bir transaction bulunamadı.`);
                 }
             }
         } catch (error) {
             console.error("❌ Transaction temizliği sırasında hata:", error);
+        }
+
+        // --- [YENİ] MÜVEKKİLE "DOSYA KAPATILDI" BİLDİRİMİ ---
+        try {
+            console.log(`🚫 Task ${taskId} kapatıldı. Müvekkile kapanış maili hazırlanıyor...`);
+
+            // A) Şablonu Çek (tmpl_clientInstruction_2)
+            const templateSnap = await adminDb.collection("mail_templates").doc("tmpl_clientInstruction_2").get();
+            
+            if (templateSnap.exists) {
+                const tmpl = templateSnap.data();
+                let subject = tmpl.subject || "{{relatedIpRecordTitle}} - Dosya Kapatıldı";
+                let body = tmpl.body || "<p>Talimatınız üzerine dosya kapatılmıştır.</p>";
+
+                // B) Değişkenleri Yerleştir
+                const relatedTitle = after.relatedIpRecordTitle || after.title || "Dosya";
+                subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
+                body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
+
+                // C) Alıcıları Belirle
+                let toList = [];
+                if (after.clientEmail) toList.push(after.clientEmail);
+                if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
+                
+                toList = [...new Set(toList.filter(Boolean))];
+
+                // D) Bildirimi Oluştur
+                if (toList.length > 0) {
+                    await adminDb.collection("mail_notifications").add({
+                        toList: toList,
+                        ccList: [],
+                        subject: subject,
+                        body: body,
+                        status: "pending",
+                        
+                        // ZİNCİRLEME İÇİN KRİTİK ALANLAR:
+                        notificationType: "general_notification",
+                        taskType: String(after.taskType), // Zinciri bulur
+                        relatedIpRecordId: after.relatedIpRecordId,
+                        associatedTaskId: taskId,
+                        
+                        source: "auto_instruction_response",
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`✅ [AUTO-REPLY] 'Dosya Kapatıldı' maili kuyruğa eklendi.`);
+                }
+            }
+        } catch (mailErr) {
+            console.error("❌ Kapanış maili hatası:", mailErr);
         }
     }
     
