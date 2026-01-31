@@ -1070,7 +1070,8 @@ async function renderCurrentPage() {
       'awaiting_client_approval': 'Onay Bekliyor', // Taslak yerine daha açıklayıcı
       'draft': 'Taslak',
       'client_approval_closed': 'Onaylandı (Kapatıldı)',
-      'client_no_response_closed': 'Cevap Alınamadı'
+      'client_no_response_closed': 'Cevap Alınamadı',
+      'evaluation_pending': 'Değerlendirme Bekliyor' // --- YENİ EKLENDİ ---
     };
 
     let statusClass = 'status-pending'; // Varsayılan gri
@@ -1078,7 +1079,8 @@ async function renderCurrentPage() {
     else if (notification.status === 'failed') statusClass = 'status-failed';
     else if (notification.status === 'missing_info') statusClass = 'missing-info';
     else if (notification.status === 'awaiting_client_approval') statusClass = 'status-pending';
-    
+    else if (notification.status === 'evaluation_pending') statusClass = 'status-pending'; // Değerlendirme için gri renk
+
     const statusText = statusMap[notification.status] || notification.status || '-';
 
     // --- 2. KONU ---
@@ -1088,7 +1090,7 @@ async function renderCurrentPage() {
 
     // --- 3. ASENKRON VERİ ÇÖZÜMLEME ---
     const [
-      clientDisplay,      // Müvekkil Sütunu (Düzeltilen Kısım)
+      clientDisplay,      // Müvekkil Sütunu
       applicationNoText,  // Başvuru No
       typeText,           // Tür
       docInfo,            // Ekler
@@ -1096,14 +1098,13 @@ async function renderCurrentPage() {
     ] = await Promise.all([
       
 
-    // A) MÜVEKKİL SÜTUNU MANTIĞI (DÜZELTİLMİŞ)
+    // A) MÜVEKKİL SÜTUNU MANTIĞI
       (async () => {
         // 1. ÖNCELİK: Task Owner (Görev Sahibi)
         if (notification.taskOwner) {
             
             // SENARYO 1: taskOwner bir String (ID) ise - Örn: "64ed6f..."
             if (typeof notification.taskOwner === 'string') {
-                // Eğer ID değil de direkt isim yazılmışsa ve '@' yoksa (eski veri) yine de sorgulamayı deneriz
                 try {
                     const personData = await getDocFromDb("persons", notification.taskOwner);
                     if (personData) {
@@ -1112,16 +1113,13 @@ async function renderCurrentPage() {
                 } catch (e) {
                     console.warn("Müvekkil ID'si çözülürken hata:", e);
                 }
-                // Veritabanında yoksa veya hata varsa eldeki ID/String'i göster
                 return notification.taskOwner;
             }
 
             // SENARYO 2: taskOwner bir Dizi (Array) ise - Örn: ["64ed6f..."]
-            // (Backend güncellemesinden sonra veriler dizi olarak gelebilir)
             if (Array.isArray(notification.taskOwner) && notification.taskOwner.length > 0) {
                 const firstVal = notification.taskOwner[0];
                 
-                // Dizi içindeki ilk eleman ID ise
                 if (typeof firstVal === 'string') {
                      try {
                         const personData = await getDocFromDb("persons", firstVal);
@@ -1132,7 +1130,6 @@ async function renderCurrentPage() {
                     return firstVal;
                 }
                 
-                // Dizi içindeki ilk eleman Obje ise
                 if (typeof firstVal === 'object' && firstVal.name) return firstVal.name;
             }
 
@@ -1142,8 +1139,6 @@ async function renderCurrentPage() {
             }
         }
         
-        // --- Eğer yukarıda taskOwner'dan sonuç çıkmazsa aşağıdakilere geç ---
-
         // 2. Yedek: applicantName
         if (notification.applicantName) return notification.applicantName;
         
@@ -1230,12 +1225,23 @@ async function renderCurrentPage() {
     // --- 6. BUTONLAR ---
     const actionCell = tr.querySelector('.actions-cell');
     
-    // Düzenle Butonu (Her zaman görünür)
+    // Değerlendirme Bekliyor durumunda butonlar pasif mi?
+    const isEvaluationPending = (notification.status === 'evaluation_pending');
+
+    // Düzenle Butonu (Her zaman görünür ama pasif olabilir)
     const editButton = document.createElement('button');
     editButton.className = 'action-btn';
     editButton.textContent = 'Düzenle';
     editButton.dataset.id = notification.id;
-    editButton.addEventListener('click', () => openModal(notification));
+    
+    if (isEvaluationPending) {
+        editButton.disabled = true;
+        editButton.style.opacity = '0.5';
+        editButton.style.cursor = 'not-allowed';
+        editButton.title = "Değerlendirme tamamlanmadan düzenlenemez.";
+    } else {
+        editButton.addEventListener('click', () => openModal(notification));
+    }
     actionCell.appendChild(editButton);
 
     // Duruma Göre Diğer Butonlar
@@ -1259,7 +1265,15 @@ async function renderCurrentPage() {
       // Hata varsa "Tekrar Gönder", yoksa "Gönder"
       sendBtn.textContent = (notification.status === 'failed') ? 'Tekrar Gönder' : 'Gönder';
       sendBtn.dataset.id = notification.id;
-      sendBtn.addEventListener('click', (e) => sendNotificationWithUI(e, notification));
+      
+      if (isEvaluationPending) {
+          sendBtn.disabled = true;
+          sendBtn.style.opacity = '0.5';
+          sendBtn.style.cursor = 'not-allowed';
+          sendBtn.title = "Değerlendirme tamamlanmadan gönderilemez.";
+      } else {
+          sendBtn.addEventListener('click', (e) => sendNotificationWithUI(e, notification));
+      }
       actionCell.appendChild(sendBtn);
     }
 
@@ -1281,7 +1295,8 @@ async function renderCurrentPage() {
   __isRendering = false;
   if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
 }
-    // ---------- Global exposures ----------
+
+// ---------- Global exposures ----------
     try { globalThis.openModal = openModal; } catch (e) {}
     try { globalThis.showMissingInfo = showMissingInfo; } catch (e) {}
     try { globalThis.getToCcFromNotification = getToCcFromNotification; } catch (e) {}
