@@ -30,26 +30,13 @@ export class PortfolioDetailManager {
     }
 
     async init() {
-        // 1. Önce layout yükle
+        // 1. Layout ve Auth
         await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-
-        // 2. Oturumu bekle.
         const user = await waitForAuthUser({ requireAuth: true });
-        
-        // Eğer user null ise (yönlendirme başladı demektir), işlemi durdur
         if (!user) return; 
 
-        // 🔥 KRİTİK DÜZELTME: Token Senkronizasyonu
-        // Kullanıcı nesnesi var olsa bile, Firestore kurallarının (Rules) 
-        // bu oturumu tanıması için token'ın tazelenmesini ve hazır olmasını bekliyoruz.
-        try {
-            // 'true' parametresi token'ı zorla yeniler, bu da yetki sorunlarını çözer.
-            await user.getIdToken(true);
-            console.log("✅ Token senkronize edildi, veri çekiliyor...");
-        } catch (e) {
-            console.error("Token yenileme hatası:", e);
-            // Hata olsa bile devam etmeyi deneyebiliriz veya durdurabiliriz.
-        }
+        // Token Refresh (Yetki sorunları için)
+        try { await user.getIdToken(true); } catch (e) {}
 
         // 3. ID kontrolü
         if (!this.recordId) {
@@ -57,8 +44,8 @@ export class PortfolioDetailManager {
             return;
         }
 
-        // 4. Verileri yükle
-        await this.loadLookups();
+        // 4. Verileri Yükle
+        await this.loadLookups(); // İşlem tiplerini önden al
         await this.loadRecord();
         this.setupEventListeners();
         
@@ -82,13 +69,19 @@ export class PortfolioDetailManager {
             
             this.currentRecord = res.data;
             
-            // Render fonksiyonlarını çağır
+            // --- UI RENDER (BLOKLAYICI MOD) ---
+            // İsteğiniz üzerine tüm verilerin yüklenmesini bekliyoruz.
+            
             this.renderHero();
-            this.renderApplicants();
+            await this.renderApplicants(); // Kişi bilgilerini bekle
             this.renderGoodsList();
-            await this.renderTransactions(); // Async işlem (Task belgeleri için)
             this.renderDocuments();
 
+            // İşlemlerin (Transactions) yüklenmesini BEKLİYORUZ (await)
+            // Paralel işleme sayesinde bu süre eskisine göre çok daha kısa sürecek.
+            await this.renderTransactions(); 
+
+            // HER ŞEY HAZIR OLUNCA YÜKLEME EKRANINI KALDIR
             document.getElementById('loading').classList.add('d-none');
             document.getElementById('detail-root').classList.remove('d-none');
 
@@ -110,11 +103,9 @@ export class PortfolioDetailManager {
             this.elements.heroCard.classList.add('d-none');
         }
 
-        // Tescil Numarası
         let regNo = r.registrationNumber;
         if (!regNo) regNo = r.internationalRegNumber || r.wipoIrNumber || '-';
 
-        // Nice Sınıfları
         let classesStr = '-';
         if (Array.isArray(r.goodsAndServicesByClass) && r.goodsAndServicesByClass.length > 0) {
             classesStr = r.goodsAndServicesByClass.map(c => c.classNo).join(', ');
@@ -124,14 +115,12 @@ export class PortfolioDetailManager {
             classesStr = r.classes;
         }
 
-        // --- GÜNCELLENEN HTML YAPISI ---
         const kvHtml = `
             <div class="kv-item"><div class="label">Başvuru No</div><div class="value">${r.applicationNumber || '-'}</div></div>
             <div class="kv-item"><div class="label">Tescil No</div><div class="value">${regNo}</div></div>
             <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
             <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
             <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
-            
             <div class="kv-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
                 <div class="label" style="margin-bottom: 4px;">Sınıflar (Nice)</div>
                 <div class="value text-primary" style="font-weight: 700; line-height: 1.4;">${classesStr}</div>
@@ -155,17 +144,14 @@ export class PortfolioDetailManager {
         let addressesHtml = '<span class="text-muted">-</span>';
 
         if (Array.isArray(r.applicants) && r.applicants.length > 0) {
-            // 1. İsimleri Çözümle
             const resolvedApplicants = await Promise.all(r.applicants.map(async (app) => {
                 let name = 'İsimsiz';
                 let address = null;
                 let personId = null;
 
-                // ID Tespiti
                 if (typeof app === 'string') personId = app;
                 else if (typeof app === 'object' && app) personId = app.id;
 
-                // Veritabanından Detay Çek
                 if (personId) {
                     try {
                         const snap = await getDoc(doc(db, 'persons', personId));
@@ -176,34 +162,19 @@ export class PortfolioDetailManager {
                         }
                     } catch (e) { console.warn('Kişi detayı alınamadı:', personId); }
                 } 
-                
-                // Fallback: DB'den bulunamazsa obje içindeki ismi kullan
-                if (name === 'İsimsiz' && typeof app === 'object' && app.name) {
-                    name = app.name;
-                }
-
+                if (name === 'İsimsiz' && typeof app === 'object' && app.name) name = app.name;
                 return { name, address };
             }));
 
-            // 2. HTML Olarak Listele (Alt alta div)
             if (resolvedApplicants.length > 0) {
-                // İsimler Listesi
-                namesHtml = resolvedApplicants
-                    .map(a => `<div style="margin-bottom: 4px; border-bottom: 1px solid #dee2e6; padding-bottom: 2px;">${a.name}</div>`)
-                    .join('');
-                
-                // Adresler Listesi
-                addressesHtml = resolvedApplicants
-                    .map(a => `<div style="margin-bottom: 4px; border-bottom: 1px solid #dee2e6; padding-bottom: 2px;">${a.address || '-'}</div>`)
-                    .join('');
+                namesHtml = resolvedApplicants.map(a => `<div style="margin-bottom: 4px; border-bottom: 1px solid #dee2e6; padding-bottom: 2px;">${a.name}</div>`).join('');
+                addressesHtml = resolvedApplicants.map(a => `<div style="margin-bottom: 4px; border-bottom: 1px solid #dee2e6; padding-bottom: 2px;">${a.address || '-'}</div>`).join('');
             }
         } else {
-            // Eski usul tekil kayıt varsa
             const singleName = r.applicantName || r.ownerName;
             if (singleName) namesHtml = singleName;
         }
 
-        // 3. Konteynerlara Bas (Input olmadığı için innerHTML kullanıyoruz)
         if (nameContainer) nameContainer.innerHTML = namesHtml;
         if (addressContainer) addressContainer.innerHTML = addressesHtml;
     }
@@ -233,7 +204,6 @@ export class PortfolioDetailManager {
             `}).join('');
     }
 
-    // --- SINIF 35 FORMATLAMA MANTIĞI ---
     formatNiceClassContent(classNo, items) {
         if (!items || !items.length) return '';
         
@@ -254,31 +224,25 @@ export class PortfolioDetailManager {
                         const splitIndex = match.index + match[1].length;
                         const preText = text.substring(0, splitIndex);
                         const postText = text.substring(splitIndex);
-                        
                         html += `<li class="font-weight-bold list-unstyled mt-2" style="list-style:none;">${preText}</li>`;
-                        if (postText.trim().length > 0) {
-                            html += `<li class="ml-4" style="list-style-type:circle;">${postText}</li>`;
-                        }
+                        if (postText.trim().length > 0) html += `<li class="ml-4" style="list-style-type:circle;">${postText}</li>`;
                         isIndentedSection = true;
                         return;
                     }
                 }
-                
-                if (isIndentedSection) {
-                    html += `<li class="ml-4" style="list-style-type:circle;">${text}</li>`;
-                } else {
-                    html += `<li>${text}</li>`;
-                }
+                if (isIndentedSection) html += `<li class="ml-4" style="list-style-type:circle;">${text}</li>`;
+                else html += `<li>${text}</li>`;
             });
             return html;
         }
         return items.map(item => `<li>${item}</li>`).join('');
     }
 
+    // --- OPTİMİZE EDİLMİŞ TRANSACTION RENDER (PARALEL) ---
     async renderTransactions() {
         const accordion = this.elements.txAccordion;
-        accordion.innerHTML = '<div class="p-3 text-center text-muted"><span class="spinner-border spinner-border-sm"></span> İşlemler analiz ediliyor...</div>';
-
+        // Not: Burada artık "Yükleniyor" yazmaya gerek yok çünkü sayfa zaten yükleniyor modunda
+        
         const res = await ipRecordsService.getTransactionsForRecord(this.recordId);
         const transactions = res.success ? res.transactions : [];
 
@@ -289,35 +253,42 @@ export class PortfolioDetailManager {
 
         const { parents, childrenMap } = TransactionHelper.organizeTransactions(transactions);
 
-        let html = '';
-        for (const parent of parents) {
+        // PARALEL İŞLEME (HIZLI MOD)
+        // Tüm parent işlemleri ve altındaki belgeleri aynı anda çekiyoruz.
+        const htmlParts = await Promise.all(parents.map(async (parent) => {
             const typeName = this.transactionTypesMap.get(String(parent.type)) || `İşlem ${parent.type}`;
-            const docs = await TransactionHelper.getDocuments(parent);
-            const children = childrenMap[parent.id] || [];
             
-            const docIcons = docs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
-            
-            let childrenHtml = '';
-            if (children.length > 0) {
-                const childItems = await Promise.all(children.map(async child => {
-                    const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
-                    const cDocs = await TransactionHelper.getDocuments(child);
-                    const cDocIcons = cDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+            // Parent dokümanları ve Çocuk işlemleri paralel hazırla
+            const [docs, childrenHtml] = await Promise.all([
+                TransactionHelper.getDocuments(parent),
+                (async () => {
+                    const children = childrenMap[parent.id] || [];
+                    if (children.length === 0) return '';
                     
-                    return `
-                        <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
-                            <div>
-                                <small class="text-muted">↳ ${cTypeName}</small>
-                                <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
+                    // Çocukların dokümanlarını da paralel çek
+                    const childItems = await Promise.all(children.map(async child => {
+                        const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
+                        const cDocs = await TransactionHelper.getDocuments(child);
+                        const cDocIcons = cDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+                        
+                        return `
+                            <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
+                                <div>
+                                    <small class="text-muted">↳ ${cTypeName}</small>
+                                    <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
+                                </div>
+                                <div>${cDocIcons}</div>
                             </div>
-                            <div>${cDocIcons}</div>
-                        </div>
-                    `;
-                }));
-                childrenHtml = `<div class="accordion-transaction-children" style="display:none;">${childItems.join('')}</div>`;
-            }
+                        `;
+                    }));
+                    return `<div class="accordion-transaction-children" style="display:none;">${childItems.join('')}</div>`;
+                })()
+            ]);
 
-            html += `
+            const children = childrenMap[parent.id] || [];
+            const docIcons = docs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+
+            return `
                 <div class="accordion-transaction-item border-bottom">
                     <div class="accordion-transaction-header d-flex justify-content-between align-items-center p-3" style="cursor:pointer; background: #fff;">
                         <div class="d-flex align-items-center">
@@ -335,16 +306,15 @@ export class PortfolioDetailManager {
                     ${childrenHtml}
                 </div>
             `;
-        }
+        }));
         
-        accordion.innerHTML = html;
+        accordion.innerHTML = htmlParts.join('');
         this.setupAccordionEvents();
     }
 
     renderDocuments() {
         const tbody = this.elements.docsTbody;
         const docs = this.currentRecord.documents || [];
-        
         document.getElementById('docCount').textContent = docs.length;
 
         if (docs.length === 0) {
@@ -418,7 +388,6 @@ export class PortfolioDetailManager {
 
         this.elements.tpQueryBtn?.addEventListener('click', () => {
              const appNo = this.currentRecord.applicationNumber;
-             // Varsa Chrome Extension'ı tetiklemek için özel event veya direkt link
              if(window.triggerTpQuery) {
                  window.triggerTpQuery(appNo);
              } else {
@@ -435,7 +404,6 @@ export class PortfolioDetailManager {
 
             header.addEventListener('click', (e) => {
                 if (e.target.closest('a')) return;
-                
                 const item = header.parentElement;
                 const childrenContainer = item.querySelector('.accordion-transaction-children');
                 const icon = header.querySelector('.fa-chevron-right');
@@ -502,7 +470,6 @@ export class PortfolioDetailManager {
 
     async handleDocDelete(index) {
         if (!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
-        
         try {
             const docs = this.currentRecord.documents.filter((_, i) => i !== Number(index));
             await ipRecordsService.updateRecord(this.recordId, { documents: docs });
