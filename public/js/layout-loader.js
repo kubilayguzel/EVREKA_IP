@@ -1,14 +1,17 @@
 // public/js/layout-loader.js
-import { personService, authService, db } from '../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// CACHE ANAHTARI (Versiyon değişirse burayı artırabilirsiniz, örn: v2)
-const LAYOUT_CACHE_KEY = 'app_layout_cache_v1';
-let authCache = null;
-let lastAuthCheck = 0;
+// NOT: En üstte statik import YOK. Bu sayede dosya anında yüklenir ve çalışır.
+// Firebase ve diğer servisleri ihtiyaç anında (lazy load) çağıracağız.
+
+// Global cache değişkenleri
+const LAYOUT_CACHE_KEY = 'app_layout_v2_html'; // Şablon Cache
+const MENU_CACHE_KEY = 'app_layout_v2_menu';   // Render edilmiş Menü Cache
 const AUTH_CACHE_DURATION = 5000;
 
-// Menü Yapısı
+let authCache = null;
+let lastAuthCheck = 0;
+
+// Menü Yapısı (Sabit Veri)
 const menuItems = [
     { id: 'dashboard', text: 'Dashboard', link: 'dashboard.html', icon: 'fas fa-tachometer-alt', category: 'Ana Menü' },
     {
@@ -71,93 +74,114 @@ const menuItems = [
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
 ];
 
-// --- OPTİMİZE EDİLMİŞ LOAD FONKSİYONU ---
+// === ANA YÜKLEME FONKSİYONU ===
 export async function loadSharedLayout(options = {}) {
     const placeholder = document.getElementById('layout-placeholder');
     if (!placeholder) {
-        console.error('Layout placeholder not found.');
+        console.error('Layout placeholder bulunamadı.');
         return;
     }
 
-    // 1. [HIZLI] LocalStorage Cache Kontrolü
-    // Eğer önceden yüklenmişse, network'ü beklemeden hemen bas.
+    // 1. [ANINDA] Cache'ten Layout ve Menüyü Bas
+    // Bu aşamada henüz Firebase yüklenmedi, network isteği yapılmadı.
+    // Kullanıcı önceki ziyaretinden kalan menüyü ANINDA görür.
     const cachedHTML = localStorage.getItem(LAYOUT_CACHE_KEY);
+    const cachedMenu = localStorage.getItem(MENU_CACHE_KEY);
+
     if (cachedHTML) {
         placeholder.innerHTML = cachedHTML;
-        // İskelet yüklendi, hemen aktif menüyü işaretle ki kullanıcı nerede olduğunu görsün
-        highlightActiveMenu(window.location.pathname.split('/').pop());
-    }
-
-    // 2. [PARALEL] Veri Çekme İşlemleri
-    // Layout HTML'ini (güncelleme için), Auth bilgisini ve Datepicker'ı aynı anda başlatıyoruz.
-    // await kullanmıyoruz, promise dizisi oluşturuyoruz.
-    const layoutPromise = fetchAndCacheLayout();
-    const authPromise = getCachedAuth();
-    const datepickerPromise = ensureDatepickerDeps();
-
-    // 3. HTML Güncelleme (Eğer cache yoksa mecbur bekleriz, varsa pas geçeriz)
-    if (!cachedHTML) {
-        const freshHTML = await layoutPromise;
-        if (freshHTML) {
-            placeholder.innerHTML = freshHTML;
+        
+        // Eğer daha önce render edilmiş menü cache'te varsa onu da yerine koy
+        if (cachedMenu) {
+            const sidebarNav = placeholder.querySelector('.sidebar-nav');
+            if (sidebarNav) {
+                sidebarNav.innerHTML = cachedMenu;
+                // Etkileşimleri hemen bağla (Accordion aç/kapa çalışsın)
+                setupFastMenuInteractions();
+                // Aktif sayfayı işaretle
+                highlightActiveMenu(window.location.pathname.split('/').pop());
+            }
         }
     }
 
-    // 4. Kullanıcı Bilgilerini ve Menüyü Doldur
-    // Auth işlemi bittiğinde burası çalışır.
-    const user = await authPromise;
-    
-    // Auth yoksa dur (Login'e yönlendirme authService içinde olabilir veya burada yapılabilir)
-    if (!user) return;
+    // 2. [ARKAPLAN] Gerekli Kütüphaneleri Dinamik Olarak Yükle
+    // Sayfa iskeleti göründü, şimdi Firebase'i ve taze veriyi çekebiliriz.
+    try {
+        // Firebase Config ve Servislerini burada import ediyoruz (Lazy Load)
+        const { authService, db } = await import('../firebase-config.js');
+        const { collection, query, where, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
 
-    // Kullanıcıya özel menüyü oluştur
-    updateUserInfo(user);
-    const sidebarNav = document.querySelector('.sidebar-nav');
-    if (sidebarNav) {
-        renderMenu(sidebarNav, user.role || 'user');
-        setupFastMenuInteractions();
-        setupMenuBadges();
-        highlightActiveMenu(window.location.pathname.split('/').pop());
+        // Layout HTML'ini tazelemek için istek at (değişiklik varsa cache güncelle)
+        fetchAndCacheLayout(placeholder, cachedHTML);
+
+        // Datepicker bağımlılıklarını yükle
+        ensureDatepickerDeps();
+
+        // 3. Auth Kontrolü ve Menü Güncelleme
+        const user = await getCachedAuth(authService);
+        if (!user) return; // Kullanıcı yoksa işlem yapma
+
+        // Kullanıcı bilgilerini güncelle
+        updateUserInfo(user);
+
+        // Menüyü kullanıcının rolüne göre TEKRAR oluştur ve Cache'le
+        const sidebarNav = document.querySelector('.sidebar-nav');
+        if (sidebarNav) {
+            renderMenu(sidebarNav, user.role || 'user');
+            
+            // Yeni oluşan menüyü cache'e kaydet
+            localStorage.setItem(MENU_CACHE_KEY, sidebarNav.innerHTML);
+            
+            setupFastMenuInteractions();
+            
+            // Badge (Bildirim Sayıları) dinlemeyi başlat (Firebase bağımlı)
+            setupMenuBadges(db, collection, query, where, onSnapshot);
+            
+            highlightActiveMenu(window.location.pathname.split('/').pop());
+        }
+
+        // Logout butonu
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.onclick = (e) => {
+                e.preventDefault();
+                authService.signOut();
+            };
+        }
+
+    } catch (error) {
+        console.error('Layout yükleme hatası:', error);
+        // Hata olsa bile cache'ten gelen layout ekranda kalır, sayfa boş görünmez.
     }
-
-    // Logout butonu bağla
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.onclick = (e) => {
-            e.preventDefault();
-            authService.signOut();
-        };
-    }
-
-    // Datepicker bağımlılıkları arkada yüklenmeye devam etsin veya bitmiş olsun
-    await datepickerPromise;
 }
 
 // --- YARDIMCI FONKSİYONLAR ---
 
-async function fetchAndCacheLayout() {
+async function fetchAndCacheLayout(placeholder, currentHTML) {
     try {
         const response = await fetch('shared_layout_parts.html');
-        if (!response.ok) throw new Error('Layout fetch failed');
+        if (!response.ok) return;
+        
         let html = await response.text();
-        // Script etiketlerini temizle
         html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
         
-        // LocalStorage'a kaydet (Gelecek sefer için)
-        localStorage.setItem(LAYOUT_CACHE_KEY, html);
-        return html;
+        // Sadece HTML değişmişse güncelle (Gereksiz DOM işleminden kaçın)
+        if (html !== currentHTML) {
+            localStorage.setItem(LAYOUT_CACHE_KEY, html);
+            // Not: Placeholder'ı tamamen yenilemiyoruz çünkü içinde çalışan menü/eventler olabilir.
+            // Sadece cache'i güncel tutuyoruz, bir sonraki yenilemede aktif olur.
+            // Eğer iskelet çok değiştiyse zorla yenileme mantığı eklenebilir ama genelde gerekmez.
+        }
     } catch (e) {
-        console.error("Layout fetch error:", e);
-        return null;
+        console.warn("Layout fetch error (offline?):", e);
     }
 }
 
-async function getCachedAuth() {
+async function getCachedAuth(authService) {
     const now = Date.now();
     if (authCache && (now - lastAuthCheck) < AUTH_CACHE_DURATION) {
         return authCache;
     }
-    // Auth kontrolünü yap
     authCache = authService.getCurrentUser();
     lastAuthCheck = now;
     return authCache;
@@ -223,8 +247,9 @@ function renderMenu(container, userRole) {
 
 function setupFastMenuInteractions() {
     const sidebar = document.querySelector('.sidebar-nav');
-    if (!sidebar) return;
+    if (!sidebar || sidebar.dataset.bound) return; // Zaten bağlandıysa tekrar yapma
     
+    sidebar.dataset.bound = "true";
     sidebar.onclick = (e) => {
         const header = e.target.closest('.accordion-header');
         if (!header) return;
@@ -249,7 +274,6 @@ function highlightActiveMenu(currentPage) {
         link.classList.remove('active');
     });
 
-    let activeLink = null;
     let parentAccordion = null;
 
     document.querySelectorAll('.sidebar-nav-item, .accordion-content a').forEach(link => {
@@ -258,7 +282,6 @@ function highlightActiveMenu(currentPage) {
             const fileName = href.split('/').pop();
             if (fileName === currentPage) {
                 link.classList.add('active');
-                activeLink = link;
                 const accordion = link.closest('.accordion');
                 if (accordion) parentAccordion = accordion;
             }
@@ -273,7 +296,8 @@ function highlightActiveMenu(currentPage) {
     }
 }
 
-function setupMenuBadges() {
+// Bildirim sayıları (Firebase yüklendikten sonra çağrılır)
+function setupMenuBadges(db, collection, query, where, onSnapshot) {
     try {
         const tasksQuery = query(collection(db, "tasks"), where("status", "==", "awaiting_client_approval"));
         onSnapshot(tasksQuery, (snapshot) => updateBadgeUI('triggered-tasks', snapshot.size), (e) => console.error(e));
@@ -291,8 +315,8 @@ function updateBadgeUI(menuId, count) {
     }
 }
 
+// Tarih Seçici (Bağımsız, paralel yüklenir)
 async function ensureDatepickerDeps() {
-  // CSS ve JS kütüphanelerini yükleme (Değişiklik yok, aynen korundu)
   const head = document.head;
   if (!document.querySelector('link[data-evreka="flatpickr-css"]')) {
     const link = document.createElement('link');
@@ -315,14 +339,18 @@ async function ensureDatepickerDeps() {
     s.onload = () => res();
     head.appendChild(s);
   });
-  if (!window.flatpickr) await loadScript('https://cdn.jsdelivr.net/npm/flatpickr', 'data-evreka="flatpickr-js"');
+  
+  // Paralel script yüklemeleri
+  await loadScript('https://cdn.jsdelivr.net/npm/flatpickr', 'data-evreka="flatpickr-js"');
   if (!(window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr)) await loadScript('https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js', 'data-evreka="flatpickr-tr"');
   if (!window.EvrekaDatePicker) await loadScript('./js/date-pickers.js', 'data-evreka="evreka-datepickers"');
   window.EvrekaDatePicker?.init();
 }
 
-// === ORTAK KİŞİ MODALİ ===
-export function ensurePersonModal() {
+// === ORTAK KİŞİ MODALİ (Firebase bağımlılığı import edilinceye kadar beklemez) ===
+// Not: Bu fonksiyonu çağırmak için Firebase servislerine ihtiyaç duyulursa
+// main.js içinde zaten firebase yüklü olacağı için sorun olmaz.
+export async function ensurePersonModal() {
   if (document.getElementById('personModal')) return;
   if (!document.getElementById('personModalSharedStyles')) {
     const style = document.createElement('style');
@@ -446,11 +474,15 @@ let __onPersonSaved = null;
 
 async function handlePersonSubmit(e) {
   e.preventDefault();
+  
+  // Modül içinde dinamik import (PersonService için)
+  const { personService } = await import('../firebase-config.js');
+
   const payload = {
     type: document.getElementById('pm_personType').value,
     name: document.getElementById('pm_name').value.trim(),
     nationalIdOrVkn: document.getElementById('pm_tckn').value.trim() || document.getElementById('pm_vkn').value.trim() || '',
-    tpeNo: document.getElementById('pm_tpeNo')?.value.trim(), // Düzeltme: pm_tpeNo ID'si kullanıldı
+    tpeNo: document.getElementById('pm_tpeNo')?.value.trim(),
     email: document.getElementById('pm_email').value.trim(),
     phone: document.getElementById('pm_phone').value.trim(),
     countryCode: document.getElementById('pm_country').value || '',
@@ -496,12 +528,15 @@ export function closePersonModal() {
   if (modal) modal.classList.remove('show');
 }
 
-// LOOKUPS
+// LOOKUPS (Ülke/İl)
 let __countriesCache = null;
 let __citiesCacheByCountry = new Map();
 
 async function loadCountries() {
   if (__countriesCache) return __countriesCache;
+  const { db } = await import('../firebase-config.js'); // Dinamik import
+  const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+
   try {
     const snapA = await getDoc(doc(db, 'common', 'countries'));
     const dataA = snapA.exists() ? snapA.data() : null;
@@ -514,6 +549,10 @@ async function loadCountries() {
 async function loadCities(countryCode) {
   if (!countryCode) return [];
   if (__citiesCacheByCountry.has(countryCode)) return __citiesCacheByCountry.get(countryCode);
+  
+  const { db } = await import('../firebase-config.js');
+  const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+
   try {
       const d = await getDoc(doc(db, 'common', `cities_${countryCode}`));
       const data = d.exists() ? d.data() : null;
