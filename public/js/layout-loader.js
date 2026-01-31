@@ -22,7 +22,7 @@ const menuItems = [
         subItems: [
             { id: 'portfolio', text: 'Portföy', link: 'portfolio.html' },
             { id: 'data-entry', text: 'Yeni Kayıt', link: 'data-entry.html' },
-            { id: 'tp-file-transfer', text: 'TÜRKPATENT Dosya Aktarımı', link: 'tp-file-transfer.html' },
+            { id: 'tp-file-transfer', text: 'TPE Dosya Aktarımı', link: 'tp-file-transfer.html' },
             { id: 'excel-upload', text: 'Excel ile Yükle', link: 'excel-upload.html', adminOnly: true }
         ]
     },
