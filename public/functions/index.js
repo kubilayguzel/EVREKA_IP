@@ -2522,7 +2522,60 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             const userSnap = await adminDb.collection("users").doc(assignedUid).get();
             const assignedEmail = userSnap.exists ? userSnap.data().email : "";
 
-            // 3. Görevi Belirlenen Sayısal ID ile Kaydet
+            // --- [YENİ] ID 66 İÇİN AKILLI TARİH HESAPLAMA ---
+            let task66DueDate = null;
+            
+            // rawTeblig: Tebliğ Tarihi (Fonksiyonda zaten tanımlı)
+            // calculatedDeadline: Resmi Son Tarih (Fonksiyonda zaten tanımlı)
+            
+            if (rawTeblig) {
+                try {
+                    // 1. Tebliğ Tarihini Al ve +10 Gün Ekle (Varsayılan Hedef)
+                    let baseDate = null;
+                    if (typeof rawTeblig.toDate === 'function') baseDate = rawTeblig.toDate();
+                    else baseDate = new Date(rawTeblig);
+
+                    let targetDate = new Date(baseDate);
+                    targetDate.setDate(targetDate.getDate() + 10); // Tebliğ + 10
+
+                    // 2. Resmi Son Tarihi Kontrol Et
+                    let officialLimit = null;
+                    // calculatedDeadline yoksa rawDeadline'a bak (Data recovery)
+                    const refDeadline = calculatedDeadline || rawDeadline; 
+                    
+                    if (refDeadline) {
+                        if (typeof refDeadline.toDate === 'function') officialLimit = refDeadline.toDate();
+                        else officialLimit = new Date(refDeadline);
+                    }
+
+                    // 3. Karşılaştırma ve Güvenlik Payı (Safety Margin)
+                    if (officialLimit && !isNaN(officialLimit.getTime())) {
+                        
+                        // Eğer (Tebliğ + 10) tarihi, Resmi Son Tarih'i geçiyorsa (veya eşitse)
+                        if (targetDate >= officialLimit) {
+                            console.log(`⚠️ Uyarı: (Tebliğ + 10 gün) resmi süreyi aşıyor! Güvenlik protokolü devrede.`);
+                            
+                            // Tarihi (Resmi Son Tarih - 5 Gün) olarak ayarla
+                            let safeDate = new Date(officialLimit);
+                            safeDate.setDate(safeDate.getDate() - 5);
+                            
+                            targetDate = safeDate;
+                        }
+                    }
+
+                    // Sonuç Geçerli mi?
+                    if (!isNaN(targetDate.getTime())) {
+                        task66DueDate = admin.firestore.Timestamp.fromDate(targetDate);
+                        console.log(`📅 Task 66 Son Tarihi Ayarlandı: ${targetDate.toLocaleDateString('tr-TR')}`);
+                    }
+
+                } catch (err) {
+                    console.warn("⚠️ Task 66 akıllı tarih hesaplama hatası:", err);
+                }
+            }
+            // -----------------------------------------------------------
+
+            // 4. Görevi Kaydet
             await adminDb.collection("tasks").doc(newTaskId).set({
                 id: newTaskId,
                 taskType: "66",
@@ -2535,10 +2588,12 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 assignedTo_uid: assignedUid,
                 assignedTo_email: assignedEmail,
                 priority: "high",
-                // Hesaplanan resmi tarihi (calculatedDeadline) Task 66'ya aktarıyoruz
-                officialDueDate: calculatedDeadline ? admin.firestore.Timestamp.fromDate(calculatedDeadline) : null,
-                // Operasyonel tarihi de resmi tarih ile aynı yapıyoruz (veya ihtiyaca göre öne çekilebilir)
-                dueDate: calculatedDeadline ? admin.firestore.Timestamp.fromDate(calculatedDeadline) : null,
+
+                // --- HESAPLANAN TARİHLER ---
+                officialDueDate: task66DueDate, 
+                dueDate: task66DueDate,         
+                // ---------------------------
+
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 history: [{
