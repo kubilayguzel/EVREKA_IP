@@ -763,8 +763,15 @@ async function getAttachmentPreviews(notification) {
       let currentTo = [...toList];
       let currentCc = [...ccList];
 
-      const toInput = document.getElementById('modal-to-input');
-      const ccInput = document.getElementById('modal-cc-input');
+      // ÇÖZÜM: Elementleri klonlayarak eski event listener'lardan kurtuluyoruz
+      let oldToInput = document.getElementById('modal-to-input');
+      let oldCcInput = document.getElementById('modal-cc-input');
+
+      let toInput = oldToInput.cloneNode(true);
+      let ccInput = oldCcInput.cloneNode(true);
+
+      oldToInput.parentNode.replaceChild(toInput, oldToInput);
+      oldCcInput.parentNode.replaceChild(ccInput, oldCcInput);
 
       function renderChips() {
         const chip = (addr, cls) =>
