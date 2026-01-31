@@ -2535,6 +2535,10 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 assignedTo_uid: assignedUid,
                 assignedTo_email: assignedEmail,
                 priority: "high",
+                // Hesaplanan resmi tarihi (calculatedDeadline) Task 66'ya aktarıyoruz
+                officialDueDate: calculatedDeadline ? admin.firestore.Timestamp.fromDate(calculatedDeadline) : null,
+                // Operasyonel tarihi de resmi tarih ile aynı yapıyoruz (veya ihtiyaca göre öne çekilebilir)
+                dueDate: calculatedDeadline ? admin.firestore.Timestamp.fromDate(calculatedDeadline) : null,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 history: [{
