@@ -2555,6 +2555,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
   }
 );
 
+// functions/index.js
+
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
@@ -2569,7 +2571,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     const taskId = event.params.taskId;
 
     if (String(after.taskType) === "66") {
-        console.log(`ℹ️ Task ${taskId} (Tip 66 - Değerlendirme) tamamlandı ancak bildirim oluşturulmadı (Zaten var olanı güncelledi).`);
+        console.log(`ℹ️ Task ${taskId} (Tip 66 - Değerlendirme) tamamlandı ancak bildirim oluşturulmadı.`);
         return null;
     }
 
@@ -2687,20 +2689,17 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         }
     }
 
-// IP Kaydı Verilerini İşle
+    // IP Kaydı Verilerini İşle
     if (ipRecord) {
         const clean = (val) => (val ? String(val).trim() : "");
         
-        // --- [GÜNCELLEME BURADA] ---
-        // imageUrl ve imageSignedUrl alanları eklendi
         enrichedData.markImageUrl = 
             clean(ipRecord.brandImageUrl) || 
             clean(ipRecord.trademarkImage) || 
             clean(ipRecord.publicImageUrl) || 
-            clean(ipRecord.imageUrl) ||       // EKLENDİ
-            clean(ipRecord.imageSignedUrl) || // EKLENDİ
+            clean(ipRecord.imageUrl) ||       
+            clean(ipRecord.imageSignedUrl) || 
             "";
-        // ---------------------------
 
         if (!nameSourceFound) {
             try {
@@ -2730,9 +2729,13 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
     // --- ŞABLON SEÇİMİ ---
     let template = null, templateId = null, hasTemplate = false;
+    let parentTemplateSubject = null; // YENİ: Ata Konu için değişken
+
     try {
       const currentTaskType = String(after.taskType || "");
       if (currentTaskType) {
+        
+        // 1. Kendi Şablonunu Bul
         const rulesSnap = await adminDb.collection("template_rules")
           .where("sourceType", "==", "task_completion_epats")
           .where("taskType", "==", currentTaskType)
@@ -2750,6 +2753,44 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
             }
           }
         }
+
+        // 2. [YENİ] PARENT ŞABLON & KONU ARAMA (Fallback Subject)
+        // Eğer transactionTypeMatch tablosunda bir eşleşme varsa, parent konusunu bulmaya çalış.
+        const matchDoc = await adminDb.collection('mailThreads').doc('transactionTypeMatch').get();
+        if (matchDoc.exists) {
+            const mapping = matchDoc.data();
+            // Mapping değeri string ("2") veya array (["19", "2"]) olabilir
+            let parentTypes = mapping[currentTaskType];
+            
+            if (parentTypes) {
+                if (!Array.isArray(parentTypes)) parentTypes = [parentTypes];
+                
+                // İlk uygun parent için şablon ara (Örn: "2" -> Başvuru)
+                // Genelde en sondaki (en kök) parent tercih edilir ama burada ilkine bakıyoruz.
+                // Eğer ["19", "2"] ise, önce 19'a bakar.
+                for (const pType of parentTypes) {
+                    const pRuleSnap = await adminDb.collection("template_rules")
+                        .where("sourceType", "==", "task_completion_epats") // veya uygun source type
+                        .where("taskType", "==", String(pType))
+                        .limit(1)
+                        .get();
+                    
+                    if (!pRuleSnap.empty) {
+                        const pTmplId = pRuleSnap.docs[0].data().templateId;
+                        if (pTmplId) {
+                            const pTmplSnap = await adminDb.collection("mail_templates").doc(pTmplId).get();
+                            if (pTmplSnap.exists) {
+                                // Parent konusunu yakaladık!
+                                parentTemplateSubject = pTmplSnap.data().mailSubject || pTmplSnap.data().subject;
+                                console.log(`🔗 Parent Konu Bulundu (Tip: ${pType}): ${parentTemplateSubject}`);
+                                break; // İlk bulduğumuzu alıp çıkıyoruz
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
       }
     } catch (e) { console.warn("Template kuralı aranırken hata:", e); }
 
@@ -2789,139 +2830,143 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     } catch (e) { console.warn("CC listesi genişletilirken hata:", e); }
 
-// --- İÇERİK OLUŞTURMA ---
-let subject = "", body = "";
-if (hasTemplate) {
-  let rawEmailSubject = String(template.mailSubject || template.subject || "");
-  let rawInnerSubject = String(template.subject || "");
-
-  // 1. Varsayılanı Ayarla
-  let rawBody = String(template.body || "");
-  let detectedType = "unknown";
-
-  // ---------------------------------------------------------
-  // PORTFÖY TİPİ VE ŞABLON SEÇİMİ (CRASH FIX + normalize)
-  // ---------------------------------------------------------
-  console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${after.relatedIpRecordId || 'Bilinmiyor'}`);
-
-  const normalizeOwnerType = (v) => {
-    const s = String(v || "").trim().toLowerCase();
-    if (!s) return null;
-    const n = s.replace(/[\s-]+/g, "_"); // "third party" -> "third_party"
-    if (["self", "own", "portfolio", "my", "muvekkil", "müvekkil"].includes(n)) return "self";
-    if ([
-      "third_party", "thirdparty", "third", "opponent", "rakip",
-      "karsi_taraf", "karşı_taraf", "karsitaraf", "karşıtaraf"
-    ].includes(n)) return "third_party";
-    return n;
-  };
-
-  // ✅ Öncelik: task/doküman üzerindeki type -> ipRecord üzerindeki type -> applicants fallback
-  const docType = normalizeOwnerType(
-    after.recordOwnerType || after.ownerType || after.portfolioType || null
-  );
-
-  const dbType = normalizeOwnerType(
-    ipRecord?.recordOwnerType || ipRecord?.ownerType || ipRecord?.portfolioType || null
-  );
-
-  detectedType = docType || dbType || "unknown";
-
-  // applicants fallback (client değişkeni yoksa bile güvenli)
-  if (detectedType !== "self" && detectedType !== "third_party") {
-    const apps = Array.isArray(ipRecord?.applicants) ? ipRecord.applicants : [];
-    const clientId = String(after.clientId || ipRecord?.clientId || "").trim();
-
-    const isClientApplicant =
-      clientId && apps.length > 0
-        ? apps.some(app => String(app?.id || app?.personId || "").trim() === clientId)
-        : false;
-
-    detectedType = isClientApplicant ? "self" : "third_party";
-    console.log(`🧩 Fallback ownerType: applicants kontrolü -> ${detectedType}`);
-  }
-
-  console.log("🧭 FINAL OWNER TYPE", {
-    relatedIpRecordId: after.relatedIpRecordId || null,
-    docType,
-    dbType,
-    detectedType,
-  });
-
-  // B) İÇERİK SEÇİMİ (tmpl_50_document için body1/body2)
-  // İsterseniz bu koşulu kaldırıp her template için de uygulayabilirsiniz,
-  // ama sizde kural tmpl_50_document özelinde olduğu için burada o şekilde bıraktım.
-  if (templateId === "tmpl_50_document") {
-    if (detectedType === "third_party") {
-      if (template.body2 && String(template.body2).trim() !== "") {
-        rawBody = String(template.body2);
-        console.log("✅ SEÇİLEN ŞABLON: 'body2' (Third Party)");
+    // --- İÇERİK OLUŞTURMA ---
+    let subject = "", body = "";
+    if (hasTemplate) {
+      // 1. Konu Seçimi: Varsa Parent, Yoksa Kendi Konusu
+      let rawEmailSubject = "";
+      if (parentTemplateSubject) {
+          rawEmailSubject = String(parentTemplateSubject);
       } else {
-        console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body2 boş.");
+          rawEmailSubject = String(template.mailSubject || template.subject || "");
       }
-    } else if (detectedType === "self") {
-      if (template.body1 && String(template.body1).trim() !== "") {
-        rawBody = String(template.body1);
-        console.log("✅ SEÇİLEN ŞABLON: 'body1' (Self)");
+
+      let rawInnerSubject = String(template.subject || "");
+
+      // 1. Varsayılanı Ayarla
+      let rawBody = String(template.body || "");
+      let detectedType = "unknown";
+
+      // ---------------------------------------------------------
+      // PORTFÖY TİPİ VE ŞABLON SEÇİMİ (CRASH FIX + normalize)
+      // ---------------------------------------------------------
+      console.log(`🔍 Şablon Analizi Başlıyor... RecordID: ${after.relatedIpRecordId || 'Bilinmiyor'}`);
+
+      const normalizeOwnerType = (v) => {
+        const s = String(v || "").trim().toLowerCase();
+        if (!s) return null;
+        const n = s.replace(/[\s-]+/g, "_"); // "third party" -> "third_party"
+        if (["self", "own", "portfolio", "my", "muvekkil", "müvekkil"].includes(n)) return "self";
+        if ([
+          "third_party", "thirdparty", "third", "opponent", "rakip",
+          "karsi_taraf", "karşı_taraf", "karsitaraf", "karşıtaraf"
+        ].includes(n)) return "third_party";
+        return n;
+      };
+
+      // ✅ Öncelik: task/doküman üzerindeki type -> ipRecord üzerindeki type -> applicants fallback
+      const docType = normalizeOwnerType(
+        after.recordOwnerType || after.ownerType || after.portfolioType || null
+      );
+
+      const dbType = normalizeOwnerType(
+        ipRecord?.recordOwnerType || ipRecord?.ownerType || ipRecord?.portfolioType || null
+      );
+
+      detectedType = docType || dbType || "unknown";
+
+      // applicants fallback (client değişkeni yoksa bile güvenli)
+      if (detectedType !== "self" && detectedType !== "third_party") {
+        const apps = Array.isArray(ipRecord?.applicants) ? ipRecord.applicants : [];
+        const clientId = String(after.clientId || ipRecord?.clientId || "").trim();
+
+        const isClientApplicant =
+          clientId && apps.length > 0
+            ? apps.some(app => String(app?.id || app?.personId || "").trim() === clientId)
+            : false;
+
+        detectedType = isClientApplicant ? "self" : "third_party";
+        console.log(`🧩 Fallback ownerType: applicants kontrolü -> ${detectedType}`);
+      }
+
+      console.log("🧭 FINAL OWNER TYPE", {
+        relatedIpRecordId: after.relatedIpRecordId || null,
+        docType,
+        dbType,
+        detectedType,
+      });
+
+      // B) İÇERİK SEÇİMİ (tmpl_50_document için body1/body2)
+      if (templateId === "tmpl_50_document") {
+        if (detectedType === "third_party") {
+          if (template.body2 && String(template.body2).trim() !== "") {
+            rawBody = String(template.body2);
+            console.log("✅ SEÇİLEN ŞABLON: 'body2' (Third Party)");
+          } else {
+            console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body2 boş.");
+          }
+        } else if (detectedType === "self") {
+          if (template.body1 && String(template.body1).trim() !== "") {
+            rawBody = String(template.body1);
+            console.log("✅ SEÇİLEN ŞABLON: 'body1' (Self)");
+          } else {
+            console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body1 boş.");
+          }
+        } else {
+          console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Tip belirlenemedi.");
+        }
       } else {
-        console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> body1 boş.");
+        console.log(`ℹ️ Template ${templateId} için varsayılan body kullanılıyor.`);
       }
-    } else {
-      console.log("ℹ️ SEÇİLEN ŞABLON: 'body' (Varsayılan) -> Tip belirlenemedi.");
+
+      const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
+
+      const formatTrDate = (val) => {
+        if (!val) return new Date().toLocaleDateString("tr-TR");
+        const d = (val && val.toDate) ? val.toDate() : new Date(val);
+        return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
+      };
+
+      const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
+
+      const parameters = {
+        muvekkil_adi: "Değerli Müvekkilimiz",
+        proje_adi: ipTitle,
+        relatedIpRecordTitle: ipTitle,
+        is_basligi: after.title || "",
+        epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
+        applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
+        markName: ipRecord?.title || ipRecord?.markName || "-",
+        markImageUrl: enrichedData.markImageUrl,
+        applicantNames: enrichedData.applicantNames,
+        classNumbers: enrichedData.classNumbers,
+        applicationDate: enrichedData.applicationDate,
+        transactionDate: transactionDateStr,
+        basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
+      };
+
+      const replaceVars = (str) =>
+        String(str || "").replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+
+      subject = replaceVars(rawEmailSubject);
+      const innerSubjectResolved = replaceVars(rawInnerSubject);
+      let resolvedBody = replaceVars(rawBody);
+
+      if (innerSubjectResolved) {
+        const innerSubjectHtml = `
+          <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
+            <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
+          </div>
+        `;
+        if (resolvedBody.toLowerCase().includes("<body")) {
+          body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
+        } else {
+          body = innerSubjectHtml + resolvedBody;
+        }
+      } else {
+        body = resolvedBody;
+      }
     }
-  } else {
-    // diğer template’ler için default body
-    console.log(`ℹ️ Template ${templateId} için varsayılan body kullanılıyor.`);
-  }
-
-  const ipTitle = ipRecord?.title || after.relatedIpRecordTitle || "Dosya";
-
-  const formatTrDate = (val) => {
-    if (!val) return new Date().toLocaleDateString("tr-TR");
-    const d = (val && val.toDate) ? val.toDate() : new Date(val);
-    return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
-  };
-
-  const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
-
-  const parameters = {
-    muvekkil_adi: "Değerli Müvekkilimiz",
-    proje_adi: ipTitle,
-    relatedIpRecordTitle: ipTitle,
-    is_basligi: after.title || "",
-    epats_evrak_no: epatsDoc?.turkpatentEvrakNo || epatsDoc?.evrakNo || "",
-    applicationNo: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
-    markName: ipRecord?.title || ipRecord?.markName || "-",
-    markImageUrl: enrichedData.markImageUrl,
-    applicantNames: enrichedData.applicantNames,
-    classNumbers: enrichedData.classNumbers,
-    applicationDate: enrichedData.applicationDate,
-    transactionDate: transactionDateStr,
-    basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
-  };
-
-  const replaceVars = (str) =>
-    String(str || "").replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
-
-  subject = replaceVars(rawEmailSubject);
-  const innerSubjectResolved = replaceVars(rawInnerSubject);
-  let resolvedBody = replaceVars(rawBody);
-
-  if (innerSubjectResolved) {
-    const innerSubjectHtml = `
-      <div style="background-color: #f8f9fa; border-left: 4px solid #1a73e8; padding: 15px; margin: 0 0 20px 0; font-family: Arial, sans-serif; color: #333; font-size: 14px;">
-        <strong style="color: #1a73e8;">KONU:</strong> ${innerSubjectResolved}
-      </div>
-    `;
-    if (resolvedBody.toLowerCase().includes("<body")) {
-      body = resolvedBody.replace(/<body[^>]*>/i, (match) => match + innerSubjectHtml);
-    } else {
-      body = innerSubjectHtml + resolvedBody;
-    }
-  } else {
-    body = resolvedBody;
-  }
-}
 
     // Statü Belirleme
     const coreMissing = [];
@@ -2929,17 +2974,16 @@ if (hasTemplate) {
     if (!hasTemplate) coreMissing.push("mailTemplate");
     const finalStatus = coreMissing.length ? "missing_info" : "awaiting_client_approval";
 
-    // --- [DÜZELTME BAŞLANGICI] ---
-    // URL kontrolü (main.js 'url' olarak kaydediyor, index.js 'downloadURL' bekliyordu)
+    // URL kontrolü
     const validUrl = epatsDoc?.url || epatsDoc?.downloadURL || null;
 
     const epatsAttachment = {
       storagePath: epatsDoc?.storagePath || null,
-      downloadURL: validUrl, // Düzeltilmiş URL
+      downloadURL: validUrl, 
       fileName:    epatsDoc?.name || "epats.pdf",
     };
 
-    // [YENİ] Task üzerindeki diğer belgeleri topla ('documents' dizisi)
+    // Task üzerindeki diğer belgeleri topla
     const taskAttachments = [];
     if (after.documents && Array.isArray(after.documents)) {
         after.documents.forEach(doc => {
@@ -2947,12 +2991,12 @@ if (hasTemplate) {
                 name: doc.name || "ek_belge.pdf",
                 url: doc.url || doc.downloadURL,
                 storagePath: doc.storagePath,
-                type: 'application/pdf' // Varsayılan
+                type: 'application/pdf'
             });
         });
     }
 
-    // UI'da (Files listesinde) görünecek tüm dosyaları birleştir (EPATS + Diğerleri)
+    // UI listesi (EPATS + Diğerleri)
     const allUiFiles = [];
     if (validUrl) {
         allUiFiles.push({
@@ -2962,7 +3006,6 @@ if (hasTemplate) {
             type: 'application/pdf'
         });
     }
-    // Diğer belgeleri de UI listesine ekle
     taskAttachments.forEach(d => allUiFiles.push(d));
 
     const notificationDoc = {
@@ -2984,21 +3027,19 @@ if (hasTemplate) {
       taskType: after.taskType || null, 
       source: usedSource,
       
-      epatsAttachment, // Ana EPATS belgesi
-      taskAttachments, // [YENİ EKLENDİ] Ek belgeler listesi (Mail gönderimi için)
+      epatsAttachment,
+      taskAttachments, 
 
-      // UI ve Portal için gerekli alanlar
       documentUrl: validUrl, 
       documentName: epatsAttachment.fileName,
       documentSource: "EPATS (Manuel)", 
       
-      files: allUiFiles, // [GÜNCELLENDİ] Hem EPATS hem diğer belgeleri içerir
+      files: allUiFiles, 
 
       taskOwner: ownerIds,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    // --- [DÜZELTME SONU] ---
 
     await adminDb.collection("mail_notifications").add(notificationDoc);
     console.log(`Bildirim '${finalStatus}' olarak oluşturuldu. TaskType: ${after.taskType}`);
