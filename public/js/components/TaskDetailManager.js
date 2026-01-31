@@ -63,26 +63,19 @@ export class TaskDetailManager {
             let relatedPartyTxt = '-';
             console.log("🔍 İlgili taraf çözümleme başlıyor...");
 
-            // A) Task Details
-            if (task.details) {
-                console.log("A aşaması - task.details var:", task.details);
-                let parties = [];
-                if (task.details.relatedParty) parties.push(task.details.relatedParty);
-                else if (Array.isArray(task.details.relatedParties)) parties = task.details.relatedParties;
-                
-                console.log("A aşaması - parties:", parties);
-                
-                if (parties.length > 0) {
-                    const manualNames = parties.map(p => (typeof p === 'object' ? (p.name || p.companyName) : p)).filter(Boolean);
-                    console.log("A aşaması - manualNames:", manualNames);
-                    if (manualNames.length > 0) {
-                        relatedPartyTxt = manualNames.join(', ');
-                        console.log("✅ A aşamasından bulundu:", relatedPartyTxt);
-                    }
+            // A) Task Details - relatedParties (çoğul, name zaten dolu)
+            if (task.details && Array.isArray(task.details.relatedParties) && task.details.relatedParties.length > 0) {
+                console.log("A aşaması - task.details.relatedParties var:", task.details.relatedParties);
+                const manualNames = task.details.relatedParties
+                    .map(p => (typeof p === 'object' ? (p.name || p.companyName) : p))
+                    .filter(Boolean);
+                console.log("A aşaması - manualNames:", manualNames);
+                if (manualNames.length > 0) {
+                    relatedPartyTxt = manualNames.join(', ');
+                    console.log("✅ A aşamasından bulundu:", relatedPartyTxt);
                 }
-            } else {
-                console.log("A aşaması - task.details YOK");
             }
+
 
             // B) IP Record -> Applicants -> Persons Tablosu
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
