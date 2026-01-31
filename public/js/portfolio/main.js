@@ -24,25 +24,23 @@ class PortfolioController {
         this.init();
     }
 
-
     async init() {
-        // 1) İlk auth durumunu stabil şekilde bekle (kısa süreli null dalgalanmasında zıplamasın)
+        // 1) Auth bekle
         const user = await waitForAuthUser({ requireAuth: true, redirectTo: 'index.html', graceMs: 1200 });
-        if (!user) return; // redirect başladıysa çık
+        if (!user) return; 
 
-        // 2) Sonraki gerçek logout durumlarında yönlendir
+        // 2) Logout yönetimi
         redirectOnLogout('index.html', 1200);
 
+        // 3) Layout ve Loading Başlat
         await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
         this.renderer.showLoading(true);
 
-        // --- YENİ: URL'den Tab Bilgisini Okuma ve Ayarlama ---
+        // 4) Tab Yönetimi (URL'den)
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('activeTab');
-
         if (tabParam && ['all', 'trademark', 'patent', 'design', 'litigation', 'objections'].includes(tabParam)) {
             this.state.activeTab = tabParam;
-
             const tabButtons = document.querySelectorAll('.tab-button');
             if (tabButtons.length > 0) {
                 tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -50,15 +48,23 @@ class PortfolioController {
                 if (activeBtn) activeBtn.classList.add('active');
             }
         }
-        // -----------------------------------------------------
 
         try {
-            await Promise.all([
-                this.dataManager.loadTransactionTypes(),
-                this.dataManager.loadPersons(),
-                this.dataManager.loadCountries()
-            ]);
+            // --- DÜZELTME: Verilerin yüklenmesini BEKLE ---
+            // loadInitialData artık kayıtları da (loadRecords) çekiyor ve bitene kadar bekliyor.
+            await this.dataManager.loadInitialData();
 
+            // Eğer sayfa özel bir tab ile açıldıysa onun verisini de yükle (örn: Dava/İtiraz)
+            if (this.state.activeTab === 'litigation') {
+                await this.dataManager.loadLitigationData();
+            } else if (this.state.activeTab === 'objections') {
+                await this.dataManager.loadObjectionRows();
+            }
+
+            // Veriler hafızada, tabloyu çiz
+            this.render();
+
+            // Listener'ı daha sonra başlat (Canlı güncellemeler için)
             this.unsubscribe = this.dataManager.startListening(() => {
                 console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
                 this.render();
@@ -68,19 +74,18 @@ class PortfolioController {
             this.setupEventListeners();
             this.setupFilterListeners();
             this.setupImageHover();
+
         } catch (e) {
             console.error('Init hatası:', e);
+            showNotification('Veriler yüklenirken hata oluştu', 'error');
         } finally {
+            // Render bittikten ve her şey hazır olduktan sonra loading'i kapat
             this.renderer.showLoading(false);
         }
     }
 
-
-    // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
-
+    // --- GÖRSEL HOVER MANTIĞI ---
     setupImageHover() {
-        console.log('Setup image hover calisti');
-        
         let previewEl = document.getElementById('floating-preview');
         if (!previewEl) {
             previewEl = document.createElement('img');
@@ -90,23 +95,17 @@ class PortfolioController {
         }
 
         const tableBody = document.getElementById('portfolioTableBody');
-        if (!tableBody) {
-            console.error('portfolioTableBody bulunamadi');
-            return;
-        }
+        if (!tableBody) return;
         
         tableBody.addEventListener('mouseover', (e) => {
             if (e.target.classList.contains('trademark-image-thumbnail')) {
                 const src = e.target.src;
                 if (src && src.length > 10) {
                     previewEl.src = src;
-                    
                     const rect = e.target.getBoundingClientRect();
                     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                    
                     const leftPos = rect.right + 15;
                     const topPos = rect.top + scrollTop - 50;
-                    
                     previewEl.style.left = leftPos + 'px';
                     previewEl.style.top = topPos + 'px';
                     previewEl.style.display = 'block';
@@ -123,23 +122,6 @@ class PortfolioController {
         });
     }
     
-    positionPreview(e, element) {
-        const offset = 20;
-        let left = e.clientX + offset;
-        let top = e.clientY + offset;
-
-        const rect = element.getBoundingClientRect();
-        if (left + rect.width > window.innerWidth) {
-            left = e.clientX - rect.width - offset;
-        }
-        if (top + rect.height > window.innerHeight) {
-            top = e.clientY - rect.height - offset;
-        }
-
-        element.style.left = `${left}px`;
-        element.style.top = `${top}px`;
-    }
-
     setupFilterListeners() {
         const thead = document.querySelector('.portfolio-table thead');
         if (thead) {
@@ -147,7 +129,6 @@ class PortfolioController {
                 if (e.target.classList.contains('column-filter')) {
                     const key = e.target.dataset.key;
                     const value = e.target.value;
-
                     clearTimeout(this.filterDebounceTimer);
                     this.filterDebounceTimer = setTimeout(() => {
                         this.state.columnFilters[key] = value;
@@ -180,7 +161,6 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
-                this.state.columnFilters = {};
                 this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
@@ -396,11 +376,9 @@ class PortfolioController {
         this.renderer.clear();
         const frag = document.createDocumentFragment();
         
-        // itemsPerPage değerine erişim (Pagination sınıfından veya sabit)
         const itemsPerPage = 20; 
         
         pageData.forEach((item, index) => {
-            // Global sıra numarasını hesapla: (SayfaSayısı - 1) * SayfaBaşınaKayıt + MevcutIndex + 1
             const globalIndex = ((this.state.currentPage - 1) * itemsPerPage) + index + 1;
 
             if (this.state.activeTab === 'objections') {
@@ -408,7 +386,6 @@ class PortfolioController {
                 if (item.isChild) tr.style.display = 'none';
                 frag.appendChild(tr);
             } else if (this.state.activeTab === 'litigation') {
-                 // YENİ: globalIndex parametresini gönderiyoruz
                  frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
             } else {
                 const isSelected = this.state.selectedRecords.has(item.id);
@@ -436,7 +413,6 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
-    // --- KOLON AYARLARI (İSTENİLEN GENİŞLİKLER) ---
     getColumnsForTab(tab) {
         if(tab === 'objections') {
              return [
@@ -454,7 +430,7 @@ class PortfolioController {
         } 
         if(tab === 'litigation') {
              return [
-                { key: 'index', label: '#', width: '50px' }, // En başta Sıra No
+                { key: 'index', label: '#', width: '50px' },
                 { key: 'title', label: 'Konu Varlık', sortable: true, width: '250px' },
                 { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
                 { key: 'caseNo', label: 'Dosya No', sortable: true, width: '120px' },
@@ -467,21 +443,18 @@ class PortfolioController {
             ];
         }
 
-        // STANDART KOLONLAR
         const columns = [
-            { key: 'selection', isCheckbox: true, width: '40px' }, // 1
-            { key: 'toggle', width: '40px' } // 2
+            { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'toggle', width: '40px' }
         ];
 
         if (tab !== 'trademark') {
             columns.push({ key: 'type', label: 'Tür', sortable: true, width: '130px' });
         }
 
-        // Başlık
         columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px', filterable: true });
 
         if (tab === 'trademark') {
-            // ... (görsel, menşe, ülke kısımları aynı kalıyor) ...
             columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' });
             columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '140px' });
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '130px' });
@@ -489,18 +462,10 @@ class PortfolioController {
 
         columns.push(
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
-
-            // Başvuru Tarihi (Key değişti ve filterable eklendi)
             { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '140px', filterable: true, inputType: 'date' },
-
-            // Durum (Key değişti ve filterable eklendi)
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
-
-            // Başvuru Sahibi
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true, width: '200px' }, 
-
             { key: 'formattedNiceClasses', label: 'Nice', sortable: true, width: '140px', filterable: true },
-
             { key: 'actions', label: 'İşlemler', width: '280px' }
         );
 
