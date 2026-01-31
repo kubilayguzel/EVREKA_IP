@@ -55,8 +55,10 @@ export class TaskDetailManager {
         const isCompleted = task.status === 'completed';
         const statusColorClass = isCompleted ? 'text-success' : 'text-primary';
 
-        // --- [YENİ] İLGİLİ TARAF BİLGİSİNİ HAZIRLA ---
-        let relatedPartyTxt = '-';
+        // --- [GÜNCELLEME 1] İLGİLİ TARAF BELİRLEME MANTIĞI (Fallback Ekli) ---
+        let relatedPartyTxt = null;
+
+        // 1. Öncelik: Task Details içindeki veriler
         if (task.details) {
             let parties = [];
             if (task.details.relatedParty) {
@@ -72,7 +74,21 @@ export class TaskDetailManager {
                 }).join(', ');
             }
         }
-        // ---------------------------------------------
+
+        // 2. Öncelik: Eğer task içinde yoksa, IP Record (Applicant) bilgisi
+        if (!relatedPartyTxt || relatedPartyTxt === '-') {
+            if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+                relatedPartyTxt = ipRecord.applicants.map(app => {
+                    // Applicant nesne ise ismini, string ise kendisini al
+                    if (typeof app === 'object') return app.name || app.companyName || app.id || '';
+                    return app;
+                }).filter(Boolean).join(', ');
+            }
+        }
+
+        // 3. Sonuç yoksa varsayılan
+        if (!relatedPartyTxt) relatedPartyTxt = '-';
+        // -------------------------------------------------------------------
 
         const accrualsHtml = this._generateAccrualsHtml(accruals);
         const docsContent = this._generateDocsHtml(task);
@@ -93,25 +109,33 @@ export class TaskDetailManager {
                 </div>
 
                 <div class="mb-4">
+                    <h6 class="border-bottom pb-2 mb-3 text-success font-weight-bold">
+                        <i class="fas fa-user-friends mr-2"></i>MÜVEKKİL / İLGİLİ TARAF
+                    </h6>
+                    <div class="p-3 bg-white border rounded shadow-sm d-flex align-items-center">
+                        <div class="mr-3 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                            <i class="fas fa-user fa-lg"></i>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small font-weight-bold text-uppercase">Taraf Bilgisi</span>
+                            <span class="text-dark font-weight-bold" style="font-size: 1.1rem;">${relatedPartyTxt}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
                     <h6 class="border-bottom pb-2 mb-3 text-primary font-weight-bold">
                         <i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER
                     </h6>
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="text-secondary small font-weight-bold mb-1">İLGİLİ DOSYA</label>
                             <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
                                 <i class="fas fa-folder text-warning mr-3 fa-lg"></i>
                                 <span class="text-dark font-weight-bold text-truncate" title="${relatedRecordTxt}">${relatedRecordTxt}</span>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="text-secondary small font-weight-bold mb-1">İLGİLİ TARAF</label>
-                            <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
-                                <i class="fas fa-user-tag text-success mr-3 fa-lg"></i>
-                                <span class="text-dark font-weight-bold text-truncate" title="${relatedPartyTxt}">${relatedPartyTxt}</span>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="text-secondary small font-weight-bold mb-1">İŞ TİPİ</label>
                             <div class="d-flex align-items-center p-2 bg-white border rounded h-100">
                                 <i class="fas fa-tasks text-info mr-3 fa-lg"></i>
