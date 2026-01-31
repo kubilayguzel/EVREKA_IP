@@ -1,3 +1,5 @@
+// public/js/task-management/main.js
+
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, db } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
@@ -18,13 +20,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.currentUser = null;
             this.storage = getStorage();
 
-            // Veri Havuzları
+            // Veri Havuzları (Arrays)
             this.allTasks = [];
             this.allIpRecords = [];
             this.allPersons = [];
             this.allUsers = [];
             this.allTransactionTypes = [];
             this.allAccruals = [];
+
+            // --- PERFORMANS HARİTALARI (MAPS) ---
+            // Bu yapılar sayesinde binlerce kayıt arasında "find" yapmak yerine
+            // direkt ID ile ışık hızında veriyi çekeceğiz.
+            this.ipRecordsMap = new Map();
+            this.usersMap = new Map();
+            this.transactionTypesMap = new Map();
 
             // İşlenmiş ve Filtrelenmiş Veriler
             this.processedData = []; 
@@ -46,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.activeMainTab = 'active'; // Varsayılan ana sekme
             this.activeSubTab = 'active';  // Varsayılan alt sekme
 
-            // Statü Çevirileri
+            // Statü Çevirileri (Object lookup map'ten daha hızlıdır veya denktir)
             this.statusDisplayMap = {
                 'open': 'Açık',
                 'in-progress': 'Devam Ediyor',
@@ -118,6 +127,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : []; 
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
+                // --- OPTİMİZASYON: Haritaları Oluştur ---
+                this.buildMaps();
+
                 // Veriler geldikten sonra form yöneticilerini başlat
                 this.initForms();
 
@@ -139,6 +151,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const oldLoader = document.getElementById('loadingIndicator');
                 if(oldLoader) oldLoader.style.display = 'none';
             }
+        }
+
+        // --- YENİ: Haritalama Fonksiyonu (Performansın Kalbi) ---
+        buildMaps() {
+            // IP Kayıtlarını Haritala
+            this.ipRecordsMap.clear();
+            this.allIpRecords.forEach(r => {
+                if(r.id) this.ipRecordsMap.set(r.id, r);
+            });
+
+            // Kullanıcıları Haritala
+            this.usersMap.clear();
+            this.allUsers.forEach(u => {
+                if(u.id) this.usersMap.set(u.id, u);
+            });
+
+            // İşlem Tiplerini Haritala
+            this.transactionTypesMap.clear();
+            this.allTransactionTypes.forEach(t => {
+                if(t.id) this.transactionTypesMap.set(t.id, t);
+            });
         }
 
         initForms() {
@@ -163,38 +196,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         processData() {
+            // Helper fonksiyon (Date parsing)
+            const parseDate = (d) => {
+                if (!d) return null;
+                if (d.toDate) return d.toDate(); // Firestore Timestamp
+                if (d.seconds) return new Date(d.seconds * 1000);
+                return new Date(d); 
+            };
+
             this.processedData = this.allTasks.map(task => {
-                // İlişkili Kayıt Bilgisi
-                const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                // --- OPTİMİZE EDİLMİŞ VERİ ÇEKME ---
+                // .find() yerine Map.get() kullanarak O(1) hızında erişim
+                
+                // 1. İlişkili Kayıt
+                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
                 const relatedRecord = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
 
-                // İşlem Tipi Bilgisi
-                const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                // 2. İşlem Tipi
+                const transactionTypeObj = this.transactionTypesMap.get(task.taskType);
                 const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
-                // Atanan Kişi Bilgisi
-                const assignedUser = this.allUsers.find(user => user.id === task.assignedTo_uid);
+                // 3. Atanan Kişi
+                const assignedUser = this.usersMap.get(task.assignedTo_uid);
                 const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
-                // Tarih İşlemleri (Helper)
-                const parseDate = (d) => {
-                    if (!d) return null;
-                    if (d.toDate) return d.toDate(); // Firestore Timestamp
-                    if (d.seconds) return new Date(d.seconds * 1000);
-                    return new Date(d); // String veya Date object
-                };
-
-                // Operasyonel Son Tarih
-                const operationalDueObj = parseDate(task.dueDate); // Sıralama için obje
+                // Tarih İşlemleri
+                const operationalDueObj = parseDate(task.dueDate); 
                 const operationalDueISO = operationalDueObj ? operationalDueObj.toISOString().slice(0, 10) : ''; 
                 const operationalDueDisplay = operationalDueObj ? operationalDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                // Resmi Son Tarih
-                const officialDueObj = parseDate(task.officialDueDate); // Sıralama için obje
+                const officialDueObj = parseDate(task.officialDueDate); 
                 const officialDueISO = officialDueObj ? officialDueObj.toISOString().slice(0, 10) : '';
                 const officialDueDisplay = officialDueObj ? officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                // Arama Metni (Search String) - Tüm aranabilir alanları birleştir
+                // Arama Metni (Search String)
                 const statusText = this.statusDisplayMap[task.status] || task.status;
                 const searchString = `${task.id} ${task.title || ''} ${relatedRecord} ${taskTypeDisplay} ${assignedToDisplay} ${statusText} ${task.priority || ''}`.toLowerCase();
 
@@ -229,32 +264,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 2. Filtreleme Mantığı
             this.filteredData = this.processedData.filter(item => {
                 // A) Metin Araması
-                const matchesSearch = !searchValue || item.searchString.toLocaleLowerCase('tr').includes(searchValue);
+                const matchesSearch = !searchValue || item.searchString.includes(searchValue);
                 
-                // B) Tab Filtresi (Kritik Kısım)
+                // B) Tab Filtresi
                 let matchesTab = false;
                 
-                // İş "Bitti" mi? (Tamamlandı, İptal, Kapatıldı vb.)
+                // İş "Bitti" mi?
                 const isFinished = ['completed', 'cancelled', 'client_approval_closed', 'client_no_response_closed'].includes(item.status);
                 
                 // İş "Tahakkuk" (Tip 53) mu?
                 const isAccrualTask = String(item.taskType) === '53';
 
                 if (this.activeMainTab === 'active') {
-                    // 1. AKTİF İŞLER SEKMESİ:
                     // Tahakkuk OLMAYAN ve Henüz BİTMEMİŞ işler
                     matchesTab = !isAccrualTask && !isFinished;
                 } 
                 else if (this.activeMainTab === 'completed') {
-                    // 2. BİTEN İŞLER SEKMESİ:
                     // Tahakkuk OLMAYAN ve BİTMİŞ işler
                     matchesTab = !isAccrualTask && isFinished;
                 } 
                 else if (this.activeMainTab === 'accrual') {
-                    // 3. TAHAKKUK İŞLERİ SEKMESİ:
                     // Sadece Tip 53 olanlar
                     if (isAccrualTask) {
-                        // Alt Tab Kontrolü
                         if (this.activeSubTab === 'active') {
                             matchesTab = !isFinished; // Bekleyen Tahakkuklar
                         } else {
@@ -279,7 +310,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- SIRALAMA (SORTING) ---
         handleSort(key) {
-            // Aynı kolona tıklandıysa yönü değiştir, farklıysa 'asc' yap
             if (this.sortState.key === key) {
                 this.sortState.direction = this.sortState.direction === 'asc' ? 'desc' : 'asc';
             } else {
@@ -299,18 +329,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 let valA = a[key];
                 let valB = b[key];
 
-                // Null/Undefined kontrolü (Boş değerler en sona gitsin mantığı eklenebilir)
                 if (valA == null) valA = '';
                 if (valB == null) valB = '';
 
-                // Tarih Sıralaması (Date objeleri üzerinden)
                 if (valA instanceof Date && valB instanceof Date) return (valA - valB) * multiplier;
-                if (valA instanceof Date) return -1 * multiplier; // Tarih olan öne gelsin
+                if (valA instanceof Date) return -1 * multiplier; 
                 if (valB instanceof Date) return 1 * multiplier;
 
-                // ID Sıralaması (Hem T-15 gibi string hem sayı olabilir)
                 if (key === 'id') {
-                    // Sadece sayıları çekip karşılaştır
                     const numA = parseFloat(String(valA).replace(/[^0-9]/g, ''));
                     const numB = parseFloat(String(valB).replace(/[^0-9]/g, ''));
                     if (!isNaN(numA) && !isNaN(numB)) {
@@ -318,7 +344,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                // Standart Metin Sıralaması (Türkçe karakter uyumlu)
                 return String(valA).localeCompare(String(valB), 'tr') * multiplier;
             });
         }
@@ -328,11 +353,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const icon = th.querySelector('i');
                 if(!icon) return;
                 
-                // Hepsini varsayılan (gri) yap
                 icon.className = 'fas fa-sort';
                 icon.style.opacity = '0.3';
                 
-                // Aktif olanı güncelle
                 if (th.dataset.sort === this.sortState.key) {
                     icon.className = this.sortState.direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
                     icon.style.opacity = '1';
@@ -387,7 +410,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.updateSortIcons();
 
-            // Deadline Highlighter Tetikle (Varsa)
             if (window.DeadlineHighlighter && typeof window.DeadlineHighlighter.refresh === 'function') {
                 setTimeout(() => window.DeadlineHighlighter.refresh('taskManagement'), 50);
             }
@@ -401,7 +423,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             let html = `<div class="action-buttons-wrapper" style="display:flex; gap:5px;">`;
             html += `<button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>`;
 
-            // Tamamlanmış tahakkuk görevlerinde düzenle/sil butonlarını gizle
             const hideModificationButtons = isAccrualTask && isCompleted;
 
             if (!hideModificationButtons) {
@@ -424,7 +445,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- EVENT LISTENERS ---
         setupStaticEventListeners() {
-            // 👇 1. ANA SEKMELERİN TIKLANMASI 👇
             const mainTabs = document.querySelectorAll('#mainTaskTabs .nav-link');
             const subTabContainer = document.getElementById('accrualSubTabsContainer');
 
@@ -432,7 +452,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tab.addEventListener('click', (e) => {
                     e.preventDefault();
                     
-                    // Görsel Güncelleme (Hepsini pasif yap, tıklananı aktif yap)
                     mainTabs.forEach(t => {
                         t.classList.remove('active');
                         t.style.color = '#6c757d';
@@ -440,39 +459,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     e.currentTarget.classList.add('active');
                     e.currentTarget.style.color = '#495057';
 
-                    // Mantıksal Güncelleme
                     this.activeMainTab = e.currentTarget.dataset.tab;
 
-                    // Eğer "Tahakkuk" sekmesi ise alt sekmeleri göster
                     if (this.activeMainTab === 'accrual') {
                         subTabContainer.style.display = 'block';
                     } else {
                         subTabContainer.style.display = 'none';
                     }
 
-                    // Listeyi Yenile
                     this.handleSearch();
                 });
             });
 
-            // 👇 2. ALT SEKMELERİN TIKLANMASI 👇
             const subTabs = document.querySelectorAll('#accrualSubTabs .nav-link');
             subTabs.forEach(tab => {
                 tab.addEventListener('click', (e) => {
                     e.preventDefault();
-
-                    // Görsel Güncelleme
                     subTabs.forEach(t => t.classList.remove('active'));
                     e.currentTarget.classList.add('active');
-
-                    // Mantıksal Güncelleme
                     this.activeSubTab = e.currentTarget.dataset.subtab;
-
-                    // Listeyi Yenile
                     this.handleSearch();
                 });
             });
-            // Arama Kutusu (Modern Yapı)
+
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
                 searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
@@ -481,13 +490,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const statusFilter = document.getElementById('statusFilter');
             if (statusFilter) {
                 statusFilter.addEventListener('change', () => {
-                    // Filtre değişince, o an arama kutusunda ne yazıyorsa onunla birlikte arama yap
                     const currentSearchValue = document.getElementById('searchInput')?.value || '';
                     this.handleSearch(currentSearchValue);
                 });
             }
             
-            // Sıralama Başlıkları
             const headers = document.querySelectorAll('#tasksTableHeaderRow th[data-sort]');
             headers.forEach(th => {
                 th.style.cursor = 'pointer';
@@ -496,7 +503,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // Tablo İçi Butonlar (Delegation)
             const tbody = document.getElementById('tasksTableBody');
             if (tbody) {
                 tbody.addEventListener('click', (e) => {
@@ -509,7 +515,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     if (btn.classList.contains('edit-btn')) {
                         const task = this.allTasks.find(t => t.id === taskId);
-                        // Tahakkuk görevi kontrolü
                         if (task && (String(task.taskType) === '53' || task.taskType === 'accrual_creation')) {
                             this.openCompleteAccrualModal(taskId);
                         } else {
@@ -527,7 +532,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // Modal Kapatma Butonları
             document.querySelectorAll('.close-modal-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const modal = e.target.closest('.modal');
@@ -535,15 +539,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // Atama Modalı Butonları
             document.getElementById('cancelAssignmentBtn')?.addEventListener('click', () => this.closeModal('assignTaskModal'));
             document.getElementById('saveNewAssignmentBtn')?.addEventListener('click', () => this.saveNewAssignment());
 
-            // Ek Tahakkuk Modalı Butonları
             document.getElementById('cancelCreateTaskAccrualBtn')?.addEventListener('click', () => this.closeModal('createTaskAccrualModal'));
             document.getElementById('saveNewAccrualBtn')?.addEventListener('click', () => this.handleSaveNewAccrual());
 
-            // Tahakkuk Tamamlama Modalı Butonları
             document.getElementById('cancelCompleteAccrualBtn')?.addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
             document.getElementById('submitCompleteAccrualBtn')?.addEventListener('click', () => this.handleCompleteAccrualSubmission());
         }
@@ -560,7 +561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.taskDetailManager.showLoading();
 
             try {
-                // Taze veri çek (Detayda güncel durumu görmek için)
+                // Taze veri çek
                 const taskRef = doc(db, 'tasks', String(taskId));
                 const taskSnap = await getDoc(taskRef);
 
@@ -572,10 +573,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 modalTitle.textContent = `İş Detayı (${task.id})`;
 
-                // İlişkili verileri bul
-                const ipRecord = task.relatedIpRecordId ? this.allIpRecords.find(r => r.id === task.relatedIpRecordId) : null;
-                const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
-                const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+                // --- OPTİMİZASYON: Detay modalında da Map kullanımı ---
+                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
+                const transactionType = this.transactionTypesMap.get(task.taskType);
+                const assignedUser = this.usersMap.get(task.assignedTo_uid);
+                
+                // Accruals için Map yok (array içinde arama mecbur)
                 const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
 
                 this.taskDetailManager.render(task, {
@@ -592,6 +595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openAssignTaskModal(taskId) {
+            // Liste içinden bul (Map'te task tutmuyoruz çünkü task sıralı array lazım)
             this.selectedTaskForAssignment = this.allTasks.find(t => t.id === taskId);
             if (!this.selectedTaskForAssignment) { showNotification('İş bulunamadı.', 'error'); return; }
 
@@ -615,7 +619,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Atama Yapılıyor') : null;
 
-            const user = this.allUsers.find(u => u.id === uid);
+            // Map'ten hızlıca bul
+            const user = this.usersMap.get(uid);
             try {
                 const updateData = { assignedTo_uid: uid, assignedTo_email: user.email };
                 const historyEntry = { 
@@ -624,7 +629,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     userEmail: this.currentUser.email 
                 };
                 
-                // Mevcut tarihçeyi koru
                 let history = this.selectedTaskForAssignment.history ? [...this.selectedTaskForAssignment.history] : [];
                 history.push(historyEntry);
                 updateData.history = history;
@@ -649,9 +653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         async deleteTask(taskId) {
             if (confirm('Bu görevi ve ilişkili verileri silmek istediğinize emin misiniz?')) {
                 let loader = window.showSimpleLoading ? window.showSimpleLoading('Siliniyor') : null;
-                
                 const res = await taskService.deleteTask(taskId);
-                
                 if (loader) loader.hide();
                 
                 if (res.success) { 
@@ -673,7 +675,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(this.createTaskFormManager) {
                 this.createTaskFormManager.reset();
 
-                // EPATS Belgesi Bulma Mantığı
                 let epatsDoc = null;
                 if (this.currentTaskForAccrual.details?.epatsDocument) {
                     epatsDoc = this.currentTaskForAccrual.details.epatsDocument;
@@ -696,7 +697,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Tahakkuk Kaydediliyor') : null;
 
-            // Dosya Yükleme
             let uploadedFiles = [];
             if (formData.files && formData.files.length > 0) {
                 try {
@@ -830,8 +830,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeModal(modalId) {
             const m = document.getElementById(modalId);
             if(m) m.classList.remove('show');
-            
-            // Modallar kapanırken formları sıfırla
             if(modalId === 'createTaskAccrualModal' && this.createTaskFormManager) this.createTaskFormManager.reset();
             if(modalId === 'completeAccrualTaskModal' && this.completeTaskFormManager) this.completeTaskFormManager.reset();
         }
@@ -840,7 +838,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const module = new TaskManagementModule();
     module.init();
 
-    // Deadline Highlighter Entegrasyonu
     if (window.DeadlineHighlighter) {
         window.DeadlineHighlighter.init();
         window.DeadlineHighlighter.registerList('taskManagement', {
