@@ -7932,3 +7932,77 @@ export const saveEpatsDocument = onCall(
     }
   }
 );
+// =========================================================
+//              EPATS BELGESİ SİLİNDİĞİNDE BİLDİRİM TEMİZLİĞİ
+// =========================================================
+
+export const deleteNotificationOnEpatsRemoval = onDocumentUpdated(
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const taskId = event.params.taskId;
+
+    // 1. KONTROL: EPATS belgesi var mıydı ve şimdi yok mu? (Silinme durumu)
+    // Hem 'details.epatsDocument' alanını hem de 'documents' dizisini kontrol ediyoruz.
+    
+    // A) Ana EPATS dökümanı (details.epatsDocument)
+    const hadMainEpats = !!(before.details && before.details.epatsDocument);
+    const hasMainEpats = !!(after.details && after.details.epatsDocument);
+    const mainEpatsRemoved = hadMainEpats && !hasMainEpats;
+
+    // B) Documents dizisi (Eğer array boşaltıldıysa veya eleman sayısı azaldıysa)
+    // Not: Tam dosya eşleşmesi yapmak zor olabilir, ancak genelde documents dizisi tamamen temizleniyorsa veya
+    // bildirim oluşturulmasına sebep olan dosya gidiyorsa tetiklenmeli.
+    // Şimdilik en güvenli yöntem: Ana EPATS belgesi silindiyse işlem yapmaktır.
+    
+    if (!mainEpatsRemoved) {
+        return null; // Belge silinmemiş, işlem yapma.
+    }
+
+    console.log(`🗑️ Task ${taskId}: EPATS belgesi kaldırıldı. Gönderilmemiş bildirimler temizleniyor...`);
+
+    try {
+      // 2. SORGULA: Bu task'a bağlı ve henüz GÖNDERİLMEMİŞ bildirimleri bul
+      // Silinebilir statüler: taslak, onay bekleyen, eksik bilgi, değerlendirme, gönderim sırasında(pending)
+      const targetStatuses = [
+          'draft', 
+          'awaiting_client_approval', 
+          'missing_info', 
+          'pending', 
+          'evaluation_pending'
+      ];
+
+      const snapshot = await adminDb.collection('mail_notifications')
+        .where('associatedTaskId', '==', taskId)
+        .where('status', 'in', targetStatuses)
+        .get();
+
+      if (snapshot.empty) {
+        console.log(`ℹ️ Silinecek uygun statüde bildirim bulunamadı.`);
+        return null;
+      }
+
+      // 3. SİL: Bulunan bildirimleri sil
+      const batch = adminDb.batch();
+      snapshot.forEach((doc) => {
+        console.log(`❌ Bildirim siliniyor: ${doc.id} (Statü: ${doc.data().status})`);
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      console.log(`✅ Toplam ${snapshot.size} adet gönderilmemiş bildirim silindi.`);
+
+    } catch (error) {
+      console.error("❌ Bildirim temizliği sırasında hata:", error);
+    }
+
+    return null;
+  }
+);
