@@ -61,21 +61,32 @@ export class TaskDetailManager {
 
             // 2. ADIM: MÜVEKKİL / İLGİLİ TARAF İSMİNİ ÇÖZÜMLE
             let relatedPartyTxt = '-';
+            console.log("🔍 İlgili taraf çözümleme başlıyor...");
 
             // A) Task Details
             if (task.details) {
+                console.log("A aşaması - task.details var:", task.details);
                 let parties = [];
                 if (task.details.relatedParty) parties.push(task.details.relatedParty);
                 else if (Array.isArray(task.details.relatedParties)) parties = task.details.relatedParties;
                 
+                console.log("A aşaması - parties:", parties);
+                
                 if (parties.length > 0) {
                     const manualNames = parties.map(p => (typeof p === 'object' ? (p.name || p.companyName) : p)).filter(Boolean);
-                    if (manualNames.length > 0) relatedPartyTxt = manualNames.join(', ');
+                    console.log("A aşaması - manualNames:", manualNames);
+                    if (manualNames.length > 0) {
+                        relatedPartyTxt = manualNames.join(', ');
+                        console.log("✅ A aşamasından bulundu:", relatedPartyTxt);
+                    }
                 }
+            } else {
+                console.log("A aşaması - task.details YOK");
             }
 
             // B) IP Record -> Applicants -> Persons Tablosu
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+                console.log("B aşaması başladı - ipRecord.applicants:", ipRecord.applicants);
                 const applicantPromises = ipRecord.applicants.map(async (app) => {
                     if (app.name && app.name.trim() !== '') return app.name;
                     if (app.id) {
@@ -91,12 +102,18 @@ export class TaskDetailManager {
                 });
                 const resolvedNames = await Promise.all(applicantPromises);
                 const validNames = resolvedNames.filter(Boolean);
-                if (validNames.length > 0) relatedPartyTxt = validNames.join(', ');
+                console.log("B aşaması - validNames:", validNames);
+                if (validNames.length > 0) {
+                    relatedPartyTxt = validNames.join(', ');
+                    console.log("✅ B aşamasından bulundu:", relatedPartyTxt);
+                }
+            } else {
+                console.log("B aşaması atlandı - relatedPartyTxt:", relatedPartyTxt, "ipRecord var mı:", !!ipRecord);
             }
 
             // C) Task Owner -> Persons Tablosu (relatedParties yoksa)
             if ((!relatedPartyTxt || relatedPartyTxt === '-') && task.taskOwner) {
-                console.log("C aşaması başladı - taskOwner:", task.taskOwner);
+                console.log("✅ C aşaması başladı - taskOwner:", task.taskOwner);
                 try {
                     // taskOwner array veya string olabilir
                     const ownerIds = Array.isArray(task.taskOwner) ? task.taskOwner : [task.taskOwner];
@@ -122,12 +139,17 @@ export class TaskDetailManager {
                     console.log("ownerNames:", ownerNames);
                     const validOwnerNames = ownerNames.filter(Boolean);
                     console.log("validOwnerNames:", validOwnerNames);
-                    if (validOwnerNames.length > 0) relatedPartyTxt = validOwnerNames.join(', ');
+                    if (validOwnerNames.length > 0) {
+                        relatedPartyTxt = validOwnerNames.join(', ');
+                        console.log("✅ C aşamasından bulundu:", relatedPartyTxt);
+                    }
                 } catch (err) {
                     console.warn("Task owner fetch error:", err);
                 }
+            } else {
+                console.log("C aşaması atlandı - relatedPartyTxt:", relatedPartyTxt, "taskOwner var mı:", !!task.taskOwner);
             }
-            console.log("Final relatedPartyTxt:", relatedPartyTxt);
+            console.log("🎯 Final relatedPartyTxt:", relatedPartyTxt);
 
             // --- Veri Formatlama ---
             const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
