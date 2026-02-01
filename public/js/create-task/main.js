@@ -398,21 +398,31 @@ setupEventListeners() {
     handleMainTypeChange(e) {
         const mainType = e.target.value;
         const specificSelect = document.getElementById('specificTaskType');
+        
+        // Temizlik
         this.uiManager.clearContainer();
         this.resetSelections();
         specificSelect.innerHTML = '<option value="">Seçiniz...</option>';
+
+        // 1. Select Box'ı Doldur
         if (mainType) {
             const filtered = this.state.allTransactionTypes.filter(t => {
                 return (t.hierarchy === 'parent' && t.ipType === mainType) || 
                        (t.hierarchy === 'child' && t.isTopLevelSelectable && (t.applicableToMainType?.includes(mainType) || t.applicableToMainType?.includes('all')));
             }).sort((a, b) => (a.order || 999) - (b.order || 999));
+            
             filtered.forEach(t => {
                 const opt = document.createElement('option');
-                opt.value = t.id; opt.textContent = t.alias || t.name; specificSelect.appendChild(opt);
+                opt.value = t.id; // ID: 2 (Başvuru), 5 (Devir) vb.
+                opt.textContent = t.alias || t.name; 
+                specificSelect.appendChild(opt);
             });
             specificSelect.disabled = false;
-        } else { specificSelect.disabled = true; }
+        } else { 
+            specificSelect.disabled = true; 
+        }
         
+        // 2. Menşe Ayarları
         this.uiManager.populateDropdown('originSelect', 
             (mainType === 'suit' ? [{value:'TURKEY', text:'Türkiye'}, {value:'FOREIGN_NATIONAL', text:'Yurtdışı'}] : 
             [{value:'TÜRKPATENT', text:'TÜRKPATENT'}, {value:'WIPO', text:'WIPO'}, {value:'EUIPO', text:'EUIPO'}, {value:'ARIPO', text:'ARIPO'}, {value:'Yurtdışı Ulusal', text:'Yurtdışı Ulusal'}]), 
@@ -421,8 +431,50 @@ setupEventListeners() {
         
         if (mainType === 'suit') { document.getElementById('originSelect').value = 'TURKEY'; this.handleOriginChange('TURKEY'); }
         else { document.getElementById('originSelect').value = 'TÜRKPATENT'; this.handleOriginChange('TÜRKPATENT'); }
-    }
 
+        // --- KRİTİK GÜNCELLEME: KARTLARI KONTROLLÜ AÇMA ---
+        const tmSubCards = document.getElementById('trademarkSubCards');
+        
+        if (mainType === 'trademark') {
+            tmSubCards.style.display = 'block'; // Container'ı göster
+            
+            // Kart elementleri
+            const appCard = document.getElementById('card-tm-application');
+            const transCard = document.getElementById('card-tm-transfer');
+
+            // Listede gerçekten var mı kontrol et?
+            // "2" = Başvuru ID'si, "5" = Devir ID'si (Kendi veritabanınızdaki ID'ler)
+            // Array.from kullanımı HTMLCollection üzerinde işlem yapmayı sağlar.
+            const hasApplication = Array.from(specificSelect.options).some(opt => opt.value == '2');
+            const hasTransfer = Array.from(specificSelect.options).some(opt => opt.value == '5');
+
+            // Kartları Aktifleştir/Pasifleştir Fonksiyonu
+            const toggleCardState = (card, isActive) => {
+                if (!card) return;
+                if (isActive) {
+                    card.style.opacity = '1';
+                    card.style.pointerEvents = 'auto'; // Tıklamayı aç
+                    card.style.cursor = 'pointer';
+                    card.classList.remove('disabled'); // Varsa CSS class'ı
+                } else {
+                    card.style.opacity = '0.5';
+                    card.style.pointerEvents = 'none'; // Tıklamayı engelle
+                    card.style.cursor = 'default';
+                }
+            };
+
+            // Duruma göre aç/kapa
+            toggleCardState(appCard, hasApplication);
+            toggleCardState(transCard, hasTransfer);
+
+            // Label güncellemesi
+            document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
+
+        } else {
+            tmSubCards.style.display = 'none';
+            document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
+        }
+    }
 
     toggleAssetSearchVisibility(originValue) {
         const typeId = String(this.state.selectedTaskType?.id || '');
