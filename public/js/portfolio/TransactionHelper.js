@@ -3,6 +3,109 @@ import { db } from '../../firebase-config.js';
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 export class TransactionHelper {
+
+    // Basit in-memory cache (sayfa ömrü boyunca)
+    static _taskCache = new Map();        // taskId -> taskData | null
+    static _taskPromiseCache = new Map(); // taskId -> Promise<taskData|null>
+
+    /**
+     * Task dokümanları için tekilleştirilmiş fetch (aynı taskId tekrar istenirse cache kullanır).
+     */
+    static async getTaskData(taskId) {
+        if (!taskId) return null;
+        if (this._taskCache.has(taskId)) return this._taskCache.get(taskId);
+        if (this._taskPromiseCache.has(taskId)) return this._taskPromiseCache.get(taskId);
+
+        const p = (async () => {
+            try {
+                const taskRef = doc(db, 'tasks', taskId);
+                const taskSnap = await getDoc(taskRef);
+                const data = taskSnap.exists() ? taskSnap.data() : null;
+                this._taskCache.set(taskId, data);
+                return data;
+            } catch (e) {
+                console.warn(`Task belge çekme hatası (ID: ${taskId}):`, e);
+                this._taskCache.set(taskId, null);
+                return null;
+            } finally {
+                this._taskPromiseCache.delete(taskId);
+            }
+        })();
+
+        this._taskPromiseCache.set(taskId, p);
+        return p;
+    }
+
+    /**
+     * Transaction üzerindeki (task'a gitmeden) direkt belgeleri normalize eder.
+     */
+    static getDirectDocuments(transaction) {
+        const docs = [];
+        const seenUrls = new Set();
+
+        const addDoc = (d) => {
+            const url = d.fileUrl || d.url || d.path || d.downloadURL;
+            if (url && !seenUrls.has(url)) {
+                seenUrls.add(url);
+                docs.push({
+                    name: d.fileName || d.name || 'Belge',
+                    url,
+                    type: d.type || 'document',
+                    source: 'direct'
+                });
+            }
+        };
+
+        if (Array.isArray(transaction.documents)) {
+            transaction.documents.forEach(addDoc);
+        }
+
+        if (transaction.relatedPdfUrl) {
+            addDoc({ name: 'Resmi Yazı', url: transaction.relatedPdfUrl, type: 'official' });
+        }
+        if (transaction.oppositionPetitionFileUrl) {
+            addDoc({ name: 'İtiraz Dilekçesi', url: transaction.oppositionPetitionFileUrl, type: 'petition' });
+        }
+
+        return docs;
+    }
+
+    /**
+     * Sadece task üzerinden gelen belgeleri getirir (cache'li).
+     */
+    static async getTaskDocuments(transaction) {
+        const docs = [];
+        const seenUrls = new Set();
+
+        const addDoc = (d) => {
+            const url = d.fileUrl || d.url || d.path || d.downloadURL;
+            if (url && !seenUrls.has(url)) {
+                seenUrls.add(url);
+                docs.push({
+                    name: d.fileName || d.name || 'Belge',
+                    url,
+                    type: d.type || 'document',
+                    source: 'task'
+                });
+            }
+        };
+
+        if (!transaction.triggeringTaskId) return docs;
+        const taskData = await this.getTaskData(transaction.triggeringTaskId);
+        if (!taskData) return docs;
+
+        if (taskData.details?.epatsDocument?.downloadURL) {
+            addDoc({
+                name: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                url: taskData.details.epatsDocument.downloadURL,
+                type: 'epats'
+            });
+        }
+        if (Array.isArray(taskData.documents)) {
+            taskData.documents.forEach(d => addDoc(d));
+        }
+        return docs;
+    }
     
     /**
      * Bir transaction için tüm ilişkili belgeleri (Kendi belgeleri + Task belgeleri) toplar.
@@ -43,29 +146,21 @@ export class TransactionHelper {
         // 2. Task (Görev) üzerindeki belgeler (Fallback)
         // Eğer transaction bir Task tarafından tetiklendiyse (triggeringTaskId)
         if (transaction.triggeringTaskId) {
-            try {
-                const taskRef = doc(db, 'tasks', transaction.triggeringTaskId);
-                const taskSnap = await getDoc(taskRef);
-                
-                if (taskSnap.exists()) {
-                    const taskData = taskSnap.data();
-                    
-                    // ePats Belgesi
-                    if (taskData.details?.epatsDocument?.downloadURL) {
-                        addDoc({
-                            name: taskData.details.epatsDocument.name || 'ePats Belgesi',
-                            url: taskData.details.epatsDocument.downloadURL,
-                            type: 'epats'
-                        }, 'task');
-                    }
-                    
-                    // Task Documents Array
-                    if (Array.isArray(taskData.documents)) {
-                        taskData.documents.forEach(d => addDoc(d, 'task'));
-                    }
+            const taskData = await this.getTaskData(transaction.triggeringTaskId);
+            if (taskData) {
+                // ePats Belgesi
+                if (taskData.details?.epatsDocument?.downloadURL) {
+                    addDoc({
+                        name: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                        url: taskData.details.epatsDocument.downloadURL,
+                        type: 'epats'
+                    }, 'task');
                 }
-            } catch (e) {
-                console.warn(`Task belge çekme hatası (ID: ${transaction.triggeringTaskId}):`, e);
+
+                // Task Documents Array
+                if (Array.isArray(taskData.documents)) {
+                    taskData.documents.forEach(d => addDoc(d, 'task'));
+                }
             }
         }
 
