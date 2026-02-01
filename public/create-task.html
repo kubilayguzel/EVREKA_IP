@@ -306,38 +306,53 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     <script>
         // Ana Kart Seçimi
         function selectMainType(typeValue, cardElement) {
-            // 1. Görsel durumu güncelle
+            // 1) Görsel durumu güncelle
             document.querySelectorAll('.selection-card').forEach(el => el.classList.remove('active'));
-            if(cardElement) cardElement.classList.add('active');
+            if (cardElement) cardElement.classList.add('active');
 
-            // 2. Gizli Select'i güncelle ve tetikle
+            // 2) Gizli Select'i güncelle ve tetikle
             const mainSelect = document.getElementById('mainIpType');
-            
-            const isChange = mainSelect.value !== typeValue;
+            if (!mainSelect) {
+                console.warn('mainIpType bulunamadı');
+                return;
+            }
+
             mainSelect.value = typeValue;
-            
-            // 3. Marka ise alt kartları göster (Ama henüz aktifleştirme!)
+
+            // 3) Marka ise alt kartları göster (Ama henüz aktifleştirme!)
             // Main.js 'change' eventini yakalayıp listeyi doldurduktan sonra kartları açacaktır.
             const tmSubCards = document.getElementById('trademarkSubCards');
-            
+
             if (typeValue === 'trademark') {
-                tmSubCards.style.display = 'block';
-                document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
-                
+                if (tmSubCards) tmSubCards.style.display = 'block';
+
+                const label = document.querySelector('label[for="specificTaskType"]');
+                if (label) label.textContent = 'Diğer Marka İşlemleri';
+
                 // Güvenlik: Kartları tekrar pasife çek (Main.js açana kadar)
-                document.getElementById('card-tm-application').classList.add('card-disabled');
-                document.getElementById('card-tm-application').style.opacity = '0.5';
-                document.getElementById('card-tm-transfer').classList.add('card-disabled');
-                document.getElementById('card-tm-transfer').style.opacity = '0.5';
+                const appCard = document.getElementById('card-tm-application');
+                const transferCard = document.getElementById('card-tm-transfer');
 
+                if (appCard) {
+                    appCard.classList.add('card-disabled');
+                    appCard.style.opacity = '0.5';
+                }
+                if (transferCard) {
+                    transferCard.classList.add('card-disabled');
+                    transferCard.style.opacity = '0.5';
+                }
             } else {
-                tmSubCards.style.display = 'none';
-                document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
+                if (tmSubCards) tmSubCards.style.display = 'none';
+
+                const label = document.querySelector('label[for="specificTaskType"]');
+                if (label) label.textContent = 'Spesifik İş Tipi';
             }
 
-            if(isChange) {
-                mainSelect.dispatchEvent(new Event('change')); 
-            }
+            // ✅ ÖNEMLİ: Her tıklamada change tetikle
+            // (Bazen event listener geç bağlanır; bu yüzden 0ms setTimeout daha sağlamdır)
+            setTimeout(() => {
+                mainSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }, 0);
         }
 
         // Alt Kart Seçimi
