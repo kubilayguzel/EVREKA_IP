@@ -7,6 +7,90 @@ export class TaskUIManager {
         this.container = document.getElementById('conditionalFieldsContainer');
     }
 
+    // 1. Ana Tür Kartlarını Oluşturan Fonksiyon
+    renderMainTaskTypeCards(taskTypes, onSelect) {
+        const container = document.getElementById('mainTaskTypeCards');
+        const originalSelect = document.getElementById('mainIpType');
+        if (!container) return;
+
+        container.innerHTML = taskTypes.map(type => {
+            let icon = 'fa-file-alt';
+            if (type.name.includes('Marka')) icon = 'fa-trademark';
+            else if (type.name.includes('Patent')) icon = 'fa-lightbulb';
+            else if (type.name.includes('Tasarım')) icon = 'fa-drafting-compass';
+
+            return `
+                <div class="type-card main-type-card" data-id="${type.id}">
+                    <i class="fas ${icon}"></i>
+                    <span>${type.name}</span>
+                </div>`;
+        }).join('');
+
+        container.querySelectorAll('.main-type-card').forEach(card => {
+            card.addEventListener('click', () => {
+                container.querySelectorAll('.main-type-card').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                const id = card.getAttribute('data-id');
+                if (originalSelect) { originalSelect.value = id; originalSelect.dispatchEvent(new Event('change')); }
+                onSelect(id);
+            });
+        });
+    }
+
+    // 2. İşlem Tipi Kartlarını (Başvuru, Devir vb.) Oluşturan Fonksiyon
+    renderSpecificTaskTypeCards(transactions, onSelect) {
+        const cardContainer = document.getElementById('specificTaskCards');
+        const otherContainer = document.getElementById('otherTransactionsContainer');
+        const transactionSelect = document.getElementById('specificTaskType');
+        const mainArea = document.getElementById('specificTaskArea');
+
+        if (!cardContainer || !mainArea) return;
+        mainArea.classList.remove('d-none');
+
+        // Sizin istediğiniz 4 ana işlem
+        const priorityNames = ["Başvuru", "Devir", "Yenileme", "İtiraza Ek Belge"];
+        const cardData = transactions.filter(t => priorityNames.includes(t.name));
+        const selectData = transactions.filter(t => !priorityNames.includes(t.name));
+
+        // Kartları bas
+        cardContainer.innerHTML = cardData.map(t => {
+            let icon = 'fa-cog';
+            if (t.name === "Başvuru") icon = 'fa-plus-circle';
+            if (t.name === "Devir") icon = 'fa-exchange-alt';
+            if (t.name === "Yenileme") icon = 'fa-sync-alt';
+            if (t.name === "İtiraza Ek Belge") icon = 'fa-file-import';
+
+            return `
+                <div class="type-card spec-type-card" data-id="${t.id}">
+                    <i class="fas ${icon}"></i>
+                    <span>${t.name}</span>
+                </div>`;
+        }).join('');
+
+        // Diğerleri select box'a
+        if (transactionSelect) {
+            transactionSelect.innerHTML = '<option value="">Diğerlerinden seçin...</option>' + 
+                selectData.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            otherContainer.classList.toggle('d-none', selectData.length === 0);
+        }
+
+        cardContainer.querySelectorAll('.spec-type-card').forEach(card => {
+            card.addEventListener('click', () => {
+                cardContainer.querySelectorAll('.spec-type-card').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                if (transactionSelect) transactionSelect.value = ""; 
+                onSelect(card.getAttribute('data-id'));
+            });
+        });
+
+        transactionSelect?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                cardContainer.querySelectorAll('.spec-type-card').forEach(c => c.classList.remove('active'));
+                onSelect(e.target.value);
+            }
+        });
+    }
+
     clearContainer() {
         if (this.container) this.container.innerHTML = '';
     }
