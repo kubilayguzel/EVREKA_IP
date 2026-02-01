@@ -288,4 +288,10 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
         font-size: 0.9rem;
         font-weight: 500;
     }
+
+    .type-card.active {
+        border-color: #007bff !important;
+        background-color: rgba(0, 123, 255, 0.05) !important;
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+    }
 }
