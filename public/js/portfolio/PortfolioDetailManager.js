@@ -29,29 +29,29 @@ export class PortfolioDetailManager {
         this.init();
     }
 
+
     async init() {
-        // 1. Layout ve Auth
         // Layout'u bloklamadan yükle
         try { loadSharedLayout({ activeMenuLink: 'portfolio.html' }); } catch (e) {}
 
-        const user = await waitForAuthUser({ requireAuth: true });
-        if (!user) return; 
-
-        // Token Refresh (Yetki sorunları için)
-        try { await user.getIdToken(true); } catch (e) {}
-
-        // 3. ID kontrolü
+        // ID kontrolü (auth beklemeden yapılabilir)
         if (!this.recordId) {
             this.showError('Kayıt ID parametresi eksik.');
             return;
         }
 
-        // 4. Verileri Yükle
-        await this.loadLookups(); // İşlem tiplerini önden al
-        await this.loadRecord();
+        // Auth (gerekli)
+        const user = await waitForAuthUser({ requireAuth: true });
+        if (!user) return;
+
+        // Lookup'ları arkadan başlat (ilk boyamayı bloklamasın)
+        this._lookupsPromise = this.loadLookups().catch(() => null);
+
+        // Kayıtı yükle (gerekirse permission hatasında 1 kez token refresh + retry)
+        await this.loadRecordWithRetry(user);
+
         this.setupEventListeners();
-        
-        redirectOnLogout(); 
+        redirectOnLogout();
     }
 
     async loadLookups() {
@@ -64,38 +64,70 @@ export class PortfolioDetailManager {
         }
     }
 
-    async loadRecord() {
+
+    async loadRecordWithRetry(user) {
         try {
-            const res = await ipRecordsService.getRecordById(this.recordId);
-            if (!res.success) throw new Error('Kayıt verisi alınamadı.');
-            
-            this.currentRecord = res.data;
+            let res = await ipRecordsService.getRecordById(this.recordId);
 
-            // ---- HIZLI İLK BOYAMA ----
-            // Sayfayı, kayıt bilgileri hazır olur olmaz göster.
-            // Transactions verisi geldikten sonra görüntülenecek; PDF ikonları arkadan tamamlanacak.
-            this.renderHero();
-            this.renderGoodsList();
-            this.renderDocuments();
-
-            // İşlem geçmişi alanında placeholder
-            if (this.elements.txAccordion) {
-                this.elements.txAccordion.innerHTML = '<div class="p-3 text-muted">İşlem geçmişi yükleniyor...</div>';
+            // Permission hatasında 1 kez token refresh + retry
+            if (!res.success && res.error && /permission|insufficient/i.test(res.error)) {
+                try { await user.getIdToken(true); } catch (e) {}
+                res = await ipRecordsService.getRecordById(this.recordId);
             }
 
-            // Yükleme ekranını kaldır
-            document.getElementById('loading').classList.add('d-none');
-            document.getElementById('detail-root').classList.remove('d-none');
+            if (!res.success) {
+                // Hata mesajını görünür kıl (debug için çok değerli)
+                throw new Error(res.error || 'Kayıt verisi alınamadı.');
+            }
 
-            // Ağır işleri bloklamadan başlat
-            this.renderApplicants().catch(e => console.warn(e));
-            this.renderTransactions().catch(e => console.warn(e));
-
+            this.loadRecordFromData(res.data);
         } catch (e) {
             console.error(e);
             this.showError('Kayıt yüklenirken hata oluştu: ' + e.message);
         }
     }
+
+    loadRecordFromData(recordData) {
+        this.currentRecord = recordData;
+
+        // ---- HIZLI İLK BOYAMA ----
+        this.renderHero();
+        this.renderGoodsList();
+        this.renderDocuments();
+
+        // İşlem geçmişi alanında placeholder
+        if (this.elements.txAccordion) {
+            this.elements.txAccordion.innerHTML = '<div class="p-3 text-muted">İşlem geçmişi yükleniyor...</div>';
+        }
+
+        // Yükleme ekranını kaldır
+        const loadingEl = document.getElementById('loading');
+        const rootEl = document.getElementById('detail-root');
+        if (loadingEl) loadingEl.classList.add('d-none');
+        if (rootEl) rootEl.classList.remove('d-none');
+
+        // Ağır işleri bloklamadan başlat
+        this.renderApplicants().catch(e => console.warn(e));
+        this.renderTransactions().catch(e => console.warn(e));
+
+        // Lookup'lar daha sonra geldiyse transaction tiplerini güncelle
+        if (this._lookupsPromise) {
+            this._lookupsPromise.then(() => this.updateTransactionTypeLabels()).catch(() => null);
+        }
+    }
+
+    updateTransactionTypeLabels() {
+        // Parent başlıkları: <span data-tx-type="...">
+        const nodes = document.querySelectorAll('[data-tx-type]');
+        nodes.forEach((el) => {
+            const typeKey = el.getAttribute('data-tx-type');
+            const mapped = this.transactionTypesMap.get(String(typeKey));
+            if (mapped) {
+                el.textContent = mapped;
+            }
+        });
+    }
+
 
     renderHero() {
         const r = this.currentRecord;
@@ -299,7 +331,7 @@ export class PortfolioDetailManager {
                     return `
                         <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
                             <div>
-                                <small class="text-muted">↳ ${cTypeName}</small>
+                                <small class="text-muted" data-tx-type="${child.type}">↳ ${cTypeName}</small>
                                 <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
                             </div>
                             <div id="${childDocsContainerId}">${childDocsHtml}</div>
@@ -316,7 +348,7 @@ export class PortfolioDetailManager {
                         <div class="d-flex align-items-center">
                             <i class="fas fa-chevron-right mr-2 text-muted transition-icon ${children.length ? 'has-child-indicator' : ''}"></i>
                             <div class="d-flex flex-column">
-                                <span class="font-weight-bold">${typeName}</span>
+                                <span class="font-weight-bold" data-tx-type="${parent.type}">${typeName}</span>
                                 <small class="text-muted">${this.formatDate(parent.timestamp, true)}</small>
                             </div>
                         </div>
