@@ -314,57 +314,30 @@ export class TaskDetailManager {
     //  ID 66: GÖRSEL MAİL DEĞERLENDİRME EDİTÖRÜ (Düzeltildi)
     // =========================================================================
     async _renderEvaluationEditor(task) {
-        this.showLoading(); // Yükleniyor göster
+        this.showLoading();
         try {
             const mailSnap = await getDoc(doc(db, "mail_notifications", task.mail_notification_id));
             if (!mailSnap.exists()) throw new Error("İlişkili mail taslağı bulunamadı.");
             const mail = mailSnap.data();
 
-            // --- EK DOSYALARI HAZIRLA ---
+            // --- EK DOSYALARI HAZIRLA (Aynen Korundu) ---
             const attachments = [];
-
-            // 1. EPATS Belgesi
             if (mail.epatsAttachment && (mail.epatsAttachment.downloadURL || mail.epatsAttachment.url)) {
-                attachments.push({
-                    name: mail.epatsAttachment.fileName || 'EPATS Belgesi.pdf',
-                    url: mail.epatsAttachment.downloadURL || mail.epatsAttachment.url,
-                    icon: 'fa-file-pdf',
-                    color: 'text-danger',
-                    label: 'RESMİ EPATS BELGESİ'
-                });
+                attachments.push({ name: mail.epatsAttachment.fileName || 'EPATS Belgesi.pdf', url: mail.epatsAttachment.downloadURL || mail.epatsAttachment.url, icon: 'fa-file-pdf', color: 'text-danger', label: 'RESMİ EPATS BELGESİ' });
             }
-
-            // 2. Ek Belge (Supplementary)
             if (mail.supplementaryAttachment && (mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url)) {
-                attachments.push({
-                    name: mail.supplementaryAttachment.fileName || 'Ek Belge',
-                    url: mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url,
-                    icon: 'fa-paperclip',
-                    color: 'text-primary',
-                    label: 'EK DOSYA (Dilekçe vb.)'
-                });
+                attachments.push({ name: mail.supplementaryAttachment.fileName || 'Ek Belge', url: mail.supplementaryAttachment.downloadURL || mail.supplementaryAttachment.url, icon: 'fa-paperclip', color: 'text-primary', label: 'EK DOSYA' });
             }
-
-            // 3. Dosyalar Listesi (Files Array)
             if (mail.files && Array.isArray(mail.files)) {
                 mail.files.forEach(f => {
                     const fUrl = f.url || f.downloadURL;
-                    // Mükerrer eklemeyi önle
                     const isDuplicate = attachments.some(existing => existing.url === fUrl);
-                    
                     if (fUrl && !isDuplicate) {
-                        attachments.push({
-                            name: f.name || f.fileName || 'Dosya',
-                            url: fUrl,
-                            icon: 'fa-file-alt',
-                            color: 'text-secondary',
-                            label: 'EKLENTİ'
-                        });
+                        attachments.push({ name: f.name || f.fileName || 'Dosya', url: fUrl, icon: 'fa-file-alt', color: 'text-secondary', label: 'EKLENTİ' });
                     }
                 });
             }
 
-            // --- EKLERİN HTML'İNİ OLUŞTUR ---
             let attachmentsHtml = '';
             if (attachments.length > 0) {
                 const filesList = attachments.map(file => `
@@ -373,46 +346,28 @@ export class TaskDetailManager {
                             <div class="d-flex align-items-center overflow-hidden">
                                 <i class="fas ${file.icon} ${file.color} fa-2x mr-3"></i>
                                 <div class="text-truncate">
-                                    <small class="text-muted font-weight-bold d-block" style="font-size: 0.65rem; letter-spacing:0.5px;">${file.label}</small>
+                                    <small class="text-muted font-weight-bold d-block" style="font-size: 0.65rem;">${file.label}</small>
                                     <span class="text-dark font-weight-bold text-truncate d-block" style="max-width: 180px; font-size:0.9rem;" title="${file.name}">${file.name}</span>
                                 </div>
                             </div>
-                            <a href="${file.url}" target="_blank" class="btn btn-sm btn-light border ml-2" title="Görüntüle">
-                                <i class="fas fa-external-link-alt text-muted"></i>
-                            </a>
+                            <a href="${file.url}" target="_blank" class="btn btn-sm btn-light border ml-2"><i class="fas fa-external-link-alt text-muted"></i></a>
                         </div>
-                    </div>
-                `).join('');
-
-                attachmentsHtml = `
-                    <div class="mb-4">
-                        <label class="d-block small font-weight-bold text-muted text-uppercase mb-2">MAİLE EKLENECEK DOSYALAR</label>
-                        <div class="p-3 bg-light border rounded">
-                            <div class="row">
-                                ${filesList}
-                            </div>
-                        </div>
-                    </div>
-                `;
+                    </div>`).join('');
+                attachmentsHtml = `<div class="mb-4"><label class="d-block small font-weight-bold text-muted text-uppercase mb-2">EKLİ DOSYALAR</label><div class="p-3 bg-light border rounded"><div class="row">${filesList}</div></div></div>`;
             } else {
-                attachmentsHtml = `
-                    <div class="alert alert-light border text-muted small mb-4">
-                        <i class="fas fa-info-circle mr-2"></i>Bu mailde ekli dosya bulunmuyor.
-                    </div>
-                `;
+                attachmentsHtml = `<div class="alert alert-light border text-muted small mb-4"><i class="fas fa-info-circle mr-2"></i>Ekli dosya yok.</div>`;
             }
 
-            // --- EDİTÖR HTML ---
+            // --- HTML ÇIKTISI (YENİ BUTONLAR İLE) ---
             this.container.innerHTML = `
                 <div class="card shadow-sm border-0">
                     <div class="card-header bg-white border-bottom py-3">
                         <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0 text-dark font-weight-bold"><i class="fas fa-edit mr-2 text-primary"></i>Mail Bildirim Değerlendirmesi</h5>
+                            <h5 class="mb-0 text-dark font-weight-bold"><i class="fas fa-edit mr-2 text-primary"></i>Değerlendirme Editörü</h5>
                             <span class="badge badge-light border">ID: ${task.id}</span>
                         </div>
                     </div>
                     <div class="card-body bg-white p-4">
-                        
                         ${attachmentsHtml}
 
                         <div class="mb-4">
@@ -423,37 +378,98 @@ export class TaskDetailManager {
                         <div class="mb-4">
                              <label class="d-block small font-weight-bold text-muted text-uppercase mb-2">İÇERİK DÜZENLEME</label>
                              <div id="eval-body-editor" contenteditable="true" class="form-control p-3" style="min-height: 400px; height: auto; border: 1px solid #ced4da; line-height: 1.6;">${mail.body}</div>
-                             <small class="text-muted mt-1 d-block"><i class="fas fa-level-up-alt mr-1"></i>Metni doğrudan yukarıdaki alana tıklayarak düzenleyebilirsiniz.</small>
                         </div>
 
                         <div class="d-flex justify-content-end pt-3 border-top">
-                            <button id="btn-save-eval" class="btn btn-dark px-5 py-2 font-weight-bold shadow-sm">
-                                <i class="fas fa-paper-plane mr-2"></i>Onayla ve Gönder
+                            <button id="btn-save-draft" class="btn btn-secondary px-4 mr-2 shadow-sm">
+                                <i class="fas fa-save mr-2"></i>Kaydet (Taslak)
+                            </button>
+                            <button id="btn-submit-final" class="btn btn-success px-4 font-weight-bold shadow-sm">
+                                <i class="fas fa-check-circle mr-2"></i>Kaydet ve İşi Bitir
                             </button>
                         </div>
                     </div>
                 </div>
             `;
             
-            document.getElementById('btn-save-eval').onclick = () => this._submitEvaluation(task);
+            // İki ayrı butona ayrı event listener ekliyoruz
+            document.getElementById('btn-save-draft').onclick = () => this._saveEvaluationDraft(task);
+            document.getElementById('btn-submit-final').onclick = () => this._submitEvaluationFinal(task);
         
         } catch (e) { 
             console.error("Evaluation render error:", e);
-            this.showError("Taslak yüklenirken hata oluştu: " + e.message); 
+            this.showError("Hata: " + e.message); 
         }
     }
 
-    async _submitEvaluation(task) {
+    // SADECE KAYDET (Taslak olarak kalır, sayfa yenilenmez)
+    async _saveEvaluationDraft(task) {
         const newBody = document.getElementById('eval-body-editor').innerHTML;
+        const btn = document.getElementById('btn-save-draft');
+        const originalText = btn.innerHTML;
+
         try {
-            const btn = document.getElementById('btn-save-eval');
-            btn.disabled = true; btn.innerHTML = 'Kaydediliyor...';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Kaydediliyor...';
+
+            // Sadece Mail Notification'ı güncelle, statüleri değiştirme
             await updateDoc(doc(db, "mail_notifications", task.mail_notification_id), {
-                body: newBody, status: "awaiting_client_approval", updatedAt: Timestamp.now()
+                body: newBody,
+                updatedAt: Timestamp.now()
             });
-            await updateDoc(doc(db, "tasks", task.id), { status: "completed", updatedAt: Timestamp.now() });
-            alert("Değerlendirme başarıyla kaydedildi."); window.location.reload();
-        } catch (e) { alert("Hata: " + e.message); }
+
+            // Kullanıcıya bildirim ver (Toast veya Alert yerine buton üzerinde gösterim daha şık)
+            btn.innerHTML = '<i class="fas fa-check mr-2"></i>Kaydedildi';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-info');
+
+            // 2 saniye sonra butonu eski haline getir
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.classList.remove('btn-info');
+                btn.classList.add('btn-secondary');
+            }, 2000);
+
+        } catch (e) {
+            alert("Kaydetme hatası: " + e.message);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // KAYDET VE BİTİR (İşi tamamlar, sayfayı yeniler)
+    async _submitEvaluationFinal(task) {
+        const newBody = document.getElementById('eval-body-editor').innerHTML;
+        const btn = document.getElementById('btn-submit-final');
+        
+        if (!confirm("İşi tamamlayıp taslağı onaya göndermek üzeresiniz. Emin misiniz?")) return;
+
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>İşleniyor...';
+
+            // 1. Mail bildirimini onaya gönder statüsüne çek
+            await updateDoc(doc(db, "mail_notifications", task.mail_notification_id), {
+                body: newBody,
+                status: "awaiting_client_approval", // Onay bekliyor statüsü
+                updatedAt: Timestamp.now()
+            });
+
+            // 2. Task'ı tamamlandı yap
+            await updateDoc(doc(db, "tasks", task.id), {
+                status: "completed",
+                updatedAt: Timestamp.now()
+            });
+
+            alert("İşlem başarıyla tamamlandı. Mail onaya sunuldu.");
+            window.location.reload(); // Listeyi yenilemek için sayfayı tazele
+
+        } catch (e) {
+            alert("Güncelleme hatası: " + e.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Kaydet ve İşi Bitir';
+        }
     }
 
     // =========================================================================
