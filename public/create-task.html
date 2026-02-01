@@ -9,158 +9,290 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
-    <link rel="stylesheet" href="./css/task-management.css">
-    
     <link rel="modulepreload" href="./firebase-config.js">
     <link rel="modulepreload" href="./js/layout-loader.js">
 
 <style>
-/* Sayfa Düzeni ve Modern Kart Seçimi İçin Ek Stiller */
-.page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: #f8f9fa; }
-.main-container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 120px 20px 40px 20px; }
-.step-card { border: none; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 25px; transition: all 0.3s ease; }
-.step-card:hover { transform: translateY(-2px); }
-.card-header { background: #fff; border-bottom: 1px solid #eee; padding: 20px; border-radius: 15px 15px 0 0 !important; }
-.card-header h5 { font-weight: 700; color: #2c3e50; }
+/* Genel Reset */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
 
-/* Kart Izgara Yapısı */
-.card-selection-grid {
+/* Sayfa Yapısı */
+.page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+.main-container { width: 100%; padding: 30px; padding-top: 120px; }
+.page-header { background: #ffffff; padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+.page-title { font-size: 2em !important; color: #1e3c72 !important; margin-bottom: 10px !important;}
+.page-subtitle { color: #666; font-size: 1.1em; }
+
+/* Form ve Kart Yapısı */
+.form-container { background: none; box-shadow: none; padding: 0; }
+.form-section { border-bottom: 1px solid #e1e8ed; padding-bottom: 25px; margin-bottom: 25px; }
+.form-section:last-child { border-bottom: none; }
+
+/* Kartların gölgesini ve ayrımını her yerde garanti et */
+#conditionalFieldsContainer > .section-card,
+.section-card{
+  background: var(--card-bg);
+  border-radius: var(--card-radius);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+  position: relative;
+  margin-bottom: 24px;
+  padding: 30px; /* Kart içi boşluk */
+}
+
+:root{
+  --card-radius:20px;
+  --card-shadow: 0 10px 30px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.05);
+  --card-border: 1px solid rgba(0,0,0,.06);
+  --card-bg:#fff;
+}
+
+/* Kart gölgeleri kesilmesin */
+.form-container,
+#conditionalFieldsContainer{ overflow: visible; }
+
+/* Eski bölüm çizgilerini nötralize et (varsa) */
+.form-section {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.section-title {
+    font-size: 1.3em;
+    color: #1e3c72;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e1e8ed;
     display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+.form-group { position: relative; display: flex; flex-direction: column; }
+.form-group.full-width { grid-column: 1 / -1; }
+.form-label { margin-bottom: 8px; font-weight: 500; color: #333; }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; background: #fff; }
+
+/* Butonlar */
+.form-actions { display: flex; justify-content: flex-end; gap: 15px; margin-top: 30px; }
+.btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; }
+.btn-primary { background: #1e3c72; color: #fff; }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+.btn-secondary { background: #6c757d; color: #fff; }
+.btn-add-person { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; border: none; padding: 5px 15px; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
+.btn-add-person:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(30, 60, 114, 0.2); }
+
+/* Arama Sonuçları */
+.search-input-wrapper { position: relative; }
+.search-results-list {
+    position: absolute; 
+    top: 100%; 
+    left: 0; 
+    right: 0; 
+    max-height: 250px; 
+    overflow-y: auto; 
+    border: 1px solid #ced4da; 
+    border-top: none; 
+    border-bottom-left-radius: .25rem; 
+    border-bottom-right-radius: .25rem; 
+    background: #fff; 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
+    z-index: 1000;
+}
+
+.search-result-item { 
+    padding: 10px 15px; 
+    cursor: pointer; 
+    border-bottom: 1px solid #eee; 
+    transition: background-color .2s;
+}
+.search-result-item:hover { background: #f8f9fa; }
+
+/* Seçilen Öğeler */
+.selected-items-list {
+    min-height: 60px;
+    border: 1px dashed #ced4da;
+    border-radius: 10px;
+    padding: 10px;
+    background-color: #f8f9fa;
     margin-top: 10px;
 }
-.type-card {
-    flex: 1;
-    min-width: 160px;
-    max-width: 200px;
-    padding: 25px 15px;
-    border: 2px solid #edeff2;
-    border-radius: 12px;
-    background: #fff;
+.selected-item {
+    background-color: #fff;
+    border: 1px solid #e1e8ed;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Nice Classification Stilleri */
+.classification-panel, .selected-classes-panel {
+    background: #fff; border: 1px solid #dee2e6; border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 600px;
+}
+.panel-header { background: linear-gradient(135deg,#1e3c72 0%,#2a5298 100%); color: #fff; padding: 15px 20px; border-radius: 12px 12px 0 0; }
+.panel-header h5 { margin: 0; font-weight: 600; font-size: 1.1em; }
+.search-section { background: #f8f9fa; padding: 15px; border-bottom: 1px solid #dee2e6; }
+.classes-list, .selected-classes-content { flex: 1; overflow-y: auto; padding: 0; }
+
+.class-header { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; transition: background 0.2s; }
+.class-header:hover { background-color: #f1f3f5; }
+.class-number { background: #1e3c72; color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 10px; font-weight: bold; }
+.subclasses-container { display: none; background-color: #f8f9fa; }
+.subclasses-container.show { display: block; }
+.subclass-item { padding: 10px 15px 10px 50px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.95em; }
+.subclass-item:hover { background-color: #e9ecef; }
+.subclass-item.selected { background-color: #d4edda; color: #155724; font-weight: 500; }
+
+/* Tab Stilleri */
+.nav-tabs .nav-link { color: #495057; font-weight: 600; border: none; border-bottom: 3px solid transparent; transition: all 0.3s; }
+.nav-tabs .nav-link.active { color: #1e3c72; background: none; border-bottom: 3px solid #1e3c72; }
+.tab-content-card { padding: 20px; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 10px 10px; background: #fff; }
+
+/* Para Birimi Input */
+.input-with-currency { display: flex; }
+.input-with-currency input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; flex: 1; }
+.currency-select { width: 80px; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa; border: 2px solid #e1e8ed; }
+
+/* Marka Örneği Yükleme */
+.file-upload-wrapper {
+    border: 2px dashed #a0a7b0;
+    border-radius: 10px;
+    padding: 20px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.3s;
+    background: #f8f9fa;
 }
-.type-card:hover { border-color: #007bff; background-color: #f0f7ff; }
-.type-card.active { border-color: #007bff; background-color: #e7f1ff; box-shadow: 0 4px 12px rgba(0,123,255,0.2); }
-.type-card i { font-size: 24px; color: #007bff; margin-bottom: 12px; display: block; }
-.type-card span { font-weight: 600; font-size: 14px; color: #495057; }
+.file-upload-wrapper:hover { border-color: #1e3c72; background: #e9ecef; }
+.drag-over { border-color: #28a745; background-color: #e8f5e8; }
 
-/* Navigasyon Tabları */
-.nav-pills .nav-link { border-radius: 10px; color: #6c757d; font-weight: 600; padding: 12px 25px; }
-.nav-pills .nav-link.active { background-color: #007bff; box-shadow: 0 4px 10px rgba(0,123,255,0.3); }
-
-/* Form Elemanları */
-.form-control { border-radius: 8px; border: 1px solid #ced4da; padding: 12px; height: auto; }
-.form-control:focus { box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.1); }
 </style>
 </head>
 <body>
+    <div id="notification-container" class="notification-container"></div>
+    <div id="layout-placeholder"></div>
+    
     <div class="page-wrapper">
         <main class="main-container">
-            <div class="page-header mb-4 text-center">
-                <h1 class="page-title">Yeni İş Kaydı Oluştur</h1>
-                <p class="text-muted">Lütfen ilgili kategori ve işlem tipini seçerek ilerleyin.</p>
-            </div>
-
-            <ul class="nav nav-pills mb-4 justify-content-center" id="taskTabs" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link active" id="details-tab" data-toggle="pill" href="#details">1. İşlem Detayları</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="summary-tab" data-toggle="pill" href="#summary">2. Özet ve Onay</a>
-                </li>
-            </ul>
-
-            <form id="createTaskForm">
-                <div class="tab-content">
-                    <div class="tab-pane fade show active" id="details">
+            <section class="page-header">
+                <h1 class="page-title">Yeni İş Oluştur</h1>
+                <p class="page-subtitle">Oluşturmak istediğiniz işin türünü ve detaylarını girerek süreci başlatın.</p>
+            </section>
+            
+            <div class="form-container">
+                <form id="createTaskForm" onsubmit="return false;">
+                    
+                    <div class="section-card">
+                        <h3 class="section-title">1. İş Tipi Seçimi</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="mainIpType" class="form-label">İşin Ana Türü</label>
+                                <select id="mainIpType" class="form-select">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="patent">Patent</option>
+                                    <option value="trademark">Marka</option>
+                                    <option value="design">Tasarım</option>
+                                    <option value="suit">Dava</option>
+                                    <option value="other">Diğer</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="specificTaskType" class="form-label">Spesifik İş Tipi</label>
+                                <select id="specificTaskType" class="form-select" disabled>
+                                    <option value="">Önce İşin Ana Türünü Seçin</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="originSelect" class="form-label">Menşe</label>
+                                <select id="originSelect" class="form-select"></select>
+                            </div>
+                        </div>
                         
-                        <div class="step-card card">
-                            <div class="card-header">
-                                <h5 class="mb-0"><i class="fas fa-th-large mr-2 text-primary"></i>Kategori Seçimi</h5>
+                        <div id="countrySelectionContainer" class="form-section" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid #eee;">
+                            <h3 class="section-title" id="countrySelectionTitle">Ulusal Menşe Ülke Seçimi</h3>
+                            
+                            <div id="singleCountrySelectWrapper" class="form-group full-width">
+                                <label for="countrySelect" class="form-label">Ülke</label>
+                                <select id="countrySelect" class="form-select"></select>
                             </div>
-                            <div class="card-body">
-                                <div id="mainTaskTypeCards" class="card-selection-grid">
+                            
+                            <div id="multiCountrySelectWrapper" style="display: none;">
+                                <div class="form-group full-width">
+                                    <label for="countriesMultiSelectInput" class="form-label">Ülke Ara ve Ekle</label>
+                                    <div class="position-relative">
+                                        <input type="text" id="countriesMultiSelectInput" class="form-input" placeholder="Ülke adı veya kodu ile arayın...">
+                                        <div id="countriesMultiSelectResults" class="search-results-list" style="display:none;"></div>
                                     </div>
-                                <select id="mainIpType" class="form-control" style="display:none;" required>
-                                    <option value="">Seçiniz...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="step-card card" id="specificTaskSection">
-                            <div class="card-header">
-                                <h5 class="mb-0"><i class="fas fa-list-ul mr-2 text-primary"></i>Yapılacak İşlem</h5>
-                            </div>
-                            <div class="card-body">
-                                <div id="specificTaskTypeCardsContainer" class="card-selection-grid">
-                                    </div>
-                                <select id="specificTaskType" class="form-control" style="display:none;" required disabled>
-                                    <option value="">Seçiniz...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="step-card card">
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold">Kaynak (Origin)</label>
-                                            <select id="originSelect" class="form-control" required></select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6" id="ipRecordSearchGroup">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold">Portföy Kaydı Ara (Opsiyonel)</label>
-                                            <div class="input-group">
-                                                <input type="text" id="ipRecordSearch" class="form-control" placeholder="No veya İsim ile ara...">
-                                                <div class="input-group-append">
-                                                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
-                                                </div>
-                                            </div>
-                                            <div id="ipRecordResults" class="list-group mt-2 shadow-sm" style="display:none; position:absolute; z-index:1000; width:94%;"></div>
+                                </div>
+                                <div class="form-group full-width mt-3">
+                                    <label class="form-label">Seçilen Ülkeler <span class="badge badge-light" id="selectedCountriesCount">0</span></label>
+                                    <div id="selectedCountriesList" class="selected-items-list">
+                                        <div class="empty-state">
+                                            <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                                            <p class="text-muted">Henüz ülke eklenmedi.</p>
                                         </div>
                                     </div>
                                 </div>
-                                <div id="selectedIpRecordDisplay" class="mt-2"></div>
                             </div>
                         </div>
-
-                        <div id="conditionalFieldsContainer"></div>
-
                     </div>
 
-                    <div class="tab-pane fade" id="summary">
-                        <div id="summaryContainer"></div>
-                        <div class="text-right mt-4">
-                            <button type="button" class="btn btn-secondary btn-lg mr-2" onclick="$('#details-tab').tab('show')">Geri Dön</button>
-                            <button type="submit" class="btn btn-success btn-lg px-5" id="submitBtn">
-                                <i class="fas fa-check-circle mr-2"></i>İşi Oluştur
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </form>
+                    <div id="conditionalFieldsContainer"></div>
+                    
+                </form>
+            </div>
         </main>
     </div>
 
-    <div id="modalContainer"></div>
+    <div class="modal fade" id="selectParentModal" tabindex="-1" aria-labelledby="selectParentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="selectParentModalLabel">Geri Çekilecek İtirazı Seçin</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>İlgili portföyde birden fazla açık itiraz işlemi bulundu. Lütfen geri çekilecek olanı seçin.</p>
+                    <ul id="parentListContainer" class="list-group">
+                        </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
 
+    <script type="module" src="./js/create-portfolio-by-opposition.js"></script>
+    
     <script type="module" src="./js/create-task/main.js"></script>
 
-    <script type="module">
-        import { PersonModalManager } from './js/components/PersonModalManager.js';
-        const personModal = new PersonModalManager();
-        personModal.init();
-    </script>
+    <style>
+        /* Modal Liste Stili */
+        #parentListContainer .list-group-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #parentListContainer .list-group-item:hover {
+            background-color: #f0f4f8;
+        }
+    </style>
 </body>
 </html>
