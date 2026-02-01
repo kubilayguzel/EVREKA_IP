@@ -215,13 +215,13 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                             <h6 class="text-primary font-weight-bold mb-3">Hızlı İşlem Seçimi</h6>
                             <div class="row">
                                 <div class="col-md-6 mb-2">
-                                    <div id="card-tm-application" class="sub-selection-card card-disabled" onclick="selectSpecificTask('2')"> 
+                                    <div id="card-tm-application" class="sub-selection-card card-disabled" onclick="selectSpecificTask('2', this)"> 
                                         <i class="fas fa-file-signature"></i>
                                         <span>Yeni Marka Başvurusu</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6 mb-2">
-                                    <div id="card-tm-transfer" class="sub-selection-card card-disabled" onclick="selectSpecificTask('5')"> 
+                                    <div id="card-tm-transfer" class="sub-selection-card card-disabled" onclick="selectSpecificTask('5', this)"> 
                                         <i class="fas fa-exchange-alt"></i>
                                         <span>Devir İşlemi</span>
                                     </div>
@@ -341,32 +341,38 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
         }
 
         // Alt Kart Seçimi
-        function selectSpecificTask(taskValue) {
+        function selectSpecificTask(taskValue, cardEl) {
             const specificSelect = document.getElementById('specificTaskType');
-            
-            // Eğer kart pasifse işlem yapma (Gerçi pointer-events:none bunu zaten engeller ama çift güvenlik)
-            if (event.currentTarget && event.currentTarget.classList.contains('card-disabled')) {
+            if (!specificSelect) {
+                console.warn('specificTaskType select bulunamadı.');
+                return;
+            }
+
+            // Eğer kart pasifse işlem yapma
+            // (Pointer-events:none genelde engeller ama çift güvenlik)
+            if (cardEl && cardEl.classList.contains('card-disabled')) {
                 return;
             }
 
             // --- AKILLI SEÇİM MANTIĞI ---
-            let targetValue = taskValue;
+            let targetValue = String(taskValue);
             let found = false;
 
-            // 1. Önce ID ile ara
-            for(let i=0; i<specificSelect.options.length; i++) {
-                if(specificSelect.options[i].value == targetValue) {
+            // 1) Önce value (ID) ile ara
+            for (let i = 0; i < specificSelect.options.length; i++) {
+                if (String(specificSelect.options[i].value) === targetValue) {
                     specificSelect.selectedIndex = i;
                     found = true;
                     break;
                 }
             }
 
-            // 2. ID bulunamazsa Metin ile ara (Yedek)
-            if (!found && taskValue === '2') {
-                for(let i=0; i<specificSelect.options.length; i++) {
-                    const txt = specificSelect.options[i].text.toLowerCase();
-                    if(txt.includes('başvuru') || txt.includes('application')) {
+            // 2) ID bulunamazsa Metin ile ara (Yedek)
+            // Başvuru için taskValue '2' ise:
+            if (!found && targetValue === '2') {
+                for (let i = 0; i < specificSelect.options.length; i++) {
+                    const txt = (specificSelect.options[i].text || '').toLowerCase();
+                    if (txt.includes('başvuru') || txt.includes('application')) {
                         specificSelect.selectedIndex = i;
                         found = true;
                         break;
@@ -375,18 +381,20 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
             }
 
             if (found) {
-                specificSelect.dispatchEvent(new Event('change'));
-                
+                // change tetikle
+                specificSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
                 // Form alanına kaydır
                 setTimeout(() => {
                     const container = document.getElementById('conditionalFieldsContainer');
-                    if(container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 100);
             } else {
                 console.warn('İstenen işlem tipi listede bulunamadı:', taskValue);
                 alert('İşlem listesi henüz yüklenemedi. Lütfen birkaç saniye bekleyip tekrar deneyiniz.');
             }
         }
+
     </script>
 </body>
 </html>
