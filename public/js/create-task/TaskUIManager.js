@@ -75,11 +75,13 @@ export class TaskUIManager {
         const ownerSearchHtml = `
             <div class="form-group mt-3 border-top pt-3">
                 <label class="form-label font-weight-bold">İşlem Yapılacak Sahip (Müvekkil)</label>
-                <div class="d-flex" style="gap:10px;">
-                    <input type="text" id="ownerSearchInput" class="form-input" placeholder="Kişi veya Firma ara...">
-                    <button type="button" id="addNewOwnerBtn" class="btn-small btn-add-person" title="Yeni Kişi Ekle">+</button>
+                <div class="position-relative">
+                    <div class="d-flex" style="gap:10px;">
+                        <input type="text" id="ownerSearchInput" class="form-input" placeholder="Kişi veya Firma ara...">
+                        <button type="button" id="addNewOwnerBtn" class="btn-small btn-add-person" title="Yeni Kişi Ekle">+</button>
+                    </div>
+                    <div id="ownerSearchResults" class="search-results-list" style="display:none;"></div>
                 </div>
-                <div id="ownerSearchResults" class="search-results-list" style="display:none;"></div>
                 <div class="mt-2">
                     <label class="form-label" style="font-size: 0.85rem; color: #666;">Seçilen Sahipler</label>
                     <div id="selectedOwnerListContainer" class="selected-items-list">
@@ -339,11 +341,13 @@ export class TaskUIManager {
                 <h3 class="section-title">Başvuru Sahibi Bilgileri</h3>
                 <div class="form-group full-width">
                     <label class="form-label">Başvuru Sahibi Ara</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="applicantSearchInput" class="form-input" placeholder="Ara...">
-                        <button type="button" id="addNewApplicantBtn" class="btn-small btn-add-person"><span>&#x2795;</span> Yeni Kişi</button>
+                    <div class="position-relative">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="applicantSearchInput" class="form-input" placeholder="Ara...">
+                            <button type="button" id="addNewApplicantBtn" class="btn-small btn-add-person"><span>&#x2795;</span> Yeni Kişi</button>
+                        </div>
+                        <div id="applicantSearchResults" class="search-results-list"></div>
                     </div>
-                    <div id="applicantSearchResults" class="search-results-list"></div>
                 </div>
                 <div class="form-group full-width mt-4">
                     <label class="form-label">Seçilen Başvuru Sahipleri</label>
@@ -433,8 +437,13 @@ export class TaskUIManager {
             </div>
             <div class="form-group full-width mt-3">
                 <label class="form-label">Müvekkil Ara</label>
-                <div class="d-flex" style="gap:10px;"><input type="text" id="personSearchInput" class="form-input"><button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">+</button></div>
-                <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+                <div class="position-relative">
+                    <div class="d-flex" style="gap:10px;">
+                        <input type="text" id="personSearchInput" class="form-input">
+                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">+</button>
+                    </div>
+                    <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+                </div>
             </div>
             <div class="form-group full-width mt-2"><label class="form-label">Seçilen Müvekkil</label><div id="relatedPartyList" class="selected-items-list"></div></div>
         </div>`;
@@ -514,8 +523,13 @@ export class TaskUIManager {
             <h3 class="section-title">3. ${label}</h3>
             <div class="form-group full-width">
                 <label class="form-label">Kişi Ara</label>
-                <div class="d-flex" style="gap:10px;"><input type="text" id="personSearchInput" class="form-input"><button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">+</button></div>
-                <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+                <div class="position-relative">
+                    <div class="d-flex" style="gap:10px;">
+                        <input type="text" id="personSearchInput" class="form-input">
+                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">+</button>
+                    </div>
+                    <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+                </div>
             </div>
             <div class="form-group full-width mt-2"><label class="form-label">Seçilenler <span id="relatedPartyCount" class="badge badge-light">0</span></label><div id="relatedPartyList" class="selected-items-list"></div></div>
         </div>`;
