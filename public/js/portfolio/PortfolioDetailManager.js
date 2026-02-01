@@ -31,7 +31,9 @@ export class PortfolioDetailManager {
 
     async init() {
         // 1. Layout ve Auth
-        await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
+        // Layout'u bloklamadan yükle
+        try { loadSharedLayout({ activeMenuLink: 'portfolio.html' }); } catch (e) {}
+
         const user = await waitForAuthUser({ requireAuth: true });
         if (!user) return; 
 
@@ -68,22 +70,26 @@ export class PortfolioDetailManager {
             if (!res.success) throw new Error('Kayıt verisi alınamadı.');
             
             this.currentRecord = res.data;
-            
-            // --- UI RENDER (BLOKLAYICI MOD) ---
-            // İsteğiniz üzerine tüm verilerin yüklenmesini bekliyoruz.
-            
+
+            // ---- HIZLI İLK BOYAMA ----
+            // Sayfayı, kayıt bilgileri hazır olur olmaz göster.
+            // Transactions verisi geldikten sonra görüntülenecek; PDF ikonları arkadan tamamlanacak.
             this.renderHero();
-            await this.renderApplicants(); // Kişi bilgilerini bekle
             this.renderGoodsList();
             this.renderDocuments();
 
-            // İşlemlerin (Transactions) yüklenmesini BEKLİYORUZ (await)
-            // Paralel işleme sayesinde bu süre eskisine göre çok daha kısa sürecek.
-            await this.renderTransactions(); 
+            // İşlem geçmişi alanında placeholder
+            if (this.elements.txAccordion) {
+                this.elements.txAccordion.innerHTML = '<div class="p-3 text-muted">İşlem geçmişi yükleniyor...</div>';
+            }
 
-            // HER ŞEY HAZIR OLUNCA YÜKLEME EKRANINI KALDIR
+            // Yükleme ekranını kaldır
             document.getElementById('loading').classList.add('d-none');
             document.getElementById('detail-root').classList.remove('d-none');
+
+            // Ağır işleri bloklamadan başlat
+            this.renderApplicants().catch(e => console.warn(e));
+            this.renderTransactions().catch(e => console.warn(e));
 
         } catch (e) {
             console.error(e);
@@ -241,8 +247,7 @@ export class PortfolioDetailManager {
     // --- OPTİMİZE EDİLMİŞ TRANSACTION RENDER (PARALEL) ---
     async renderTransactions() {
         const accordion = this.elements.txAccordion;
-        // Not: Burada artık "Yükleniyor" yazmaya gerek yok çünkü sayfa zaten yükleniyor modunda
-        
+
         const res = await ipRecordsService.getTransactionsForRecord(this.recordId);
         const transactions = res.success ? res.transactions : [];
 
@@ -253,40 +258,57 @@ export class PortfolioDetailManager {
 
         const { parents, childrenMap } = TransactionHelper.organizeTransactions(transactions);
 
-        // PARALEL İŞLEME (HIZLI MOD)
-        // Tüm parent işlemleri ve altındaki belgeleri aynı anda çekiyoruz.
-        const htmlParts = await Promise.all(parents.map(async (parent) => {
-            const typeName = this.transactionTypesMap.get(String(parent.type)) || `İşlem ${parent.type}`;
-            
-            // Parent dokümanları ve Çocuk işlemleri paralel hazırla
-            const [docs, childrenHtml] = await Promise.all([
-                TransactionHelper.getDocuments(parent),
-                (async () => {
-                    const children = childrenMap[parent.id] || [];
-                    if (children.length === 0) return '';
-                    
-                    // Çocukların dokümanlarını da paralel çek
-                    const childItems = await Promise.all(children.map(async child => {
-                        const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
-                        const cDocs = await TransactionHelper.getDocuments(child);
-                        const cDocIcons = cDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
-                        
-                        return `
-                            <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
-                                <div>
-                                    <small class="text-muted">↳ ${cTypeName}</small>
-                                    <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
-                                </div>
-                                <div>${cDocIcons}</div>
-                            </div>
-                        `;
-                    }));
-                    return `<div class="accordion-transaction-children" style="display:none;">${childItems.join('')}</div>`;
-                })()
-            ]);
+        // 1) Önce transaction listesini hızlıca bas
+        const enrichQueue = [];
 
+        const htmlParts = parents.map((parent) => {
+            const typeName = this.transactionTypesMap.get(String(parent.type)) || `İşlem ${parent.type}`;
             const children = childrenMap[parent.id] || [];
-            const docIcons = docs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+
+            const parentDocsContainerId = this.safeDomId(`txdocs-${parent.id}`);
+            const parentDirectDocs = TransactionHelper.getDirectDocuments(parent);
+            const parentDirectIcons = parentDirectDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+
+            let parentDocsHtml = parentDirectIcons || '';
+            if (parent.triggeringTaskId) {
+                // Task belgeleri sonra gelebilir
+                parentDocsHtml += `<span class="tx-docs-loading text-muted small ml-2"><i class="fas fa-spinner fa-spin"></i> PDF'ler...</span>`;
+                enrichQueue.push({ tx: parent, containerId: parentDocsContainerId, hasAnyDirect: parentDirectDocs.length > 0 });
+            } else if (!parentDocsHtml) {
+                parentDocsHtml = '<span class="text-muted small">-</span>';
+            }
+
+            const childrenHtml = (() => {
+                if (children.length === 0) return '';
+
+                const childItems = children.map((child) => {
+                    const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
+
+                    const childDocsContainerId = this.safeDomId(`txdocs-${child.id}`);
+                    const childDirectDocs = TransactionHelper.getDirectDocuments(child);
+                    const childDirectIcons = childDirectDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+
+                    let childDocsHtml = childDirectIcons || '';
+                    if (child.triggeringTaskId) {
+                        childDocsHtml += `<span class="tx-docs-loading text-muted small ml-2"><i class="fas fa-spinner fa-spin"></i> PDF'ler...</span>`;
+                        enrichQueue.push({ tx: child, containerId: childDocsContainerId, hasAnyDirect: childDirectDocs.length > 0 });
+                    } else if (!childDocsHtml) {
+                        childDocsHtml = '<span class="text-muted small">-</span>';
+                    }
+
+                    return `
+                        <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
+                            <div>
+                                <small class="text-muted">↳ ${cTypeName}</small>
+                                <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
+                            </div>
+                            <div id="${childDocsContainerId}">${childDocsHtml}</div>
+                        </div>
+                    `;
+                });
+
+                return `<div class="accordion-transaction-children" style="display:none;">${childItems.join('')}</div>`;
+            })();
 
             return `
                 <div class="accordion-transaction-item border-bottom">
@@ -298,18 +320,72 @@ export class PortfolioDetailManager {
                                 <small class="text-muted">${this.formatDate(parent.timestamp, true)}</small>
                             </div>
                         </div>
-                        <div class="d-flex align-items-center">
-                            ${docIcons}
+                        <div class="d-flex align-items-center" id="${parentDocsContainerId}">
+                            ${parentDocsHtml}
                             ${children.length ? `<span class="badge badge-light border ml-2">${children.length} alt</span>` : ''}
                         </div>
                     </div>
                     ${childrenHtml}
                 </div>
             `;
-        }));
-        
+        });
+
         accordion.innerHTML = htmlParts.join('');
         this.setupAccordionEvents();
+
+        // 2) Task kaynaklı PDF'leri arkadan tamamla (transactions <=10 olduğu için ...
+        this.populateTaskDocsAsync(enrichQueue).catch(e => console.warn(e));
+    }
+
+    safeDomId(raw) {
+        return String(raw).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    async populateTaskDocsAsync(queue) {
+        if (!Array.isArray(queue) || queue.length === 0) return;
+
+        // Düşük sayıda transaction olduğu için 4 paralel fetch genelde ideal
+        const concurrency = 4;
+        const items = [...queue];
+
+        const worker = async (item) => {
+            const { tx, containerId, hasAnyDirect } = item;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const taskDocs = await TransactionHelper.getTaskDocuments(tx);
+
+            // Loading etiketini kaldır
+            container.querySelector('.tx-docs-loading')?.remove();
+
+            if (!taskDocs || taskDocs.length === 0) {
+                // Direct de yoksa dash göster (hala boşsa)
+                if (!hasAnyDirect && container.querySelectorAll('a.doc-link-item').length === 0) {
+                    container.insertAdjacentHTML('beforeend', '<span class="text-muted small">-</span>');
+                }
+                return;
+            }
+
+            // Aynı URL'yi iki kere basmayalım
+            const existing = new Set(
+                Array.from(container.querySelectorAll('a.doc-link-item')).map(a => a.getAttribute('href'))
+            );
+            const icons = taskDocs
+                .filter(d => d?.url && !existing.has(d.url))
+                .map((d, i) => this.createDocIcon(d, i === 0 && existing.size === 0))
+                .join(' ');
+
+            if (icons) container.insertAdjacentHTML('beforeend', icons);
+        };
+
+        const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+            while (items.length) {
+                const it = items.shift();
+                try { await worker(it); } catch (e) { console.warn(e); }
+            }
+        });
+
+        await Promise.all(runners);
     }
 
     renderDocuments() {
