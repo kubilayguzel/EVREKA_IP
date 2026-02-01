@@ -292,51 +292,101 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     <script type="module" src="./js/create-task/main.js"></script>
 
     <script>
-        // Ana Kart Seçimi
-        function selectMainType(typeValue, cardElement) {
-            // 1. Görsel durumu güncelle
-            document.querySelectorAll('.selection-card').forEach(el => el.classList.remove('active'));
-            if(cardElement) cardElement.classList.add('active');
+    // Ana Kart Seçimi
+    function selectMainType(typeValue, cardElement) {
+        // 1. Görsel durumu güncelle
+        document.querySelectorAll('.selection-card').forEach(el => el.classList.remove('active'));
+        if(cardElement) cardElement.classList.add('active');
 
-            // 2. Gizli Select'i güncelle ve tetikle (main.js dinliyor)
-            const mainSelect = document.getElementById('mainIpType');
-            mainSelect.value = typeValue;
+        // 2. Gizli Select'i güncelle ve tetikle
+        const mainSelect = document.getElementById('mainIpType');
+        
+        // Eğer zaten seçiliyse tekrar tetiklemeye gerek yok (gereksiz reload'u önler)
+        // Ancak kullanıcı başka bir ana türe geçip geri dönmüşse tetiklenmeli.
+        const isChange = mainSelect.value !== typeValue;
+        mainSelect.value = typeValue;
+        
+        if(isChange) {
             mainSelect.dispatchEvent(new Event('change')); 
-
-            // 3. Marka ise alt kartları göster
-            const tmSubCards = document.getElementById('trademarkSubCards');
-            const specificContainer = document.getElementById('specificTaskContainer');
-            
-            if (typeValue === 'trademark') {
-                tmSubCards.style.display = 'block';
-                // Select label'ını güncelle
-                document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
-            } else {
-                tmSubCards.style.display = 'none';
-                document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
-            }
         }
 
-        // Alt Kart Seçimi (Marka -> Başvuru/Devir)
-        function selectSpecificTask(taskValue) {
-            // Spesifik Select'i güncelle ve tetikle
-            const specificSelect = document.getElementById('specificTaskType');
+        // 3. Marka ise alt kartları göster
+        const tmSubCards = document.getElementById('trademarkSubCards');
+        if (typeValue === 'trademark') {
+            tmSubCards.style.display = 'block';
+            document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
+        } else {
+            tmSubCards.style.display = 'none';
+            document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
+        }
+    }
+
+    // Alt Kart Seçimi (GÜNCELLENMİŞ - BEKLEME ÖZELLİKLİ)
+    async function selectSpecificTask(taskValue) {
+        const specificSelect = document.getElementById('specificTaskType');
+        
+        // Yardımcı Fonksiyon: Listede seçeneği arar
+        const findOptionIndex = () => {
+            for(let i=0; i<specificSelect.options.length; i++) {
+                // ID eşleşmesi
+                if(specificSelect.options[i].value == taskValue) return i;
+                
+                // Fallback: Metin bazlı eşleşme (ID değişirse diye güvenlik)
+                if(taskValue === '2') {
+                    const txt = specificSelect.options[i].text.toLowerCase();
+                    if(txt.includes('başvuru') || txt.includes('application')) return i;
+                }
+            }
+            return -1;
+        };
+
+        // 1. Önce hemen dene
+        let index = findOptionIndex();
+
+        // 2. Eğer bulunamazsa (liste henüz yükleniyorsa), bekleme moduna geç
+        if (index === -1) {
+            // Kullanıcıya işlemin sürdüğünü hissettir
+            document.body.style.cursor = 'wait';
+            const btnOriginalText = event.currentTarget ? event.currentTarget.innerHTML : '';
             
-            // Eğer "application" ise (ID'si kodda 'application' veya 2 olabilir, main.js'deki yapıya göre değişir)
-            // TaskUIManager.js renderTrademarkApplicationForm() metodunu tetikler.
-            // Genelde value olarak atanır.
-            specificSelect.value = taskValue;
+            console.log('Liste henüz hazır değil, bekleniyor...');
+
+            // 2 saniye boyunca (20 x 100ms) deneme yap
+            for (let attempt = 0; attempt < 20; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms bekle
+                index = findOptionIndex();
+                
+                // Eğer seçenekler yüklendiyse (1'den fazla seçenek varsa ve aradığımız da geldiyse) döngüyü kır
+                if (index !== -1) break;
+            }
+            
+            // İmleci normale döndür
+            document.body.style.cursor = 'default';
+        }
+
+        // 3. Sonuç Kontrolü ve İşlem
+        if (index !== -1) {
+            specificSelect.selectedIndex = index;
+            // 'change' eventini tetikle ki form açilsin
             specificSelect.dispatchEvent(new Event('change'));
             
-            // Görsel geri bildirim (isteğe bağlı, focus kaydırma vb.)
-            document.getElementById('conditionalFieldsContainer').scrollIntoView({ behavior: 'smooth' });
+            // Forma yumuşak kaydırma yap
+            const container = document.getElementById('conditionalFieldsContainer');
+            if(container) {
+                setTimeout(() => {
+                    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100); // Formun render olması için minik bir tolerans
+            }
+        } else {
+            console.warn('Zaman aşımı: İstenen işlem tipi listede bulunamadı:', taskValue);
+            alert('İşlem listesi yüklenirken bir sorun oluştu veya internet bağlantınız yavaş. Lütfen "Marka" kartına tekrar tıklayıp deneyiniz.');
         }
+    }
 
-        // Ana Main.js yüklendikten sonra select'in değişimlerini dinleyip "Diğer" kartlarını yönetelim
-        // (Opsiyonel: Kullanıcı selectbox'tan bir şey seçerse kartlardaki vurguyu kaldırabiliriz)
-        document.getElementById('specificTaskType').addEventListener('change', function() {
-            // Selectbox'tan seçim yapılırsa alt kart seçim vurgusunu kaldırabiliriz (CSS class varsa)
-        });
-    </script>
+    // Dropdown manuel değişirse
+    document.getElementById('specificTaskType').addEventListener('change', function() {
+        // Gerekirse ek mantık
+    });
+</script>
 </body>
 </html>
