@@ -7,7 +7,9 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    
     <link rel="stylesheet" href="./css/shared-styles.css">
+    
     <link rel="modulepreload" href="./firebase-config.js">
     <link rel="modulepreload" href="./js/layout-loader.js">
 
@@ -22,7 +24,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .page-title { font-size: 2em !important; color: #1e3c72 !important; margin-bottom: 10px !important;}
 .page-subtitle { color: #666; font-size: 1.1em; }
 
-/* --- KART STİLLERİ (YENİ EKLENDİ) --- */
+/* --- KART STİLLERİ --- */
 .selection-card {
     background: #fff;
     border: 2px solid #e1e8ed;
@@ -81,7 +83,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     background: #fff;
     padding: 15px;
     border-radius: 10px;
-    cursor: pointer;
+    cursor: pointer; /* Varsayılan (JS ile yönetilecek) */
     transition: all 0.2s;
     text-align: center;
 }
@@ -98,6 +100,13 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .sub-selection-card span {
     font-weight: 600;
     color: #1e3c72;
+}
+
+/* Pasif Kart Stili (JS Yüklenene Kadar) */
+.card-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: default;
 }
 
 /* --- MEVCUT FORM YAPISI --- */
@@ -131,13 +140,14 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .btn-primary { background: #1e3c72; color: #fff; }
 .btn-secondary { background: #6c757d; color: #fff; }
 
-/* Select Box Gizleme (Logic için gerekli ama görselde yok) */
+/* Select Box Gizleme */
 .hidden-select-container { display: none !important; }
 
-/* Nice Classification ve Diğer Stiller */
+/* Arama Sonuçları & Listeler */
 .classification-panel, .selected-classes-panel { height: 600px; display: flex; flex-direction: column; background: #fff; border: 1px solid #dee2e6; border-radius: 12px; }
-.search-results-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 250px; overflow-y: auto; background: #fff; border: 1px solid #ced4da; z-index: 1000; }
+.search-results-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 250px; overflow-y: auto; background: #fff; border: 1px solid #ced4da; z-index: 1000; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-radius: 0 0 8px 8px;}
 .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+.search-result-item:hover { background-color: #f8f9fa; }
 .selected-items-list { min-height: 60px; background: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px dashed #ced4da; }
 .selected-item { background: #fff; padding: 8px; margin-bottom: 5px; border-radius: 5px; border: 1px solid #ddd; display: flex; justify-content: space-between; }
 </style>
@@ -188,7 +198,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                                     <div class="card-desc">Hukuki süreç ve dava takibi.</div>
                                 </div>
                             </div>
-                            </div>
+                        </div>
 
                         <div class="hidden-select-container">
                             <select id="mainIpType" class="form-select">
@@ -205,12 +215,14 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                             <h6 class="text-primary font-weight-bold mb-3">Hızlı İşlem Seçimi</h6>
                             <div class="row">
                                 <div class="col-md-6 mb-2">
-                                    <div class="sub-selection-card" onclick="selectSpecificTask('2')"> <i class="fas fa-file-signature"></i>
+                                    <div id="card-tm-application" class="sub-selection-card card-disabled" onclick="selectSpecificTask('2')"> 
+                                        <i class="fas fa-file-signature"></i>
                                         <span>Yeni Marka Başvurusu</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6 mb-2">
-                                    <div class="sub-selection-card" onclick="selectSpecificTask('5')"> <i class="fas fa-exchange-alt"></i>
+                                    <div id="card-tm-transfer" class="sub-selection-card card-disabled" onclick="selectSpecificTask('5')"> 
+                                        <i class="fas fa-exchange-alt"></i>
                                         <span>Devir İşlemi</span>
                                     </div>
                                 </div>
@@ -292,101 +304,89 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     <script type="module" src="./js/create-task/main.js"></script>
 
     <script>
-    // Ana Kart Seçimi
-    function selectMainType(typeValue, cardElement) {
-        // 1. Görsel durumu güncelle
-        document.querySelectorAll('.selection-card').forEach(el => el.classList.remove('active'));
-        if(cardElement) cardElement.classList.add('active');
+        // Ana Kart Seçimi
+        function selectMainType(typeValue, cardElement) {
+            // 1. Görsel durumu güncelle
+            document.querySelectorAll('.selection-card').forEach(el => el.classList.remove('active'));
+            if(cardElement) cardElement.classList.add('active');
 
-        // 2. Gizli Select'i güncelle ve tetikle
-        const mainSelect = document.getElementById('mainIpType');
-        
-        // Eğer zaten seçiliyse tekrar tetiklemeye gerek yok (gereksiz reload'u önler)
-        // Ancak kullanıcı başka bir ana türe geçip geri dönmüşse tetiklenmeli.
-        const isChange = mainSelect.value !== typeValue;
-        mainSelect.value = typeValue;
-        
-        if(isChange) {
-            mainSelect.dispatchEvent(new Event('change')); 
-        }
-
-        // 3. Marka ise alt kartları göster
-        const tmSubCards = document.getElementById('trademarkSubCards');
-        if (typeValue === 'trademark') {
-            tmSubCards.style.display = 'block';
-            document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
-        } else {
-            tmSubCards.style.display = 'none';
-            document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
-        }
-    }
-
-    // Alt Kart Seçimi (GÜNCELLENMİŞ - BEKLEME ÖZELLİKLİ)
-    async function selectSpecificTask(taskValue) {
-        const specificSelect = document.getElementById('specificTaskType');
-        
-        // Yardımcı Fonksiyon: Listede seçeneği arar
-        const findOptionIndex = () => {
-            for(let i=0; i<specificSelect.options.length; i++) {
-                // ID eşleşmesi
-                if(specificSelect.options[i].value == taskValue) return i;
+            // 2. Gizli Select'i güncelle ve tetikle
+            const mainSelect = document.getElementById('mainIpType');
+            
+            const isChange = mainSelect.value !== typeValue;
+            mainSelect.value = typeValue;
+            
+            // 3. Marka ise alt kartları göster (Ama henüz aktifleştirme!)
+            // Main.js 'change' eventini yakalayıp listeyi doldurduktan sonra kartları açacaktır.
+            const tmSubCards = document.getElementById('trademarkSubCards');
+            
+            if (typeValue === 'trademark') {
+                tmSubCards.style.display = 'block';
+                document.querySelector('label[for="specificTaskType"]').textContent = 'Diğer Marka İşlemleri';
                 
-                // Fallback: Metin bazlı eşleşme (ID değişirse diye güvenlik)
-                if(taskValue === '2') {
-                    const txt = specificSelect.options[i].text.toLowerCase();
-                    if(txt.includes('başvuru') || txt.includes('application')) return i;
+                // Güvenlik: Kartları tekrar pasife çek (Main.js açana kadar)
+                document.getElementById('card-tm-application').classList.add('card-disabled');
+                document.getElementById('card-tm-application').style.opacity = '0.5';
+                document.getElementById('card-tm-transfer').classList.add('card-disabled');
+                document.getElementById('card-tm-transfer').style.opacity = '0.5';
+
+            } else {
+                tmSubCards.style.display = 'none';
+                document.querySelector('label[for="specificTaskType"]').textContent = 'Spesifik İş Tipi';
+            }
+
+            if(isChange) {
+                mainSelect.dispatchEvent(new Event('change')); 
+            }
+        }
+
+        // Alt Kart Seçimi
+        function selectSpecificTask(taskValue) {
+            const specificSelect = document.getElementById('specificTaskType');
+            
+            // Eğer kart pasifse işlem yapma (Gerçi pointer-events:none bunu zaten engeller ama çift güvenlik)
+            if (event.currentTarget && event.currentTarget.classList.contains('card-disabled')) {
+                return;
+            }
+
+            // --- AKILLI SEÇİM MANTIĞI ---
+            let targetValue = taskValue;
+            let found = false;
+
+            // 1. Önce ID ile ara
+            for(let i=0; i<specificSelect.options.length; i++) {
+                if(specificSelect.options[i].value == targetValue) {
+                    specificSelect.selectedIndex = i;
+                    found = true;
+                    break;
                 }
             }
-            return -1;
-        };
 
-        // 1. Önce hemen dene
-        let index = findOptionIndex();
+            // 2. ID bulunamazsa Metin ile ara (Yedek)
+            if (!found && taskValue === '2') {
+                for(let i=0; i<specificSelect.options.length; i++) {
+                    const txt = specificSelect.options[i].text.toLowerCase();
+                    if(txt.includes('başvuru') || txt.includes('application')) {
+                        specificSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+            }
 
-        // 2. Eğer bulunamazsa (liste henüz yükleniyorsa), bekleme moduna geç
-        if (index === -1) {
-            // Kullanıcıya işlemin sürdüğünü hissettir
-            document.body.style.cursor = 'wait';
-            const btnOriginalText = event.currentTarget ? event.currentTarget.innerHTML : '';
-            
-            console.log('Liste henüz hazır değil, bekleniyor...');
-
-            // 2 saniye boyunca (20 x 100ms) deneme yap
-            for (let attempt = 0; attempt < 20; attempt++) {
-                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms bekle
-                index = findOptionIndex();
+            if (found) {
+                specificSelect.dispatchEvent(new Event('change'));
                 
-                // Eğer seçenekler yüklendiyse (1'den fazla seçenek varsa ve aradığımız da geldiyse) döngüyü kır
-                if (index !== -1) break;
-            }
-            
-            // İmleci normale döndür
-            document.body.style.cursor = 'default';
-        }
-
-        // 3. Sonuç Kontrolü ve İşlem
-        if (index !== -1) {
-            specificSelect.selectedIndex = index;
-            // 'change' eventini tetikle ki form açilsin
-            specificSelect.dispatchEvent(new Event('change'));
-            
-            // Forma yumuşak kaydırma yap
-            const container = document.getElementById('conditionalFieldsContainer');
-            if(container) {
+                // Form alanına kaydır
                 setTimeout(() => {
-                    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100); // Formun render olması için minik bir tolerans
+                    const container = document.getElementById('conditionalFieldsContainer');
+                    if(container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            } else {
+                console.warn('İstenen işlem tipi listede bulunamadı:', taskValue);
+                alert('İşlem listesi henüz yüklenemedi. Lütfen birkaç saniye bekleyip tekrar deneyiniz.');
             }
-        } else {
-            console.warn('Zaman aşımı: İstenen işlem tipi listede bulunamadı:', taskValue);
-            alert('İşlem listesi yüklenirken bir sorun oluştu veya internet bağlantınız yavaş. Lütfen "Marka" kartına tekrar tıklayıp deneyiniz.');
         }
-    }
-
-    // Dropdown manuel değişirse
-    document.getElementById('specificTaskType').addEventListener('change', function() {
-        // Gerekirse ek mantık
-    });
-</script>
+    </script>
 </body>
 </html>
