@@ -194,15 +194,24 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                         <h3 class="section-title">1. İş Tipi Seçimi</h3>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label for="mainIpType" class="form-label">İşin Ana Türü</label>
-                                <select id="mainIpType" class="form-select">
+                                <label class="font-weight-bold mb-3"><i class="fas fa-layer-group mr-2"></i>İş Ana Türü</label>
+                                
+                                <div id="mainTaskTypeCards" class="card-selection-grid mb-3"></div>
+                                
+                                <select id="mainIpType" class="form-control d-none" required>
                                     <option value="">Seçiniz...</option>
-                                    <option value="patent">Patent</option>
-                                    <option value="trademark">Marka</option>
-                                    <option value="design">Tasarım</option>
-                                    <option value="suit">Dava</option>
-                                    <option value="other">Diğer</option>
                                 </select>
+                            </div>
+
+                            <div id="specificTaskArea" class="form-group mt-4 d-none">
+                                <label class="font-weight-bold mb-3"><i class="fas fa-tasks mr-2"></i>İşlem Türü</label>
+                                
+                                <div id="specificTaskCards" class="card-selection-grid mb-3"></div>
+                                
+                                <div id="otherTransactionsContainer" class="mt-2 d-none">
+                                    <label class="small text-muted font-weight-bold">Diğer İşlemler</label>
+                                    <select id="specificTaskType" class="form-control"></select>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="specificTaskType" class="form-label">Spesifik İş Tipi</label>
