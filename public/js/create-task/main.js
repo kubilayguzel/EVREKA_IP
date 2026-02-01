@@ -497,7 +497,7 @@ setupEventListeners() {
 
     async handleSpecificTypeChange(e) {
         const typeId = e.target.value;
-        const selectedType = this.state.allTransactionTypes.find(t => t.id === typeId);
+        const selectedType = this.state.allTransactionTypes.find(t => String(t.id) === String(typeId));
         this.state.selectedTaskType = selectedType;
         
         if (!selectedType) { this.uiManager.clearContainer(); return; }
