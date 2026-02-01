@@ -49,6 +49,7 @@ class CreateTaskController {
         this.personModal = new PersonModalManager();
         
     }
+
     async init() {
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -57,11 +58,6 @@ class CreateTaskController {
                 try {
                     const initialData = await this.dataManager.loadInitialData();
                     Object.assign(this.state, initialData);
-
-                    // --- YENİ: Ana İşlem Tipi Kartlarını Render Et ---
-                    // Bu satır sayfa ilk açıldığında "Marka, Patent, Tasarım..." kartlarını basar.
-                    this.uiManager.renderMainTaskTypeCards(this.state.allTransactionTypes);
-
                     this.setupEventListeners();
                     this.setupIpRecordSearch();
                 } catch (e) { console.error('Init hatası:', e); }
@@ -402,48 +398,31 @@ setupEventListeners() {
     handleMainTypeChange(e) {
         const mainType = e.target.value;
         const specificSelect = document.getElementById('specificTaskType');
-        
-        // UI ve Seçim Temizliği
-        this.uiManager.clearContainer(); // Alt formları temizler
+        this.uiManager.clearContainer();
         this.resetSelections();
-        
-        // Select box'ı temizle (Geri planda çalışmaya devam edecek)
         specificSelect.innerHTML = '<option value="">Seçiniz...</option>';
-        
         if (mainType) {
-            // Seçilen ana tipe göre işlemleri filtrele
             const filtered = this.state.allTransactionTypes.filter(t => {
                 return (t.hierarchy === 'parent' && t.ipType === mainType) || 
                        (t.hierarchy === 'child' && t.isTopLevelSelectable && (t.applicableToMainType?.includes(mainType) || t.applicableToMainType?.includes('all')));
             }).sort((a, b) => (a.order || 999) - (b.order || 999));
-
-            // --- YENİ: Alt İşlem Kartlarını Render Et ---
-            // "Marka" seçildikten sonra "Yenileme, Karşı Görüş..." gibi kartları basar.
-            this.uiManager.renderSpecificTaskTypeCards(filtered);
-
+            filtered.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id; opt.textContent = t.alias || t.name; specificSelect.appendChild(opt);
+            });
             specificSelect.disabled = false;
-        } else { 
-            specificSelect.disabled = true;
-            // Eğer seçim yoksa kart alanını da temizle
-            const specContainer = document.getElementById('specificTaskTypeCardsContainer');
-            if (specContainer) specContainer.innerHTML = '';
-        }
+        } else { specificSelect.disabled = true; }
         
-        // Origin (TÜRKPATENT/WIPO) ayarları (Mevcut mantık devam eder)
         this.uiManager.populateDropdown('originSelect', 
             (mainType === 'suit' ? [{value:'TURKEY', text:'Türkiye'}, {value:'FOREIGN_NATIONAL', text:'Yurtdışı'}] : 
             [{value:'TÜRKPATENT', text:'TÜRKPATENT'}, {value:'WIPO', text:'WIPO'}, {value:'EUIPO', text:'EUIPO'}, {value:'ARIPO', text:'ARIPO'}, {value:'Yurtdışı Ulusal', text:'Yurtdışı Ulusal'}]), 
             'value', 'text', 'Seçiniz...'
         );
         
-        if (mainType === 'suit') { 
-            document.getElementById('originSelect').value = 'TURKEY'; 
-            this.handleOriginChange('TURKEY'); 
-        } else { 
-            document.getElementById('originSelect').value = 'TÜRKPATENT'; 
-            this.handleOriginChange('TÜRKPATENT'); 
-        }
+        if (mainType === 'suit') { document.getElementById('originSelect').value = 'TURKEY'; this.handleOriginChange('TURKEY'); }
+        else { document.getElementById('originSelect').value = 'TÜRKPATENT'; this.handleOriginChange('TÜRKPATENT'); }
     }
+
 
     toggleAssetSearchVisibility(originValue) {
         const typeId = String(this.state.selectedTaskType?.id || '');
@@ -896,12 +875,12 @@ setupEventListeners() {
             // A) SADECE BÜLTEN ARAMASI YAPILACAKLAR
             // Buraya "3. Kişi Görüşü" (ID: 170 veya string ID) ekliyoruz.
             const isBulletinOnly = [
-                '1',
-                '20','trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN,
+                '1'
             ].includes(typeId);
 
             // B) HİBRİT ARAMA (HEM PORTFÖY HEM BÜLTEN) YAPILACAKLAR
             const isHybrid = [
+                '20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN,
                 '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
                 '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
                 '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
