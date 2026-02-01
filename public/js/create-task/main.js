@@ -450,18 +450,21 @@ setupEventListeners() {
 
             // Kartları Aktifleştir/Pasifleştir Fonksiyonu
             const toggleCardState = (card, isActive) => {
-                if (!card) return;
-                if (isActive) {
-                    card.style.opacity = '1';
-                    card.style.pointerEvents = 'auto'; // Tıklamayı aç
-                    card.style.cursor = 'pointer';
-                    card.classList.remove('disabled'); // Varsa CSS class'ı
-                } else {
-                    card.style.opacity = '0.5';
-                    card.style.pointerEvents = 'none'; // Tıklamayı engelle
-                    card.style.cursor = 'default';
-                }
+            if (!card) return;
+
+            if (isActive) {
+                card.style.opacity = '1';
+                card.style.pointerEvents = 'auto';
+                card.style.cursor = 'pointer';
+                card.classList.remove('card-disabled');
+            } else {
+                card.style.opacity = '0.5';
+                card.style.pointerEvents = 'none';
+                card.style.cursor = 'default';
+                card.classList.add('card-disabled');
+            }
             };
+
 
             // Duruma göre aç/kapa
             toggleCardState(appCard, hasApplication);
