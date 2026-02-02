@@ -20,6 +20,9 @@ export class PortfolioUpdateManager {
 
         this.elements = this.cacheElements();
         this.init();
+
+        // PDF'den otomatik alan doldurma (tek seferlik tekrar kontrolü)
+        this._lastAutofillKey = null;
     }
 
     cacheElements() {
@@ -66,6 +69,11 @@ export class PortfolioUpdateManager {
                 this.selectRecord(e.detail.recordId);
             }
         });
+
+        // Diğer modüllerden (örn. document-review-manager) alan doldurma istekleri gelebilir.
+        window.applyRegistryAutofill = (payload) => {
+            try { this.applyRegistryAutofill(payload); } catch (e) { /* no-op */ }
+        };
     }
 
     renderInitialState() {
@@ -172,6 +180,13 @@ export class PortfolioUpdateManager {
         if (isRegistry) {
             this.elements.registryEditorSection.style.display = 'block';
 
+            // Marka durumu default olarak "Tescilli" gelsin.
+            this.ensureDefaultRegisteredStatus();
+
+            // Tescil belgesi PDF'i varsa otomatik tescil no/tarih doldurmayı dene.
+            // (Sadece alanlar boşsa ve aynı PDF için tekrar tekrar çalışmasın.)
+            this.tryAutofillRegistryFromCurrentPdf();
+
             const r = this.state.recordData;
             if (r && r.goodsAndServicesByClass) {
                 const formatted = r.goodsAndServicesByClass.map(
@@ -186,6 +201,120 @@ export class PortfolioUpdateManager {
         } else {
             this.elements.registryEditorSection.style.display = 'none';
         }
+    }
+
+    ensureDefaultRegisteredStatus() {
+        const select = this.elements.registryStatus;
+        if (!select) return;
+
+        // Henüz populate edilmediyse veya boşsa, kayıtlı varsayılanı seç.
+        const current = String(select.value || '').trim();
+        if (current) return;
+
+        // trademark statü listesinde "registered" = "Tescilli"
+        const opt = Array.from(select.options || []).find(o => String(o.value) === 'registered');
+        if (opt) select.value = 'registered';
+    }
+
+    applyRegistryAutofill({ registrationNumber, registrationDate, status, force = false } = {}) {
+        if (!this.elements.registryEditorSection) return;
+        // Form kapalıyken de çağrılabilir; sadece alanlar varsa doldur.
+        if (this.elements.regNo && (force || !String(this.elements.regNo.value || '').trim())) {
+            if (registrationNumber) this.elements.regNo.value = registrationNumber;
+        }
+        if (this.elements.regDate && (force || !String(this.elements.regDate.value || '').trim())) {
+            if (registrationDate) this.elements.regDate.value = registrationDate;
+        }
+        if (this.elements.registryStatus) {
+            const current = String(this.elements.registryStatus.value || '').trim();
+            if (force || !current) {
+                if (status) this.elements.registryStatus.value = status;
+                else this.ensureDefaultRegisteredStatus();
+            }
+        }
+    }
+
+    async tryAutofillRegistryFromCurrentPdf() {
+        // Bu ekran sadece indeksleme-detail'de kullanılıyor; PDF URL'i document-review-manager tarafından set edilir.
+        const pdfInfo = window.__CURRENT_INDEXING_PDF__;
+        const pdfUrl = pdfInfo && pdfInfo.url ? String(pdfInfo.url) : '';
+        if (!pdfUrl) return;
+
+        // Alanlar doluysa tekrar deneme.
+        const regNoFilled = this.elements.regNo && String(this.elements.regNo.value || '').trim();
+        const regDateFilled = this.elements.regDate && String(this.elements.regDate.value || '').trim();
+        if (regNoFilled && regDateFilled) return;
+
+        // Aynı PDF için gereksiz tekrar çalışmayı önle.
+        const key = `${pdfUrl}::${regNoFilled ? 'n' : ''}${regDateFilled ? 'd' : ''}`;
+        if (this._lastAutofillKey === key) return;
+        this._lastAutofillKey = key;
+
+        try {
+            const extracted = await this.extractRegistryFieldsFromPdfUrl(pdfUrl);
+            if (!extracted) return;
+
+            const payload = {
+                registrationNumber: extracted.registrationNumber,
+                registrationDate: extracted.registrationDate,
+                status: 'registered',
+                force: false,
+            };
+
+            this.applyRegistryAutofill(payload);
+
+            if (payload.registrationNumber || payload.registrationDate) {
+                showNotification('✅ Tescil bilgileri PDF içeriğinden otomatik dolduruldu.', 'success');
+            }
+        } catch (e) {
+            console.warn('PDF üzerinden tescil alanları okunamadı:', e);
+        }
+    }
+
+    async extractRegistryFieldsFromPdfUrl(pdfUrl) {
+        // PDF metnini PDF.js ile çıkarıp regex ile tescil tarihi/numarası yakalar.
+        // Not: Worker kullanmadan (disableWorker) küçük PDF'lerde yeterince hızlı.
+
+        // Dinamik import: sayfa açılışını yavaşlatmasın.
+        const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.mjs');
+
+        const res = await fetch(pdfUrl);
+        if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
+        const data = await res.arrayBuffer();
+
+        const loadingTask = pdfjsLib.getDocument({ data, disableWorker: true });
+        const pdf = await loadingTask.promise;
+
+        let fullText = '';
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const pageText = (content.items || []).map(it => it.str || '').join(' ');
+            fullText += `\n${pageText}`;
+        }
+
+        const normalized = fullText
+            .replace(/\s+/g, ' ')
+            .replace(/\u00A0/g, ' ')
+            .trim();
+
+        // 1) Tescil tarihi: "22.01.2026 tarihinde tescil edilmiştir"
+        const dateMatch = normalized.match(/(\d{2}\.\d{2}\.\d{4})\s*tarihinde\s*tescil\s*edil/i);
+        const registrationDate = dateMatch ? dateMatch[1] : null;
+
+        // 2) Tescil numarası: "No: 2025 127472" (veya varyasyonları)
+        let registrationNumber = null;
+        const noMatch = normalized.match(/\bNo\s*:\s*(\d{4})\s*(\d{1,10})\b/i);
+        if (noMatch) {
+            registrationNumber = `${noMatch[1]} ${noMatch[2]}`;
+        } else {
+            // fallback: "Başvuru Numarası: 2025/127472" veya "2025/127472"
+            const slashMatch = normalized.match(/\b(\d{4})\s*\/\s*(\d{1,10})\b/);
+            if (slashMatch) registrationNumber = `${slashMatch[1]} ${slashMatch[2]}`;
+        }
+
+        if (!registrationDate && !registrationNumber) return null;
+        return { registrationDate, registrationNumber };
     }
 
     initDatePickers() {
