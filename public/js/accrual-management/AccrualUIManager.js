@@ -50,19 +50,24 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- Tarih, Alan ve Dosya Bilgileri ---
+            // --- Temel Bilgiler ---
             const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
             
-            let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-';
+            let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-', subjectDisplay = '-';
             const task = tasks[String(acc.taskId)];
             
             if (task) {
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 
+                // İlgili Dosya ve KONU (Marka Adı) Bulma
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
-                    if (ipRec) relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
+                    if (ipRec) {
+                        relatedFileDisplay = ipRec.applicationNumber || ipRec.applicationNo || 'Dosya';
+                        // Marka Adı (Konu)
+                        subjectDisplay = ipRec.markName || ipRec.title || ipRec.name || '-';
+                    }
                 }
 
                 if (typeObj && typeObj.ipType) {
@@ -75,8 +80,7 @@ export class AccrualUIManager {
             const efn = acc.evrekaInvoiceNo || '-';
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
-            // --- MENÜ (DROPDOWN) MANTIĞI ---
-            // Düzenle butonu 'paid' ise pasif olsun
+            // --- Menü (Dropdown) ---
             const isEditDisabled = acc.status === 'paid';
             const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn';
             const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
@@ -118,9 +122,17 @@ export class AccrualUIManager {
                     remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
                 }
 
-                let partyDisplay = '-';
-                if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) partyDisplay = acc.tpInvoiceParty.name || 'Türk Patent';
-                else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) partyDisplay = acc.serviceInvoiceParty.name || '-';
+                // --- TARAF BİLGİSİ (KISALTMA MANTIĞI) ---
+                let fullPartyName = '-';
+                if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) fullPartyName = acc.tpInvoiceParty.name || 'Türk Patent';
+                else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) fullPartyName = acc.serviceInvoiceParty.name || '-';
+
+                // İsim 18 karakterden uzunsa kısalt ve .. koy
+                let shortPartyName = fullPartyName;
+                if (fullPartyName.length > 18) {
+                    shortPartyName = fullPartyName.substring(0, 18) + '..';
+                }
+                const partyHtml = `<span title="${fullPartyName}" style="cursor:help; border-bottom:1px dotted #999;">${shortPartyName}</span>`;
 
                 return `
                 <tr>
@@ -130,8 +142,13 @@ export class AccrualUIManager {
                     <td><span class="badge badge-info" style="font-weight:normal;">${fieldDisplay}</span></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
+                    
+                    <td><span class="font-weight-bold" style="font-size:0.95em; color:#555;">${subjectDisplay}</span></td>
+                    
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    <td><small>${partyDisplay}</small></td>
+                    
+                    <td><small>${partyHtml}</small></td>
+                    
                     <td><small class="text-muted font-weight-bold">${tfn}</small></td>
                     <td><small class="text-muted font-weight-bold">${efn}</small></td>
                     <td>${officialStr}</td>
@@ -144,7 +161,7 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ
+            // TAB 2: YURT DIŞI LİSTESİ (Aynı kalabilir)
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 const fStatus = acc.foreignStatus || 'unpaid';
@@ -180,11 +197,6 @@ export class AccrualUIManager {
                 } else {
                     documentHtml = '<span class="text-muted small">-</span>';
                 }
-
-                // Yurt dışı tabında düzenleme/silme butonları daha sade olabilir ama tutarlılık için aynı menü yapısını kullanabiliriz.
-                // Ancak orijinal tasarımda sadece belge linki vardı, buraya da işlem menüsü eklenebilir. 
-                // Şimdilik orijinal yapıyı koruyup sadece belgeyi gösteriyoruz.
-                // İsterseniz buraya da actionMenuHtml ekleyebiliriz.
 
                 return `
                 <tr>
