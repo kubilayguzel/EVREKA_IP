@@ -30,6 +30,8 @@ export class AccrualUIManager {
      * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
+    // public/js/accrual-management/AccrualUIManager.js
+
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
@@ -48,27 +50,47 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // İlgili İş / Dosya Bulma (Ortak Kod)
-            let taskDisplay = '-', relatedFileDisplay = '-';
+            // --- YENİ VERİLERİN HAZIRLANMASI ---
+            
+            // 1. Tarih (Oluşturulma)
+            const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
+
+            // 2. İlgili İş, Dosya ve ALAN Bilgisi
+            let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-';
             const task = tasks[String(acc.taskId)];
+            
             if (task) {
+                // İş Tipi ve Alias
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
+                
+                // İlgili Dosya
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
                 }
+
+                // Alan Bilgisi (Marka, Patent vb.)
+                if (typeObj && typeObj.ipType) {
+                    const ipTypeMap = { 
+                        'trademark': 'Marka', 
+                        'patent': 'Patent', 
+                        'design': 'Tasarım', 
+                        'suit': 'Dava' 
+                    };
+                    fieldDisplay = ipTypeMap[typeObj.ipType] || typeObj.ipType.toUpperCase();
+                }
+
             } else { taskDisplay = acc.taskTitle || '-'; }
 
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
             // =========================================================
-            // TAB 1: ANA LİSTE (TAHSİLAT GÖRÜNÜMÜ)
+            // TAB 1: ANA LİSTE (GÜNCELLENMİŞ HTML)
             // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
-                // Tahsilat Kalanı (Veritabanındaki remainingAmount alanı burası için tasarlanmıştı)
                 let remainingHtml = '-';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                 const isFullyPaid = (Array.isArray(rem)) 
@@ -87,6 +109,9 @@ export class AccrualUIManager {
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
                     <td><small>${acc.id}</small></td>
+                    
+                    <td><small>${dateStr}</small></td>
+                    <td><span class="badge badge-info" style="font-weight:normal;">${fieldDisplay}</span></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
@@ -105,28 +130,21 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ (YENİ ALANLARLA GÜNCELLENDİ)
+            // ... (Foreign Tab Kodu Aynı Kalabilir veya İstenirse Oraya da Eklenebilir)
             else {
+                // ... (Mevcut kodunuzun devamı)
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
-                
-                // --- DURUM GÖSTERİMİ (Yurt dışı özel status varsa onu kullan, yoksa unpaid varsay) ---
-                // Eğer foreignStatus tanımlı değilse (eski kayıt), unpaid kabul et.
                 const fStatus = acc.foreignStatus || 'unpaid';
                 let sTxt = 'Ödenmedi', sCls = 'danger';
                 if (fStatus === 'paid') { sTxt = 'Ödendi'; sCls = 'success'; }
                 else if (fStatus === 'partially_paid') { sTxt = 'Kısmen'; sCls = 'warning'; }
                 
-                // --- KALAN TUTAR GÖSTERİMİ (Yeni foreignRemainingAmount alanından) ---
                 let remainingHtml = '-';
-                
-                // Eğer foreignRemainingAmount tanımlıysa onu kullan, değilse Resmi Ücreti varsay (hiç ödenmemiş)
                 let foreignRem = acc.foreignRemainingAmount;
                 if (foreignRem === undefined) {
-                    // Veri yoksa ve status paid değilse, borç = resmi ücret
                     if (fStatus !== 'paid') foreignRem = [{ amount: acc.officialFee?.amount || 0, currency: acc.officialFee?.currency || 'EUR' }];
-                    else foreignRem = []; // Ödenmişse borç yok
+                    else foreignRem = []; 
                 }
-
                 const isFullyPaid = (Array.isArray(foreignRem)) 
                     ? foreignRem.length === 0 || foreignRem.every(r => parseFloat(r.amount) <= 0.01)
                     : parseFloat(foreignRem) <= 0.01;
@@ -137,14 +155,10 @@ export class AccrualUIManager {
                     remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
                 }
 
-                // Ödeme Belgesi
                 let documentHtml = '';
                 if (acc.files && acc.files.length > 0) {
-                    // Son yüklenen dosya
                     const lastFile = acc.files[acc.files.length - 1];
-                    // URL varsa url, yoksa content (eski kayıtlar için)
                     const link = lastFile.url || lastFile.content;
-                    
                     documentHtml = `
                         <a href="${link}" target="_blank" class="text-secondary" title="${lastFile.name || 'Dekont'}" style="text-decoration: none;">
                             <i class="fas fa-file-contract fa-lg hover-primary"></i>
