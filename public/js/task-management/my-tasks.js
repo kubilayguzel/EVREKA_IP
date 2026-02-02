@@ -92,10 +92,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loader) loader.style.display = 'block';
 
             try {
-                // Kullanıcıları da çekiyoruz (allUsers)
-                const [tasksResult, ipRecordsResult, personsResult, accrualsResult, transactionTypesResult, usersResult] = await Promise.all([
+                // Not: ipRecords koleksiyonu büyük olabildiği için (ve cache bazen bayat kalabildiği için)
+                // artık tüm ipRecords'ları çekmek yerine yalnızca görevlerin işaret ettiği kayıtları getiriyoruz.
+                const [tasksResult, personsResult, accrualsResult, transactionTypesResult, usersResult] = await Promise.all([
                     taskService.getTasksForUser(this.currentUser.uid),
-                    ipRecordsService.getRecords(),
                     personService.getPersons(),
                     accrualService.getAccruals(),
                     transactionTypeService.getTransactionTypes(),
@@ -105,7 +105,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allTasks = tasksResult.success ? tasksResult.data.filter(t => 
                     !['awaiting_client_approval', 'client_approval_closed', 'client_no_response_closed'].includes(t.status)
                 ) : [];
-                this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
+
+                // Görevlerin bağlı olduğu ipRecord'ları çek (cache-first) ve eksik kalanları server'dan tamamla.
+                const relatedIds = [...new Set(this.allTasks.map(t => t.relatedIpRecordId).filter(Boolean).map(id => String(id)))];
+                let ipRecords = [];
+                if (relatedIds.length) {
+                    const ipCacheRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
+                    ipRecords = ipCacheRes.success ? ipCacheRes.data : [];
+
+                    const foundSet = new Set(ipRecords.map(r => String(r.id)));
+                    const missingIds = relatedIds.filter(id => !foundSet.has(String(id)));
+                    if (missingIds.length) {
+                        const ipServerRes = await ipRecordsService.getRecordsByIds(missingIds, { source: 'server' });
+                        if (ipServerRes.success && Array.isArray(ipServerRes.data)) {
+                            const map = new Map(ipRecords.map(r => [String(r.id), r]));
+                            ipServerRes.data.forEach(r => map.set(String(r.id), r));
+                            ipRecords = [...map.values()];
+                        }
+                    }
+                }
+                this.allIpRecords = ipRecords;
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
@@ -148,7 +167,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Bu sayede "123" (string) ile 123 (number) gelirse de eşleşir.
                 const ipRecord = this.allIpRecords.find(r => String(r.id) === String(task.relatedIpRecordId));
                 
-                const relatedRecordDisplay = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'N/A';
+                const relatedRecordDisplay = ipRecord
+                    ? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title)
+                    : 'N/A';
                 
                 const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
                 const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmiyor';
