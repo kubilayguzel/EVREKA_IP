@@ -50,23 +50,21 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- Temel Bilgiler ---
             const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
             
-            let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-', subjectDisplay = '-';
+            let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-', fullSubject = '-';
             const task = tasks[String(acc.taskId)];
             
             if (task) {
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 
-                // İlgili Dosya ve KONU (Marka Adı) Bulma
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) {
                         relatedFileDisplay = ipRec.applicationNumber || ipRec.applicationNo || 'Dosya';
-                        // Marka Adı (Konu)
-                        subjectDisplay = ipRec.markName || ipRec.title || ipRec.name || '-';
+                        // Konu (Marka Adı) verisini al
+                        fullSubject = ipRec.markName || ipRec.title || ipRec.name || '-';
                     }
                 }
 
@@ -76,11 +74,30 @@ export class AccrualUIManager {
                 }
             } else { taskDisplay = acc.taskTitle || '-'; }
 
+            // --- KONU KISALTMA (YENİ) ---
+            let shortSubject = fullSubject;
+            if (fullSubject.length > 18) {
+                shortSubject = fullSubject.substring(0, 18) + '..';
+            }
+            const subjectHtml = `<span title="${fullSubject}" style="cursor:help; border-bottom:1px dotted #999;">${shortSubject}</span>`;
+
+            // --- TARAF KISALTMA (MEVCUT) ---
+            let fullPartyName = '-';
+            if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) fullPartyName = acc.tpInvoiceParty.name || 'Türk Patent';
+            else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) fullPartyName = acc.serviceInvoiceParty.name || '-';
+
+            let shortPartyName = fullPartyName;
+            if (fullPartyName.length > 18) {
+                shortPartyName = fullPartyName.substring(0, 18) + '..';
+            }
+            const partyHtml = `<span title="${fullPartyName}" style="cursor:help; border-bottom:1px dotted #999;">${shortPartyName}</span>`;
+
+            // Fatura Nolar
             const tfn = acc.tpeInvoiceNo || '-';
             const efn = acc.evrekaInvoiceNo || '-';
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
-            // --- Menü (Dropdown) ---
+            // Menü Kodları (Aynı kalıyor)
             const isEditDisabled = acc.status === 'paid';
             const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn';
             const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
@@ -92,47 +109,20 @@ export class AccrualUIManager {
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
-                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}">
-                            <i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle
-                        </a>
-                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
-                            <i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle
-                        </a>
+                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}"><i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle</a>
+                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}"><i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle</a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}">
-                            <i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil
-                        </a>
+                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}"><i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil</a>
                     </div>
-                </div>
-            `;
+                </div>`;
 
-            // =========================================================
-            // TAB 1: ANA LİSTE
-            // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
                 let remainingHtml = '-';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
-                const isFullyPaid = (Array.isArray(rem)) 
-                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
-                    : parseFloat(rem) <= 0.01;
-
-                if (!isFullyPaid) {
-                    remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
-                }
-
-                // --- TARAF BİLGİSİ (KISALTMA MANTIĞI) ---
-                let fullPartyName = '-';
-                if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) fullPartyName = acc.tpInvoiceParty.name || 'Türk Patent';
-                else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) fullPartyName = acc.serviceInvoiceParty.name || '-';
-
-                // İsim 18 karakterden uzunsa kısalt ve .. koy
-                let shortPartyName = fullPartyName;
-                if (fullPartyName.length > 18) {
-                    shortPartyName = fullPartyName.substring(0, 18) + '..';
-                }
-                const partyHtml = `<span title="${fullPartyName}" style="cursor:help; border-bottom:1px dotted #999;">${shortPartyName}</span>`;
+                const isFullyPaid = (Array.isArray(rem)) ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01) : parseFloat(rem) <= 0.01;
+                if (!isFullyPaid) remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
 
                 return `
                 <tr>
@@ -143,7 +133,7 @@ export class AccrualUIManager {
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
                     
-                    <td><span class="font-weight-bold" style="font-size:0.95em; color:#555;">${subjectDisplay}</span></td>
+                    <td><span class="font-weight-bold" style="font-size:0.95em; color:#555;">${subjectHtml}</span></td>
                     
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     
@@ -155,11 +145,9 @@ export class AccrualUIManager {
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
                     <td>${remainingHtml}</td>
-                    <td class="text-center">
-                        ${actionMenuHtml}
-                    </td>
+                    <td class="text-center">${actionMenuHtml}</td>
                 </tr>`;
-            } 
+            }
             
             // TAB 2: YURT DIŞI LİSTESİ (Aynı kalabilir)
             else {
