@@ -604,7 +604,7 @@ async loadData() {
         }
 
         // 2. Tescil ve Eşya Listesi Formu Kontrolü
-        const registrationSection = document.getElementById('registrationSection');
+        const registrationSection = document.getElementById('registry-editor-section');
         
         // Element varsa işlem yap, yoksa sessizce geç
         if (registrationSection) {
