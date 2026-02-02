@@ -30,8 +30,6 @@ export class AccrualUIManager {
      * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
-    // public/js/accrual-management/AccrualUIManager.js
-
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
@@ -50,6 +48,7 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
+            // --- Temel Bilgiler ---
             const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
             
             let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-', fullSubject = '-';
@@ -59,11 +58,12 @@ export class AccrualUIManager {
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 
+                // İlgili Dosya ve KONU (Marka Adı) Bulma
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) {
                         relatedFileDisplay = ipRec.applicationNumber || ipRec.applicationNo || 'Dosya';
-                        // Konu (Marka Adı) verisini al
+                        // Marka Adı (Konu)
                         fullSubject = ipRec.markName || ipRec.title || ipRec.name || '-';
                     }
                 }
@@ -74,14 +74,14 @@ export class AccrualUIManager {
                 }
             } else { taskDisplay = acc.taskTitle || '-'; }
 
-            // --- KONU KISALTMA (YENİ) ---
+            // --- KONU KISALTMA ---
             let shortSubject = fullSubject;
             if (fullSubject.length > 18) {
                 shortSubject = fullSubject.substring(0, 18) + '..';
             }
-            const subjectHtml = `<span title="${fullSubject}" style="cursor:help; border-bottom:1px dotted #999;">${shortSubject}</span>`;
+            const subjectHtml = `<span title="${fullSubject}" style="cursor:help;">${shortSubject}</span>`;
 
-            // --- TARAF KISALTMA (MEVCUT) ---
+            // --- TARAF KISALTMA ---
             let fullPartyName = '-';
             if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) fullPartyName = acc.tpInvoiceParty.name || 'Türk Patent';
             else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) fullPartyName = acc.serviceInvoiceParty.name || '-';
@@ -90,14 +90,14 @@ export class AccrualUIManager {
             if (fullPartyName.length > 18) {
                 shortPartyName = fullPartyName.substring(0, 18) + '..';
             }
-            const partyHtml = `<span title="${fullPartyName}" style="cursor:help; border-bottom:1px dotted #999;">${shortPartyName}</span>`;
+            const partyHtml = `<span title="${fullPartyName}" style="cursor:help;">${shortPartyName}</span>`;
 
             // Fatura Nolar
             const tfn = acc.tpeInvoiceNo || '-';
             const efn = acc.evrekaInvoiceNo || '-';
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
-            // Menü Kodları (Aynı kalıyor)
+            // --- Menü (Dropdown) ---
             const isEditDisabled = acc.status === 'paid';
             const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn';
             const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
@@ -109,47 +109,63 @@ export class AccrualUIManager {
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
-                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}"><i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle</a>
-                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}"><i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle</a>
+                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}">
+                            <i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle
+                        </a>
+                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
+                            <i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle
+                        </a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}"><i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil</a>
+                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}">
+                            <i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil
+                        </a>
                     </div>
-                </div>`;
+                </div>
+            `;
 
+            // =========================================================
+            // TAB 1: ANA LİSTE (YEKNESAKLAŞTIRILDI)
+            // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
                 let remainingHtml = '-';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
-                const isFullyPaid = (Array.isArray(rem)) ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01) : parseFloat(rem) <= 0.01;
-                if (!isFullyPaid) remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
+                const isFullyPaid = (Array.isArray(rem)) 
+                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
+                    : parseFloat(rem) <= 0.01;
+
+                if (!isFullyPaid) {
+                    remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
+                }
 
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
-                    <td><small>${acc.id}</small></td>
-                    <td><small>${dateStr}</small></td>
-                    <td><span class="badge badge-info" style="font-weight:normal;">${fieldDisplay}</span></td>
+                    <td>${acc.id}</td> <td>${dateStr}</td> <td><span class="badge badge-info">${fieldDisplay}</span></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
-                    <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
+                    <td><span class="badge badge-light border">${relatedFileDisplay}</span></td>
                     
-                    <td><span class="font-weight-bold" style="font-size:0.95em; color:#555;">${subjectHtml}</span></td>
+                    <td><span class="font-weight-bold text-secondary">${subjectHtml}</span></td>
                     
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     
-                    <td><small>${partyHtml}</small></td>
+                    <td>${partyHtml}</td>
                     
-                    <td><small class="text-muted font-weight-bold">${tfn}</small></td>
-                    <td><small class="text-muted font-weight-bold">${efn}</small></td>
+                    <td><span class="text-muted font-weight-bold">${tfn}</span></td>
+                    <td><span class="text-muted font-weight-bold">${efn}</span></td>
+                    
                     <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
                     <td>${remainingHtml}</td>
-                    <td class="text-center">${actionMenuHtml}</td>
+                    <td class="text-center">
+                        ${actionMenuHtml}
+                    </td>
                 </tr>`;
-            }
+            } 
             
-            // TAB 2: YURT DIŞI LİSTESİ (Aynı kalabilir)
+            // TAB 2: YURT DIŞI LİSTESİ (YEKNESAKLAŞTIRILDI)
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 const fStatus = acc.foreignStatus || 'unpaid';
@@ -189,11 +205,9 @@ export class AccrualUIManager {
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
-                    <td><small>${acc.id}</small></td>
-                    <td><span class="badge badge-${sCls}">${sTxt}</span></td>
+                    <td>${acc.id}</td> <td><span class="badge badge-${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    <td style="font-weight:600; color:#495057;"><i class="fas fa-university mr-2 text-muted"></i>${paymentParty}</td>
-                    <td style="font-weight:bold; color:#1e3c72;">${officialStr}</td>
+                    <td>${paymentParty}</td> <td style="font-weight:bold; color:#1e3c72;">${officialStr}</td>
                     <td>${remainingHtml}</td>
                     <td>${documentHtml}</td>
                 </tr>`;
