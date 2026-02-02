@@ -272,10 +272,6 @@ export class PortfolioUpdateManager {
     }
 
     async extractRegistryFieldsFromPdfUrl(pdfUrl) {
-        // PDF metnini PDF.js ile çıkarıp regex ile tescil tarihi/numarası yakalar.
-        // Not: Worker kullanmadan (disableWorker) küçük PDF'lerde yeterince hızlı.
-
-        // Dinamik import: sayfa açılışını yavaşlatmasın.
         const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.mjs');
 
         const res = await fetch(pdfUrl);
@@ -298,43 +294,32 @@ export class PortfolioUpdateManager {
             .replace(/\u00A0/g, ' ')
             .trim();
 
-        // 1) Tescil tarihi: "22.01.2026 tarihinde tescil edilmiştir"
+        // 1) Tescil tarihi Regex (Güncellendi: [./] ile esneklik sağlandı)
         const dateMatches = Array.from(
-        normalized.matchAll(
-            /(\d{2}\.\d{2}\.\d{4})\s*tarihinde\s*tescil\s*edil(?:mi(?:ş|s)tir)?/gi
-        )
+            normalized.matchAll(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})\s*tarihinde\s*tescil\s*edil(?:mi(?:ş|s)tir)?/gi)
         );
 
-        // Debug: neleri yakalıyoruz?
-        console.log("[TESPIT] dateMatches:", dateMatches.map(m => m[0]));
+        let registrationDate = null;
+        if (dateMatches.length > 0) {
+            const lastMatch = dateMatches[dateMatches.length - 1];
+            // Tarihi YYYY-MM-DD formatına çevir (HTML date input için)
+            const d = lastMatch[1].padStart(2, '0');
+            const m = lastMatch[2].padStart(2, '0');
+            const y = lastMatch[3];
+            registrationDate = `${y}-${m}-${d}`;
+        }
 
-        // Genelde doğru olan son eşleşme oluyor
-        const registrationDate = dateMatches.length
-        ? dateMatches[dateMatches.length - 1][1]
-        : null;
-
-        console.log("[TESPIT] registrationDate(selected):", registrationDate);
-
-        // Ek debug: "tescil" geçen yerin etrafı nasıl geliyor?
-        const aroundTescil = normalized.match(/.{0,80}tescil.{0,80}/i);
-        console.log("[TESPIT] around 'tescil':", aroundTescil ? aroundTescil[0] : "(yok)");
-
-
-        // 2) Tescil numarası: "No: 2025 127472" (veya varyasyonları)
+        // 2) Tescil numarası Regex (Aynı kalabilir, gayet iyi)
         let registrationNumber = null;
         const noMatch = normalized.match(/\bNo\s*:\s*(\d{4})\s*(\d{1,10})\b/i);
-
-        console.log("[TESPIT] noMatch:", noMatch);
 
         if (noMatch) {
             registrationNumber = `${noMatch[1]} ${noMatch[2]}`;
         } else {
-            // fallback: "Başvuru Numarası: 2025/127472" veya "2025/127472"
             const slashMatch = normalized.match(/\b(\d{4})\s*\/\s*(\d{1,10})\b/);
-            console.log("[TESPIT] slashMatch:", slashMatch);
             if (slashMatch) registrationNumber = `${slashMatch[1]} ${slashMatch[2]}`;
         }
-        console.log("[TESPIT] registrationNumber:", registrationNumber);
+
         if (!registrationDate && !registrationNumber) return null;
         return { registrationDate, registrationNumber };
     }
@@ -540,6 +525,7 @@ export class PortfolioUpdateManager {
         if (!this.state.selectedRecordId) return;
 
         try {
+            // 1. Nice Sınıfları ve Emtiaları Hazırla
             const selectedNiceData = getSelectedNiceClasses();
             const goodsAndServicesByClass = [];
             const niceClasses = [];
@@ -550,10 +536,8 @@ export class PortfolioUpdateManager {
                     const classNo = Number(match[1]);
                     const content = match[2];
 
-                    // Sınıf listesini doldur
                     niceClasses.push(String(classNo));
 
-                    // Satırlara böl, temizle, boş satırları at
                     const items = content.split('\n')
                         .map(line => line.trim())
                         .filter(line => line.length > 0);
@@ -565,18 +549,38 @@ export class PortfolioUpdateManager {
                 }
             });
 
+            // 2. Güncellenecek Verileri Oluştur
             const updates = {
-                // ... diğer alanlar ...
+                // --- EKSİK OLAN KISIM EKLENDİ ---
+                status: this.elements.registryStatus ? this.elements.registryStatus.value : null,
+                applicationDate: this.elements.appDate ? this.elements.appDate.value : null,
+                registrationNumber: this.elements.regNo ? this.elements.regNo.value : null,
+                registrationDate: this.elements.regDate ? this.elements.regDate.value : null,
+                renewalDate: this.elements.renewalDate ? this.elements.renewalDate.value : null,
+                // --------------------------------
+                
                 niceClasses: niceClasses.sort((a, b) => Number(a) - Number(b)),
                 goodsAndServicesByClass: goodsAndServicesByClass.sort((a, b) => a.classNo - b.classNo),
+                
+                // Bültenleri de kaydedelim (state'den)
+                bulletins: this.state.bulletins || [],
+                
                 updatedAt: new Date().toISOString()
             };
 
+            // Boş (null/undefined) alanları temizle (Opsiyonel ama temiz veri için iyidir)
+            Object.keys(updates).forEach(key => {
+                if (updates[key] === undefined || updates[key] === null) {
+                    delete updates[key];
+                }
+            });
+
             await updateDoc(doc(db, 'ipRecords', this.state.selectedRecordId), updates);
-            showNotification('Değişiklikler başarıyla kaydedildi!', 'success');
+            showNotification('Tüm değişiklikler (Tescil & Nice) başarıyla kaydedildi!', 'success');
 
         } catch (error) {
-            // Hata yönetimi...
+            console.error('Kaydetme hatası:', error);
+            showNotification('Kaydetme sırasında hata oluştu: ' + error.message, 'error');
         }
     }
 }
