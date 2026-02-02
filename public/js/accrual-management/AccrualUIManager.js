@@ -32,8 +32,6 @@ export class AccrualUIManager {
      */
     // public/js/accrual-management/AccrualUIManager.js
 
-    // public/js/accrual-management/AccrualUIManager.js
-
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
@@ -73,11 +71,36 @@ export class AccrualUIManager {
                 }
             } else { taskDisplay = acc.taskTitle || '-'; }
 
-            // --- Yeni Fatura Numaraları ---
             const tfn = acc.tpeInvoiceNo || '-';
             const efn = acc.evrekaInvoiceNo || '-';
-
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
+
+            // --- MENÜ (DROPDOWN) MANTIĞI ---
+            // Düzenle butonu 'paid' ise pasif olsun
+            const isEditDisabled = acc.status === 'paid';
+            const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn';
+            const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
+            const editTitle = isEditDisabled ? 'Ödenmiş kayıt düzenlenemez' : 'Düzenle';
+
+            const actionMenuHtml = `
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
+                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}">
+                            <i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle
+                        </a>
+                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
+                            <i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}">
+                            <i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil
+                        </a>
+                    </div>
+                </div>
+            `;
 
             // =========================================================
             // TAB 1: ANA LİSTE
@@ -109,24 +132,19 @@ export class AccrualUIManager {
                     <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td><small>${partyDisplay}</small></td>
-                    
                     <td><small class="text-muted font-weight-bold">${tfn}</small></td>
                     <td><small class="text-muted font-weight-bold">${efn}</small></td>
                     <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
                     <td>${remainingHtml}</td>
-                    <td>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="action-btn view-btn" data-id="${acc.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
-                            <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${acc.status === 'paid' ? 'disabled' : ''}><i class="fas fa-edit"></i></button>
-                            <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil"><i class="fas fa-trash"></i></button>
-                        </div>
+                    <td class="text-center">
+                        ${actionMenuHtml}
                     </td>
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ (Değişiklik yok)
+            // TAB 2: YURT DIŞI LİSTESİ
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 const fStatus = acc.foreignStatus || 'unpaid';
@@ -162,6 +180,11 @@ export class AccrualUIManager {
                 } else {
                     documentHtml = '<span class="text-muted small">-</span>';
                 }
+
+                // Yurt dışı tabında düzenleme/silme butonları daha sade olabilir ama tutarlılık için aynı menü yapısını kullanabiliriz.
+                // Ancak orijinal tasarımda sadece belge linki vardı, buraya da işlem menüsü eklenebilir. 
+                // Şimdilik orijinal yapıyı koruyup sadece belgeyi gösteriyoruz.
+                // İsterseniz buraya da actionMenuHtml ekleyebiliriz.
 
                 return `
                 <tr>
