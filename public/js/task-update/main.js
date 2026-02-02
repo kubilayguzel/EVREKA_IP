@@ -139,6 +139,37 @@ class TaskUpdateController {
 
         document.getElementById('epatsFileUploadArea').addEventListener('click', () => document.getElementById('epatsFileInput').click());
         document.getElementById('epatsFileInput').addEventListener('change', (e) => this.uploadEpatsDocument(e.target.files[0]));
+
+        // EPATS drag & drop
+        const epatsDropZone = document.getElementById('epatsFileUploadArea');
+        const epatsInput = document.getElementById('epatsFileInput');
+        if (epatsDropZone) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+                epatsDropZone.addEventListener(evt, (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+            });
+            ['dragenter', 'dragover'].forEach(evt => epatsDropZone.addEventListener(evt, () => epatsDropZone.classList.add('drag-over')));
+            ['dragleave', 'drop'].forEach(evt => epatsDropZone.addEventListener(evt, () => epatsDropZone.classList.remove('drag-over')));
+            epatsDropZone.addEventListener('drop', (ev) => {
+                const files = ev.dataTransfer?.files;
+                if (!files || !files.length) return;
+
+                if (files.length > 1) {
+                    showNotification('Sadece tek PDF yükleyebilirsiniz. İlk dosya seçildi.', 'warning');
+                }
+
+                const file = files[0];
+                const isPdf = (file.type === 'application/pdf') || (file.name && file.name.toLowerCase().endsWith('.pdf'));
+                if (!isPdf) {
+                    showNotification('Lütfen PDF dosyası yükleyin.', 'warning');
+                    return;
+                }
+
+                // Aynı dosya tekrar seçilebilsin diye input'u temizle
+                if (epatsInput) epatsInput.value = '';
+                this.uploadEpatsDocument(file);
+            });
+        }
+
         document.getElementById('epatsFileListContainer').addEventListener('click', (e) => {
             if (e.target.closest('#removeEpatsFileBtn')) {
                 this.removeEpatsDocument();
