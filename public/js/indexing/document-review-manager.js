@@ -318,38 +318,33 @@ async loadData() {
         console.log("📄 PDF Verisi Yüklendi:", this.pdfData); // Debug için
 
         if (this.pdfData.fileUrl || this.pdfData.downloadURL) {
-                const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
-                
-                // Arkaplanda PDF metnini oku
-                this.extractTextFromPDF(pdfUrl).then(text => {
-                    if (text) {
-                        const regDate = this.findRegistrationDate(text);
-                        if (regDate) {
-                            console.log("✅ PDF İçinde Bulunan Tescil Tarihi:", regDate);
-                            
-                            // 1. Tescil Tarihi Alanını Doldur
-                            const regDateInput = document.getElementById('registry-registration-date');
-                            if (regDateInput) {
-                                regDateInput.value = regDate;
-                                // Kullanıcıya hafif bir bildirim ver
-                                showNotification(`Tescil tarihi belgeden okundu: ${regDate}`, 'info');
-                            }
+            const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
+            
+            // Run extraction in background
+            this.extractTextFromPDF(pdfUrl).then(text => {
+                if (text) {
+                    const regDate = this.findRegistrationDate(text);
+                    if (regDate) {
+                        console.log("✅ Registration Date Found:", regDate);
+                        
+                        // 1. Save to class property
+                        this.extractedRegDate = regDate;
 
-                            // 2. Eğer "Tescil Belgesi" işlemi seçiliyse "Tebliğ Tarihi"ni de bununla güncelleyebiliriz (Opsiyonel)
-                            /*
-                            const detectedDateInput = document.getElementById('detectedDate');
-                            if (detectedDateInput && !detectedDateInput.value) {
-                                // Tarihi YYYY-MM-DD formatına çevirmek gerekir
-                                const parts = regDate.split('.'); // 22.01.2026 -> [22, 01, 2026]
-                                if(parts.length === 3) {
-                                    detectedDateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                                }
+                        // 2. Try to set immediately (if field is already there)
+                        const regDateInput = document.getElementById('registry-registration-date');
+                        if (regDateInput) {
+                            regDateInput.value = regDate;
+                            // If using Flatpickr, update the instance
+                            if (regDateInput._flatpickr) {
+                                regDateInput._flatpickr.setDate(regDate, true);
                             }
-                            */
                         }
+                        
+                        showNotification(`Tescil tarihi belgeden okundu: ${regDate}`, 'info');
                     }
-                });
-            }
+                }
+            });
+        }
 
         // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
         const dateInput = document.getElementById('detectedDate');
@@ -597,24 +592,29 @@ async loadData() {
         const childTypeId = String(childSelect.value);
         const parentTxId = String(parentSelect.value);
 
-        // 1. İtiraz Bölümü Kontrolü (Tip 27)
+        // 1. İtiraz Bölümü Kontrolü (Tip 27 - Yayına İtiraz)
         const oppositionSection = document.getElementById('oppositionSection');
         if (oppositionSection) {
             oppositionSection.style.display = (childTypeId === '27') ? 'block' : 'none';
         }
 
         // 2. Tescil ve Eşya Listesi Formu Kontrolü
-        const registrationSection = document.getElementById('registry-editor-section');
+        // HTML'deki ID'si 'registry-editor-section' olan kapsayıcıyı hedefliyoruz
+        const registrationSection = document.getElementById('registry-editor-section'); 
         
-        // Element varsa işlem yap, yoksa sessizce geç
         if (registrationSection) {
             let showRegistration = false;
+            
+            // Seçili opsiyonun metnini al (örn: "Marka Tescil Belgesi")
+            const selectedOption = childSelect.options[childSelect.selectedIndex];
+            const childText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-            // DURUM A: Alt işlem doğrudan 45 (Tescil Belgesi)
-            if (childTypeId === '45') {
+            // GÖRÜNÜRLÜK MANTIĞI
+            // DURUM A: İşlem ID'si 45 ise VEYA metin "tescil belgesi" içeriyorsa
+            if (childTypeId === '45' || childText.includes('tescil belgesi')) {
                 showRegistration = true;
             }
-            // DURUM B: Alt işlem 40 (Kabul) ise Ana İşlemi Kontrol Et
+            // DURUM B: İşlem ID'si 40 (Kabul) ise ve Ana İşlem 6 (Kısmi Ret) veya 17 (Vazgeçme) ise
             else if (childTypeId === '40') {
                 if (this.currentTransactions && parentTxId) {
                     const parentTx = this.currentTransactions.find(t => String(t.id) === parentTxId);
@@ -629,8 +629,24 @@ async loadData() {
                 }
             }
             
-            // Görünürlüğü ayarla
+            // Formun görünürlüğünü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
+
+            // TARİHİ OTOMATİK DOLDURMA (YENİ EKLENEN KISIM)
+            // Eğer form açıldıysa ve hafızada okunmuş bir tarih varsa
+            if (showRegistration && this.extractedRegDate) {
+                const regDateInput = document.getElementById('registry-registration-date');
+                
+                // Sadece kutu boşsa doldur (Kullanıcının manuel seçimini ezmemek için)
+                if (regDateInput && !regDateInput.value) {
+                    regDateInput.value = this.extractedRegDate;
+                    
+                    // Flatpickr takvim örneği varsa onu da güncelle (UI için kritik)
+                    if (regDateInput._flatpickr) {
+                        regDateInput._flatpickr.setDate(this.extractedRegDate, true);
+                    }
+                }
+            }
         }
     }
 
