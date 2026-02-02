@@ -377,21 +377,94 @@ export const ipRecordsService = {
     },
     async getRecords(opts = {}) {
         if (!isFirebaseAvailable) return { success: true, data: [] };
-        const { limitCount } = opts;
+        const { limitCount, source = 'cache-first' } = opts;
         try {
         let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
         if (limitCount) q = query(q, limit(limitCount));
 
-        // 1) Cache'ten dene (IndexedDB)
-        const snapCache = await getDocsFromCache(q).catch(() => null);
-        if (snapCache && !snapCache.empty) {
-            return { success: true, data: snapCache.docs.map(d => ({ id: d.id, ...d.data() })), from: 'cache' };
+        // source:
+        // - 'cache-first' (default): cache doluysa onu döndürür, yoksa server
+        // - 'server': cache'i atlayıp her zaman server'dan çeker
+        // - 'cache-only': sadece cache'ten dener
+        if (source !== 'server') {
+            const snapCache = await getDocsFromCache(q).catch(() => null);
+            if (snapCache && !snapCache.empty) {
+                return { success: true, data: snapCache.docs.map(d => ({ id: d.id, ...d.data() })), from: 'cache' };
+            }
+            if (source === 'cache-only') {
+                return { success: true, data: [], from: 'cache' };
+            }
         }
-        // 2) Sunucudan getir
+
         const snapServer = await getDocsFromServer(q).catch(() => getDocs(q));
         return { success: true, data: snapServer.docs.map(d => ({ id: d.id, ...d.data() })), from: 'server' };
         } catch (error) {
         return { success: false, error: error.message };
+        }
+    },
+
+    // ✅ İhtiyaç duyulan ipRecord'ları ID listesi ile getir (İşlerim/MyTasks için ideal)
+    // Firestore 'in' sorgusu 10 ID ile sınırlı olduğu için chunk'lar halinde çalışır.
+    async getRecordsByIds(recordIds = [], opts = {}) {
+        if (!isFirebaseAvailable) return { success: true, data: [] };
+        const { source = 'cache-first' } = opts;
+        try {
+            const ids = [...new Set((recordIds || []).filter(Boolean).map(id => String(id)))];
+            if (ids.length === 0) return { success: true, data: [] };
+
+            const out = [];
+            const seen = new Set();
+            const chunkSize = 10;
+
+            for (let i = 0; i < ids.length; i += chunkSize) {
+                const chunk = ids.slice(i, i + chunkSize);
+                const q = query(
+                    collection(db, 'ipRecords'),
+                    where(documentId(), 'in', chunk)
+                );
+
+                let cacheSnap = null;
+                if (source !== 'server') {
+                    cacheSnap = await getDocsFromCache(q).catch(() => null);
+                }
+
+                const cacheDocs = cacheSnap ? cacheSnap.docs : [];
+                const cacheMap = new Map(cacheDocs.map(d => [d.id, d]));
+
+                // cache-only modunda cache döndür, yoksa boş
+                if (source === 'cache-only') {
+                    for (const d of cacheDocs) {
+                        if (seen.has(d.id)) continue;
+                        seen.add(d.id);
+                        out.push({ id: d.id, ...d.data() });
+                    }
+                    continue;
+                }
+
+                // cache-first ise: cache'te eksik kalan ID'ler için server'a git
+                const missingIds = chunk.filter(id => !cacheMap.has(id));
+                let serverDocs = [];
+                if (source === 'server' || missingIds.length > 0 || !cacheSnap || cacheSnap.empty) {
+                    // Not: Server'dan chunk bazlı sorgu
+                    const qServer = query(
+                        collection(db, 'ipRecords'),
+                        where(documentId(), 'in', chunk)
+                    );
+                    const serverSnap = await getDocsFromServer(qServer).catch(() => getDocs(qServer));
+                    serverDocs = serverSnap.docs;
+                }
+
+                // Merge (server cache'i de tazeler)
+                for (const d of [...cacheDocs, ...serverDocs]) {
+                    if (seen.has(d.id)) continue;
+                    seen.add(d.id);
+                    out.push({ id: d.id, ...d.data() });
+                }
+            }
+
+            return { success: true, data: out };
+        } catch (error) {
+            return { success: false, error: error.message };
         }
     },
 
