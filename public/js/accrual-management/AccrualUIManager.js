@@ -30,6 +30,7 @@ export class AccrualUIManager {
      * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
+
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
@@ -63,7 +64,6 @@ export class AccrualUIManager {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) {
                         relatedFileDisplay = ipRec.applicationNumber || ipRec.applicationNo || 'Dosya';
-                        // Marka Adı (Konu)
                         fullSubject = ipRec.markName || ipRec.title || ipRec.name || '-';
                     }
                 }
@@ -79,6 +79,7 @@ export class AccrualUIManager {
             if (fullSubject.length > 18) {
                 shortSubject = fullSubject.substring(0, 18) + '..';
             }
+            // Sadece tooltip için span kaldı, stil kaldırıldı
             const subjectHtml = `<span title="${fullSubject}" style="cursor:help;">${shortSubject}</span>`;
 
             // --- TARAF KISALTMA ---
@@ -109,7 +110,7 @@ export class AccrualUIManager {
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
-                        <a class="dropdown-item view-btn font-weight-bold" href="#" data-id="${acc.id}">
+                        <a class="dropdown-item view-btn" href="#" data-id="${acc.id}">
                             <i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle
                         </a>
                         <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
@@ -124,7 +125,7 @@ export class AccrualUIManager {
             `;
 
             // =========================================================
-            // TAB 1: ANA LİSTE (YEKNESAKLAŞTIRILDI)
+            // TAB 1: ANA LİSTE (SADELEŞTİRİLMİŞ)
             // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
@@ -142,20 +143,10 @@ export class AccrualUIManager {
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
-                    <td>${acc.id}</td> <td>${dateStr}</td> <td><span class="badge badge-info">${fieldDisplay}</span></td>
-                    <td><span class="status-badge ${sCls}">${sTxt}</span></td>
-                    <td><span class="badge badge-light border">${relatedFileDisplay}</span></td>
-                    
-                    <td><span class="font-weight-bold text-secondary">${subjectHtml}</span></td>
-                    
-                    <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    
-                    <td>${partyHtml}</td>
-                    
-                    <td><span class="text-muted font-weight-bold">${tfn}</span></td>
-                    <td><span class="text-muted font-weight-bold">${efn}</span></td>
-                    
-                    <td>${officialStr}</td>
+                    <td>${acc.id}</td>
+                    <td>${dateStr}</td>
+                    <td><span class="badge badge-info">${fieldDisplay}</span></td> <td><span class="status-badge ${sCls}">${sTxt}</span></td> <td>${relatedFileDisplay}</td> <td>${subjectHtml}</td>        <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td> <td>${partyHtml}</td>
+                    <td>${tfn}</td>                <td>${efn}</td>                <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
                     <td>${remainingHtml}</td>
@@ -165,9 +156,9 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ (YEKNESAKLAŞTIRILDI)
+            // TAB 2: YURT DIŞI LİSTESİ (SADELEŞTİRİLMİŞ)
             else {
-                let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
+                let paymentParty = acc.serviceInvoiceParty?.name || '-'; // text-muted kaldırıldı
                 const fStatus = acc.foreignStatus || 'unpaid';
                 let sTxt = 'Ödenmedi', sCls = 'danger';
                 if (fStatus === 'paid') { sTxt = 'Ödendi'; sCls = 'success'; }
@@ -184,9 +175,9 @@ export class AccrualUIManager {
                     : parseFloat(foreignRem) <= 0.01;
 
                 if (!isFullyPaid) {
-                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRem, acc.officialFee?.currency || 'EUR')}</span>`;
+                    remainingHtml = `<span class="text-danger">${this._formatMoney(foreignRem, acc.officialFee?.currency || 'EUR')}</span>`;
                 } else {
-                    remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
+                    remainingHtml = `<span class="text-success">Tamamlandı</span>`;
                 }
 
                 let documentHtml = '';
@@ -199,15 +190,17 @@ export class AccrualUIManager {
                         </a>
                     `;
                 } else {
-                    documentHtml = '<span class="text-muted small">-</span>';
+                    documentHtml = '-';
                 }
 
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
-                    <td>${acc.id}</td> <td><span class="badge badge-${sCls}">${sTxt}</span></td>
-                    <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    <td>${paymentParty}</td> <td style="font-weight:bold; color:#1e3c72;">${officialStr}</td>
+                    <td>${acc.id}</td>
+                    <td><span class="badge badge-${sCls}">${sTxt}</span></td>
+                    <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
+                    <td>${paymentParty}</td>
+                    <td>${officialStr}</td>
                     <td>${remainingHtml}</td>
                     <td>${documentHtml}</td>
                 </tr>`;
