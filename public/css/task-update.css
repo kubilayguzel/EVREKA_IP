@@ -65,6 +65,8 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     background: #f1faee; margin-top: 15px; position: relative;
 }
 .file-upload-area:hover { border-color: #457b9d; background: #e0f2f7; }
+.file-upload-area.drag-over { border-color: #d63384; background: #ffe3ef; box-shadow: 0 0 0 4px rgba(214,51,132,0.12); }
+
 .upload-icon { font-size: 3.5em; color: #457b9d; margin-bottom: 15px; }
 .upload-text { font-size: 1.2em; font-weight: 600; color: #333; }
 .upload-subtext { font-size: 0.9em; color: #666; margin-top: 5px; }
