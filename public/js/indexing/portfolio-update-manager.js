@@ -299,11 +299,26 @@ export class PortfolioUpdateManager {
             .trim();
 
         // 1) Tescil tarihi: "22.01.2026 tarihinde tescil edilmiştir"
-        const dateMatch = normalized.match(/(\d{2}\.\d{2}\.\d{4})\s*tarihinde\s*tescil\s*edil/i);
-        const registrationDate = dateMatch ? dateMatch[1] : null;
+        const dateMatches = Array.from(
+        normalized.matchAll(
+            /(\d{2}\.\d{2}\.\d{4})\s*tarihinde\s*tescil\s*edil(?:mi(?:ş|s)tir)?/gi
+        )
+        );
 
-        console.log("[TESPIT] dateMatch:", dateMatch);
-        console.log("[TESPIT] registrationDate:", registrationDate);
+        // Debug: neleri yakalıyoruz?
+        console.log("[TESPIT] dateMatches:", dateMatches.map(m => m[0]));
+
+        // Genelde doğru olan son eşleşme oluyor
+        const registrationDate = dateMatches.length
+        ? dateMatches[dateMatches.length - 1][1]
+        : null;
+
+        console.log("[TESPIT] registrationDate(selected):", registrationDate);
+
+        // Ek debug: "tescil" geçen yerin etrafı nasıl geliyor?
+        const aroundTescil = normalized.match(/.{0,80}tescil.{0,80}/i);
+        console.log("[TESPIT] around 'tescil':", aroundTescil ? aroundTescil[0] : "(yok)");
+
 
         // 2) Tescil numarası: "No: 2025 127472" (veya varyasyonları)
         let registrationNumber = null;
