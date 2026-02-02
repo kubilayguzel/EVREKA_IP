@@ -54,6 +54,73 @@ class TaskUpdateController {
         this.setupRenewalModalEvents();
     }
 
+    async extractEpatsInfoFromFile(file) {
+        try {
+            // PDF.js kütüphanesini dinamik olarak yükle
+            const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.mjs');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.mjs';
+
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+            const pdf = await loadingTask.promise;
+
+            let fullText = '';
+            // Genellikle bilgi ilk sayfadadır, performans için sadece 1. sayfayı okuyoruz (gerekirse artırılabilir)
+            const maxPages = Math.min(pdf.numPages, 2);
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                const strings = content.items.map(item => item.str);
+                fullText += strings.join(' ') + '\n';
+            }
+
+            // --- REGEX İLE VERİ AYIKLAMA ---
+            
+            // 1. Evrak No: Genellikle "2024-GE-12345" veya "Evrak No: 12345" formatındadır.
+            let evrakNo = null;
+            // Format A: YYYY-AA-XXXXXX (Örn: 2024-GE-123456)
+            const standardMatch = fullText.match(/(\d{4}-[A-Z]{2,}-\d+)/);
+            // Format B: "Evrak No : XXXXX"
+            const labeledMatch = fullText.match(/Evrak\s*No\s*[:]\s*([\w-]+)/i);
+
+            if (standardMatch) evrakNo = standardMatch[1];
+            else if (labeledMatch) evrakNo = labeledMatch[1];
+
+            // 2. Tarih: "Tarih : 01.01.2024" veya belgedeki ilk tarih
+            let documentDate = null;
+            
+            // Önce etiketli tarihi ara (Daha güvenilir)
+            const dateLabelMatch = fullText.match(/(?:Evrak\s*)?Tarih(?:i)?\s*[:]\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i);
+            
+            if (dateLabelMatch) {
+                documentDate = this.parseDate(dateLabelMatch[1]);
+            } else {
+                // Etiket yoksa belgedeki ilk mantıklı tarihi bul
+                const allDates = fullText.match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/);
+                if (allDates) {
+                    documentDate = this.parseDate(allDates[0]);
+                }
+            }
+
+            return { evrakNo, documentDate };
+
+        } catch (e) {
+            console.error("PDF okuma hatası:", e);
+            return null;
+        }
+    }
+
+    // Yardımcı: DD.MM.YYYY formatını YYYY-MM-DD (HTML input formatı) yapar
+    parseDate(dateStr) {
+        if (!dateStr) return null;
+        const parts = dateStr.replace(/\//g, '.').split('.');
+        if (parts.length === 3) {
+            // parts[2]=Yıl, parts[1]=Ay, parts[0]=Gün
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        return null;
+    }
+
     async refreshTaskData() {
         this.taskData = await this.dataManager.getTaskById(this.taskId);
         this.currentDocuments = this.taskData.documents || [];
@@ -348,6 +415,31 @@ class TaskUpdateController {
                 };
                 console.log("📥 Mevcut veriler geri dönüş için yedeklendi.");
             }
+        }
+
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            showNotification('PDF taranıyor, evrak bilgileri okunuyor...', 'info');
+            
+            this.extractEpatsInfoFromFile(file).then(info => {
+                if (info) {
+                    const noInput = document.getElementById('turkpatentEvrakNo');
+                    const dateInput = document.getElementById('epatsDocumentDate');
+
+                    let msg = [];
+                    if (info.evrakNo && noInput && !noInput.value) {
+                        noInput.value = info.evrakNo;
+                        msg.push('Evrak No');
+                    }
+                    if (info.documentDate && dateInput && !dateInput.value) {
+                        dateInput.value = info.documentDate;
+                        msg.push('Tarih');
+                    }
+
+                    if (msg.length > 0) {
+                        showNotification(`✅ PDF'ten otomatik dolduruldu: ${msg.join(', ')}`, 'success');
+                    }
+                }
+            });
         }
 
         const id = generateUUID();
