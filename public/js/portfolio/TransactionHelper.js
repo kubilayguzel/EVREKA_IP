@@ -66,6 +66,9 @@ export class TransactionHelper {
         if (transaction.oppositionPetitionFileUrl) {
             addDoc({ name: 'İtiraz Dilekçesi', url: transaction.oppositionPetitionFileUrl, type: 'petition' });
         }
+        if (transaction.oppositionEpatsPetitionFileUrl) {
+            addDoc({ name: 'Karşı ePATS Dilekçesi', url: transaction.oppositionEpatsPetitionFileUrl, type: 'epats' });
+        }
 
         return docs;
     }
@@ -141,6 +144,9 @@ export class TransactionHelper {
         }
         if (transaction.oppositionPetitionFileUrl) {
             addDoc({ name: 'İtiraz Dilekçesi', url: transaction.oppositionPetitionFileUrl, type: 'petition' }, 'direct');
+        }
+        if (transaction.oppositionEpatsPetitionFileUrl) {
+            addDoc({ name: 'Karşı ePATS Dilekçesi', url: transaction.oppositionEpatsPetitionFileUrl, type: 'epats' }, 'direct');
         }
 
         // 2. Task (Görev) üzerindeki belgeler (Fallback)
