@@ -2,7 +2,6 @@
 
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
-import { showNotification } from '../../utils.js';
 
 export class AccrualUIManager {
     constructor() {
@@ -22,16 +21,58 @@ export class AccrualUIManager {
         // Alt Bileşenler (Managers)
         this.editFormManager = null;
         this.taskDetailManager = new TaskDetailManager('modalBody');
+
+        // Veri Saklama (Görüntüleme işlemleri için)
+        this.currentData = [];
+
+        // Event Dinleyicilerini Başlat
+        this._bindInternalEvents();
+    }
+
+    /**
+     * Tablo içi butonlara tıklama olaylarını dinler.
+     */
+    _bindInternalEvents() {
+        const handleTableClick = (e) => {
+            // 1. Görüntüle Butonu
+            const viewBtn = e.target.closest('.view-btn');
+            if (viewBtn) {
+                e.preventDefault();
+                const id = viewBtn.dataset.id;
+                const item = this.currentData.find(x => String(x.id) === String(id));
+                if (item) this.showViewDetailModal(item);
+                return;
+            }
+
+            // 2. Düzenle Butonu (Custom Event fırlatır veya main.js yakalar)
+            const editBtn = e.target.closest('.edit-btn');
+            if (editBtn && !editBtn.classList.contains('disabled')) {
+                // Main.js'in dinlemesi için global event fırlatıyoruz (Yedek mekanizma)
+                const id = editBtn.dataset.id;
+                document.dispatchEvent(new CustomEvent('accrual-edit-request', { detail: { id } }));
+                return;
+            }
+
+            // 3. Sil Butonu
+            const deleteBtn = e.target.closest('.delete-btn');
+            if (deleteBtn) {
+                 const id = deleteBtn.dataset.id;
+                 document.dispatchEvent(new CustomEvent('accrual-delete-request', { detail: { id } }));
+                 return;
+            }
+        };
+
+        if (this.tableBody) this.tableBody.addEventListener('click', handleTableClick);
+        if (this.foreignTableBody) this.foreignTableBody.addEventListener('click', handleTableClick);
     }
 
     /**
      * Tabloyu çizer.
-     * @param {Array} data - Görüntülenecek (sayfalanmış) veri listesi
-     * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
-     * @param {String} activeTab - 'main' veya 'foreign'
      */
-
     renderTable(data, lookups, activeTab = 'main') {
+        // Veriyi sakla (Modal açarken kullanacağız)
+        this.currentData = data || [];
+
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
         
@@ -49,7 +90,6 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- Temel Bilgiler ---
             const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
             
             let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-', fullSubject = '-';
@@ -59,7 +99,6 @@ export class AccrualUIManager {
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 
-                // İlgili Dosya ve KONU (Marka Adı) Bulma
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) {
@@ -74,59 +113,49 @@ export class AccrualUIManager {
                 }
             } else { taskDisplay = acc.taskTitle || '-'; }
 
-            // --- KONU KISALTMA ---
-            let shortSubject = fullSubject;
-            if (fullSubject.length > 18) {
-                shortSubject = fullSubject.substring(0, 18) + '..';
-            }
-            // Sadece tooltip için span kaldı, stil kaldırıldı
+            // Kısaltmalar
+            let shortSubject = fullSubject.length > 18 ? fullSubject.substring(0, 18) + '..' : fullSubject;
             const subjectHtml = `<span title="${fullSubject}" style="cursor:help;">${shortSubject}</span>`;
 
-            // --- TARAF KISALTMA ---
             let fullPartyName = '-';
             if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) fullPartyName = acc.tpInvoiceParty.name || 'Türk Patent';
             else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) fullPartyName = acc.serviceInvoiceParty.name || '-';
 
-            let shortPartyName = fullPartyName;
-            if (fullPartyName.length > 18) {
-                shortPartyName = fullPartyName.substring(0, 18) + '..';
-            }
+            let shortPartyName = fullPartyName.length > 18 ? fullPartyName.substring(0, 18) + '..' : fullPartyName;
             const partyHtml = `<span title="${fullPartyName}" style="cursor:help;">${shortPartyName}</span>`;
 
-            // Fatura Nolar
             const tfn = acc.tpeInvoiceNo || '-';
             const efn = acc.evrekaInvoiceNo || '-';
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
-            // --- Menü (Dropdown) ---
+            // Menü Yapılandırması
             const isEditDisabled = acc.status === 'paid';
-            const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn';
+            // action-btn sınıfı eklendi (Main.js uyumluluğu için)
+            const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn action-btn';
             const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
             const editTitle = isEditDisabled ? 'Ödenmiş kayıt düzenlenemez' : 'Düzenle';
 
+            // İkonlara pointer-events: none eklendi (Tıklama hatasını önlemek için)
             const actionMenuHtml = `
                 <div class="dropdown">
                     <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-ellipsis-v"></i>
+                        <i class="fas fa-ellipsis-v" style="pointer-events: none;"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
-                        <a class="dropdown-item view-btn" href="#" data-id="${acc.id}">
-                            <i class="fas fa-eye mr-2 text-primary" style="width:20px;"></i> Görüntüle
+                        <a class="dropdown-item view-btn action-btn" href="#" data-id="${acc.id}">
+                            <i class="fas fa-eye mr-2 text-primary" style="pointer-events: none; width:20px;"></i> Görüntüle
                         </a>
                         <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
-                            <i class="fas fa-edit mr-2 text-warning" style="width:20px;"></i> Düzenle
+                            <i class="fas fa-edit mr-2 text-warning" style="pointer-events: none; width:20px;"></i> Düzenle
                         </a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item delete-btn text-danger" href="#" data-id="${acc.id}">
-                            <i class="fas fa-trash-alt mr-2" style="width:20px;"></i> Sil
+                        <a class="dropdown-item delete-btn action-btn text-danger" href="#" data-id="${acc.id}">
+                            <i class="fas fa-trash-alt mr-2" style="pointer-events: none; width:20px;"></i> Sil
                         </a>
                     </div>
                 </div>
             `;
 
-            // =========================================================
-            // TAB 1: ANA LİSTE (SADELEŞTİRİLMİŞ)
-            // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
@@ -136,29 +165,30 @@ export class AccrualUIManager {
                     ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
                     : parseFloat(rem) <= 0.01;
 
-                if (!isFullyPaid) {
-                    remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
-                }
+                if (!isFullyPaid) remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
 
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
                     <td>${acc.id}</td>
                     <td>${dateStr}</td>
-                    <td><span class="badge badge-info">${fieldDisplay}</span></td> <td><span class="status-badge ${sCls}">${sTxt}</span></td> <td>${relatedFileDisplay}</td> <td>${subjectHtml}</td>        <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td> <td>${partyHtml}</td>
-                    <td>${tfn}</td>                <td>${efn}</td>                <td>${officialStr}</td>
+                    <td><span class="badge badge-info">${fieldDisplay}</span></td>
+                    <td><span class="status-badge ${sCls}">${sTxt}</span></td>
+                    <td>${relatedFileDisplay}</td>
+                    <td><span class="font-weight-bold text-secondary">${subjectHtml}</span></td>
+                    <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
+                    <td>${partyHtml}</td>
+                    <td><span class="text-muted font-weight-bold">${tfn}</span></td>
+                    <td><span class="text-muted font-weight-bold">${efn}</span></td>
+                    <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
                     <td>${remainingHtml}</td>
-                    <td class="text-center">
-                        ${actionMenuHtml}
-                    </td>
+                    <td class="text-center">${actionMenuHtml}</td>
                 </tr>`;
-            } 
-            
-            // TAB 2: YURT DIŞI LİSTESİ (SADELEŞTİRİLMİŞ)
-            else {
-                let paymentParty = acc.serviceInvoiceParty?.name || '-'; // text-muted kaldırıldı
+            } else {
+                // Yurt Dışı Tablosu
+                let paymentParty = acc.serviceInvoiceParty?.name || '-';
                 const fStatus = acc.foreignStatus || 'unpaid';
                 let sTxt = 'Ödenmedi', sCls = 'danger';
                 if (fStatus === 'paid') { sTxt = 'Ödendi'; sCls = 'success'; }
@@ -180,17 +210,11 @@ export class AccrualUIManager {
                     remainingHtml = `<span class="text-success">Tamamlandı</span>`;
                 }
 
-                let documentHtml = '';
+                let documentHtml = '-';
                 if (acc.files && acc.files.length > 0) {
                     const lastFile = acc.files[acc.files.length - 1];
                     const link = lastFile.url || lastFile.content;
-                    documentHtml = `
-                        <a href="${link}" target="_blank" class="text-secondary" title="${lastFile.name || 'Dekont'}" style="text-decoration: none;">
-                            <i class="fas fa-file-contract fa-lg hover-primary"></i>
-                        </a>
-                    `;
-                } else {
-                    documentHtml = '-';
+                    documentHtml = `<a href="${link}" target="_blank" class="text-secondary" title="${lastFile.name}"><i class="fas fa-file-contract fa-lg hover-primary"></i></a>`;
                 }
 
                 return `
@@ -212,22 +236,19 @@ export class AccrualUIManager {
     }
 
     /**
-     * Düzenleme Modalını Açar ve Formu Doldurur
+     * Düzenle Modalını Açar (Bu metod Main.js tarafından veya event ile tetiklenir)
      */
     initEditModal(accrual, personList, epatsDocument = null) {
         if (!accrual) return;
 
-        // Form Manager'ı Başlat (Sadece bir kere veya her açılışta resetle)
         if (!this.editFormManager) {
             this.editFormManager = new AccrualFormManager('editAccrualFormContainer', 'edit', personList);
             this.editFormManager.render();
         } else {
-            // Person listesi güncellenmiş olabilir
             this.editFormManager.persons = personList;
             this.editFormManager.render(); 
         }
 
-        // Verileri Doldur
         document.getElementById('editAccrualId').value = accrual.id;
         document.getElementById('editAccrualTaskTitleDisplay').value = accrual.taskTitle || '';
         
@@ -242,7 +263,7 @@ export class AccrualUIManager {
     }
 
     /**
-     * Detay Görüntüleme Modalını Açar
+     * Detay Modalını Açar (Artık dahili olarak da çağrılabilir)
      */
     showViewDetailModal(accrual) {
         if (!accrual) return;
@@ -279,6 +300,10 @@ export class AccrualUIManager {
             filesHtml = '<div class="col-12 text-center text-muted font-italic p-3">Ekli dosya bulunmamaktadır.</div>';
         }
 
+        // --- YENİ ALANLARIN DETAYDA GÖSTERİMİ ---
+        const tfn = accrual.tpeInvoiceNo || '-';
+        const efn = accrual.evrekaInvoiceNo || '-';
+
         body.innerHTML = `
             <div class="container-fluid p-0">
                 <div class="row mb-3">
@@ -292,6 +317,21 @@ export class AccrualUIManager {
                         <div class="p-2 bg-light border rounded text-center">
                             <label class="small text-muted mb-0 font-weight-bold">DURUM</label>
                             <div class="font-weight-bold" style="color:${statusColor}">${statusText.toUpperCase()}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="p-2 border rounded">
+                            <label class="small text-muted mb-0 font-weight-bold">TPE Fatura No</label>
+                            <div class="text-dark font-weight-bold">${tfn}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 border rounded">
+                            <label class="small text-muted mb-0 font-weight-bold">EVREKA Fatura No</label>
+                            <div class="text-dark font-weight-bold">${efn}</div>
                         </div>
                     </div>
                 </div>
@@ -328,12 +368,6 @@ export class AccrualUIManager {
         this.viewModal.classList.add('show');
     }
 
-    /**
-     * Ödeme Girişi Modalını Hazırlar
-     * @param {Array} selectedAccrualsList - Seçilen tahakkuk objeleri
-     * @param {String} activeTab - 'main' veya 'foreign'
-     */
-
     showPaymentModal(selectedAccrualsList, activeTab = 'main') {
         document.getElementById('paidAccrualCount').textContent = selectedAccrualsList.length;
         document.getElementById('paymentDate').valueAsDate = new Date();
@@ -342,15 +376,12 @@ export class AccrualUIManager {
         const localArea = document.getElementById('detailedPaymentInputs');
         const foreignArea = document.getElementById('foreignPaymentInputs');
 
-        // Önce her iki alanı da gizle
         if(localArea) localArea.style.display = 'none';
         if(foreignArea) foreignArea.style.display = 'none';
 
-        // SADECE TEKİL SEÇİMDE DETAY GÖSTERİLİR
         if (selectedAccrualsList.length === 1) {
             const acc = selectedAccrualsList[0];
 
-            // --- SENARYO A: YURT DIŞI TABI ---
             if (activeTab === 'foreign') {
                 if(foreignArea) foreignArea.style.display = 'block';
 
@@ -360,10 +391,8 @@ export class AccrualUIManager {
                 document.getElementById('foreignTotalBadge').textContent = `${this._formatMoney(offAmt, offCurr)}`;
                 document.querySelectorAll('.foreign-currency-label').forEach(el => el.textContent = offCurr);
 
-                // --- GÜNCELLEME BURADA: Yeni alanlardan veriyi çek ---
                 document.getElementById('manualForeignOfficial').value = acc.foreignPaidOfficialAmount || 0;
                 document.getElementById('manualForeignService').value = acc.foreignPaidServiceAmount || 0;
-                // ----------------------------------------------------
 
                 const payFullCb = document.getElementById('payFullForeign');
                 const splitInputs = document.getElementById('foreignSplitInputs');
@@ -371,26 +400,21 @@ export class AccrualUIManager {
                 if(payFullCb) payFullCb.checked = true;
                 if(splitInputs) splitInputs.style.display = 'none';
             }
-            
-            // --- SENARYO B: ANA LİSTE (YEREL) ---
             else {
-                if(localArea) localArea.style.display = 'block'; // Yerel alanı aç
+                if(localArea) localArea.style.display = 'block';
 
-                // Resmi Ücret
                 const offAmt = acc.officialFee?.amount || 0;
                 const offCurr = acc.officialFee?.currency || 'TRY';
                 document.getElementById('officialFeeBadge').textContent = `${offAmt} ${offCurr}`;
                 document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr;
                 document.getElementById('manualOfficialAmount').value = acc.paidOfficialAmount || 0;
 
-                // Hizmet Bedeli
                 const srvAmt = acc.serviceFee?.amount || 0;
                 const srvCurr = acc.serviceFee?.currency || 'TRY';
                 document.getElementById('serviceFeeBadge').textContent = `${srvAmt} ${srvCurr}`;
                 document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr;
                 document.getElementById('manualServiceAmount').value = acc.paidServiceAmount || 0;
 
-                // Varsayılanlar
                 document.getElementById('payFullOfficial').checked = true;
                 document.getElementById('officialAmountInputContainer').style.display = 'none';
                 document.getElementById('payFullService').checked = true;
@@ -401,9 +425,6 @@ export class AccrualUIManager {
         this.paymentModal.classList.add('show');
     }
 
-    /**
-     * Task Detail Modalını Gösterir (Loading/Content/Error durumları)
-     */
     showTaskDetailLoading() {
         this.taskDetailModal.classList.add('show');
         document.getElementById('modalTaskTitle').textContent = 'Yükleniyor...';
@@ -419,9 +440,6 @@ export class AccrualUIManager {
         this.taskDetailManager.showError(msg);
     }
 
-    /**
-     * Yardımcılar
-     */
     updateBulkActionsVisibility(isVisible) {
         if(this.bulkActions) this.bulkActions.style.display = isVisible ? 'flex' : 'none';
     }
@@ -434,7 +452,6 @@ export class AccrualUIManager {
         document.getElementById(modalId).classList.remove('show');
     }
 
-    // Para birimi formatlayıcı (Ondalıksız)
     _formatMoney(val, curr) {
         if (Array.isArray(val)) {
             if (val.length === 0) return '0 ' + (curr || 'TRY');
@@ -447,7 +464,6 @@ export class AccrualUIManager {
         return `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num)} ${curr || 'TRY'}`;
     }
 
-    // Edit form verisini toplar
     getEditFormData() {
         return this.editFormManager ? this.editFormManager.getData() : { success: false, error: 'Form yüklenmedi' };
     }
