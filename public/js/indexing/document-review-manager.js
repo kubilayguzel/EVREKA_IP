@@ -353,7 +353,7 @@ async loadData() {
                     }
                 }
             });
-        }
+        } 
 
         // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
         const dateInput = document.getElementById('detectedDate');
