@@ -141,6 +141,38 @@
             transform: translateX(120%);
         }
 
+        /* PDF Drag & Drop */
+        .pdf-dropzone {
+            border: 1px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #ffffff;
+            cursor: pointer;
+            transition: 120ms ease;
+        }
+
+        .pdf-dropzone.drag-over {
+            border-color: #0d6efd;
+            background: #f0f7ff;
+        }
+
+        .pdf-dropzone .dz-title {
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pdf-dropzone .dz-hint {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .pdf-dropzone .dz-filename {
+            font-size: 12px;
+            color: #495057;
+            margin-top: 6px;
+            word-break: break-word;
+        }
+
         @keyframes slideInRight {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
@@ -264,7 +296,23 @@
 
                                     <div class="form-group mb-0">
                                         <label class="small font-weight-bold">Karşı Taraf İtiraz Dilekçesi (PDF)</label>
-                                        <input type="file" id="oppositionPetitionFile" class="form-control-file small" accept="application/pdf">
+                                        <div id="oppositionPetitionDropzone" class="pdf-dropzone" role="button" tabindex="0">
+                                            <div class="dz-title"><i class="fas fa-file-upload mr-1"></i>PDF yükle</div>
+                                            <div class="dz-hint">Sürükle &amp; bırak ya da tıklayıp seç</div>
+                                            <div id="oppositionPetitionFileName" class="dz-filename">Dosya seçilmedi</div>
+                                            <input type="file" id="oppositionPetitionFile" class="d-none" accept="application/pdf">
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group mt-2 mb-0">
+                                        <label class="small font-weight-bold">Karşı ePATS Dilekçesi (PDF)</label>
+                                        <div id="oppositionEpatsDropzone" class="pdf-dropzone" role="button" tabindex="0">
+                                            <div class="dz-title"><i class="fas fa-file-upload mr-1"></i>PDF yükle</div>
+                                            <div class="dz-hint">Sürükle &amp; bırak ya da tıklayıp seç</div>
+                                            <div id="oppositionEpatsFileName" class="dz-filename">Dosya seçilmedi</div>
+                                            <input type="file" id="oppositionEpatsPetitionFile" class="d-none" accept="application/pdf">
+                                        </div>
+                                        <small class="text-muted italic d-block mt-1"><i class="fas fa-info-circle mr-1"></i>Opsiyonel: Karşı tarafın ePATS dilekçesini ekleyebilirsiniz.</small>
                                     </div>
                                 </div>
 
@@ -304,6 +352,17 @@
                                         <div class="input-group-append">
                                             <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
                                         </div>
+                                    </div>
+
+                                    <div class="form-group mb-0 mt-2">
+                                        <label class="small font-weight-bold">Karşı ePATS Dilekçesi (PDF)</label>
+                                        <div id="oppositionEpatsDropzone" class="pdf-dropzone" role="button" tabindex="0">
+                                            <div class="dz-title"><i class="fas fa-file-upload mr-1"></i>PDF yükle</div>
+                                            <div class="dz-hint">Sürükle &amp; bırak ya da tıklayıp seç</div>
+                                            <div id="oppositionEpatsFileName" class="dz-filename">Dosya seçilmedi</div>
+                                            <input type="file" id="oppositionEpatsFile" class="d-none" accept="application/pdf">
+                                        </div>
+                                        <small class="text-muted italic d-block mt-1"><i class="fas fa-info-circle mr-1"></i>Opsiyonel</small>
                                     </div>
                                 </div>
                             </div>
