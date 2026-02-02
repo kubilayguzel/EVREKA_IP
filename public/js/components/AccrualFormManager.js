@@ -82,6 +82,30 @@ export class AccrualFormManager {
                 </div>
             </div>
 
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="text-secondary font-weight-bold" style="font-size:0.9rem;">TPE Fatura No</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text bg-light"><i class="fas fa-file-invoice text-muted"></i></span>
+                            </div>
+                            <input type="text" id="${p}TpeInvoiceNo" class="form-input form-control" placeholder="Örn: TPE2023..." style="border-left:none;">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="text-secondary font-weight-bold" style="font-size:0.9rem;">EVREKA Fatura No</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text bg-light"><i class="fas fa-file-invoice-dollar text-muted"></i></span>
+                            </div>
+                            <input type="text" id="${p}EvrekaInvoiceNo" class="form-input form-control" placeholder="Örn: EVR2023..." style="border-left:none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div id="${p}TotalAmountDisplay" class="total-amount-display d-flex justify-content-between align-items-center" 
                  style="font-size: 1.1em; font-weight: bold; color: #1e3c72; margin-top: 15px; padding: 15px 20px; background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 10px;">
                 <span class="text-uppercase text-muted" style="font-size: 0.85em; letter-spacing: 1px;">TOPLAM</span>
@@ -209,7 +233,6 @@ export class AccrualFormManager {
 
     /**
      * Toplam tutarı hesaplar ve ekrana yazar.
-     * GÜNCELLENDİ: "Toplam" yazısı solda, tutarlar sağda tek satırda ( + ile birleştirilmiş).
      */
     calculateTotal() {
         const p = this.prefix;
@@ -230,11 +253,8 @@ export class AccrualFormManager {
         if (offTotal > 0) totals[offCurr] = (totals[offCurr] || 0) + offTotal;
         if (srvTotal > 0) totals[srvCurr] = (totals[srvCurr] || 0) + srvTotal;
 
-        // Render'da oluşturduğumuz dış div'in içindeki değeri güncelleyeceğiz
-        // Dış div: TotalAmountDisplay -> İçindeki değer span'ı: TotalValueContent
         const displayContainer = document.getElementById(`${p}TotalAmountDisplay`);
         
-        // Eğer render'da eski HTML yapısı kaldıysa (hot reload durumları için) güvenlik
         if(!document.getElementById(`${p}TotalValueContent`)) {
              displayContainer.innerHTML = `
                 <span class="text-uppercase text-muted" style="font-size: 0.85em; letter-spacing: 1px;">TOPLAM</span>
@@ -244,14 +264,11 @@ export class AccrualFormManager {
         const valueSpan = document.getElementById(`${p}TotalValueContent`);
         const fmt = (val, curr) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' ' + curr;
 
-        // Diziye çevirip formatla
         const parts = Object.entries(totals).map(([curr, amount]) => fmt(amount, curr));
 
         if (parts.length === 0) {
             valueSpan.innerHTML = '0.00 ₺';
         } else {
-            // Tek satırda "+" ile birleştir
-            // Örnek: "150,00 TRY + 200,00 USD"
             valueSpan.innerHTML = `<span class="text-primary font-weight-bold">${parts.join(' + ')}</span>`;
         }
     }
@@ -289,7 +306,10 @@ export class AccrualFormManager {
         document.getElementById(`${p}ServiceFeeCurrency`).value = 'TRY';
         document.getElementById(`${p}VatRate`).value = '20';
         
-        // Toplamı sıfırla (Yeni yapıya göre)
+        // Yeni Fatura Alanlarını Sıfırla
+        document.getElementById(`${p}TpeInvoiceNo`).value = '';
+        document.getElementById(`${p}EvrekaInvoiceNo`).value = '';
+
         const valSpan = document.getElementById(`${p}TotalValueContent`);
         if(valSpan) valSpan.innerHTML = '0.00 ₺';
         
@@ -329,6 +349,10 @@ export class AccrualFormManager {
         document.getElementById(`${p}VatRate`).value = data.vatRate || 20;
         document.getElementById(`${p}ApplyVatToOfficial`).checked = data.applyVatToOfficialFee ?? false;
 
+        // YENİ FATURA BİLGİLERİ (Eğer veri varsa doldur)
+        document.getElementById(`${p}TpeInvoiceNo`).value = data.tpeInvoiceNo || '';
+        document.getElementById(`${p}EvrekaInvoiceNo`).value = data.evrekaInvoiceNo || '';
+
         // Taraflar
         if (data.tpInvoiceParty) {
             this.selectedTpParty = data.tpInvoiceParty;
@@ -348,7 +372,6 @@ export class AccrualFormManager {
         document.getElementById(`${p}IsForeignTransaction`).checked = isForeign;
         this.handleForeignToggle();
         
-        // Hesaplamayı tetikle
         this.calculateTotal();
     }
 
@@ -384,8 +407,11 @@ export class AccrualFormManager {
         
         const serviceFee = parseFloat(document.getElementById(`${p}ServiceFee`).value) || 0;
         const srvCurr = document.getElementById(`${p}ServiceFeeCurrency`).value;
+        
+        // Yeni Fatura Numaralarını Al
+        const tpeInvoiceNo = document.getElementById(`${p}TpeInvoiceNo`).value.trim();
+        const evrekaInvoiceNo = document.getElementById(`${p}EvrekaInvoiceNo`).value.trim();
 
-        // Basit Validation
         if (officialFee <= 0 && serviceFee <= 0) {
             return { success: false, error: 'En az bir ücret (Resmi veya Hizmet) girmelisiniz.' };
         }
@@ -396,7 +422,6 @@ export class AccrualFormManager {
         const fileInput = document.getElementById(`${p}ForeignInvoiceFile`);
         const files = fileInput.files;
 
-        // Taraf Mantığı
         const tpParty = this.selectedTpParty ? { id: this.selectedTpParty.id, name: this.selectedTpParty.name } : null;
         let serviceParty = null;
 
@@ -408,16 +433,13 @@ export class AccrualFormManager {
             serviceParty = tpParty;
         }
 
-        // --- HESAPLAMA (DİZİ OLUŞTURMA) ---
         const offTotal = applyVatToOfficial ? officialFee * (1 + vatRate / 100) : officialFee;
         const srvTotal = serviceFee * (1 + vatRate / 100);
         
-        // Para birimine göre topla
         const totalsMap = {};
         if (offTotal > 0) totalsMap[offCurr] = (totalsMap[offCurr] || 0) + offTotal;
         if (srvTotal > 0) totalsMap[srvCurr] = (totalsMap[srvCurr] || 0) + srvTotal;
 
-        // Nesneyi Diziye Çevir: [{amount: 100, currency: 'EUR'}, {amount: 500, currency: 'TRY'}]
         const totalAmountArray = Object.entries(totalsMap).map(([curr, amt]) => ({
             amount: amt,
             currency: curr
@@ -435,6 +457,9 @@ export class AccrualFormManager {
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
                 isForeignTransaction: isForeign,
+                // YENİ ALANLAR VERİ PAKETİNE EKLENDİ
+                tpeInvoiceNo: tpeInvoiceNo,
+                evrekaInvoiceNo: evrekaInvoiceNo,
                 files: files
             }
         };
