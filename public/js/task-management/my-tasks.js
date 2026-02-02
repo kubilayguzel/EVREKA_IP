@@ -130,6 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // public/js/task-management/my-tasks.js dosyasındaki processData metodu
+
         processData() {
             const safeDate = (val) => {
                 if (!val) return null;
@@ -142,7 +144,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             this.processedData = this.allTasks.map(task => {
-                const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                // [GÜNCELLEME BURADA] ID'leri String'e çevirerek karşılaştır
+                // Bu sayede "123" (string) ile 123 (number) gelirse de eşleşir.
+                const ipRecord = this.allIpRecords.find(r => String(r.id) === String(task.relatedIpRecordId));
+                
                 const relatedRecordDisplay = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'N/A';
                 
                 const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
@@ -179,7 +184,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const currentQuery = document.getElementById('taskSearchInput')?.value || '';
             this.handleSearch(currentQuery);
-           
         }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
