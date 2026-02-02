@@ -54,48 +54,55 @@ class TaskUpdateController {
         this.setupRenewalModalEvents();
     }
 
+    /**
+     * PDF dosyasını okur ve Evrak No / Tarih bilgisini ayıklar.
+     */
     async extractEpatsInfoFromFile(file) {
         try {
-            // PDF.js kütüphanesini dinamik olarak yükle
-            const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.mjs');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.mjs';
+            // ✅ GÜNCELLENMİŞ VE ÇALIŞAN CDN ADRESLERİ (cdnjs)
+            const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.mjs');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.mjs';
 
             const arrayBuffer = await file.arrayBuffer();
             const loadingTask = pdfjsLib.getDocument(arrayBuffer);
             const pdf = await loadingTask.promise;
 
             let fullText = '';
-            // Genellikle bilgi ilk sayfadadır, performans için sadece 1. sayfayı okuyoruz (gerekirse artırılabilir)
+            // Genellikle bilgi ilk sayfadadır, performans için sadece ilk 2 sayfayı okuyoruz
             const maxPages = Math.min(pdf.numPages, 2);
             for (let i = 1; i <= maxPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
+                // Satırları birleştirirken araya boşluk koyuyoruz
                 const strings = content.items.map(item => item.str);
                 fullText += strings.join(' ') + '\n';
             }
 
             // --- REGEX İLE VERİ AYIKLAMA ---
             
-            // 1. Evrak No: Genellikle "2024-GE-12345" veya "Evrak No: 12345" formatındadır.
+            // 1. Evrak No: "2024-GE-123456" formatı veya "Evrak No: ..."
             let evrakNo = null;
-            // Format A: YYYY-AA-XXXXXX (Örn: 2024-GE-123456)
-            const standardMatch = fullText.match(/(\d{4}-[A-Z]{2,}-\d+)/);
-            // Format B: "Evrak No : XXXXX"
+            
+            // Öncelikli Format: YYYY-GE-XXXXXX veya YYYY-GP-XXXXXX (TürkPatent standart formatı)
+            // \b kelime sınırı ile daha hassas arama yapıyoruz
+            const standardMatch = fullText.match(/\b(\d{4}-[A-Z]{2,}-\d+)\b/);
+            
+            // Alternatif Format: "Evrak No : 12345"
             const labeledMatch = fullText.match(/Evrak\s*No\s*[:]\s*([\w-]+)/i);
 
             if (standardMatch) evrakNo = standardMatch[1];
             else if (labeledMatch) evrakNo = labeledMatch[1];
 
-            // 2. Tarih: "Tarih : 01.01.2024" veya belgedeki ilk tarih
+            // 2. Tarih: "Tarih : 01.01.2024" veya belgedeki ilk geçerli tarih
             let documentDate = null;
             
-            // Önce etiketli tarihi ara (Daha güvenilir)
+            // Önce "Tarih:" etiketiyle arama yap (Daha güvenilir)
             const dateLabelMatch = fullText.match(/(?:Evrak\s*)?Tarih(?:i)?\s*[:]\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i);
             
             if (dateLabelMatch) {
                 documentDate = this.parseDate(dateLabelMatch[1]);
             } else {
-                // Etiket yoksa belgedeki ilk mantıklı tarihi bul
+                // Etiket yoksa belgedeki ilk mantıklı tarihi bul (GG.AA.YYYY)
                 const allDates = fullText.match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/);
                 if (allDates) {
                     documentDate = this.parseDate(allDates[0]);
@@ -106,6 +113,7 @@ class TaskUpdateController {
 
         } catch (e) {
             console.error("PDF okuma hatası:", e);
+            // Hata olsa bile null dönerek akışı bozmuyoruz
             return null;
         }
     }
