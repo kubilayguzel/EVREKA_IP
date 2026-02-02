@@ -302,17 +302,24 @@ export class PortfolioUpdateManager {
         const dateMatch = normalized.match(/(\d{2}\.\d{2}\.\d{4})\s*tarihinde\s*tescil\s*edil/i);
         const registrationDate = dateMatch ? dateMatch[1] : null;
 
+        console.log("[TESPIT] dateMatch:", dateMatch);
+        console.log("[TESPIT] registrationDate:", registrationDate);
+
         // 2) Tescil numarası: "No: 2025 127472" (veya varyasyonları)
         let registrationNumber = null;
         const noMatch = normalized.match(/\bNo\s*:\s*(\d{4})\s*(\d{1,10})\b/i);
+
+        console.log("[TESPIT] noMatch:", noMatch);
+
         if (noMatch) {
             registrationNumber = `${noMatch[1]} ${noMatch[2]}`;
         } else {
             // fallback: "Başvuru Numarası: 2025/127472" veya "2025/127472"
             const slashMatch = normalized.match(/\b(\d{4})\s*\/\s*(\d{1,10})\b/);
+            console.log("[TESPIT] slashMatch:", slashMatch);
             if (slashMatch) registrationNumber = `${slashMatch[1]} ${slashMatch[2]}`;
         }
-
+        console.log("[TESPIT] registrationNumber:", registrationNumber);
         if (!registrationDate && !registrationNumber) return null;
         return { registrationDate, registrationNumber };
     }
