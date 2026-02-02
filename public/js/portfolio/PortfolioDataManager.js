@@ -286,6 +286,7 @@ export class PortfolioDataManager {
         
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
+        if (tx.oppositionEpatsPetitionFileUrl) docs.push({ fileName: 'Karşı ePATS Dilekçesi', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
        
         return {
             id: tx.id,
