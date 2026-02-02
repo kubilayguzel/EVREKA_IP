@@ -147,6 +147,75 @@ export class DocumentReviewManager {
                     this.updateCalculatedDeadline(); // YENİ: Tarih hesaplamayı tetikle
                 });
             }
+
+            // --- PDF Drag & Drop (İtiraz Dilekçeleri) ---
+            this._setupPdfDropzone('oppositionPetitionDropzone', 'oppositionPetitionFile', 'oppositionPetitionFileName');
+            this._setupPdfDropzone('oppositionEpatsDropzone', 'oppositionEpatsPetitionFile', 'oppositionEpatsFileName');
+        }
+
+        _setupPdfDropzone(dropzoneId, inputId, filenameLabelId) {
+            const dz = document.getElementById(dropzoneId);
+            const input = document.getElementById(inputId);
+            const fileLabel = document.getElementById(filenameLabelId);
+            if (!dz || !input) return;
+
+            const setFilename = (name) => {
+                if (fileLabel) fileLabel.textContent = name || 'Dosya seçilmedi';
+            };
+
+            // Click/keyboard -> open file picker
+            dz.addEventListener('click', () => input.click());
+            dz.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    input.click();
+                }
+            });
+
+            input.addEventListener('change', () => {
+                const f = input.files && input.files[0];
+                setFilename(f ? f.name : 'Dosya seçilmedi');
+            });
+
+            const prevent = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+
+            ['dragenter', 'dragover'].forEach(evt => {
+                dz.addEventListener(evt, (e) => {
+                    prevent(e);
+                    dz.classList.add('drag-over');
+                });
+            });
+            ['dragleave', 'drop'].forEach(evt => {
+                dz.addEventListener(evt, (e) => {
+                    prevent(e);
+                    dz.classList.remove('drag-over');
+                });
+            });
+
+            dz.addEventListener('drop', (e) => {
+                const files = e.dataTransfer?.files;
+                if (!files || !files.length) return;
+                const file = files[0];
+                if (files.length > 1) {
+                    showNotification('Birden fazla dosya bırakıldı. İlk dosya seçildi.', 'warning');
+                }
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                    showNotification('Lütfen sadece PDF dosyası yükleyin.', 'error');
+                    return;
+                }
+                // Programmatically set input.files (Chrome supports via DataTransfer)
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                } catch (err) {
+                    // Fallback: keep file in memory (not used elsewhere)
+                }
+                setFilename(file.name);
+            });
         }
 
         // YENİ METOT: Resmi Son Tarihi Hesapla ve Ekrana Yazdır
@@ -510,16 +579,27 @@ async loadData() {
             let newParentTxId = null;
             let oppositionFileUrl = null;
             let oppositionFileName = null;
+            let oppositionEpatsFileUrl = null;
+            let oppositionEpatsFileName = null;
 
             if (childTypeId === '27') { 
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
+                const epatsFileInput = document.getElementById('oppositionEpatsPetitionFile')?.files?.[0] || null;
                 if (!ownerInput || !fileInput) throw new Error('İtiraz Sahibi ve PDF zorunludur.');
 
                 const storageRef = ref(firebaseServices.storage, `opposition-petitions/${this.matchedRecord.id}/${Date.now()}_${fileInput.name}`);
                 await uploadBytes(storageRef, fileInput);
                 oppositionFileUrl = await getDownloadURL(storageRef);
                 oppositionFileName = fileInput.name;
+
+                // Opsiyonel: Karşı ePATS dilekçesi
+                if (epatsFileInput) {
+                    const epatsRef = ref(firebaseServices.storage, `opposition-epats-petitions/${this.matchedRecord.id}/${Date.now()}_${epatsFileInput.name}`);
+                    await uploadBytes(epatsRef, epatsFileInput);
+                    oppositionEpatsFileUrl = await getDownloadURL(epatsRef);
+                    oppositionEpatsFileName = epatsFileInput.name;
+                }
 
                 let newParentTypeId = '20'; 
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
@@ -535,6 +615,7 @@ async loadData() {
                     transactionHierarchy: 'parent',
                     oppositionOwner: ownerInput,
                     oppositionPetitionFileUrl: oppositionFileUrl,
+                    oppositionEpatsPetitionFileUrl: oppositionEpatsFileUrl,
                     timestamp: new Date().toISOString()
                 };
                 const newParentResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, newParentData);
@@ -570,6 +651,8 @@ async loadData() {
             }
 
             if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
+                const docsToAdd = [];
+
                 const oppDocPayload = {
                     id: generateUUID(),
                     name: oppositionFileName || 'opposition_petition.pdf',
@@ -578,8 +661,22 @@ async loadData() {
                     documentDesignation: 'İtiraz Dilekçesi',
                     uploadedAt: new Date().toISOString()
                 };
+                docsToAdd.push(oppDocPayload);
+
+                if (oppositionEpatsFileUrl) {
+                    const oppEpatsDocPayload = {
+                        id: generateUUID(),
+                        name: oppositionEpatsFileName || 'opposition_epats_petition.pdf',
+                        downloadURL: oppositionEpatsFileUrl,
+                        type: 'application/pdf',
+                        documentDesignation: 'Karşı ePATS Dilekçesi',
+                        uploadedAt: new Date().toISOString()
+                    };
+                    docsToAdd.push(oppEpatsDocPayload);
+                }
+
                 const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
-                await updateDoc(txRef, { documents: arrayUnion(oppDocPayload) });
+                await updateDoc(txRef, { documents: arrayUnion(...docsToAdd) });
             }
 
             // 3. İş Tetikleme (Task)
