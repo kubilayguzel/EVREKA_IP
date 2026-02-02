@@ -63,14 +63,14 @@
         .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1000px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
         .close-modal-btn { float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa; }
         
-        /* Form Elemanları (Eski CSS'ten taşındı) */
+        /* Form Elemanları */
         .form-input, .form-select, .form-control { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; }
         .form-group { margin-bottom: 15px; }
         
         /* Tablo Stilleri */
         .accruals-table { width: 100%; border-collapse: collapse; }
         .accruals-table th, .accruals-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-        .accruals-table th { background: #f8f9fa; font-weight: 600; cursor: pointer; user-select: none; }
+        .accruals-table th { background: #f8f9fa; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
         
         /* Butonlar */
         .action-btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-left: 5px; }
@@ -132,7 +132,9 @@
                         </a>
                     </li>
                 </ul>
+
                 <div class="tab-content">
+                    
                     <div class="tab-pane fade show active" id="content-main" role="tabpanel">
                         <div class="table-container">
                             <table class="accruals-table">
@@ -140,16 +142,11 @@
                                     <tr>
                                         <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
                                         <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="sortable" data-sort="createdAt">Tarih <i class="fas fa-sort sort-icon"></i></th>
-                                        <th>Alan</th>
-                                        <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="createdAt">Tarih <i class="fas fa-sort sort-icon"></i></th> <th>Alan</th> <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
                                         <th>İlgili Dosya</th>
-                                        <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
+                                        <th>Konu</th> <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
                                         <th>Taraf</th>
-                                        
-                                        <th>TFN</th>
-                                        <th>EFN</th>
-                                        <th class="sortable" data-sort="officialFee">Resmi Ü.<i class="fas fa-sort sort-icon"></i></th>
+                                        <th>TFN</th> <th>EFN</th> <th class="sortable" data-sort="officialFee">Resmi Ü.<i class="fas fa-sort sort-icon"></i></th>
                                         <th class="sortable" data-sort="serviceFee">Hizmet Ü.<i class="fas fa-sort sort-icon"></i></th>
                                         <th class="sortable" data-sort="totalAmount">Toplam <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="sortable" data-sort="remainingAmount">Kalan <i class="fas fa-sort sort-icon"></i></th>
@@ -160,6 +157,7 @@
                             </table>
                         </div>
                     </div>
+
                     <div class="tab-pane fade" id="content-foreign" role="tabpanel">
                         <div class="table-container">
                             <table class="accruals-table">
