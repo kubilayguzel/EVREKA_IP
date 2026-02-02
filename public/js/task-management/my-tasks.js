@@ -244,8 +244,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         handleSearch(query) {
             const statusFilter = document.getElementById('statusFilter').value;
-            // query null veya undefined gelirse boş string kullan
             const lowerQuery = (query || '').toLowerCase();
+
+            // Aktif Kullanıcı Bilgileri
+            const currentUserId = this.currentUser.uid;
+            const currentUserEmail = this.currentUser.email;
 
             this.filteredData = this.processedData.filter(item => {
                 // 1. Arama Metni Filtresi
@@ -254,21 +257,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // 2. Dropdown Statü Filtresi
                 const matchesStatusFilter = (statusFilter === 'all' || item.status === statusFilter);
 
-                // 3. TAB FİLTRESİ (YENİ)
+                // 3. TAB FİLTRESİ
                 let matchesTab = false;
-                
-                // "completed" veya "cancelled" statüleri Bitenler tabına aittir.
                 const isFinished = item.status === 'completed' || item.status === 'cancelled';
 
                 if (this.activeTab === 'active') {
-                    // Aktif Tab: Bitmemiş ve İptal Edilmemiş işler
                     matchesTab = !isFinished;
                 } else {
-                    // Biten Tab: Tamamlanan ve İptal Edilenler
                     matchesTab = isFinished;
                 }
 
-                return matchesSearch && matchesStatusFilter && matchesTab;
+                // [DÜZELTME 2] Kullanıcı Filtresi: Görev gerçekten bana mı ait?
+                // activeTab ne olursa olsun, sadece bana atananları göster.
+                const assigneeId = item.assignedTo?.id || item.assignedTo;
+                const isMyTask = (assigneeId === currentUserId) || 
+                                 (item.assignedToEmail === currentUserEmail) ||
+                                 (item.assignedTo_email === currentUserEmail);
+
+                return matchesSearch && matchesStatusFilter && matchesTab && isMyTask;
             });
 
             this.sortData();
