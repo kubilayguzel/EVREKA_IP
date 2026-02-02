@@ -32,6 +32,8 @@ export class AccrualUIManager {
      */
     // public/js/accrual-management/AccrualUIManager.js
 
+    // public/js/accrual-management/AccrualUIManager.js
+
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
@@ -50,43 +52,35 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- YENİ VERİLERİN HAZIRLANMASI ---
-            
-            // 1. Tarih (Oluşturulma)
+            // --- Tarih, Alan ve Dosya Bilgileri ---
             const dateStr = acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-';
-
-            // 2. İlgili İş, Dosya ve ALAN Bilgisi
+            
             let taskDisplay = '-', relatedFileDisplay = '-', fieldDisplay = '-';
             const task = tasks[String(acc.taskId)];
             
             if (task) {
-                // İş Tipi ve Alias
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 
-                // İlgili Dosya
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
                 }
 
-                // Alan Bilgisi (Marka, Patent vb.)
                 if (typeObj && typeObj.ipType) {
-                    const ipTypeMap = { 
-                        'trademark': 'Marka', 
-                        'patent': 'Patent', 
-                        'design': 'Tasarım', 
-                        'suit': 'Dava' 
-                    };
+                    const ipTypeMap = { 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' };
                     fieldDisplay = ipTypeMap[typeObj.ipType] || typeObj.ipType.toUpperCase();
                 }
-
             } else { taskDisplay = acc.taskTitle || '-'; }
+
+            // --- Yeni Fatura Numaraları ---
+            const tfn = acc.tpeInvoiceNo || '-';
+            const efn = acc.evrekaInvoiceNo || '-';
 
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
 
             // =========================================================
-            // TAB 1: ANA LİSTE (GÜNCELLENMİŞ HTML)
+            // TAB 1: ANA LİSTE
             // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
@@ -109,13 +103,15 @@ export class AccrualUIManager {
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
                     <td><small>${acc.id}</small></td>
-                    
                     <td><small>${dateStr}</small></td>
                     <td><span class="badge badge-info" style="font-weight:normal;">${fieldDisplay}</span></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td><small>${partyDisplay}</small></td>
+                    
+                    <td><small class="text-muted font-weight-bold">${tfn}</small></td>
+                    <td><small class="text-muted font-weight-bold">${efn}</small></td>
                     <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${this._formatMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
@@ -130,9 +126,8 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // ... (Foreign Tab Kodu Aynı Kalabilir veya İstenirse Oraya da Eklenebilir)
+            // TAB 2: YURT DIŞI LİSTESİ (Değişiklik yok)
             else {
-                // ... (Mevcut kodunuzun devamı)
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 const fStatus = acc.foreignStatus || 'unpaid';
                 let sTxt = 'Ödenmedi', sCls = 'danger';
