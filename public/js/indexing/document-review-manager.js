@@ -104,6 +104,52 @@ export class DocumentReviewManager {
         } catch (error) { console.error('İşlem tipleri yüklenemedi:', error); }
     }
 
+    async extractTextFromPDF(url) {
+        try {
+            // pdfjsLib global nesnesi kontrol edilir
+            if (!window.pdfjsLib) {
+                console.warn('PDF.js kütüphanesi bulunamadı.');
+                return null;
+            }
+
+            // Worker ayarı (CDN kullanıldığı için)
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+            const loadingTask = pdfjsLib.getDocument(url);
+            const pdf = await loadingTask.promise;
+            let fullText = '';
+
+            // Performans için sadece ilk 3 sayfayı tarıyoruz
+            const maxPages = Math.min(pdf.numPages, 3);
+
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + ' ';
+            }
+
+            return fullText;
+        } catch (error) {
+            console.error('PDF metin okuma hatası:', error);
+            return null;
+        }
+    }
+
+    findRegistrationDate(text) {
+        if (!text) return null;
+        
+        // Örnek: "22.01.2026 tarihinde tescil edilmiştir"
+        // Esnek regex: Tarih formatı ve aradaki boşlukları toleranslı yakalar
+        const regex = /(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})\s+tarihinde\s+tescil\s+edilmiştir/i;
+        
+        const match = text.match(regex);
+        if (match && match[1]) {
+            return match[1]; // Sadece tarihi (örn: 22.01.2026) döndürür
+        }
+        return null;
+    }
+
     setupEventListeners() {
             // --- Mevcut Kaydet Butonu Mantığı ---
             const saveBtn = document.getElementById('saveTransactionBtn');
@@ -270,6 +316,40 @@ async loadData() {
         
         this.pdfData = { id: docSnap.id, ...docSnap.data() };
         console.log("📄 PDF Verisi Yüklendi:", this.pdfData); // Debug için
+
+        if (this.pdfData.fileUrl || this.pdfData.downloadURL) {
+                const pdfUrl = this.pdfData.fileUrl || this.pdfData.downloadURL;
+                
+                // Arkaplanda PDF metnini oku
+                this.extractTextFromPDF(pdfUrl).then(text => {
+                    if (text) {
+                        const regDate = this.findRegistrationDate(text);
+                        if (regDate) {
+                            console.log("✅ PDF İçinde Bulunan Tescil Tarihi:", regDate);
+                            
+                            // 1. Tescil Tarihi Alanını Doldur
+                            const regDateInput = document.getElementById('registry-registration-date');
+                            if (regDateInput) {
+                                regDateInput.value = regDate;
+                                // Kullanıcıya hafif bir bildirim ver
+                                showNotification(`Tescil tarihi belgeden okundu: ${regDate}`, 'info');
+                            }
+
+                            // 2. Eğer "Tescil Belgesi" işlemi seçiliyse "Tebliğ Tarihi"ni de bununla güncelleyebiliriz (Opsiyonel)
+                            /*
+                            const detectedDateInput = document.getElementById('detectedDate');
+                            if (detectedDateInput && !detectedDateInput.value) {
+                                // Tarihi YYYY-MM-DD formatına çevirmek gerekir
+                                const parts = regDate.split('.'); // 22.01.2026 -> [22, 01, 2026]
+                                if(parts.length === 3) {
+                                    detectedDateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                }
+                            }
+                            */
+                        }
+                    }
+                });
+            }
 
         // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
         const dateInput = document.getElementById('detectedDate');
@@ -957,3 +1037,4 @@ export async function resolveApprovalStateAssignee() {
 document.addEventListener('DOMContentLoaded', () => {
     new DocumentReviewManager();
 });
+
