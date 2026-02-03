@@ -3027,6 +3027,11 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         const d = (val && val.toDate) ? val.toDate() : new Date(val);
         return isNaN(d.getTime()) ? new Date().toLocaleDateString("tr-TR") : d.toLocaleDateString("tr-TR");
       };
+      const formatDeadline = (val) => {
+        if (!val) return "-";
+        const d = (val && val.toDate) ? val.toDate() : new Date(val);
+        return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("tr-TR");
+      };
 
       const transactionDateStr = formatTrDate(epatsDoc?.documentDate || new Date());
 
