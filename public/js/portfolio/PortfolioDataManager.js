@@ -315,7 +315,6 @@ export class PortfolioDataManager {
     prepareMonitoringData(record) {
         if (!record) return null;
 
-        // Başvuru sahibini belirle (Formatlanmış veri varsa onu kullan, yoksa ham veriden çek)
         let ownerName = record.formattedApplicantName || '';
         
         if (!ownerName) {
@@ -329,17 +328,18 @@ export class PortfolioDataManager {
 
         // İzleme servisine gönderilecek standart obje yapısı
         return {
-            relatedRecordId: record.id,               // Portföydeki ID'si
+            id: record.id,                   // <--- [KRİTİK EKLEME] Firebase Belge ID'si bu olacak
+            relatedRecordId: record.id,      // Portföydeki ID'si (Referans)
             trademarkName: record.title || record.brandText, // Marka Adı
             applicationNumber: record.applicationNumber, // Başvuru No
             niceClasses: record.niceClasses || [],       // Sınıflar
             ownerName: ownerName,                        // Sahibi
             image: record.brandImageUrl || record.trademarkImage || null, // Varsa görsel
-            source: 'portfolio',                         // Kaynak
+            source: 'portfolio',             // Kaynak
             createdAt: new Date().toISOString()
         };
     }
-    
+
     // --- ACTIONS ---
     async deleteRecord(id) { return await ipRecordsService.deleteParentWithChildren(id); }
 
