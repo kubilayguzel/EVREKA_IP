@@ -6,7 +6,7 @@ import {
 } from '../../firebase-config.js';
 
 import { 
-    doc, getDoc, collection, getDocs, query, where, writeBatch 
+    doc, getDoc, collection, getDocs, query, where, writeBatch, documentId
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { 
@@ -19,8 +19,9 @@ export class AccrualDataManager {
         
         // Veri Havuzu
         this.allAccruals = [];
-        this.allTasks = {};         // ID bazlı erişim için obje: { "taskID": { ... } }
-        this.allIpRecords = [];     // Dosya/Başvuru no eşleşmesi için
+        this.allTasks = {};         // ID bazlı erişim: { "taskID": { ... } }
+        this.allIpRecords = [];     // Array olarak tutuyoruz (Filtreleme için)
+        this.ipRecordsMap = {};     // ID bazlı hızlı erişim için: { "recordID": { ... } }
         this.allPersons = [];
         this.allUsers = [];
         this.allTransactionTypes = [];
@@ -30,17 +31,15 @@ export class AccrualDataManager {
     }
 
     /**
-     * Tüm verileri yükler, ilişkileri kurar ve arama dizinini oluşturur.
+     * Tüm verileri optimize edilmiş şekilde yükler.
      */
     async fetchAllData() {
         try {
+            console.time("Veri Yükleme Süresi");
             console.log("📥 Veri çekme işlemi başladı...");
 
-            // 1. IP KAYITLARINI DOĞRUDAN ÇEK (Servis hatasını bypass etmek için)
-            const ipSnapshot = await getDocs(collection(db, 'ipRecords'));
-            this.allIpRecords = ipSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // 2. DİĞER VERİLERİ SERVİSLERDEN ÇEK
+            // 1. ANA VERİLERİ ÇEK (IP Records HARİÇ)
+            // IP Records'u burada çekmiyoruz çünkü çok büyük olabilir.
             const [accRes, personsRes, usersRes, typesRes] = await Promise.all([
                 accrualService.getAccruals(),
                 personService.getPersons(),
@@ -58,16 +57,22 @@ export class AccrualDataManager {
                 a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); 
             });
 
-            // 3. TASK'LERİ BATCH (Yığın) HALİNDE ÇEK
+            // 2. İLİŞKİLİ TASK'LERİ BATCH HALİNDE ÇEK
+            // Sadece tahakkuklarda kullanılan Task'leri çekiyoruz.
             await this._fetchTasksInBatches();
 
-            // 4. ARAMA METİNLERİNİ OLUŞTUR (Search Indexing)
+            // 3. İLİŞKİLİ IP KAYITLARINI BATCH HALİNDE ÇEK (YENİ OPTİMİZASYON)
+            // Sadece çekilen Task'lerde geçen IP Record ID'lerini çekiyoruz.
+            await this._fetchIpRecordsInBatches();
+
+            // 4. ARAMA METİNLERİNİ OLUŞTUR
             this._buildSearchStrings();
 
-            // İlk işlem: Veriyi olduğu gibi processedData'ya aktar
+            // Veriyi processedData'ya aktar
             this.processedData = [...this.allAccruals];
             
-            console.log("✅ Tüm veriler başarıyla yüklendi.");
+            console.timeEnd("Veri Yükleme Süresi");
+            console.log(`✅ Yüklenen: ${this.allAccruals.length} Tahakkuk, ${Object.keys(this.allTasks).length} İş, ${this.allIpRecords.length} Dosya.`);
             return true;
 
         } catch (error) {
@@ -88,26 +93,76 @@ export class AccrualDataManager {
         this.allTasks = {}; // Sıfırla
 
         if (taskIds.length > 0) {
-            // 30'arlı gruplara böl (Firestore 'in' sorgusu limiti)
-            const chunkSize = 30;
+            const chunkSize = 30; // Firestore 'in' sorgusu limiti
+            const promises = [];
+
             for (let i = 0; i < taskIds.length; i += chunkSize) {
                 const chunk = taskIds.slice(i, i + chunkSize);
-                try {
-                    const q = query(collection(db, 'tasks'), where('__name__', 'in', chunk));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(doc => {
-                        this.allTasks[doc.id] = { id: doc.id, ...doc.data() };
-                    });
-                } catch (err) {
-                    console.error(`Task chunk hatası (${i}-${i+chunkSize}):`, err);
-                }
+                // Paralel sorgu başlat
+                promises.push(this._fetchBatch(collection(db, 'tasks'), chunk, 'task'));
             }
+            
+            await Promise.all(promises);
+        }
+    }
+
+    /**
+     * YENİ: Sadece ilgili IP kayıtlarını (Dosyaları) çeker.
+     * Tüm veritabanını indirmeyi engeller.
+     */
+    async _fetchIpRecordsInBatches() {
+        // Çekilmiş olan Task'lerin içindeki relatedIpRecordId'leri topla
+        const recordIds = new Set();
+        
+        Object.values(this.allTasks).forEach(task => {
+            if (task.relatedIpRecordId) {
+                recordIds.add(String(task.relatedIpRecordId));
+            }
+        });
+
+        const uniqueRecordIds = Array.from(recordIds);
+        this.allIpRecords = [];
+        this.ipRecordsMap = {};
+
+        if (uniqueRecordIds.length > 0) {
+            const chunkSize = 30;
+            const promises = [];
+
+            for (let i = 0; i < uniqueRecordIds.length; i += chunkSize) {
+                const chunk = uniqueRecordIds.slice(i, i + chunkSize);
+                promises.push(this._fetchBatch(collection(db, 'ipRecords'), chunk, 'ipRecord'));
+            }
+
+            await Promise.all(promises);
+        }
+    }
+
+    /**
+     * Helper: Firestore'dan ID listesine göre batch veri çeker
+     */
+    async _fetchBatch(collectionRef, ids, type) {
+        try {
+            // documentId() kullanımı __name__ ile aynıdır, daha okunaklıdır
+            const q = query(collectionRef, where(documentId(), 'in', ids));
+            const snapshot = await getDocs(q);
+            
+            snapshot.forEach(doc => {
+                const data = { id: doc.id, ...doc.data() };
+                
+                if (type === 'task') {
+                    this.allTasks[doc.id] = data;
+                } else if (type === 'ipRecord') {
+                    this.allIpRecords.push(data);
+                    this.ipRecordsMap[doc.id] = data; // Hızlı erişim için map de tut
+                }
+            });
+        } catch (err) {
+            console.error(`${type} chunk hatası:`, err);
         }
     }
 
     /**
      * Her bir tahakkuk için aranabilir metin (searchString) oluşturur.
-     * ID, Tutar, Dosya No, İş Tipi Alias, Taraf İsimleri vb. içerir.
      */
     _buildSearchStrings() {
         this.allAccruals.forEach(acc => {
@@ -130,7 +185,8 @@ export class AccrualDataManager {
 
                 // Dosya Numarası (App Number)
                 if (task.relatedIpRecordId) {
-                    const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                    // Map üzerinden hızlı erişim (Array find yerine)
+                    const ipRec = this.ipRecordsMap[task.relatedIpRecordId]; 
                     if(ipRec) searchTerms.push(ipRec.applicationNumber);
                 }
             } else {
@@ -143,8 +199,6 @@ export class AccrualDataManager {
 
     /**
      * Verileri filtreler ve sıralar.
-     * @param {Object} criteria - { tab: 'main'|'foreign', status: 'all'|..., search: '...' }
-     * @param {Object} sort - { column: '...', direction: 'asc'|'desc' }
      */
     filterAndSort(criteria, sort) {
         let data = [...this.allAccruals];
@@ -175,7 +229,6 @@ export class AccrualDataManager {
                 case 'id': valA = (a.id || '').toLowerCase(); valB = (b.id || '').toLowerCase(); break;
                 case 'status': valA = (a.status || '').toLowerCase(); valB = (b.status || '').toLowerCase(); break;
                 case 'taskTitle':
-                    // Task başlığına veya Alias'a göre sıralama mantığı eklenebilir
                     const tA = this.allTasks[String(a.taskId)];
                     const tB = this.allTasks[String(b.taskId)];
                     valA = (tA ? tA.title : (a.taskTitle || '')).toLowerCase();
@@ -185,7 +238,6 @@ export class AccrualDataManager {
                 case 'serviceFee': valA = Number(a.serviceFee?.amount) || 0; valB = Number(b.serviceFee?.amount) || 0; break;
                 case 'totalAmount': valA = Number(a.totalAmount) || 0; valB = Number(b.totalAmount) || 0; break;
                 case 'createdAt': valA = a.createdAt; valB = b.createdAt; break;
-                // Kalan tutar sıralaması karmaşık olduğu için totalAmount baz alındı
                 default: valA = 0; valB = 0;
             }
             if (valA < valB) return -1 * dir;
@@ -199,19 +251,18 @@ export class AccrualDataManager {
 
     /**
      * Edit Modal'ı açarken Task detayının taze olduğundan emin olur.
-     * Özellikle EPATS belgesi için anlık sorgu atar.
      */
     async getFreshTaskDetail(taskId) {
         if (!taskId) return null;
         
         try {
-            // Önbellekteki task'in detayları eksikse veritabanından çek
             let task = this.allTasks[String(taskId)];
+            // Eğer task zaten hafızada varsa ve detayları doluysa tekrar çekme
             if (!task || (!task.details && !task.relatedTaskId)) {
                 const snap = await getDoc(doc(db, 'tasks', String(taskId)));
                 if (snap.exists()) {
                     task = { id: snap.id, ...snap.data() };
-                    this.allTasks[String(taskId)] = task; // Cache güncelle
+                    this.allTasks[String(taskId)] = task; 
                 }
             }
             return task;
@@ -222,13 +273,12 @@ export class AccrualDataManager {
     }
 
     /**
-     * Tahakkuk Güncelleme ve Kalan Tutar Hesaplama Mantığı
+     * Tahakkuk Güncelleme
      */
     async updateAccrual(accrualId, formData, fileToUpload) {
         const currentAccrual = this.allAccruals.find(a => a.id === accrualId);
         if (!currentAccrual) throw new Error("Tahakkuk bulunamadı.");
 
-        // 1. Dosya Yükleme (Varsa)
         let newFiles = [];
         if (fileToUpload) {
             const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${fileToUpload.name}`);
@@ -243,81 +293,60 @@ export class AccrualDataManager {
         }
         const finalFiles = [...(currentAccrual.files || []), ...newFiles];
 
-        // 2. Kalan Tutar Hesaplama (HESAPLAMA MANTIĞI)
         const vatMultiplier = 1 + (formData.vatRate / 100);
-        
         const targetOff = formData.applyVatToOfficialFee 
             ? formData.officialFee.amount * vatMultiplier 
             : formData.officialFee.amount;
         const targetSrv = formData.serviceFee.amount * vatMultiplier;
 
-        // Veritabanındaki mevcut ödenen tutarlar
         const paidOff = currentAccrual.paidOfficialAmount || 0;
         const paidSrv = currentAccrual.paidServiceAmount || 0;
 
-        // Kalan (Math.max ile negatif engellenir)
         const remOff = Math.max(0, targetOff - paidOff);
         const remSrv = Math.max(0, targetSrv - paidSrv);
 
-        // Kalan tutarı diziye çevir (Multi-currency support)
         const remMap = {};
         if (remOff > 0.01) remMap[formData.officialFee.currency] = (remMap[formData.officialFee.currency] || 0) + remOff;
         if (remSrv > 0.01) remMap[formData.serviceFee.currency] = (remMap[formData.serviceFee.currency] || 0) + remSrv;
 
         const newRemainingAmount = Object.entries(remMap).map(([curr, amt]) => ({ amount: amt, currency: curr }));
 
-        // 3. Status Hesaplama
         let newStatus = 'unpaid';
         if (newRemainingAmount.length === 0) newStatus = 'paid';
         else if (paidOff > 0 || paidSrv > 0) newStatus = 'partially_paid';
 
-        // 4. Update Objesi
         const updates = {
             ...formData,
             remainingAmount: newRemainingAmount,
             status: newStatus,
             files: finalFiles,
-            // Formdan gelmeyen ama korunması gereken alanları buraya eklemiyoruz, merge edilecek
         };
-        // Form data içinde gelmeyen ama hesaplananlar:
-        delete updates.files; // files'ı ayrıca işledik, formData içindekini eziyoruz
+        delete updates.files; 
         updates.files = finalFiles;
 
         await accrualService.updateAccrual(accrualId, updates);
-        
-        // Belleği güncelle
         await this.fetchAllData(); 
     }
 
-/**
-     * Ödeme Kaydetme (Dosya Yüklemeli Versiyon)
+    /**
+     * Ödeme Kaydetme
      */
     async savePayment(selectedIds, paymentData) {
         const { date, receiptFiles, singlePaymentDetails } = paymentData;
         const ids = Array.from(selectedIds);
 
-        // 1. DOSYALARI FIREBASE STORAGE'A YÜKLE VE URL AL
         let uploadedFileRecords = [];
         
         if (receiptFiles && receiptFiles.length > 0) {
-            // Promise.all ile tüm dosyaları paralel yükle
             const uploadPromises = receiptFiles.map(async (fileObj) => {
-                // Eğer dosya zaten bir URL ise (önceden yüklenmişse) pas geç
                 if (!fileObj.file) return fileObj;
-
                 try {
-                    const storage = getStorage();
-                    // Dosya yolu: receipts/timestamp_dosyaadi
-                    const storageRef = ref(storage, `receipts/${Date.now()}_${fileObj.file.name}`);
-                    
-                    // Yükleme işlemi
+                    const storageRef = ref(this.storage, `receipts/${Date.now()}_${fileObj.file.name}`);
                     const snapshot = await uploadBytes(storageRef, fileObj.file);
                     const downloadURL = await getDownloadURL(snapshot.ref);
-
-                    // Veritabanına kaydedilecek temiz obje
                     return {
                         name: fileObj.name,
-                        url: downloadURL, // Artık URL kaydediyoruz
+                        url: downloadURL,
                         type: fileObj.type || 'application/pdf',
                         uploadedAt: new Date().toISOString()
                     };
@@ -326,7 +355,6 @@ export class AccrualDataManager {
                     return null;
                 }
             });
-
             const results = await Promise.all(uploadPromises);
             uploadedFileRecords = results.filter(f => f !== null);
         }
@@ -335,12 +363,10 @@ export class AccrualDataManager {
             const acc = this.allAccruals.find(a => a.id === id);
             if (!acc) return;
 
-            // Dosyaları mevcutların üzerine ekle
             let updates = {
                 files: [...(acc.files || []), ...uploadedFileRecords]
             };
 
-            // --- SENARYO 1: YURT DIŞI ÖDEMESİ ---
             if (ids.length === 1 && singlePaymentDetails && singlePaymentDetails.isForeignMode) {
                 updates.foreignPaymentDate = date;
                 const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
@@ -359,8 +385,6 @@ export class AccrualDataManager {
                 else if (totalPaidOut > 0) updates.foreignStatus = 'partially_paid';
                 else updates.foreignStatus = 'unpaid';
             } 
-            
-            // --- SENARYO 2: TAHAKKUK TAHSİLATI ---
             else if (ids.length === 1 && singlePaymentDetails) {
                 updates.paymentDate = date;
                 const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
@@ -387,8 +411,6 @@ export class AccrualDataManager {
                 else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
                 else updates.status = 'unpaid';
             }
-            
-            // --- SENARYO 3: ÇOKLU İŞLEM ---
             else {
                 updates.status = 'paid';
                 updates.remainingAmount = [];
@@ -405,7 +427,7 @@ export class AccrualDataManager {
     }
 
     /**
-     * Toplu Durum Güncelleme (Örn: Ödenmedi Yap)
+     * Toplu Durum Güncelleme
      */
     async batchUpdateStatus(selectedIds, newStatus) {
         const ids = Array.from(selectedIds);
@@ -415,17 +437,10 @@ export class AccrualDataManager {
 
             const updates = { status: newStatus };
             
-            // Eğer "Ödenmedi" yapılıyorsa, ödeme geçmişini sil
             if (newStatus === 'unpaid') {
                 updates.paymentDate = null;
                 updates.paidOfficialAmount = 0;
                 updates.paidServiceAmount = 0;
-                // Kalan tutarı tekrar toplama eşitle
-                // Not: Burada basitçe totalAmount'u diziye çevirmek gerekebilir, 
-                // ancak totalAmount array ise direkt kopyalanır.
-                // Basitlik adına UI'da totalAmount gösteriliyor, burada veri tutarlılığı için:
-                // İdeal çözüm: calculateRemainingAmount mantığını burada da çalıştırmak.
-                // Şimdilik null/undefined bırakıp görüntülemede totalAmount'a fallback yapıyoruz.
                 updates.remainingAmount = acc.totalAmount; 
             }
 
