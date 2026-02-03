@@ -2365,6 +2365,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         islem_turu_adi: finalIslemTanimlamasi, 
         teblig_tarihi: enrichedData.tebligTarihiFormatted,
         resmi_son_cevap_tarihi: enrichedData.deadlineFormatted,
+        son_odeme_tarihi: enrichedData.deadlineFormatted,
         itiraz_sahibi: enrichedData.itirazSahibi, 
         dava_son_tarihi: davaSonTarihi,
         dava_son_tarihi_display_style: (davaSonTarihi && davaSonTarihi !== "-") ? "block" : "none",
@@ -3049,7 +3050,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
-        son_odeme_tarihi: formatDeadline(after.officialDueDate || after.dueDate)
+        son_odeme_tarihi: formatDeadline(finalDueDate)
       };
 
       const replaceVars = (str) =>
