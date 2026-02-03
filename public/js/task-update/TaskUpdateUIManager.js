@@ -243,4 +243,114 @@ export class TaskUpdateUIManager {
     </div>`;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
+
+renderApplicationSummaryModalContent(task, masterPersons = []) {
+    const container = document.getElementById('applicationSummaryContent');
+    if (!container) return;
+
+    const d = task.details || {}; 
+
+    // 1. Verileri Hazırla
+    const brandName = d.brandName || d.brandExampleText || '-'; 
+    const brandType = d.brandType || '-';
+    const brandCategory = d.brandCategory || '-';
+    const nonLatin = d.nonLatinAlphabet || '-';
+
+    // Menşe
+    let origin = d.originSelect || 'Türkiye';
+    if (d.originSelect === 'Yurtdışı Ulusal' && d.countrySelect) {
+        origin += ` (${d.countrySelect})`;
+    }
+
+    // Sınıflar (Nice Classes)
+    let classHtml = '<span class="text-muted">Seçim Yok</span>';
+    if (d.niceClasses && Array.isArray(d.niceClasses) && d.niceClasses.length > 0) {
+        const listItems = d.niceClasses.map(c => {
+            const val = typeof c === 'object' ? `(${c.classNo}) ${c.description || ''}` : c;
+            return `<div class="border-bottom py-2 pl-2 bg-white mb-1 rounded small">${val}</div>`;
+        }).join('');
+        classHtml = `<div style="max-height: 200px; overflow-y: auto; background:#f8f9fa; padding:5px; border-radius:4px;">${listItems}</div>`;
+    }
+    if (d.customClassDefinition) {
+        classHtml += `<div class="mt-2 p-2 alert alert-warning small"><strong>Özel Tanım:</strong> ${d.customClassDefinition}</div>`;
+    }
+
+    // Başvuru Sahipleri
+    let applicantsHtml = '<span class="text-danger">Seçilmedi</span>';
+    if (d.selectedApplicants && d.selectedApplicants.length > 0) {
+        applicantsHtml = d.selectedApplicants.map(a => 
+            `<span class="badge badge-light border text-dark p-2 mr-1 mb-1"><i class="fas fa-user mr-1"></i>${a.name || a.applicantName}</span>`
+        ).join(' ');
+    }
+
+    // Rüçhanlar
+    let priorityHtml = '<span class="text-muted">Yok</span>';
+    if (d.priorities && d.priorities.length > 0) {
+        priorityHtml = '<ul class="list-group list-group-flush small">' + 
+            d.priorities.map(p => 
+                `<li class="list-group-item bg-transparent pl-0 py-1">
+                    <strong>${p.type || 'Rüçhan'}:</strong> ${p.country} - ${p.number} 
+                    <span class="badge badge-secondary ml-1">${p.date}</span>
+                </li>`
+            ).join('') + 
+            '</ul>';
+    }
+
+    // Marka Görseli
+    let imageHtml = '<div class="text-muted small font-italic">Görsel bulunamadı</div>';
+    if (task.documents && task.documents.length > 0) {
+        const imgDoc = task.documents.find(doc => doc.name.match(/\.(jpg|jpeg|png|gif)$/i));
+        if (imgDoc) {
+            imageHtml = `
+                <div class="text-center p-2 border rounded bg-white">
+                    <img src="${imgDoc.downloadURL || imgDoc.url}" class="img-fluid" style="max-height: 180px; object-fit: contain;">
+                    <div class="mt-1 small text-muted">${imgDoc.name}</div>
+                    <a href="${imgDoc.downloadURL || imgDoc.url}" target="_blank" class="btn btn-xs btn-outline-primary mt-1">İndir / Büyüt</a>
+                </div>`;
+        }
+    }
+
+    // 2. HTML Şablonu
+    const html = `
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-3 border-0">
+                    <div class="card-body p-0">
+                        <table class="table table-bordered table-striped mb-0 small">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 30%;" class="bg-white text-dark">Marka Adı / İbare</th>
+                                    <td class="text-primary font-weight-bold lead">${brandName}</td>
+                                </tr>
+                                <tr><th class="bg-white">Marka Tipi / Türü</th><td>${brandType} / ${brandCategory}</td></tr>
+                                ${nonLatin !== '-' ? `<tr><th class="bg-white">Latin Dışı Harf</th><td>${nonLatin}</td></tr>` : ''}
+                                <tr><th class="bg-white">Menşe</th><td>${origin}</td></tr>
+                                <tr><th class="bg-white align-middle">Başvuru Sahipleri</th><td class="align-middle">${applicantsHtml}</td></tr>
+                                <tr><th class="bg-white align-top">Mal/Hizmet Sınıfları</th><td>${classHtml}</td></tr>
+                                <tr><th class="bg-white align-top">Rüçhan Bilgileri</th><td>${priorityHtml}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white font-weight-bold text-center small py-2">Marka Örneği</div>
+                    <div class="card-body bg-light text-center p-3">
+                        ${imageHtml}
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 small border-0 shadow-sm">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    <strong>Uzman Notu:</strong><br>
+                    Bu veriler iş oluşturulurken girilmiştir. Lütfen EPATS girişini bu verilere göre yapınız.
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
 }
