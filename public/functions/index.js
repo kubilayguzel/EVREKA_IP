@@ -1612,6 +1612,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     // İtiraz Bilgileri
     let oppositionOwner = null;
     let oppositionFileUrl = null;
+    let oppositionEpatsFileUrl = null;
 
     const associatedTransactionId = after.associatedTransactionId || after.finalTransactionId;
     const recordId = after.matchedRecordId || after.relatedIpRecordId || after.ipRecordId;
@@ -1641,7 +1642,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                          // --- İtiraz Bilgilerini Çek (Child) ---
                          if (fetchedTxnData.oppositionOwner) oppositionOwner = fetchedTxnData.oppositionOwner;
                          if (fetchedTxnData.oppositionPetitionFileUrl) oppositionFileUrl = fetchedTxnData.oppositionPetitionFileUrl;
-
+                          
+                         if (fetchedTxnData.oppositionEpatsPetitionFileUrl) oppositionEpatsFileUrl = fetchedTxnData.oppositionEpatsPetitionFileUrl;
                          if (fetchedTxnData.parentId) {
                              const parentSnap = await adminDb.collection("ipRecords").doc(recordId).collection("transactions").doc(fetchedTxnData.parentId).get();
                              if (parentSnap.exists) {
@@ -1651,6 +1653,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                                  // --- İtiraz Bilgilerini Çek (Parent - Varsa üzerine yaz) ---
                                  if (parentTxnData.oppositionOwner) oppositionOwner = parentTxnData.oppositionOwner;
                                  if (parentTxnData.oppositionPetitionFileUrl) oppositionFileUrl = parentTxnData.oppositionPetitionFileUrl;
+                                 if (parentTxnData.oppositionEpatsPetitionFileUrl) oppositionEpatsFileUrl = parentTxnData.oppositionEpatsPetitionFileUrl;
                              }
                          }
                          
@@ -2456,14 +2459,51 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       fileName: fileNameToUse,
     };
 
-    // EK DOSYA (Dilekçe) HAZIRLIĞI
-    let supplementaryAttachment = null;
-    if (oppositionFileUrl) {
-        supplementaryAttachment = {
-            downloadURL: oppositionFileUrl,
-            fileName: "Itiraz_Dilekcesi.pdf" 
-        };
+
+    // --- EKLERİ HAZIRLA (GÜNCELLENDİ) ---
+    const taskAttachments = [];
+
+    // 1. Görev/Doküman üzerindeki manuel ekler (Varsa)
+    if (after.documents && Array.isArray(after.documents)) {
+        after.documents.forEach(doc => {
+            taskAttachments.push({
+                name: doc.name || "ek_belge.pdf",
+                url: doc.url || doc.downloadURL,
+                storagePath: doc.storagePath || null, 
+                type: 'application/pdf'
+            });
+        });
     }
+
+    // 2. İtiraz Dilekçesi (Varsa ekle)
+    if (oppositionFileUrl) {
+        taskAttachments.push({
+            name: "Itiraz_Dilekcesi.pdf",
+            url: oppositionFileUrl,
+            type: 'application/pdf'
+        });
+    }
+
+    // 3. Karşı ePATS Dilekçesi (Varsa ekle - YENİ)
+    if (oppositionEpatsFileUrl) {
+        taskAttachments.push({
+            name: "Karsi_Epats_Dilekcesi.pdf",
+            url: oppositionEpatsFileUrl,
+            type: 'application/pdf'
+        });
+    }
+
+    // UI listesi için (Bildirim ekranında görünmesi için)
+    const allUiFiles = [];
+    if (fileUrlToUse) { // fileUrlToUse değişkeni yukarıda tanımlı
+        allUiFiles.push({
+            url: fileUrlToUse,
+            name: fileNameToUse,
+            storagePath: after.storagePath || null,
+            type: 'application/pdf'
+        });
+    }
+    taskAttachments.forEach(d => allUiFiles.push(d));
 
     const notificationData = {
       recipientTo: toRecipients || [],
@@ -2482,7 +2522,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       taskOwner: taskOwnerIds || [], 
       applicantName: (client && (client.name || client.companyName)) || null,
       epatsAttachment, 
-      supplementaryAttachment,
+      taskAttachments: taskAttachments, // <-- Tüm ekler burada
+      files: allUiFiles, // UI'da görünmesi için dosyalar listesi
       assignedTo_uid: selcanUserId || null,
       assignedTo_email: selcanUserEmail || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
