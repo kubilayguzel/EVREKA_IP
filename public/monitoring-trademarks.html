@@ -694,9 +694,10 @@
     // Filtreleri uygula
     function applyFilters() {
         filteredData = allMonitoringData.filter(item => {
+            // 1. ARAMA (Marka Adı, Sahip, Başvuru No)
             if (currentFilters.search) {
                 const searchTerm = currentFilters.search.toLowerCase();
-                const markName = (item.title || item.markName || '').toLowerCase();
+                const markName = (item.title || item.markName || item.trademarkName || '').toLowerCase();
                 const owner = getOwnerNames(item).toLowerCase();
                 const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
 
@@ -705,16 +706,32 @@
                 }
             }
 
+            // 2. DURUM (Status)
             if (currentFilters.status !== 'all') {
+                // item.status yoksa varsayılan olarak 'unknown' kabul edilir
                 const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
                 if (itemStatus !== currentFilters.status) return false;
             }
 
+            // 3. NICE SINIFI
             if (currentFilters.niceClass) {
-                const itemClasses = Array.isArray(item.niceClass) ? item.niceClass.join(' ') : (item.niceClass || '').toString();
-                if (!itemClasses.toLowerCase().includes(currentFilters.niceClass.toLowerCase())) return false;
+                const searchClass = currentFilters.niceClass.trim();
+                
+                // Tüm sınıf kaynaklarını birleştirip string içinde ara
+                const allClassSources = [
+                    ...(Array.isArray(item.niceClasses) ? item.niceClasses : []),
+                    ...(Array.isArray(item.niceClassSearch) ? item.niceClassSearch : []),
+                    item.niceClass
+                ].filter(c => c !== null && c !== undefined);
+
+                // Virgülle birleştirilmiş string içinde arama yap (örn: "05, 35")
+                const classesStr = allClassSources.join(' ').toLowerCase();
+                
+                // Tam eşleşme veya içerik kontrolü
+                if (!classesStr.includes(searchClass)) return false;
             }
 
+            // 4. SAHİP (Owner)
             if (currentFilters.owner) {
                 const ownerName = getOwnerNames(item).toLowerCase();
                 if (!ownerName.includes(currentFilters.owner.toLowerCase())) return false;
@@ -918,50 +935,49 @@ if (currentPageData.length === 0) {
     };
 
 const getOwnerNames = (item) => {
-    try {
-        // ÖNCE: Firebase'deki asıl yapı - applicants array (sadece id içerir)
-        if (item.applicants && Array.isArray(item.applicants) && item.applicants.length > 0) {
-            return item.applicants
-                .map(applicant => {
-                    // Applicant bir obje ve id içeriyorsa, persons'dan ismi bul
-                    if (typeof applicant === 'object' && applicant.id) {
-                        const match = allPersons.find(p => p.id === applicant.id);
-                        return match ? match.name : `ID:${applicant.id} (Bulunamadı)`;
-                    }
-                    // Eski veri yapısı: applicant.name varsa direkt kullan
-                    if (typeof applicant === 'object' && applicant.name) {
-                        return applicant.name;
-                    }
-                    // String ise direkt kullan
-                    return String(applicant);
-                })
-                .filter(name => name && name.trim() !== '')
-                .join(', ');
-        }
+        try {
+            // 1. Yeni standart alan (ownerName) varsa direkt döndür
+            if (item.ownerName && typeof item.ownerName === 'string' && item.ownerName.trim() !== '') {
+                return item.ownerName;
+            }
 
-        // SONRA: Eski owners yapısı (geriye uyumluluk için)
-        if (item.owners && Array.isArray(item.owners)) {
-            return item.owners.map(owner => {
-                if (typeof owner === 'object' && owner.id) {
-                    const match = allPersons.find(p => p.id === owner.id);
-                    return match ? match.name : `ID:${owner.id} (Bulunamadı)`;
-                }
-                return String(owner.name || owner);
-            }).join(', ');
-        } else if (typeof item.owners === 'string') {
-            return item.owners;
-        }
+            // 2. Applicants array (sadece id içerir)
+            if (item.applicants && Array.isArray(item.applicants) && item.applicants.length > 0) {
+                return item.applicants
+                    .map(applicant => {
+                        if (typeof applicant === 'object' && applicant.id) {
+                            const match = allPersons.find(p => p.id === applicant.id);
+                            return match ? match.name : applicant.name || '';
+                        }
+                        if (typeof applicant === 'object' && applicant.name) return applicant.name;
+                        return String(applicant);
+                    })
+                    .filter(name => name && name.trim() !== '')
+                    .join(', ');
+            }
 
-        // owner string alanı varsa
-        if (item.owner && typeof item.owner === 'string' && item.owner.trim() !== '') {
-            return item.owner;
+            // 3. Eski owners yapısı
+            if (item.owners && Array.isArray(item.owners)) {
+                return item.owners.map(owner => {
+                    if (typeof owner === 'object' && owner.id) {
+                        const match = allPersons.find(p => p.id === owner.id);
+                        return match ? match.name : owner.name || '';
+                    }
+                    return String(owner.name || owner);
+                }).join(', ');
+            } else if (typeof item.owners === 'string') {
+                return item.owners;
+            }
+
+            // 4. Owner string alanı
+            if (item.owner && typeof item.owner === 'string') {
+                return item.owner;
+            }
+        } catch (error) {
+            console.error('❌ getOwnerNames hatası:', error);
         }
-    } catch (error) {
-        console.error('❌ getOwnerNames hatası:', error);
-        return 'Hata: ' + error.message;
-    }
-    return '-';
-};
+        return '-';
+    };
 
 const renderMonitoringTable = (data, userUid) => {
         allMonitoringData = data || [];
