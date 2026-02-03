@@ -644,8 +644,12 @@ updateChildTransactionOptions() {
             
             registrationSection.style.display = showRegistration ? 'block' : 'none';
             
+            // --- BUTON VE INPUT YÖNETİMİ ---
+            const savePortfolioBtn = document.getElementById('save-portfolio-btn'); // Portföy kaydet butonu (Varsa ID'sini kontrol edin)
+            const indexBtn = document.getElementById('saveTransactionBtn'); // İndeksle butonu
+
             if (showRegistration) {
-                // A) Tescil Numarası
+                // A) PDF'ten okunan verileri doldur
                 if (this.extractedRegNo) {
                     const regNoInput = document.getElementById('registry-registration-no');
                     if (regNoInput && !regNoInput.value) {
@@ -653,8 +657,6 @@ updateChildTransactionOptions() {
                         regNoInput.dispatchEvent(new Event('input'));
                     }
                 }
-
-                // B) Tescil Tarihi
                 if (this.extractedRegDate) {
                     const regDateInput = document.getElementById('registry-registration-date');
                     if (regDateInput && !regDateInput.value) {
@@ -664,8 +666,7 @@ updateChildTransactionOptions() {
                         }
                     }
                 }
-
-                // C) Marka Durumu
+                // Marka durumu "Tescilli"
                 const statusSelect = document.getElementById('registry-status') || document.getElementById('status');
                 if (statusSelect) {
                     statusSelect.value = 'registered'; 
@@ -678,6 +679,23 @@ updateChildTransactionOptions() {
                         }
                     }
                     statusSelect.dispatchEvent(new Event('change'));
+                }
+
+                // B) Butonları Düzenle (Tek Buton Deneyimi)
+                if (savePortfolioBtn && indexBtn) {
+                    savePortfolioBtn.style.display = 'none'; // Kaydet butonunu gizle
+                    indexBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Kaydet ve İndeksle';
+                    indexBtn.classList.remove('btn-primary');
+                    indexBtn.classList.add('btn-success'); // Yeşil yap
+                }
+
+            } else {
+                // Form kapalıysa butonları eski haline getir
+                if (savePortfolioBtn && indexBtn) {
+                    savePortfolioBtn.style.display = 'inline-block'; 
+                    indexBtn.innerHTML = '<i class="fas fa-check mr-2"></i>İndeksle';
+                    indexBtn.classList.remove('btn-success');
+                    indexBtn.classList.add('btn-primary');
                 }
             }
         }
@@ -695,13 +713,11 @@ updateChildTransactionOptions() {
             return;
         }
 
-        // ✅ Tescil Belgesi indekslemesinde tescil no/tarih zorunlu (boş ise kayıt yapılmasın)
-        // Not: Bu kontrol sadece tescil belgesi senaryolarında çalışır; diğer işlem tiplerini etkilemez.
+        // Tescil Belgesi için Zorunlu Alan Kontrolü
         try {
             const childSelect = document.getElementById('detectedType');
             const selectedText = childSelect?.options?.[childSelect.selectedIndex]?.text || '';
             const typeText = String(selectedText).toLowerCase();
-
             const parentTx = this.currentTransactions?.find(t => String(t.id) === String(parentTxId));
             const parentTypeId = String(parentTx?.type || '');
 
@@ -717,40 +733,56 @@ updateChildTransactionOptions() {
                 const regDate = String(regDateEl?.value || '').trim();
 
                 if (!regNo || !regDate) {
-                    showNotification('Tescil Belgesi indekslemesi için Tescil No ve Tescil Tarihi zorunludur.', 'error');
+                    showNotification('Tescil Belgesi için Tescil No ve Tarih zorunludur.', 'error');
                     if (!regNo && regNoEl) regNoEl.focus();
                     else if (!regDate && regDateEl) regDateEl.focus();
                     return;
                 }
             }
-        } catch (e) {
-            // validation should not block unrelated transaction types
-        }
+        } catch (e) { /* validation ignore */ }
 
-        // --- OTOMATİK PORTFÖY GÜNCELLEME ---
-        if (window.portfolioUpdateManager && typeof window.portfolioUpdateManager.saveChanges === 'function') {
-            const regSection = document.getElementById('registry-editor-section');
-            
-            // Sadece Tescil Düzenleme alanı görünürse (yani bu bir tescil işlemiyse) kaydetmeyi dene
-            if (regSection && regSection.style.display !== 'none') {
-                try {
-                    console.log("🔄 İndeksleme öncesi portföy verileri otomatik güncelleniyor...");
-                    
-                    // [YENİ EKLENEN KISIM]: Güncellenecek kayıt ID'sini PortfolioManager'a elle bildiriyoruz.
-                    // Bu satır, formdaki verilerin doğru kayda işlenmesini garanti eder.
-                    if (this.matchedRecord && this.matchedRecord.id) {
-                        window.portfolioUpdateManager.state.selectedRecordId = this.matchedRecord.id;
-                    }
+        // --- DOĞRUDAN VERİ GÜNCELLEME (YENİ BLOK) ---
+        // Form açıksa, içindeki verileri alıp doğrudan veritabanına yazıyoruz.
+        const regSection = document.getElementById('registry-editor-section');
+        if (regSection && regSection.style.display !== 'none' && this.matchedRecord) {
+            try {
+                // 1. Formdaki Güncel Değerleri Oku
+                const regNoVal = document.getElementById('registry-registration-no')?.value;
+                const regDateVal = document.getElementById('registry-registration-date')?.value;
+                const statusVal = document.getElementById('registry-status')?.value || document.getElementById('status')?.value;
 
-                    // Şimdi kaydetme fonksiyonunu çağırıyoruz
-                    await window.portfolioUpdateManager.saveChanges();
-                    
-                } catch (err) {
-                    console.warn("Otomatik portföy güncellemesi sırasında uyarı:", err);
-                    // Hata kritik değilse işleme devam et
+                // 2. Güncellenecek Objeyi Hazırla
+                const updates = {};
+                
+                if (regNoVal) {
+                    updates.registrationNumber = regNoVal;
+                    updates.applicationNumber = regNoVal; // Genelde ikisi de güncellenir
                 }
+                
+                if (regDateVal) {
+                    updates.registrationDate = regDateVal; // String yyyy-MM-dd
+                }
+
+                if (statusVal) {
+                    updates.status = statusVal;
+                    // Eğer statü tarihini de tutuyorsanız: updates.statusDate = new Date().toISOString(); 
+                }
+
+                // 3. Veritabanını Güncelle
+                if (Object.keys(updates).length > 0) {
+                    console.log("💾 Veriler doğrudan kaydediliyor:", updates);
+                    const recordRef = doc(db, 'ipRecords', this.matchedRecord.id);
+                    await updateDoc(recordRef, updates);
+                    showNotification('Kayıt bilgileri güncellendi.', 'success');
+                }
+
+            } catch (err) {
+                console.error("Kayıt güncelleme hatası:", err);
+                showNotification('Veriler güncellenirken hata oluştu ancak indeksleme devam ediyor.', 'warning');
             }
         }
+        // --- DOĞRUDAN GÜNCELLEME SONU ---
+
         const saveBtn = document.getElementById('saveTransactionBtn');
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> İşleniyor...';
@@ -760,7 +792,7 @@ updateChildTransactionOptions() {
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // 1. İtiraz Bildirimi Özel Mantığı
+            // 1. İtiraz Bildirimi & Dosya Yükleme (Mevcut Mantık)
             let newParentTxId = null;
             let oppositionFileUrl = null;
             let oppositionFileName = null;
@@ -778,7 +810,6 @@ updateChildTransactionOptions() {
                 oppositionFileUrl = await getDownloadURL(storageRef);
                 oppositionFileName = fileInput.name;
 
-                // Opsiyonel: Karşı ePATS dilekçesi
                 if (epatsFileInput) {
                     const epatsRef = ref(firebaseServices.storage, `opposition-epats-petitions/${this.matchedRecord.id}/${Date.now()}_${epatsFileInput.name}`);
                     await uploadBytes(epatsRef, epatsFileInput);
@@ -837,7 +868,6 @@ updateChildTransactionOptions() {
 
             if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
                 const docsToAdd = [];
-
                 const oppDocPayload = {
                     id: generateUUID(),
                     name: oppositionFileName || 'opposition_petition.pdf',
@@ -859,7 +889,6 @@ updateChildTransactionOptions() {
                     };
                     docsToAdd.push(oppEpatsDocPayload);
                 }
-
                 const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
                 await updateDoc(txRef, { documents: arrayUnion(...docsToAdd) });
             }
@@ -884,7 +913,6 @@ updateChildTransactionOptions() {
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
                 const deliveryDate = new Date(deliveryDateStr);
                 
-                // Süre Hesaplama (Dinamik)
                 let duePeriod = Number(childTypeObj.duePeriod || 0);
                 
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
@@ -895,33 +923,22 @@ updateChildTransactionOptions() {
                     taskDueDate.setDate(taskDueDate.getDate() - 1);
                 }
 
-                // 🔥 KESİN ÇÖZÜM: Her zaman Selcan'a ata
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
-                
-                console.log(`✅ Tetiklenen iş doğrudan Selcan'a atanıyor (${SELCAN_EMAIL})`);
-
-                // 🔥 İLGİLİ TARAF VE TASK OWNER MANTIĞI (GÜNCELLENDİ)
                 let relatedPartyData = null;
                 let taskOwner = []; 
 
-                // 1. Portföy (Self) Kaydıysa: Dosya Sahibi = İş Sahibi
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
-                        // Applicant ID'lerini güvenli şekilde String array olarak alıyoruz
                         taskOwner = this.matchedRecord.applicants
                             .map(app => String(app.id || app.personId))
                             .filter(Boolean);
                         
-                        // İlk başvuru sahibini 'relatedParty' olarak da ekleyelim (Opsiyonel ama faydalı)
                         const app = this.matchedRecord.applicants[0];
                         if (app && (app.id || app.personId)) {
                             relatedPartyData = { id: app.id || app.personId, name: app.name || 'İsimsiz' };
                         }
-                        
-                        console.log('✅ Indexing: Dosya sahipleri taskOwner olarak atandı:', taskOwner);
                     }
                 } 
-                // 2. Üçüncü Taraf (Third Party) Kaydıysa: Parent Task'tan Miras Al
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
                     const triggeringTaskId = parentTx?.triggeringTaskId;
                     if (triggeringTaskId) {
@@ -940,7 +957,6 @@ updateChildTransactionOptions() {
                     }
                 }
 
-                // --- GÜNCELLENMİŞ TASK VERİ YAPISI ---
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
@@ -982,7 +998,6 @@ updateChildTransactionOptions() {
                 }
             }
 
-            // Tetiklenen işin hiyerarşisini dinamik belirleme
             if (createdTaskId && childTypeObj.taskTriggered) {
                 const triggeredTypeObj = this.allTransactionTypes.find(t => t.id === childTypeObj.taskTriggered);
                 const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
@@ -999,7 +1014,6 @@ updateChildTransactionOptions() {
                 if (targetHierarchy === 'child') {
                     triggeredTransactionData.parentId = finalParentId;
                 }
-
                 await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
             }
 
