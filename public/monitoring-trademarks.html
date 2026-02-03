@@ -209,11 +209,25 @@
         text-align: center;
     }
 
-    /* 3. Marka Adı (ESNEK)
-       4. Aranacak İbareler (ESNEK) 
-       5. Sahip (ESNEK)
-       Bu kolonlara genişlik vermiyoruz, böylece kalan alanı paylaşırlar. 
-    */
+    /* 3. Marka Adı (Daraltıldı) */
+    .accruals-table th:nth-child(3),
+    .accruals-table td:nth-child(3) {
+        width: 170px;
+        max-width: 170px; /* Taşan metni kesmek için sınır */
+    }
+
+    /* 4. Aranacak İbareler (Daraltıldı) */
+    .accruals-table th:nth-child(4),
+    .accruals-table td:nth-child(4) {
+        width: 170px;
+        max-width: 170px;
+    }
+
+    /* 5. Sahip (Genişletildi - Kalan alanı kaplar) */
+    .accruals-table th:nth-child(5),
+    .accruals-table td:nth-child(5) {
+        width: auto; /* Esnek genişlik */
+    }
 
     /* 6. Başvuru No (Sabit) */
     .accruals-table th:nth-child(6),
@@ -813,7 +827,8 @@
 
         if (currentPageData.length === 0) {
             const hasFilters = currentFilters.search || currentFilters.status !== 'all' ||
-                              currentFilters.niceClass || currentFilters.owner;
+                              currentFilters.niceClass || currentFilters.owner || 
+                              currentFilters.markName || currentFilters.searchTerms;
             container.innerHTML = `<div class="no-records">${hasFilters ? 'Filtreleme kriterlerinize uygun kayıt bulunamadı.' : 'İzleme listeniz boş.'}</div>`;
             return;
         }
@@ -822,7 +837,8 @@
                         <th><input type="checkbox" id="headerSelectAllCheckbox" /></th>
                         <th>Görsel</th>
                         <th>Marka Adı</th>
-                        <th>Aranacak İbareler</th> <th>Sahip</th>
+                        <th>Aranacak İbareler</th>
+                        <th>Sahip</th>
                         <th>Başvuru No</th>
                         <th>Başvuru Tarihi</th>
                         <th>Nice Sınıfı</th>
@@ -848,34 +864,51 @@
                 return '<span style="color:#999; font-size:12px;">🖼️ Görsel yok</span>';
             })();
 
-            // --- ARANACAK İBARELER (YENİ) ---
-            const searchTermsHtml = (() => {
+            // --- HOVER İÇİN METİN HAZIRLIĞI ---
+            // tırnak işaretleri HTML'i bozmasın diye replace ile temizliyoruz
+            const markNameText = r.title || r.markName || '-';
+            const safeMarkName = markNameText.replace(/"/g, '&quot;');
+            
+            const ownerNames = getOwnerNames(r);
+            const safeOwnerNames = ownerNames.replace(/"/g, '&quot;');
+
+            // --- ARANACAK İBARELER ---
+            const searchTermsPlain = (() => {
                 let terms = [];
-                // 1. Manuel girilen "searchMarkName" varsa en başa ekle
+                // 1. Manuel girilen searchMarkName
                 if (r.searchMarkName && r.searchMarkName.trim()) {
-                    terms.push(`<span style="color:#007bff; font-weight:bold;">${r.searchMarkName}</span>`);
+                    terms.push(r.searchMarkName);
                 }
-                // 2. "brandTextSearch" dizisindeki diğer ibareler
-                if (Array.isArray(r.brandTextSearch) && r.brandTextSearch.length > 0) {
-                    r.brandTextSearch.forEach(term => {
-                        // searchMarkName ile aynıysa tekrar ekleme
-                        if (term !== r.searchMarkName) {
-                            terms.push(term);
-                        }
+                // 2. brandTextSearch listesi
+                if (Array.isArray(r.brandTextSearch)) {
+                    r.brandTextSearch.forEach(t => { 
+                        if(t !== r.searchMarkName) terms.push(t); 
                     });
                 }
-                
-                // Eğer hiç özel kriter yoksa, orijinal marka adını gri (default) göster
-                if (terms.length === 0) {
-                    return `<span style="color:#999; font-style:italic;">${r.title || r.markName || '-'}</span>`;
-                }
+                // Hiçbiri yoksa orijinal marka adını kullan
+                return terms.length > 0 ? terms.join(', ') : markNameText;
+            })();
+            
+            const safeSearchTerms = searchTermsPlain.replace(/"/g, '&quot;');
 
-                // İbareleri noktalı virgül ile ayırarak göster
-                return terms.join(' <span style="color:#ccc; margin:0 4px;">|</span> ');
+            // HTML Görünümü (Renkli, İkonlu vs.)
+            const searchTermsHtml = (() => {
+                 let htmlParts = [];
+                 if (r.searchMarkName && r.searchMarkName.trim()) {
+                     htmlParts.push(`<span style="color:#007bff; font-weight:bold;">${r.searchMarkName}</span>`);
+                 }
+                 if (Array.isArray(r.brandTextSearch)) {
+                     r.brandTextSearch.forEach(t => {
+                         if (t !== r.searchMarkName) htmlParts.push(t);
+                     });
+                 }
+                 if (htmlParts.length === 0) {
+                     return `<span style="color:#999; font-style:italic;">${markNameText}</span>`;
+                 }
+                 return htmlParts.join(' <span style="color:#ccc; margin:0 4px;">|</span> ');
             })();
 
             const statusInfo = getStatusInTurkish(r.status);
-            const ownerNames = getOwnerNames(r);
             
             // --- NICE SINIFLARI ---
             const niceClassesHtml = (() => {
@@ -888,7 +921,6 @@
                 if (r.niceClassSearch && Array.isArray(r.niceClassSearch)) {
                     r.niceClassSearch.forEach(classNo => classes.add(String(classNo)));
                 } else if (r.niceClasses) {
-                    // Eğer search yoksa normal classes'a bak
                     const extras = Array.isArray(r.niceClasses) ? r.niceClasses : [r.niceClasses];
                     extras.forEach(c => classes.add(String(c)));
                 }
@@ -904,11 +936,18 @@
                 return '-';
             })();
 
+            // --- TABLO SATIRINI OLUŞTUR ---
+            // Not: title="..." özelliği sayesinde üzerine gelince tam metin görünür.
             html += `<tr data-id="${r.id}">
                         <td><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${isSelected}></td>
                         <td>${trademarkImageHtml}</td>
-                        <td style="font-weight: 500;">${r.title || r.markName || '-'}</td>
-                        <td style="font-size: 0.9em;">${searchTermsHtml}</td> <td><div class="owner-cell" title="${ownerNames}">${ownerNames}</div></td>
+                        
+                        <td style="font-weight: 500;" title="${safeMarkName}">${markNameText}</td>
+                        
+                        <td style="font-size: 0.9em;" title="${safeSearchTerms}">${searchTermsHtml}</td>
+                        
+                        <td><div class="owner-cell" title="${safeOwnerNames}">${ownerNames}</div></td>
+                        
                         <td>${r.applicationNumber || r.applicationNo || '-'}</td>
                         <td>${formatTurkishDate(r.applicationDate)}</td>
                         <td>${niceClassesHtml}</td>
@@ -919,7 +958,7 @@
         html += `</tbody></table>`;
         container.innerHTML = html;
 
-        // ... (Checkbox ve Hover event listener'ları aynı kalıyor) ...
+        // Checkbox Event Listener
         const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
         if (headerCheckbox) {
             headerCheckbox.addEventListener('change', (e) => {
@@ -933,6 +972,7 @@
             });
         }
 
+        // Görsel Hover Efekti (Büyütme)
         container.querySelectorAll('.trademark-image-thumbnail').forEach(img => {
             let hoverElement = null;
             img.addEventListener('mouseenter', (e) => {
