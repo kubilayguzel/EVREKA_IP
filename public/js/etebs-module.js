@@ -792,7 +792,7 @@ updateTabBadge() {
     
     // 1. Portföy verilerinin yüklü olduğundan emin ol
     // Eğer PortfolioDataManager yüklü değilse yükle veya bulk-upload-manager'dan al
-    const allRecords = await ipRecordsService.getAllRecords();
+    const allRecords = await ipRecordsService.getAllRecords({ source: 'server' });
     const records = allRecords.success ? allRecords.data : [];
 
     if (records.length === 0) {
