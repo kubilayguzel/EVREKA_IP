@@ -622,7 +622,6 @@ async loadData() {
         }
 
         // 2. Tescil ve Eşya Listesi Formu Kontrolü
-        // HTML'deki ID'si 'registry-editor-section' olan kapsayıcıyı hedefliyoruz
         const registrationSection = document.getElementById('registry-editor-section'); 
         
         if (registrationSection) {
@@ -656,16 +655,17 @@ async loadData() {
             registrationSection.style.display = showRegistration ? 'block' : 'none';
             
             if (showRegistration) {
-                // A) Tescil Numarasını Doldur (YENİ)
+                // A) Tescil Numarasını Doldur
                 if (this.extractedRegNo) {
                     const regNoInput = document.getElementById('registry-registration-no');
+                    // Input varsa ve boşsa doldur
                     if (regNoInput && !regNoInput.value) {
                         regNoInput.value = this.extractedRegNo;
-                        regNoInput.dispatchEvent(new Event('input')); // Label kayması vb. için
+                        regNoInput.dispatchEvent(new Event('input'));
                     }
                 }
 
-                // B) Tescil Tarihini Doldur (MEVCUT KODUNUZ)
+                // B) Tescil Tarihini Doldur
                 if (this.extractedRegDate) {
                     const regDateInput = document.getElementById('registry-registration-date');
                     if (regDateInput && !regDateInput.value) {
@@ -675,16 +675,12 @@ async loadData() {
                         }
                     }
                 }
-                
-                // C) Marka Durumunu "Tescilli" Yap (YENİ)
-                // Not: Input ID'niz projenize göre 'status', 'registry-status' veya 'recordStatus' olabilir.
-                // Genellikle kullanılan ID'yi varsayarak ekliyorum:
+
+                // C) Marka Durumunu "Tescilli" Yap
                 const statusSelect = document.getElementById('registry-status') || document.getElementById('status');
                 if (statusSelect) {
-                    // Sisteminizde "Tescilli" değerinin karşılığı genelde 'registered' veya 'tescilli'dir.
                     statusSelect.value = 'registered'; 
-                    
-                    // Eğer value ile seçilemediyse yazı ile bulmaya çalış
+                    // Eğer value ile eşleşmezse yazı ile bul
                     if (statusSelect.selectedIndex === -1) {
                         for (let i = 0; i < statusSelect.options.length; i++) {
                             if (statusSelect.options[i].text.toLowerCase().includes('tescilli')) {
@@ -695,9 +691,9 @@ async loadData() {
                     }
                 }
             }
+        }
+    } 
     
-    }
-
     async handleSave() {
         if (!this.matchedRecord) { alert('Lütfen önce bir kayıt ile eşleştirin.'); return; }
         const parentTxId = document.getElementById('parentTransactionSelect').value;
