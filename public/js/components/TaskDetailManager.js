@@ -561,4 +561,137 @@ export class TaskDetailManager {
         if (Array.isArray(amount)) return amount.map(i => `${i.amount} ${i.currency}`).join(', ');
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
     }
+
+    /**
+     * Marka Başvuru Özetini Gösteren Metot
+     */
+    showApplicationSummary(task) {
+        const container = document.getElementById('applicationSummaryContent');
+        const goToBtn = document.getElementById('btnGoToTaskUpdate');
+        
+        // "İşe Git" butonunun linkini ayarla
+        if (goToBtn) {
+            goToBtn.href = `task-update.html?id=${task.id}`;
+        }
+
+        if (!container) return;
+
+        const d = task.details || {}; 
+
+        // --- VERİLERİ HAZIRLA ---
+        const brandName = d.brandName || d.brandExampleText || '-'; 
+        const brandType = d.brandType || '-';
+        const brandCategory = d.brandCategory || '-';
+        const nonLatin = d.nonLatinAlphabet || '-';
+        
+        let origin = d.originSelect || 'Türkiye';
+        if (d.originSelect === 'Yurtdışı Ulusal' && d.countrySelect) {
+            origin += ` (${d.countrySelect})`;
+        }
+
+        // Sınıflar (Liste Görünümü)
+        let classHtml = '<span class="text-muted font-italic">Seçim Yok</span>';
+        if (d.niceClasses && Array.isArray(d.niceClasses) && d.niceClasses.length > 0) {
+            const listItems = d.niceClasses.map(c => {
+                const val = typeof c === 'object' ? `(${c.classNo}) ${c.description || ''}` : c;
+                return `<div class="border-bottom py-2 pl-2 mb-1 small"><i class="fas fa-layer-group text-info mr-2"></i>${val}</div>`;
+            }).join('');
+            classHtml = `<div class="bg-light rounded p-2" style="max-height: 250px; overflow-y: auto;">${listItems}</div>`;
+        }
+        if (d.customClassDefinition) {
+            classHtml += `<div class="mt-2 p-2 alert alert-warning small border-warning"><i class="fas fa-exclamation-circle mr-1"></i><strong>Özel Tanım:</strong> ${d.customClassDefinition}</div>`;
+        }
+
+        // Başvuru Sahipleri (Etiket Görünümü)
+        let applicantsHtml = '<span class="text-muted font-italic">Seçilmedi</span>';
+        if (d.selectedApplicants && d.selectedApplicants.length > 0) {
+            applicantsHtml = d.selectedApplicants.map(a => 
+                `<span class="badge badge-light border text-dark p-2 mr-1 mb-1" style="font-size: 0.9em;"><i class="fas fa-user mr-1 text-secondary"></i>${a.name || a.applicantName}</span>`
+            ).join(' ');
+        }
+
+        // Rüçhanlar
+        let priorityHtml = '<span class="text-muted font-italic">Yok</span>';
+        if (d.priorities && d.priorities.length > 0) {
+            priorityHtml = '<ul class="list-group list-group-flush small border rounded">' + 
+                d.priorities.map(p => 
+                    `<li class="list-group-item bg-transparent pl-3 py-2">
+                        <strong>${p.type || 'Rüçhan'}:</strong> ${p.country} - ${p.number} 
+                        <span class="badge badge-info ml-2">${p.date}</span>
+                    </li>`
+                ).join('') + 
+                '</ul>';
+        }
+
+        // Görsel Alanı
+        let imageHtml = `
+            <div class="text-center py-5 text-muted bg-light rounded border border-light">
+                <i class="fas fa-image fa-3x mb-2 text-secondary"></i><br>Görsel Yok
+            </div>`;
+            
+        if (task.documents && task.documents.length > 0) {
+            const imgDoc = task.documents.find(doc => doc.name.match(/\.(jpg|jpeg|png|gif)$/i));
+            if (imgDoc) {
+                imageHtml = `
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white text-center font-weight-bold small text-muted">MARKA ÖRNEĞİ</div>
+                        <div class="card-body p-2 text-center bg-light">
+                            <img src="${imgDoc.downloadURL || imgDoc.url}" class="img-fluid rounded shadow-sm" style="max-height: 300px; object-fit: contain;">
+                        </div>
+                        <div class="card-footer bg-white text-center">
+                            <a href="${imgDoc.downloadURL || imgDoc.url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-search-plus mr-1"></i>Büyüt / İndir
+                            </a>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // --- HTML ŞABLONU (GRID YAPISI) ---
+        const html = `
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-0">
+                            <table class="table table-bordered mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 25%;" class="bg-light align-middle text-dark">Marka Adı / İbare</th>
+                                        <td class="align-middle text-primary font-weight-bold lead p-3">${brandName}</td>
+                                    </tr>
+                                    <tr><th class="bg-light align-middle">Marka Tipi / Türü</th><td class="align-middle">${brandType} / ${brandCategory}</td></tr>
+                                    ${nonLatin !== '-' ? `<tr><th class="bg-light align-middle">Latin Dışı Harf</th><td class="align-middle">${nonLatin}</td></tr>` : ''}
+                                    <tr><th class="bg-light align-middle">Menşe</th><td class="align-middle">${origin}</td></tr>
+                                    <tr><th class="bg-light align-middle">Başvuru Sahipleri</th><td class="align-middle">${applicantsHtml}</td></tr>
+                                    <tr><th class="bg-light align-top pt-3">Mal/Hizmet Sınıfları</th><td class="p-3">${classHtml}</td></tr>
+                                    <tr><th class="bg-light align-top pt-3">Rüçhan Bilgileri</th><td class="p-3">${priorityHtml}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    ${imageHtml}
+                    
+                    <div class="alert alert-info mt-3 shadow-sm border-info" style="font-size: 0.9em;">
+                        <div class="d-flex">
+                            <i class="fas fa-info-circle fa-2x mr-3 mt-1"></i>
+                            <div>
+                                <strong>Bilgi:</strong><br>
+                                Bu pencere sadece başvuru verilerini özetler. İşle ilgili notlar ve diğer dosyalar için "İşe Git" butonunu kullanabilirsiniz.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+
+        // Modalı Aç (jQuery ile)
+        if (window.$) {
+            $('#applicationSummaryModal').modal('show');
+        }
+    }
 }
