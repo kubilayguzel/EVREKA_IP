@@ -110,20 +110,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const relatedIds = [...new Set(this.allTasks.map(t => t.relatedIpRecordId).filter(Boolean).map(id => String(id)))];
                 let ipRecords = [];
                 if (relatedIds.length) {
-                    const ipCacheRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
-                    ipRecords = ipCacheRes.success ? ipCacheRes.data : [];
-
-                    const foundSet = new Set(ipRecords.map(r => String(r.id)));
-                    const missingIds = relatedIds.filter(id => !foundSet.has(String(id)));
-                    if (missingIds.length) {
-                        const ipServerRes = await ipRecordsService.getRecordsByIds(missingIds, { source: 'server' });
-                        if (ipServerRes.success && Array.isArray(ipServerRes.data)) {
-                            const map = new Map(ipRecords.map(r => [String(r.id), r]));
-                            ipServerRes.data.forEach(r => map.set(String(r.id), r));
-                            ipRecords = [...map.values()];
-                        }
-                    }
+                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'server' });
+                    ipRecords = ipRes.success ? ipRes.data : [];
                 }
+                this.allIpRecords = ipRecords;
+
                 this.allIpRecords = ipRecords;
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
