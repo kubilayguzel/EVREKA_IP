@@ -701,34 +701,43 @@
                 const owner = getOwnerNames(item).toLowerCase();
                 const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
 
-                if (!markName.includes(searchTerm) && !owner.includes(searchTerm) && !applicationNo.includes(searchTerm)) {
+                // YENİ: Aranacak ibareler içinde de arama yap
+                const searchTerms = (item.brandTextSearch || []).join(' ').toLowerCase();
+
+                if (!markName.includes(searchTerm) && 
+                    !owner.includes(searchTerm) && 
+                    !applicationNo.includes(searchTerm) &&
+                    !searchTerms.includes(searchTerm)) {
                     return false;
                 }
             }
 
             // 2. DURUM (Status)
             if (currentFilters.status !== 'all') {
-                // item.status yoksa varsayılan olarak 'unknown' kabul edilir
                 const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
                 if (itemStatus !== currentFilters.status) return false;
             }
 
-            // 3. NICE SINIFI
+            // 3. NICE SINIFI (DÜZELTİLDİ: TAM EŞLEŞME)
             if (currentFilters.niceClass) {
-                const searchClass = currentFilters.niceClass.trim();
+                // Kullanıcı "5, 35" gibi virgülle ayırarak girebilir
+                const searchClasses = currentFilters.niceClass.split(/[,\s]+/)
+                                        .filter(c => c.trim() !== '')
+                                        .map(c => c.trim());
                 
-                // Tüm sınıf kaynaklarını birleştirip string içinde ara
+                // Kaydın tüm sınıflarını topla
                 const allClassSources = [
                     ...(Array.isArray(item.niceClasses) ? item.niceClasses : []),
                     ...(Array.isArray(item.niceClassSearch) ? item.niceClassSearch : []),
                     item.niceClass
-                ].filter(c => c !== null && c !== undefined);
+                ].filter(c => c !== null && c !== undefined).map(String);
 
-                // Virgülle birleştirilmiş string içinde arama yap (örn: "05, 35")
-                const classesStr = allClassSources.join(' ').toLowerCase();
+                // Kullanıcının girdiği sınıflardan EN AZ BİRİ kayıtta var mı? (Tam Eşleşme)
+                // Örn: Aranan "5". Kayıt [35, 45]. Eşleşmez. 
+                // Örn: Aranan "35". Kayıt [35, 45]. Eşleşir.
+                const hasMatch = searchClasses.some(sClass => allClassSources.includes(sClass));
                 
-                // Tam eşleşme veya içerik kontrolü
-                if (!classesStr.includes(searchClass)) return false;
+                if (!hasMatch) return false;
             }
 
             // 4. SAHİP (Owner)
@@ -741,7 +750,6 @@
         });
 
         if (pagination) pagination.update(filteredData.length, 1);
-
         renderCurrentPage();
     }
 
@@ -756,10 +764,10 @@
         const currentPageData = pagination ? pagination.getCurrentPageData(filteredData) : filteredData;
         container.innerHTML = '<div class="loading">Sayfa verileri yükleniyor...</div>';
 
-        
         // Sayfadaki kayıtları ipRecords ile zenginleştir
         const currentPageDataEnriched = await enrichItemsWithIpRecords(currentPageData);
-if (currentPageData.length === 0) {
+
+        if (currentPageData.length === 0) {
             const hasFilters = currentFilters.search || currentFilters.status !== 'all' ||
                               currentFilters.niceClass || currentFilters.owner;
             container.innerHTML = `<div class="no-records">${hasFilters ? 'Filtreleme kriterlerinize uygun kayıt bulunamadı.' : 'İzleme listeniz boş.'}</div>`;
@@ -770,7 +778,7 @@ if (currentPageData.length === 0) {
                         <th><input type="checkbox" id="headerSelectAllCheckbox" /></th>
                         <th>Görsel</th>
                         <th>Marka Adı</th>
-                        <th>Sahip</th>
+                        <th>Aranacak İbareler</th> <th>Sahip</th>
                         <th>Başvuru No</th>
                         <th>Başvuru Tarihi</th>
                         <th>Nice Sınıfı</th>
@@ -779,51 +787,68 @@ if (currentPageData.length === 0) {
 
         currentPageDataEnriched.forEach(r => {
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
+            
+            // --- GÖRSEL ---
             const trademarkImageHtml = (() => {
-                // Firebase Storage tam URL'i kontrol et
                 if (r.brandImageUrl && r.brandImageUrl.trim() !== '') {
                     let imageUrl = r.brandImageUrl;
-
-                    // Eğer relatif path ise Firebase Storage URL'ine çevir
                     if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
                         // Firebase Storage bucket URL'inizi buraya yazın
                         imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
                     }
-
                     return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail"
                             style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                     <span style="display:none; color:#999; font-size:12px;">🖼️ Görsel yok</span>`;
                 }
-
                 return '<span style="color:#999; font-size:12px;">🖼️ Görsel yok</span>';
+            })();
+
+            // --- ARANACAK İBARELER (YENİ) ---
+            const searchTermsHtml = (() => {
+                let terms = [];
+                // 1. Manuel girilen "searchMarkName" varsa en başa ekle
+                if (r.searchMarkName && r.searchMarkName.trim()) {
+                    terms.push(`<span style="color:#007bff; font-weight:bold;">${r.searchMarkName}</span>`);
+                }
+                // 2. "brandTextSearch" dizisindeki diğer ibareler
+                if (Array.isArray(r.brandTextSearch) && r.brandTextSearch.length > 0) {
+                    r.brandTextSearch.forEach(term => {
+                        // searchMarkName ile aynıysa tekrar ekleme
+                        if (term !== r.searchMarkName) {
+                            terms.push(term);
+                        }
+                    });
+                }
+                
+                // Eğer hiç özel kriter yoksa, orijinal marka adını gri (default) göster
+                if (terms.length === 0) {
+                    return `<span style="color:#999; font-style:italic;">${r.title || r.markName || '-'}</span>`;
+                }
+
+                // İbareleri noktalı virgül ile ayırarak göster
+                return terms.join(' <span style="color:#ccc; margin:0 4px;">|</span> ');
             })();
 
             const statusInfo = getStatusInTurkish(r.status);
             const ownerNames = getOwnerNames(r);
+            
+            // --- NICE SINIFLARI ---
             const niceClassesHtml = (() => {
                 const classes = new Set();
-
-                // goodsAndServicesByClass array'inden nice sınıflarını çıkar
                 if (r.goodsAndServicesByClass && Array.isArray(r.goodsAndServicesByClass)) {
                     r.goodsAndServicesByClass.forEach(classItem => {
-                        if (classItem.classNo !== null && classItem.classNo !== undefined) {
-                            classes.add(String(classItem.classNo));
-                        }
+                        if (classItem.classNo) classes.add(String(classItem.classNo));
                     });
                 }
-                
-                // niceClassSearch'den sınıfları çıkar
                 if (r.niceClassSearch && Array.isArray(r.niceClassSearch)) {
-                    r.niceClassSearch.forEach(classNo => {
-                        if (classNo !== null && classNo !== undefined) {
-                            classes.add(String(classNo));
-                        }
-                    });
+                    r.niceClassSearch.forEach(classNo => classes.add(String(classNo)));
+                } else if (r.niceClasses) {
+                    // Eğer search yoksa normal classes'a bak
+                    const extras = Array.isArray(r.niceClasses) ? r.niceClasses : [r.niceClasses];
+                    extras.forEach(c => classes.add(String(c)));
                 }
-                
 
-                // Sınıfları sırala ve badge olarak göster
                 if (classes.size > 0) {
                     return Array.from(classes)
                         .map(cls => parseInt(cls))
@@ -832,7 +857,6 @@ if (currentPageData.length === 0) {
                         .map(cls => `<span class="nice-class-badge">${cls}</span>`)
                         .join(' ');
                 }
-
                 return '-';
             })();
 
@@ -840,7 +864,7 @@ if (currentPageData.length === 0) {
                         <td><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${isSelected}></td>
                         <td>${trademarkImageHtml}</td>
                         <td style="font-weight: 500;">${r.title || r.markName || '-'}</td>
-                        <td>${ownerNames}</td>
+                        <td style="font-size: 0.9em;">${searchTermsHtml}</td> <td><div class="owner-cell" title="${ownerNames}">${ownerNames}</div></td>
                         <td>${r.applicationNumber || r.applicationNo || '-'}</td>
                         <td>${formatTurkishDate(r.applicationDate)}</td>
                         <td>${niceClassesHtml}</td>
@@ -849,66 +873,43 @@ if (currentPageData.length === 0) {
         });
 
         html += `</tbody></table>`;
-            container.innerHTML = html;
+        container.innerHTML = html;
 
-            const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
-            if (headerCheckbox) {
-                headerCheckbox.addEventListener('change', (e) => {
-                    const checkboxes = container.querySelectorAll('.row-checkbox');
-                    checkboxes.forEach(checkbox => {
-                        checkbox.checked = e.target.checked;
-                        if (e.target.checked) selectedMonitoringItems.add(checkbox.dataset.id);
-                        else selectedMonitoringItems.delete(checkbox.dataset.id);
-                    });
-                    updateSelectedButtonState();
+        // ... (Checkbox ve Hover event listener'ları aynı kalıyor) ...
+        const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
+        if (headerCheckbox) {
+            headerCheckbox.addEventListener('change', (e) => {
+                const checkboxes = container.querySelectorAll('.row-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = e.target.checked;
+                    if (e.target.checked) selectedMonitoringItems.add(checkbox.dataset.id);
+                    else selectedMonitoringItems.delete(checkbox.dataset.id);
                 });
-            }
-
-            // Dinamik hover efekti için event listener ekle
-            container.querySelectorAll('.trademark-image-thumbnail').forEach(img => {
-                let hoverElement = null;
-
-                img.addEventListener('mouseenter', (e) => {
-                    if (hoverElement) {
-                        hoverElement.remove();
-                    }
-
-                    hoverElement = document.createElement('img');
-                    // Görsel URL'ini düzelt
-                    let imageUrl = e.target.src;
-                    if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
-                        imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
-                    }
-                    hoverElement.src = imageUrl;
-                    hoverElement.alt = e.target.alt;
-                    hoverElement.style.cssText = `
-                        position: fixed;
-                        left: 50%;
-                        top: 50%;
-                        transform: translate(-50%, -50%);
-                        width: 300px;
-                        height: 300px;
-                        object-fit: contain;
-                        border: 3px solid #1e3c72;
-                        border-radius: 10px;
-                        box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-                        z-index: 9999;
-                        pointer-events: none;
-                        background: white;
-                        padding: 10px;
-                    `;
-
-                    document.body.appendChild(hoverElement);
-                });
-
-                img.addEventListener('mouseleave', () => {
-                    if (hoverElement) {
-                        hoverElement.remove();
-                        hoverElement = null;
-                    }
-                });
+                updateSelectedButtonState();
             });
         }
+
+        container.querySelectorAll('.trademark-image-thumbnail').forEach(img => {
+            let hoverElement = null;
+            img.addEventListener('mouseenter', (e) => {
+                if (hoverElement) hoverElement.remove();
+                hoverElement = document.createElement('img');
+                let imageUrl = e.target.src;
+                hoverElement.src = imageUrl;
+                hoverElement.style.cssText = `
+                    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+                    width: 300px; height: 300px; object-fit: contain;
+                    border: 3px solid #1e3c72; border-radius: 10px;
+                    box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999;
+                    pointer-events: none; background: white; padding: 10px;
+                `;
+                document.body.appendChild(hoverElement);
+            });
+            img.addEventListener('mouseleave', () => {
+                if (hoverElement) { hoverElement.remove(); hoverElement = null; }
+            });
+        });
+    }
 
     // Yardımcı fonksiyonlar
     const getStatusInTurkish = (status) => {
