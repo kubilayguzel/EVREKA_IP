@@ -464,9 +464,20 @@
       <div id="filterSection" class="filter-section" style="display: none;">
         <div class="filter-controls">
           <div class="filter-group search">
-            <label class="filter-label">Arama</label>
-            <input type="text" id="searchFilter" class="filter-input search" placeholder="Marka adı, sahip veya başvuru no ile ara...">
+            <label class="filter-label">Genel Arama</label>
+            <input type="text" id="searchFilter" class="filter-input search" placeholder="Genel arama yapın...">
           </div>
+          
+          <div class="filter-group">
+            <label class="filter-label">Marka Adı</label>
+            <input type="text" id="markNameFilter" class="filter-input" placeholder="Marka adı..." style="width: 140px;">
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label">Aranacak İbareler</label>
+            <input type="text" id="searchTermsFilter" class="filter-input" placeholder="İbare..." style="width: 140px;">
+          </div>
+
           <div class="filter-group">
             <label class="filter-label">Durum</label>
             <select id="statusFilter" class="filter-select">
@@ -623,7 +634,9 @@
         search: '',
         status: 'all',
         niceClass: '',
-        owner: ''
+        owner: '',
+        markName: '',      // [YENİ]
+        searchTerms: ''    // [YENİ]
     };
     let currentSelectedItem;
     let selectedNiceClasses = new Set();
@@ -657,6 +670,8 @@
         const filterSection = document.getElementById('filterSection');
 
         const searchInput = document.getElementById('searchFilter');
+        const markNameInput = document.getElementById('markNameFilter');       // [YENİ]
+        const searchTermsInput = document.getElementById('searchTermsFilter'); // [YENİ]
         const statusSelect = document.getElementById('statusFilter');
         const niceClassInput = document.getElementById('niceClassFilter');
         const ownerInput = document.getElementById('ownerFilter');
@@ -676,6 +691,8 @@
 
         const applyFiltersDebounced = debounce(() => {
             currentFilters.search = searchInput?.value || '';
+            currentFilters.markName = markNameInput?.value || '';       // [YENİ]
+            currentFilters.searchTerms = searchTermsInput?.value || ''; // [YENİ]
             currentFilters.status = statusSelect?.value || 'all';
             currentFilters.niceClass = niceClassInput?.value || '';
             currentFilters.owner = ownerInput?.value || '';
@@ -684,36 +701,44 @@
         }, 300);
 
         if (searchInput) searchInput.addEventListener('input', applyFiltersDebounced);
+        if (markNameInput) markNameInput.addEventListener('input', applyFiltersDebounced);       // [YENİ]
+        if (searchTermsInput) searchTermsInput.addEventListener('input', applyFiltersDebounced); // [YENİ]
         if (statusSelect) statusSelect.addEventListener('change', applyFiltersDebounced);
         if (niceClassInput) niceClassInput.addEventListener('input', applyFiltersDebounced);
         if (ownerInput) ownerInput.addEventListener('input', applyFiltersDebounced);
 
         if (clearButton) {
             clearButton.addEventListener('click', () => {
+                // Tüm inputları temizle
                 if (searchInput) searchInput.value = '';
+                if (markNameInput) markNameInput.value = '';       // [YENİ]
+                if (searchTermsInput) searchTermsInput.value = ''; // [YENİ]
                 if (statusSelect) statusSelect.value = 'all';
                 if (niceClassInput) niceClassInput.value = '';
                 if (ownerInput) ownerInput.value = '';
 
-                currentFilters = { search: '', status: 'all', niceClass: '', owner: '' };
+                currentFilters = { search: '', markName: '', searchTerms: '', status: 'all', niceClass: '', owner: '' };
 
                 applyFilters();
             });
         }
     }
 
+
     // Filtreleri uygula
     function applyFilters() {
         filteredData = allMonitoringData.filter(item => {
-            // 1. ARAMA (Marka Adı, Sahip, Başvuru No)
+            
+            // 1. GENEL ARAMA (Mevcut mantık)
             if (currentFilters.search) {
                 const searchTerm = currentFilters.search.toLowerCase();
                 const markName = (item.title || item.markName || item.trademarkName || '').toLowerCase();
                 const owner = getOwnerNames(item).toLowerCase();
                 const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
-
-                // YENİ: Aranacak ibareler içinde de arama yap
-                const searchTerms = (item.brandTextSearch || []).join(' ').toLowerCase();
+                const searchTerms = [
+                    ...(item.brandTextSearch || []),
+                    item.searchMarkName
+                ].filter(Boolean).join(' ').toLowerCase();
 
                 if (!markName.includes(searchTerm) && 
                     !owner.includes(searchTerm) && 
@@ -723,35 +748,43 @@
                 }
             }
 
-            // 2. DURUM (Status)
+            // [YENİ] 2. MARKA ADI FİLTRESİ
+            if (currentFilters.markName) {
+                const fMarkName = (item.title || item.markName || item.trademarkName || '').toLowerCase();
+                if (!fMarkName.includes(currentFilters.markName.toLowerCase())) return false;
+            }
+
+            // [YENİ] 3. ARANACAK İBARELER FİLTRESİ
+            if (currentFilters.searchTerms) {
+                const allTerms = [
+                    ...(item.brandTextSearch || []),
+                    item.searchMarkName
+                ].filter(Boolean).join(' ').toLowerCase();
+                
+                if (!allTerms.includes(currentFilters.searchTerms.toLowerCase())) return false;
+            }
+
+            // 4. DURUM (Status)
             if (currentFilters.status !== 'all') {
                 const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
                 if (itemStatus !== currentFilters.status) return false;
             }
 
-            // 3. NICE SINIFI (DÜZELTİLDİ: TAM EŞLEŞME)
+            // 5. NICE SINIFI (Tam Eşleşme)
             if (currentFilters.niceClass) {
-                // Kullanıcı "5, 35" gibi virgülle ayırarak girebilir
-                const searchClasses = currentFilters.niceClass.split(/[,\s]+/)
-                                        .filter(c => c.trim() !== '')
-                                        .map(c => c.trim());
+                const searchClasses = currentFilters.niceClass.split(/[,\s]+/).filter(c => c.trim() !== '').map(c => c.trim());
                 
-                // Kaydın tüm sınıflarını topla
                 const allClassSources = [
                     ...(Array.isArray(item.niceClasses) ? item.niceClasses : []),
                     ...(Array.isArray(item.niceClassSearch) ? item.niceClassSearch : []),
                     item.niceClass
                 ].filter(c => c !== null && c !== undefined).map(String);
 
-                // Kullanıcının girdiği sınıflardan EN AZ BİRİ kayıtta var mı? (Tam Eşleşme)
-                // Örn: Aranan "5". Kayıt [35, 45]. Eşleşmez. 
-                // Örn: Aranan "35". Kayıt [35, 45]. Eşleşir.
                 const hasMatch = searchClasses.some(sClass => allClassSources.includes(sClass));
-                
                 if (!hasMatch) return false;
             }
 
-            // 4. SAHİP (Owner)
+            // 6. SAHİP (Owner)
             if (currentFilters.owner) {
                 const ownerName = getOwnerNames(item).toLowerCase();
                 if (!ownerName.includes(currentFilters.owner.toLowerCase())) return false;
