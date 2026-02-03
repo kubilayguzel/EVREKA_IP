@@ -308,6 +308,38 @@ export class PortfolioDataManager {
         };
     }
 
+    /**
+     * İzleme modülü (Monitoring) için veriyi hazırlar.
+     * @param {Object} record - Seçili kayıt objesi
+     */
+    prepareMonitoringData(record) {
+        if (!record) return null;
+
+        // Başvuru sahibini belirle (Formatlanmış veri varsa onu kullan, yoksa ham veriden çek)
+        let ownerName = record.formattedApplicantName || '';
+        
+        if (!ownerName) {
+            if (Array.isArray(record.applicants) && record.applicants.length > 0) {
+                const app = record.applicants[0];
+                ownerName = (typeof app === 'object') ? (app.name || app.companyName || '') : app;
+            } else if (record.ownerName) {
+                ownerName = record.ownerName;
+            }
+        }
+
+        // İzleme servisine gönderilecek standart obje yapısı
+        return {
+            relatedRecordId: record.id,               // Portföydeki ID'si
+            trademarkName: record.title || record.brandText, // Marka Adı
+            applicationNumber: record.applicationNumber, // Başvuru No
+            niceClasses: record.niceClasses || [],       // Sınıflar
+            ownerName: ownerName,                        // Sahibi
+            image: record.brandImageUrl || record.trademarkImage || null, // Varsa görsel
+            source: 'portfolio',                         // Kaynak
+            createdAt: new Date().toISOString()
+        };
+    }
+    
     // --- ACTIONS ---
     async deleteRecord(id) { return await ipRecordsService.deleteParentWithChildren(id); }
 
