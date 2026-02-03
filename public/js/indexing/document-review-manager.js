@@ -561,8 +561,7 @@ async loadData() {
             parentSelect.innerHTML = '<option value="">Hata: İşlemler yüklenemedi</option>';
         }
     }
-
-    updateChildTransactionOptions() {
+updateChildTransactionOptions() {
         const parentSelect = document.getElementById('parentTransactionSelect');
         const childSelect = document.getElementById('detectedType');
         const selectedParentTxId = parentSelect.value;
@@ -575,17 +574,13 @@ async loadData() {
         const selectedParentTx = this.currentTransactions.find(t => t.id === selectedParentTxId);
         const parentTypeId = selectedParentTx?.type;
         
-        // DÜZELTME: Parent Type ID karşılaştırmasını String'e çevirerek yapıyoruz
         const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(parentTypeId));
         
         if (!parentTypeObj || !parentTypeObj.indexFile) {
-            console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı veya işlem tipi eşleşmedi.');
-            // Kullanıcının manuel seçim yapabilmesi için tüm listeyi açmak isterseniz burayı açabilirsiniz:
-            // this.populateAllTransactionTypes(childSelect); 
+            console.warn('Bu ana işlem için tanımlı alt işlem bulunamadı.');
             return;
         }
         
-        // indexFile dizisindeki ID'leri de String'e çevirerek kontrol ediyoruz
         const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile.map(String) : [];
         
         const allowedChildTypes = this.allTransactionTypes
@@ -601,7 +596,8 @@ async loadData() {
         
         childSelect.disabled = false;
         
-        if (this.analysisResult && this.analysisResult.detectedType) {
+        // Eğer analiz sonucu varsa otomatik seç (Metot varsa)
+        if (this.analysisResult && this.analysisResult.detectedType && typeof this.autoSelectChildType === 'function') {
             this.autoSelectChildType(childSelect);
         }
     }
@@ -615,7 +611,7 @@ async loadData() {
         const childTypeId = String(childSelect.value);
         const parentTxId = String(parentSelect.value);
 
-        // 1. İtiraz Bölümü Kontrolü (Tip 27 - Yayına İtiraz)
+        // 1. İtiraz Bölümü Kontrolü
         const oppositionSection = document.getElementById('oppositionSection');
         if (oppositionSection) {
             oppositionSection.style.display = (childTypeId === '27') ? 'block' : 'none';
@@ -627,23 +623,18 @@ async loadData() {
         if (registrationSection) {
             let showRegistration = false;
             
-            // Seçili opsiyonun metnini al (örn: "Marka Tescil Belgesi")
             const selectedOption = childSelect.options[childSelect.selectedIndex];
             const childText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-            // GÖRÜNÜRLÜK MANTIĞI
-            // DURUM A: İşlem ID'si 45 ise VEYA metin "tescil belgesi" içeriyorsa
+            // Görünürlük Mantığı
             if (childTypeId === '45' || childText.includes('tescil belgesi')) {
                 showRegistration = true;
             }
-            // DURUM B: İşlem ID'si 40 (Kabul) ise ve Ana İşlem 6 (Kısmi Ret) veya 17 (Vazgeçme) ise
             else if (childTypeId === '40') {
                 if (this.currentTransactions && parentTxId) {
                     const parentTx = this.currentTransactions.find(t => String(t.id) === parentTxId);
-                    
                     if (parentTx) {
                         const parentType = String(parentTx.type);
-                        // 6: Eşya Sınırlandırma, 17: Vazgeçme
                         if (parentType === '6' || parentType === '17') {
                             showRegistration = true;
                         }
@@ -651,21 +642,19 @@ async loadData() {
                 }
             }
             
-            // Formun görünürlüğünü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
             
             if (showRegistration) {
-                // A) Tescil Numarasını Doldur
+                // A) Tescil Numarası
                 if (this.extractedRegNo) {
                     const regNoInput = document.getElementById('registry-registration-no');
-                    // Input varsa ve boşsa doldur
                     if (regNoInput && !regNoInput.value) {
                         regNoInput.value = this.extractedRegNo;
                         regNoInput.dispatchEvent(new Event('input'));
                     }
                 }
 
-                // B) Tescil Tarihini Doldur
+                // B) Tescil Tarihi
                 if (this.extractedRegDate) {
                     const regDateInput = document.getElementById('registry-registration-date');
                     if (regDateInput && !regDateInput.value) {
@@ -676,11 +665,10 @@ async loadData() {
                     }
                 }
 
-                // C) Marka Durumunu "Tescilli" Yap
+                // C) Marka Durumu
                 const statusSelect = document.getElementById('registry-status') || document.getElementById('status');
                 if (statusSelect) {
                     statusSelect.value = 'registered'; 
-                    // Eğer value ile eşleşmezse yazı ile bul
                     if (statusSelect.selectedIndex === -1) {
                         for (let i = 0; i < statusSelect.options.length; i++) {
                             if (statusSelect.options[i].text.toLowerCase().includes('tescilli')) {
@@ -689,11 +677,12 @@ async loadData() {
                             }
                         }
                     }
+                    statusSelect.dispatchEvent(new Event('change'));
                 }
             }
         }
-    } 
-    
+    }
+
     async handleSave() {
         if (!this.matchedRecord) { alert('Lütfen önce bir kayıt ile eşleştirin.'); return; }
         const parentTxId = document.getElementById('parentTransactionSelect').value;
