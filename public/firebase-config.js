@@ -442,7 +442,29 @@ export const ipRecordsService = {
                 }
 
                 // cache-first ise: cache'te eksik kalan ID'ler için server'a git
-                const missingIds = chunk.filter(id => !cacheMap.has(id));
+                // cache'te doc var ama kritik alanlar eksikse "stale" kabul edip server'dan tazele
+                const isStaleIpRecord = (docSnap) => {
+                    const data = docSnap?.data?.() || {};
+
+                    // Başvuru numarası iki farklı isimle gelebiliyor olabilir
+                    const hasApplicationNo =
+                        !!String(data.applicationNumber || data.applicationNo || '').trim();
+
+                    // "sahip" alanı sizde çoğunlukla applicants üzerinden okunuyor
+                    // Alan tamamen yoksa stale sayıyoruz (boş array olabilir ama field'in hiç olmaması problem)
+                    const hasApplicantsField = Object.prototype.hasOwnProperty.call(data, 'applicants');
+
+                    return !hasApplicationNo || !hasApplicantsField;
+                };
+
+                const missingIds = chunk.filter(id => {
+                    const snap = cacheMap.get(id);
+                    if (!snap) return true;             // cache'te yok
+                    if (isStaleIpRecord(snap)) return true; // cache'te var ama eksik/eskimiş
+                    return false;
+                });
+
+
                 let serverDocs = [];
                 if (source === 'server' || missingIds.length > 0 || !cacheSnap || cacheSnap.empty) {
                     // Not: Server'dan chunk bazlı sorgu
