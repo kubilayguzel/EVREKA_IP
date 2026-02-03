@@ -627,23 +627,26 @@ async loadData() {
             
             // Formun görünürlüğünü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
-
-            // TARİHİ OTOMATİK DOLDURMA (YENİ EKLENEN KISIM)
-            // Eğer form açıldıysa ve hafızada okunmuş bir tarih varsa
             if (showRegistration && this.extractedRegDate) {
                 const regDateInput = document.getElementById('registry-registration-date');
                 
-                // Sadece kutu boşsa doldur (Kullanıcının manuel seçimini ezmemek için)
+                // Input varsa ve henüz boşsa doldur
                 if (regDateInput && !regDateInput.value) {
+                    console.log("📝 Form açıldı, saklanan tarih set ediliyor:", this.extractedRegDate);
+                    
                     regDateInput.value = this.extractedRegDate;
                     
-                    // Flatpickr takvim örneği varsa onu da güncelle (UI için kritik)
+                    // Flatpickr kullanıyorsanız takvimi de güncelle
                     if (regDateInput._flatpickr) {
                         regDateInput._flatpickr.setDate(this.extractedRegDate, true);
                     }
+                    
+                    // Kullanıcıya bilgi ver (Sadece bir kere göstermek isterseniz buraya bir flag koyabilirsiniz)
+                    showNotification(`Tescil tarihi otomatik dolduruldu: ${this.extractedRegDate}`, 'info');
                 }
             }
         }
+    
     }
 
     async handleSave() {
