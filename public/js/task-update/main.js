@@ -150,6 +150,13 @@ class TaskUpdateController {
         }
 
         this.lockFieldsIfApplicationTask();
+        const taskType = String(this.taskData.taskType);
+        if (this.isApplicationTask(taskType)) {
+            const btnSummary = document.getElementById('btnViewApplicationSummary');
+            if (btnSummary) {
+                btnSummary.style.display = 'inline-block';
+            }
+        }
     }
 
     lockFieldsIfApplicationTask() {
@@ -262,6 +269,18 @@ class TaskUpdateController {
                 this.uiManager.renderSelectedPerson(null);
             }
         });
+        const btnSummary = document.getElementById('btnViewApplicationSummary');
+            if (btnSummary) {
+                btnSummary.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // UI Manager'daki render fonksiyonunu çağır
+                    this.uiManager.renderApplicationSummaryModalContent(this.taskData, this.masterData.persons);
+                    // jQuery ile modalı aç
+                    if (window.$) {
+                        $('#applicationSummaryModal').modal('show');
+                    }
+                });
+            }
     }
 
     setupApplicationModalEvents() {
