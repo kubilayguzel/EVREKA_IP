@@ -5,6 +5,9 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import { Timestamp, arrayUnion} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"; 
 import { showNotification } from '../../utils.js';
 
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/+esm';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
+
 import { TaskUpdateDataManager } from './TaskUpdateDataManager.js';
 import { TaskUpdateUIManager } from './TaskUpdateUIManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
@@ -54,20 +57,13 @@ class TaskUpdateController {
         this.setupRenewalModalEvents();
     }
 
-    /**
-     * PDF dosyasını okur ve Evrak No / Tarih bilgisini ayıklar.
-     * Kütüphane HTML'den yüklendiği için doğrudan window.pdfjsLib kullanılır.
-     */
     async extractEpatsInfoFromFile(file) {
         try {
-            // Global kütüphane kontrolü
-            if (!window.pdfjsLib) {
-                console.error("PDF.js kütüphanesi HTML'de yüklü değil!");
-                return null;
-            }
-
+            // ARTIK KONTROLE GEREK YOK, IMPORT ETTİK
             const arrayBuffer = await file.arrayBuffer();
-            const loadingTask = window.pdfjsLib.getDocument(arrayBuffer);
+            
+            // window.pdfjsLib yerine direkt pdfjsLib kullanıyoruz
+            const loadingTask = pdfjsLib.getDocument(arrayBuffer);
             const pdf = await loadingTask.promise;
 
             let fullText = '';
