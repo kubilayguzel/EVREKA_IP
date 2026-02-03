@@ -726,6 +726,21 @@ updateChildTransactionOptions() {
         } catch (e) {
             // validation should not block unrelated transaction types
         }
+        if (window.portfolioUpdateManager && typeof window.portfolioUpdateManager.saveChanges === 'function') {
+            const regSection = document.getElementById('registry-editor-section');
+            
+            // Sadece Tescil Düzenleme alanı görünürse (yani bu bir tescil işlemiyse) kaydetmeyi dene
+            if (regSection && regSection.style.display !== 'none') {
+                try {
+                    console.log("🔄 İndeksleme öncesi portföy verileri otomatik güncelleniyor...");
+                    // PortfolioUpdateManager'ın kaydetme fonksiyonunu çağır ve bitmesini bekle
+                    await window.portfolioUpdateManager.saveChanges();
+                } catch (err) {
+                    console.warn("Otomatik portföy güncellemesi sırasında uyarı:", err);
+                    // Hata kritik değilse işleme devam et, kritikse return ile durdurabilirsiniz.
+                }
+            }
+        }
         const saveBtn = document.getElementById('saveTransactionBtn');
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> İşleniyor...';
