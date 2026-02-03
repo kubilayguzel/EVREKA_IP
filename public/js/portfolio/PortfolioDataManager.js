@@ -315,9 +315,8 @@ export class PortfolioDataManager {
     prepareMonitoringData(record) {
         if (!record) return null;
 
-        // Başvuru sahibini belirle
+        // 1. Başvuru sahibini belirle
         let ownerName = record.formattedApplicantName || '';
-        
         if (!ownerName) {
             if (Array.isArray(record.applicants) && record.applicants.length > 0) {
                 const app = record.applicants[0];
@@ -327,13 +326,45 @@ export class PortfolioDataManager {
             }
         }
 
-        // İzleme servisine gönderilecek standart obje yapısı
+        // 2. Sınıf Mantığını Kur (1-34 varsa 35 ekle)
+        let originalClasses = [];
+        
+        // A) niceClasses dizisinden al
+        if (record.niceClasses && Array.isArray(record.niceClasses)) {
+            originalClasses = [...record.niceClasses];
+        }
+        // B) goodsAndServicesByClass detayından al (Bazen ana dizi boş olabilir)
+        if (record.goodsAndServicesByClass && Array.isArray(record.goodsAndServicesByClass)) {
+            record.goodsAndServicesByClass.forEach(g => {
+                if (g.classNo) originalClasses.push(g.classNo);
+            });
+        }
+        
+        // Tekilleştir ve Sayıya Çevir
+        let distinctClasses = [...new Set(originalClasses.map(c => parseInt(c)).filter(n => !isNaN(n)))];
+        distinctClasses.sort((a, b) => a - b);
+
+        // İzleme Kriteri (Search) Listesini Hazırla
+        let searchClasses = [...distinctClasses];
+        
+        // [KURAL]: 1-34 arasında sınıf varsa, 35'i de otomatik ekle
+        const hasGoodsClass = searchClasses.some(c => c >= 1 && c <= 34);
+        if (hasGoodsClass && !searchClasses.includes(35)) {
+            searchClasses.push(35);
+            searchClasses.sort((a, b) => a - b);
+            console.log(`✅ ${record.applicationNumber} için 1-34 kuralı uygulandı: 35. sınıf eklendi.`);
+        }
+
+        // 3. İzleme servisine gönderilecek standart obje yapısı
         return {
-            id: record.id,                   // Firebase ID
-            relatedRecordId: record.id,      // Referans ID
-            markName: record.title || record.brandText, // [DÜZELTME] 'trademarkName' yerine 'markName' kullanıldı
+            id: record.id,                   
+            relatedRecordId: record.id,      
+            markName: record.title || record.brandText,
             applicationNumber: record.applicationNumber,
-            niceClasses: record.niceClasses || [],
+            
+            niceClasses: distinctClasses,       // Markanın Orijinal Sınıfları (Görüntüleme için)
+            niceClassSearch: searchClasses,     // Otomatik 35 Eklenmiş Liste (Arama için)
+            
             ownerName: ownerName,
             image: record.brandImageUrl || record.trademarkImage || null,
             source: 'portfolio',
