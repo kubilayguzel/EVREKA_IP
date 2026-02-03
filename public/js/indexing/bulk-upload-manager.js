@@ -88,8 +88,8 @@ export class BulkIndexingModule {
         
         // Matcher'ın tüm kayıtları tarayabilmesi için 'getAllRecords' kullanımı daha güvenlidir
         const [recordsResult, transactionTypesResult] = await Promise.all([
-            ipRecordsService.getAllRecords ? ipRecordsService.getAllRecords() : ipRecordsService.getRecords(),
-            transactionTypeService.getTransactionTypes()
+        ipRecordsService.getAllRecords({ source: 'server' }),
+        transactionTypeService.getTransactionTypes()
         ]);
 
         // Portföy Kayıtlarını Yükle
@@ -735,7 +735,12 @@ setupRealtimeListener() {
         orderBy('uploadedAt', 'desc')
     );
 
-    this.unsubscribe = onSnapshot(q, (snapshot) => {
+    this.unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+        if (snapshot.metadata.fromCache) {
+            console.log("🧠 Cache snapshot alındı, server verisi bekleniyor...");
+            return;
+        }
+
         // MATCHING İÇİN ALLRECORDS KONTROLÜ
         if (!this.allRecords || this.allRecords.length === 0) {
             console.warn("⚠️ Portföy kayıtları (allRecords) henüz yüklenmedi veya boş. Eşleşme denemesi atlanıyor.");
