@@ -14,12 +14,9 @@
     <link rel="stylesheet" href="css/task-update.css"> 
 </head>
 <body>
-<body>
-    <div id="layout-placeholder"></div>
-    
-    <div id="left-sidebar-container"></div> 
-    
+<div id="layout-placeholder"></div>
     <div class="page-wrapper">
+        <div id="left-sidebar-container"></div>
         <div id="top-bar-container"></div>
 
         <div class="main-container">
@@ -35,10 +32,10 @@
                 <div class="row">
                     <div class="col-lg-8">
                         
-                            <div class="section-card">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h3 class="section-title mb-0">Genel Bilgiler</h3>
-                                <div class="form-group">
+                        <div class="section-card">
+                            <h3 class="section-title">Genel Bilgiler</h3>
+                            
+                            <div class="form-group">
                                 <label class="form-label">İş Başlığı</label>
                                 <input type="text" id="taskTitle" class="form-input" placeholder="İş başlığını giriniz...">
                             </div>
@@ -216,13 +213,8 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script>
-        // Worker dosyasını global olarak tanımlıyoruz
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    </script>
     
     <script type="module" src="js/task-update/main.js"></script>
 
 </body>
-</html> 
+</html>
