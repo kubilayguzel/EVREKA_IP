@@ -330,10 +330,11 @@
 
 /* Sahip hücresi için */
 .owner-cell {
-    max-width: 200px;
+    max-width: 100%; /* Değişiklik: Hücre genişliği kadar kullanmasına izin ver */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block; /* Gerekirse ekleyin, div zaten block'tur ama garanti olsun */
 }
 
 /* Durum badge'leri */
