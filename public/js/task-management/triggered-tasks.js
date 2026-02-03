@@ -100,16 +100,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     isSuper = !!(token.claims && token.claims.superAdmin);
                 } catch (_) {}
 
-                const [tasksResult, ipRecordsResult, personsResult, transTypesResult, accrualsResult] = await Promise.all([
+                const [tasksResult, personsResult, transTypesResult, accrualsResult] = await Promise.all([
                     isSuper ? taskService.getAllTasks() : taskService.getTasksForUser(this.currentUser.uid),
-                    ipRecordsService.getRecords(),
                     personService.getPersons(),
                     transactionTypeService.getTransactionTypes(),
                     accrualService.getAccruals()
                 ]);
 
                 this.allTasks = tasksResult.success ? tasksResult.data : [];
-                this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
+                this.allTasks = tasksResult.success ? tasksResult.data : [];
+                // ✅ Görevlerde kullanılan IP kayıtlarını ID bazlı ve server'dan çek (GARANTİLİ)
+                const relatedIds = [...new Set(
+                    (this.allTasks || [])
+                        .map(t => t.relatedIpRecordId)
+                        .filter(Boolean)
+                        .map(id => String(id))
+                )];
+
+                let ipRecords = [];
+                if (relatedIds.length) {
+                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'server' });
+                    ipRecords = ipRes.success ? ipRes.data : [];
+                }
+                this.allIpRecords = ipRecords;
+
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allTransactionTypes = transTypesResult.success ? transTypesResult.data : [];
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
