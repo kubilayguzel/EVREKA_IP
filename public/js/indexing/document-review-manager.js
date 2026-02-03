@@ -726,6 +726,8 @@ updateChildTransactionOptions() {
         } catch (e) {
             // validation should not block unrelated transaction types
         }
+
+        // --- OTOMATİK PORTFÖY GÜNCELLEME ---
         if (window.portfolioUpdateManager && typeof window.portfolioUpdateManager.saveChanges === 'function') {
             const regSection = document.getElementById('registry-editor-section');
             
@@ -733,11 +735,19 @@ updateChildTransactionOptions() {
             if (regSection && regSection.style.display !== 'none') {
                 try {
                     console.log("🔄 İndeksleme öncesi portföy verileri otomatik güncelleniyor...");
-                    // PortfolioUpdateManager'ın kaydetme fonksiyonunu çağır ve bitmesini bekle
+                    
+                    // [YENİ EKLENEN KISIM]: Güncellenecek kayıt ID'sini PortfolioManager'a elle bildiriyoruz.
+                    // Bu satır, formdaki verilerin doğru kayda işlenmesini garanti eder.
+                    if (this.matchedRecord && this.matchedRecord.id) {
+                        window.portfolioUpdateManager.state.selectedRecordId = this.matchedRecord.id;
+                    }
+
+                    // Şimdi kaydetme fonksiyonunu çağırıyoruz
                     await window.portfolioUpdateManager.saveChanges();
+                    
                 } catch (err) {
                     console.warn("Otomatik portföy güncellemesi sırasında uyarı:", err);
-                    // Hata kritik değilse işleme devam et, kritikse return ile durdurabilirsiniz.
+                    // Hata kritik değilse işleme devam et
                 }
             }
         }
