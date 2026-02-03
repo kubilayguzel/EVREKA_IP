@@ -356,7 +356,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const taskId = btn.dataset.id;
                 
                 if (btn.classList.contains('view-btn') || btn.dataset.action === 'view') {
-                    this.showTaskDetailModal(taskId);
+                    // 1. Tıklanan işi bul
+                    const task = this.allTasks.find(t => t.id === taskId);
+                    
+                    // 2. İş tipi "Marka Başvurusu" (ID: 2) ise Özet Modalı aç
+                    if (task && String(task.taskType) === '2') {
+                        this.taskDetailManager.showApplicationSummary(task);
+                    } 
+                    // 3. Değilse standart Detay Modalı aç (Eski yöntem)
+                    else {
+                        this.showTaskDetailModal(taskId);
+                    }
                 } 
                 else if (btn.classList.contains('edit-btn') || btn.dataset.action === 'edit') {
                     // [DÜZELTİLDİ] Görev tipine göre yönlendirme
