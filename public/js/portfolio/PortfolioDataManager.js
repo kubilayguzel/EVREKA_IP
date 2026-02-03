@@ -315,6 +315,7 @@ export class PortfolioDataManager {
     prepareMonitoringData(record) {
         if (!record) return null;
 
+        // Başvuru sahibini belirle
         let ownerName = record.formattedApplicantName || '';
         
         if (!ownerName) {
@@ -328,14 +329,14 @@ export class PortfolioDataManager {
 
         // İzleme servisine gönderilecek standart obje yapısı
         return {
-            id: record.id,                   // <--- [KRİTİK EKLEME] Firebase Belge ID'si bu olacak
-            relatedRecordId: record.id,      // Portföydeki ID'si (Referans)
-            trademarkName: record.title || record.brandText, // Marka Adı
-            applicationNumber: record.applicationNumber, // Başvuru No
-            niceClasses: record.niceClasses || [],       // Sınıflar
-            ownerName: ownerName,                        // Sahibi
-            image: record.brandImageUrl || record.trademarkImage || null, // Varsa görsel
-            source: 'portfolio',             // Kaynak
+            id: record.id,                   // Firebase ID
+            relatedRecordId: record.id,      // Referans ID
+            markName: record.title || record.brandText, // [DÜZELTME] 'trademarkName' yerine 'markName' kullanıldı
+            applicationNumber: record.applicationNumber,
+            niceClasses: record.niceClasses || [],
+            ownerName: ownerName,
+            image: record.brandImageUrl || record.trademarkImage || null,
+            source: 'portfolio',
             createdAt: new Date().toISOString()
         };
     }
