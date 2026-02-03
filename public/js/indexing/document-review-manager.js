@@ -741,8 +741,7 @@ updateChildTransactionOptions() {
             }
         } catch (e) { /* validation ignore */ }
 
-        // --- DOĞRUDAN VERİ GÜNCELLEME (YENİ BLOK) ---
-        // Form açıksa, içindeki verileri alıp doğrudan veritabanına yazıyoruz.
+        // --- DOĞRUDAN VERİ GÜNCELLEME (DÜZELTİLMİŞ BLOK) ---
         const regSection = document.getElementById('registry-editor-section');
         if (regSection && regSection.style.display !== 'none' && this.matchedRecord) {
             try {
@@ -754,18 +753,18 @@ updateChildTransactionOptions() {
                 // 2. Güncellenecek Objeyi Hazırla
                 const updates = {};
                 
+                // [DÜZELTME]: Sadece Tescil Numarasını güncelliyoruz. Başvuru numarasına dokunmuyoruz.
                 if (regNoVal) {
                     updates.registrationNumber = regNoVal;
-                    updates.applicationNumber = regNoVal; // Genelde ikisi de güncellenir
+                    // updates.applicationNumber = regNoVal; // <-- BU SATIR SİLİNDİ (Hatalıydı)
                 }
                 
                 if (regDateVal) {
-                    updates.registrationDate = regDateVal; // String yyyy-MM-dd
+                    updates.registrationDate = regDateVal;
                 }
 
                 if (statusVal) {
                     updates.status = statusVal;
-                    // Eğer statü tarihini de tutuyorsanız: updates.statusDate = new Date().toISOString(); 
                 }
 
                 // 3. Veritabanını Güncelle
@@ -792,7 +791,7 @@ updateChildTransactionOptions() {
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // 1. İtiraz Bildirimi & Dosya Yükleme (Mevcut Mantık)
+            // 1. İtiraz Bildirimi & Dosya Yükleme
             let newParentTxId = null;
             let oppositionFileUrl = null;
             let oppositionFileName = null;
