@@ -3050,7 +3050,8 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
             taskAttachments.push({
                 name: doc.name || "ek_belge.pdf",
                 url: doc.url || doc.downloadURL,
-                storagePath: doc.storagePath,
+                // 🔥 DÜZELTME: undefined yerine null gönderiyoruz
+                storagePath: doc.storagePath || null, 
                 type: 'application/pdf'
             });
         });
@@ -7650,7 +7651,7 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
               subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
               body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
 
-              // C) Alıcıları Belirle (Geliştirilmiş Logic)
+              // C) Alıcıları Belirle
               let toList = [];
               
               // 1. Öncelik: Task üzerindeki veriler
@@ -7658,7 +7659,6 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
               if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
               
               // 2. Öncelik: IP Kaydı ve Kişi Kartı (Fallback)
-              // Eğer listede hala mail yoksa ve IP kaydı varsa veritabanına sor
               if (toList.length === 0 && after.relatedIpRecordId) {
                   try {
                       const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
@@ -7666,13 +7666,10 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
                           const ipData = ipDoc.data();
                           const apps = ipData.applicants || [];
                           
-                          // Varsa IP kaydındaki applicant'ları tara
                           for (const app of apps) {
-                              // A) Applicant objesi üzerinde direkt email var mı?
                               if (app.email) {
                                   toList.push(app.email);
                               }
-                              // B) ID varsa Persons tablosuna git
                               else if (app.id) {
                                   const personDoc = await adminDb.collection('persons').doc(app.id).get();
                                   if (personDoc.exists && personDoc.data().email) {
@@ -7681,7 +7678,6 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
                               }
                           }
                           
-                          // C) Hala yoksa ipRecord üzerindeki 'clientEmail' alanına bak
                           if (toList.length === 0 && ipData.clientEmail) {
                               toList.push(ipData.clientEmail);
                           }
@@ -7694,41 +7690,38 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
               // Tekilleştirme ve Boşları Temizleme
               toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
 
-              // Eğer Task üzerinde mail yoksa, IP Kaydına bak (Fallback)
-              if (toList.length === 0 && after.relatedIpRecordId) {
-                  const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
-                  if(ipDoc.exists) {
-                      const apps = ipDoc.data().applicants || [];
-                      // Applicants içinden email bulmaya çalış (Basit tarama)
-                      // Not: Burası karmaşık bir logic gerektirebilir, şimdilik basit tutuyoruz.
-                  }
+              // --- D) EKSİK BİLGİ KONTROLÜ VE KAYIT ---
+              const missingFields = [];
+              if (toList.length === 0) missingFields.push("recipients");
+
+              // Eğer alıcı yoksa 'missing_info', varsa 'pending'
+              const notificationStatus = missingFields.length > 0 ? "missing_info" : "pending";
+
+              await adminDb.collection("mail_notifications").add({
+                  toList: toList,
+                  ccList: [], 
+                  subject: subject,
+                  body: body,
+                  status: notificationStatus,
+                  missingFields: missingFields,
+                  
+                  // THREADING VERİLERİ
+                  notificationType: "general_notification",
+                  taskType: String(after.taskType),
+                  relatedIpRecordId: after.relatedIpRecordId,
+                  associatedTaskId: taskId,
+                  
+                  source: "auto_instruction_response",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+
+              if (notificationStatus === "missing_info") {
+                  console.log(`⚠️ [AUTO-REPLY] Alıcı bulunamadı. 'Eksik Bilgi' statüsünde bildirim oluşturuldu.`);
+              } else {
+                  console.log(`✅ [AUTO-REPLY] 'İşlem Başlatılıyor' maili kuyruğa eklendi.`);
               }
 
-              // D) Bildirimi Kuyruğa Ekle
-              if (toList.length > 0) {
-                  await adminDb.collection("mail_notifications").add({
-                      toList: toList,
-                      ccList: [], 
-                      subject: subject,
-                      body: body,
-                      status: "pending", // Otomatik gönderim
-                      
-                      // THREADING İÇİN KRİTİK VERİLER:
-                      // Bu veriler sayesinde sistem mailThreads koleksiyonuna bakıp
-                      // önceki "Onay Bekliyor" mailinin devamına ekleyecektir.
-                      notificationType: "general_notification",
-                      taskType: String(after.taskType), // Örn: '20'. Bu ID ile zincir bulunur.
-                      relatedIpRecordId: after.relatedIpRecordId,
-                      associatedTaskId: taskId,
-                      
-                      source: "auto_instruction_response",
-                      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                  });
-                  console.log(`✅ [AUTO-REPLY] 'İşlem Başlatılıyor' maili kuyruğa eklendi.`);
-              } else {
-                  console.log(`⚠️ Müvekkil maili bulunamadığı için otomatik cevap gönderilemedi.`);
-              }
           }
       } catch (mailErr) {
           console.error("❌ Müvekkil bilgilendirme maili hatası:", mailErr);
@@ -7866,21 +7859,14 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
-    // --- [DEBUG] STATÜ DEĞİŞİMİNİ LOGLA ---
-    // Bu satır sayesinde Firebase Console > Functions > Logs kısmında ne olup bittiğini göreceğiz.
     console.log(`🔍 [DEBUG] Task ${taskId} güncellendi. Statü Geçişi: '${before.status}' -> '${after.status}'`);
 
-    // Statü geçişini kontrol et
     const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(before.status);
-    
     const isClosedOrNoResponse = [
         'client_approval_closed', 
         'client_no_response_closed'
     ].includes(after.status);
 
-    console.log(`🔍 [DEBUG] Koşul Sonucu: wasAwaiting=${wasAwaiting}, isClosed=${isClosedOrNoResponse}`);
-
-    // Sadece bu geçişte çalış
     if (wasAwaiting && isClosedOrNoResponse) {
         console.log(`🚫 Task ${taskId} kapatıldı. İşlemler başlıyor...`);
 
@@ -7929,14 +7915,12 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
                 subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
                 body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
 
-                // C) Alıcı Belirle (Geliştirilmiş Fallback)
+                // C) Alıcı Belirle
                 let toList = [];
                 
-                // 1. Task Verisi
                 if (after.clientEmail) toList.push(after.clientEmail);
                 if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
 
-                // 2. IP Kaydı ve Kişi Kartı
                 if (toList.length === 0 && after.relatedIpRecordId) {
                     try {
                         const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
@@ -7960,26 +7944,35 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
 
                 toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
 
-                // D) Bildirimi Oluştur
-                if (toList.length > 0) {
-                    await adminDb.collection("mail_notifications").add({
-                        toList: toList,
-                        ccList: [],
-                        subject: subject,
-                        body: body,
-                        status: "pending",
-                        notificationType: "general_notification",
-                        taskType: String(after.taskType),
-                        relatedIpRecordId: after.relatedIpRecordId,
-                        associatedTaskId: taskId,
-                        source: "auto_instruction_response",
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                    console.log(`✅ [AUTO-REPLY] 'Dosya Kapatıldı' maili kuyruğa eklendi.`);
+                // --- D) EKSİK BİLGİ KONTROLÜ VE KAYIT ---
+                const missingFields = [];
+                if (toList.length === 0) missingFields.push("recipients");
+
+                const notificationStatus = missingFields.length > 0 ? "missing_info" : "pending";
+
+                await adminDb.collection("mail_notifications").add({
+                    toList: toList,
+                    ccList: [],
+                    subject: subject,
+                    body: body,
+                    status: notificationStatus,
+                    missingFields: missingFields,
+                    
+                    notificationType: "general_notification",
+                    taskType: String(after.taskType),
+                    relatedIpRecordId: after.relatedIpRecordId,
+                    associatedTaskId: taskId,
+                    source: "auto_instruction_response",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                if (notificationStatus === "missing_info") {
+                    console.log(`⚠️ [AUTO-REPLY] Alıcı bulunamadı. 'Eksik Bilgi' statüsünde bildirim oluşturuldu.`);
                 } else {
-                    console.warn(`⚠️ Alıcı bulunamadı (Task: ${taskId}). Mail gönderilemedi.`);
+                    console.log(`✅ [AUTO-REPLY] 'Dosya Kapatıldı' maili kuyruğa eklendi.`);
                 }
+
             } else {
                 console.warn("⚠️ 'tmpl_clientInstruction_2' şablonu bulunamadı!");
             }
