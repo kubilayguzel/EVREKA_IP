@@ -403,6 +403,12 @@ export const ipRecordsService = {
         }
     },
 
+    async getAllRecords(opts = {}) {
+    // opts içinden limitCount gelirse yine kullanabilsin
+    const { limitCount } = opts;
+    return await this.getRecords({ limitCount, source: 'server' });
+    },
+
     // ✅ İhtiyaç duyulan ipRecord'ları ID listesi ile getir (İşlerim/MyTasks için ideal)
     // Firestore 'in' sorgusu 10 ID ile sınırlı olduğu için chunk'lar halinde çalışır.
     async getRecordsByIds(recordIds = [], opts = {}) {
