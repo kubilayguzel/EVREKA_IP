@@ -322,37 +322,24 @@ async loadData() {
             
             // Run extraction in background
             this.extractTextFromPDF(pdfUrl).then(text => {
-                if (text) {
-                    const regDate = this.findRegistrationDate(text); // Örn: "22.01.2026" döner
-                    if (regDate) {
-                        console.log("✅ PDF Tescil Tarihi Bulundu:", regDate);
-                        
-                        // 1. Tarihi YYYY-MM-DD formatına çevir (PortfolioUpdateManager bu formatı bekler)
-                        const parts = regDate.split('.'); // [22, 01, 2026]
-                        let formattedDate = regDate; 
-                        if (parts.length === 3) {
-                            formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // 2026-01-22
-                        }
+                            if (text) {
+                                const regDate = this.findRegistrationDate(text);
+                                if (regDate) {
+                                    console.log("✅ PDF Tescil Tarihi Bulundu (Hafızaya alındı):", regDate);
+                                    
+                                    // 1. Tarihi sınıfın bir özelliğine kaydet (Daha sonra kullanmak için)
+                                    this.extractedRegDate = regDate;
 
-                        // 2. PortfolioUpdateManager içindeki "applyRegistryAutofill" fonksiyonunu tetikle
-                        if (window.applyRegistryAutofill) {
-                            window.applyRegistryAutofill({
-                                registrationDate: formattedDate,
-                                force: true // Alan dolu olsa bile yazmak istiyorsanız true yapın
-                            });
-                            showNotification(`Tescil tarihi forma aktarıldı: ${regDate}`, 'success');
-                        } else {
-                            console.warn("window.applyRegistryAutofill bulunamadı.");
-                        }
-                        
-                        // 3. (Opsiyonel) Eğer Tescil Belgesi seçili değilse 'detectedDate' alanını da doldur
-                        const detectedDateInput = document.getElementById('detectedDate');
-                        if (detectedDateInput && !detectedDateInput.value) {
-                            detectedDateInput.value = formattedDate;
-                        }
-                    }
-                }
-            });
+                                    // 2. Eğer form ŞU AN açıksa hemen yazmayı dene (Belki sayfa yenilendiğinde form açıktır)
+                                    const regDateInput = document.getElementById('registry-registration-date');
+                                    if (regDateInput && regDateInput.offsetParent !== null) { // Görünür mü kontrolü
+                                        regDateInput.value = regDate;
+                                        if(regDateInput._flatpickr) regDateInput._flatpickr.setDate(regDate, true);
+                                        showNotification(`Tescil tarihi belgeden okundu: ${regDate}`, 'info');
+                                    }
+                                }
+                            }
+                        });
         } 
 
         // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
