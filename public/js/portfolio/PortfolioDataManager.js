@@ -328,31 +328,23 @@ export class PortfolioDataManager {
 
         // 2. Sınıf Mantığını Kur (1-34 varsa 35 ekle)
         let originalClasses = [];
-        
-        // A) niceClasses dizisinden al
         if (record.niceClasses && Array.isArray(record.niceClasses)) {
             originalClasses = [...record.niceClasses];
         }
-        // B) goodsAndServicesByClass detayından al (Bazen ana dizi boş olabilir)
         if (record.goodsAndServicesByClass && Array.isArray(record.goodsAndServicesByClass)) {
             record.goodsAndServicesByClass.forEach(g => {
                 if (g.classNo) originalClasses.push(g.classNo);
             });
         }
         
-        // Tekilleştir ve Sayıya Çevir
         let distinctClasses = [...new Set(originalClasses.map(c => parseInt(c)).filter(n => !isNaN(n)))];
         distinctClasses.sort((a, b) => a - b);
 
-        // İzleme Kriteri (Search) Listesini Hazırla
         let searchClasses = [...distinctClasses];
-        
-        // [KURAL]: 1-34 arasında sınıf varsa, 35'i de otomatik ekle
         const hasGoodsClass = searchClasses.some(c => c >= 1 && c <= 34);
         if (hasGoodsClass && !searchClasses.includes(35)) {
             searchClasses.push(35);
             searchClasses.sort((a, b) => a - b);
-            console.log(`✅ ${record.applicationNumber} için 1-34 kuralı uygulandı: 35. sınıf eklendi.`);
         }
 
         // 3. İzleme servisine gönderilecek standart obje yapısı
@@ -361,9 +353,10 @@ export class PortfolioDataManager {
             relatedRecordId: record.id,      
             markName: record.title || record.brandText,
             applicationNumber: record.applicationNumber,
+            status: record.status,              // <--- [EKLENDİ] Filtreleme için gerekli
             
-            niceClasses: distinctClasses,       // Markanın Orijinal Sınıfları (Görüntüleme için)
-            niceClassSearch: searchClasses,     // Otomatik 35 Eklenmiş Liste (Arama için)
+            niceClasses: distinctClasses,       
+            niceClassSearch: searchClasses,     
             
             ownerName: ownerName,
             image: record.brandImageUrl || record.trademarkImage || null,
