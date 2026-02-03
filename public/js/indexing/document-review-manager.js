@@ -150,6 +150,20 @@ export class DocumentReviewManager {
         return null;
     }
 
+    // findRegistrationDate metodundan hemen sonra ekleyebilirsiniz
+    findRegistrationNumber(text) {
+        if (!text) return null;
+        // Regex: "No" kelimesi, opsiyonel iki nokta/boşluk ve ardından gelen sayı gruplarını yakalar
+        // Örnek: "No: 2023 124038" -> "2023 124038"
+        const regex = /No\s*[:.]?\s*(\d{4}[\s\d]+)/i;
+        
+        const match = text.match(regex);
+        if (match && match[1]) {
+            return match[1].trim(); 
+        }
+        return null;
+    }
+
     setupEventListeners() {
             // --- Mevcut Kaydet Butonu Mantığı ---
             const saveBtn = document.getElementById('saveTransactionBtn');
@@ -322,24 +336,37 @@ async loadData() {
             
             // Run extraction in background
             this.extractTextFromPDF(pdfUrl).then(text => {
-                            if (text) {
-                                const regDate = this.findRegistrationDate(text);
-                                if (regDate) {
-                                    console.log("✅ PDF Tescil Tarihi Bulundu (Hafızaya alındı):", regDate);
-                                    
-                                    // 1. Tarihi sınıfın bir özelliğine kaydet (Daha sonra kullanmak için)
-                                    this.extractedRegDate = regDate;
+                if (text) {
+                    // 1. Tescil Numarasını Bul (YENİ KOD)
+                    const regNo = this.findRegistrationNumber(text);
+                    if (regNo) {
+                        console.log("✅ PDF Tescil No Bulundu:", regNo);
+                        this.extractedRegNo = regNo; // Hafızaya al
 
-                                    // 2. Eğer form ŞU AN açıksa hemen yazmayı dene (Belki sayfa yenilendiğinde form açıktır)
-                                    const regDateInput = document.getElementById('registry-registration-date');
-                                    if (regDateInput && regDateInput.offsetParent !== null) { // Görünür mü kontrolü
-                                        regDateInput.value = regDate;
-                                        if(regDateInput._flatpickr) regDateInput._flatpickr.setDate(regDate, true);
-                                        showNotification(`Tescil tarihi belgeden okundu: ${regDate}`, 'info');
-                                    }
-                                }
-                            }
-                        });
+                        // Eğer input şu an ekranda varsa doldur
+                        const regNoInput = document.getElementById('registry-registration-no');
+                        if (regNoInput && regNoInput.offsetParent !== null) {
+                            regNoInput.value = regNo;
+                            // Input'un dolu olduğunu UI'a bildirmek için event tetikle
+                            regNoInput.dispatchEvent(new Event('input'));
+                        }
+                    }
+
+                    // 2. Tescil Tarihini Bul (MEVCUT KODUNUZ)
+                    const regDate = this.findRegistrationDate(text);
+                    if (regDate) {
+                        console.log("✅ PDF Tescil Tarihi Bulundu:", regDate);
+                        this.extractedRegDate = regDate;
+
+                        const regDateInput = document.getElementById('registry-registration-date');
+                        if (regDateInput && regDateInput.offsetParent !== null) { 
+                            regDateInput.value = regDate;
+                            if(regDateInput._flatpickr) regDateInput._flatpickr.setDate(regDate, true);
+                            showNotification(`Tescil tarihi ve numarası belgeden okundu.`, 'info');
+                        }
+                    }
+                }
+            });
         } 
 
         // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
@@ -627,25 +654,47 @@ async loadData() {
             
             // Formun görünürlüğünü ayarla
             registrationSection.style.display = showRegistration ? 'block' : 'none';
-            if (showRegistration && this.extractedRegDate) {
-                const regDateInput = document.getElementById('registry-registration-date');
-                
-                // Input varsa ve henüz boşsa doldur
-                if (regDateInput && !regDateInput.value) {
-                    console.log("📝 Form açıldı, saklanan tarih set ediliyor:", this.extractedRegDate);
-                    
-                    regDateInput.value = this.extractedRegDate;
-                    
-                    // Flatpickr kullanıyorsanız takvimi de güncelle
-                    if (regDateInput._flatpickr) {
-                        regDateInput._flatpickr.setDate(this.extractedRegDate, true);
+            
+            if (showRegistration) {
+                // A) Tescil Numarasını Doldur (YENİ)
+                if (this.extractedRegNo) {
+                    const regNoInput = document.getElementById('registry-registration-no');
+                    if (regNoInput && !regNoInput.value) {
+                        regNoInput.value = this.extractedRegNo;
+                        regNoInput.dispatchEvent(new Event('input')); // Label kayması vb. için
                     }
+                }
+
+                // B) Tescil Tarihini Doldur (MEVCUT KODUNUZ)
+                if (this.extractedRegDate) {
+                    const regDateInput = document.getElementById('registry-registration-date');
+                    if (regDateInput && !regDateInput.value) {
+                        regDateInput.value = this.extractedRegDate;
+                        if (regDateInput._flatpickr) {
+                            regDateInput._flatpickr.setDate(this.extractedRegDate, true);
+                        }
+                    }
+                }
+                
+                // C) Marka Durumunu "Tescilli" Yap (YENİ)
+                // Not: Input ID'niz projenize göre 'status', 'registry-status' veya 'recordStatus' olabilir.
+                // Genellikle kullanılan ID'yi varsayarak ekliyorum:
+                const statusSelect = document.getElementById('registry-status') || document.getElementById('status');
+                if (statusSelect) {
+                    // Sisteminizde "Tescilli" değerinin karşılığı genelde 'registered' veya 'tescilli'dir.
+                    statusSelect.value = 'registered'; 
                     
-                    // Kullanıcıya bilgi ver (Sadece bir kere göstermek isterseniz buraya bir flag koyabilirsiniz)
-                    showNotification(`Tescil tarihi otomatik dolduruldu: ${this.extractedRegDate}`, 'info');
+                    // Eğer value ile seçilemediyse yazı ile bulmaya çalış
+                    if (statusSelect.selectedIndex === -1) {
+                        for (let i = 0; i < statusSelect.options.length; i++) {
+                            if (statusSelect.options[i].text.toLowerCase().includes('tescilli')) {
+                                statusSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-        }
     
     }
 
