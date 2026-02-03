@@ -3043,7 +3043,8 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
-        basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-"
+        basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
+        son_odeme_tarihi: formatDeadline(after.officialDueDate || after.dueDate)
       };
 
       const replaceVars = (str) =>
