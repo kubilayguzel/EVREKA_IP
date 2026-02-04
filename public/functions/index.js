@@ -3048,7 +3048,9 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
-        son_odeme_tarihi: formatDeadline(finalDueDate)
+        
+        // [GÜNCELLEME] Hata veren değişken kaldırıldı, sabit değer atandı.
+        son_odeme_tarihi: "-" 
       };
 
       const replaceVars = (str) =>
