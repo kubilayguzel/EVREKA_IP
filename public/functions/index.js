@@ -940,7 +940,7 @@ export const createObjectionTask = onCall(
 export const sendEmailNotificationV2 = onCall(
   { 
     region: "europe-west1",
-    memory: "512MiB", // <--- BU SATIRI EKLEYİN (Varsayılan 256MB yetersiz kalıyor)
+    memory: "216MiB", // <--- BU SATIRI EKLEYİN (Varsayılan 256MB yetersiz kalıyor)
     timeoutSeconds: 120 // (Tavsiye) Büyük dosyalar için zaman aşımı süresini de artırabilirsiniz
   },
   async (request) => {
