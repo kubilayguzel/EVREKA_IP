@@ -63,35 +63,26 @@ const ALLOWED_SENDERS = new Set([
   "rumeysatimurlenk@evrekagroup.com"
 ]);
 
-// 📧 Gmail API ile "kullanıcının adına" gönderim
+// 📧 Gmail API ile Stream (Akış) Tabanlı Gönderim - RAM Dostu Versiyon
 async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, inReplyTo = null, references = null, customMessageId = null) {
   const sa = await loadMailerSA();
 
   // Headerları Hazırla
   const headers = mailOptions.headers || {};
-  
-  // 1. Message-ID'yi biz belirliyorsak ekle (Kritik Nokta)
-  if (customMessageId) {
-    headers['Message-ID'] = customMessageId;
-  }
-  
-  // 2. Cevaplama Zinciri Headerları
-  if (inReplyTo) {
-    headers['In-Reply-To'] = inReplyTo; 
-  }
-  if (references) {
-    headers['References'] = references;
-  }
+  if (customMessageId) headers['Message-ID'] = customMessageId;
+  if (inReplyTo) headers['In-Reply-To'] = inReplyTo;
+  if (references) headers['References'] = references;
   
   mailOptions.headers = headers;
 
-  // 3. Nodemailer ile MIME üret
+  // 1. Nodemailer Stream Transport (Buffer: FALSE olmalı)
   const streamTransport = nodemailer.createTransport({
     streamTransport: true,
     newline: "unix",
-    buffer: true
+    buffer: false // <--- ÖNEMLİ: Bufferlama yapma, stream üret
   });
 
+  // 2. Maili Derle (Bu işlem artık bellek tüketmez, bir akış döndürür)
   const compiled = await streamTransport.sendMail({
     ...mailOptions,
     from: `"${mailOptions.fromName || "IPGate-EVREKA GROUP"}" <${userEmail}>`,
@@ -99,11 +90,7 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, inRep
     replyTo: mailOptions.replyTo || userEmail
   });
 
-  const raw = Buffer.from(compiled.message)
-    .toString("base64")
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-  // 4. Gmail API İsteği
+  // 3. Gmail API İsteği (Media Upload Yöntemi)
   const auth = new google.auth.JWT({
     email: sa.client_email,
     key: sa.private_key,
@@ -113,14 +100,17 @@ async function sendViaGmailAsUser(userEmail, mailOptions, threadId = null, inRep
 
   const gmail = google.gmail({ version: "v1", auth });
   
-  const requestBody = { raw };
-  if (threadId) {
-    requestBody.threadId = threadId;
-  }
-
+  // RAW string yerine MEDIA (Stream) gönderimi yapıyoruz
+  // Bu sayede Base64 dönüşümü parça parça yapılarak gönderilir.
   const res = await gmail.users.messages.send({
     userId: "me",
-    requestBody
+    requestBody: {
+      threadId: threadId || undefined // Metadata (Thread ID vb.) buraya
+    },
+    media: {
+      mimeType: 'message/rfc822',
+      body: compiled.message // <--- Nodemailer'ın ürettiği Stream doğrudan buraya bağlanır
+    }
   });
 
   return res.data; 
@@ -586,9 +576,13 @@ async function buildNotificationAttachments(db, notificationData) {
       
       // buildNotificationAttachments fonksiyonu içinde addAsAttachmentOrLink kısmını bul:
       if (storagePath) {
-            const [buf] = await bucket.file(storagePath).download();
+            // ESKİ KOD (SİLİNECEK):
+            // const [buf] = await bucket.file(storagePath).download();
             
-            // MIME Type Belirleme
+            // YENİ KOD (EKLENECEK - Stream Mantığı):
+            const readStream = bucket.file(storagePath).createReadStream();
+
+            // MIME Type Belirleme (Aynı kalıyor)
             let contentType = "application/pdf";
             const lowerName = name.toLowerCase();
             
@@ -600,7 +594,7 @@ async function buildNotificationAttachments(db, notificationData) {
 
             result.attachments.push({
               filename: name,
-              content: buf,
+              content: readStream, // <-- ARTIK BUFFER DEĞİL, STREAM GÖNDERİYORUZ
               contentType: contentType,
             });
         }
@@ -944,7 +938,11 @@ export const createObjectionTask = onCall(
 // functions/index.js
 
 export const sendEmailNotificationV2 = onCall(
-  { region: "europe-west1" },
+  { 
+    region: "europe-west1",
+    memory: "512MiB", // <--- BU SATIRI EKLEYİN (Varsayılan 256MB yetersiz kalıyor)
+    timeoutSeconds: 120 // (Tavsiye) Büyük dosyalar için zaman aşımı süresini de artırabilirsiniz
+  },
   async (request) => {
     // 1. GİRİŞ PARAMETRELERİ
     const { notificationId, userEmail: userEmailFromClient, mode, overrideSubject, overrideBody } = request.data || {};
