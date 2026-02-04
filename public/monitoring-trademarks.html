@@ -657,28 +657,25 @@ tr.selected-row:hover {
         }
     }
 
-
-    // [GÜNCELLENDİ] Paralel İşleme ile Performans İyileştirmesi
+    // [GÜNCELLENDİ] Sadece gönderilen listeyi (20 kayıt) paralel olarak zenginleştirir
     async function enrichItemsWithIpRecords(items) {
-        // for döngüsü yerine map ve Promise.all kullanarak tüm istekleri aynı anda başlatıyoruz.
-        // Bu sayede 20 kayıt için 20x süre beklemek yerine sadece en yavaş olanın süresi kadar beklersiniz.
-        
         const promises = items.map(async (it) => {
             const ipId = it.ipRecordId || it.sourceRecordId || it.id;
             
-            // Kayıt önbellekte veya veritabanında var mı?
+            // Eğer kayıt ID'si yoksa veya zaten zenginleştirilmişse olduğu gibi döndür
+            if (!ipId || it.applicationDate) return it;
+
+            // Güncel veriyi çek (Cache mekanizması kullanır)
             const ipRec = await fetchIpRecordByIdCached(ipId);
             
             if (ipRec) {
-                // Kayıt bulunduysa birleştir
+                // Ham veriyi güncel IP kaydı ile birleştir
                 return { ...it, ...pick(ipRec, MERGE_FIELDS), ipRecordId: ipId };
             } else {
-                // Bulunamadıysa mevcut haliyle döndür
                 return { ...it, ipRecordId: ipId };
             }
         });
 
-        // Tüm işlemlerin bitmesini bekle ve sonuç dizisini döndür
         return await Promise.all(promises);
     }
 
@@ -941,13 +938,15 @@ tr.selected-row:hover {
         selectedMonitoringItems.clear();
         updateSelectedButtonState();
 
+        // Sayfada gösterilecek ham veriyi al
         const currentPageData = pagination ? pagination.getCurrentPageData(filteredData) : filteredData;
-        container.innerHTML = '<div class="loading">Sayfa verileri yükleniyor...</div>';
+        
+        container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>';
 
-        // Sayfadaki kayıtları ipRecords ile zenginleştir
+        // [KRİTİK GÜNCELLEME] Sadece bu sayfadaki 20 kaydı zenginleştir!
         const currentPageDataEnriched = await enrichItemsWithIpRecords(currentPageData);
 
-        if (currentPageData.length === 0) {
+        if (currentPageDataEnriched.length === 0) {
             const hasFilters = currentFilters.search || currentFilters.status !== 'all' ||
                               currentFilters.niceClass || currentFilters.owner || 
                               currentFilters.markName || currentFilters.searchTerms;
@@ -1220,27 +1219,19 @@ tr.selected-row:hover {
     return '-';
 };
 
-
-    // [GÜNCELLENDİ] Tabloyu render etme fonksiyonu
-    const renderMonitoringTable = async (data, userUid) => {
-        const rawData = data || [];
-        
-        // KRİTİK ADIM: Filtrelemenin çalışması için TÜM veriyi baştan zenginleştiriyoruz
-        allMonitoringData = await enrichItemsWithIpRecords(rawData);
+    const renderMonitoringTable = (data, userUid) => {
+        // Ham veriyi direkt hafızaya atıyoruz, işlem yapmıyoruz.
+        allMonitoringData = data || [];
         
         const filterSection = document.getElementById('filterSection');
         if (filterSection && allMonitoringData.length > 0) {
             filterSection.style.display = 'block';
         }
         
-        // Artık verilerde 'ownerName' olduğu için filtre çalışacaktır
+        // Filtreleri ham veri üzerinde uygula (Bu işlem renderCurrentPage'i tetikler)
         applyFilters();
     };
 
-    /**
- * create-task.js mantığıyla birebir uyumlu
- * 3. Taraf (Third Party) IP Record oluşturucu
- */
 async function createThirdPartyRecordFromMonitoring(monitoringItem) {
     console.log('urce: Monitoring Item:', monitoringItem);
 
@@ -1733,13 +1724,8 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
             await loadSharedLayout({ activeMenuLink: 'monitoring-trademarks.html' });
 
             // [GÜNCELLENDİ] Kişileri VE IP Kayıtlarını paralel yükle
-            await Promise.all([
-                (async () => {
-                    const pRes = await personService.getPersons();
-                    if (pRes.success) allPersons = pRes.data || [];
-                })(),
-                loadAllIpRecords() // <--- BURASI EKLENDİ
-            ]);
+            const pRes = await personService.getPersons();
+            if (pRes.success) allPersons = pRes.data || [];
 
             const container = document.getElementById('monitoringTableContainer');
             const removeSelectedBtn = document.getElementById('removeSelectedBtn');
