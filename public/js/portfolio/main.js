@@ -341,24 +341,59 @@ class PortfolioController {
     }
 
     async handleExport(type) {
-        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
+        // 1. Veriyi Hazırla (Mevcut sayfa filtrelerine göre)
+        let filtered = this.dataManager.filterRecords(
+            this.state.activeTab, 
+            this.state.searchQuery, 
+            this.state.columnFilters
+        );
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-        if (filtered.length === 0) { showNotification('Dışa aktarılacak veri yok.', 'warning'); return; }
+        
+        if (!filtered || filtered.length === 0) {
+            showNotification('Dışa aktarılacak veri bulunamadı.', 'warning');
+            return;
+        }
 
         this.renderer.showLoading(true);
+
+        // Yardımcı Fonksiyon: Script Yükleyici
+        const loadScript = (src) => {
+            return new Promise((resolve, reject) => {
+                // Zaten yüklüyse tekrar yükleme
+                if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        };
+
         try {
             if (type === 'excel') {
-                const { default: ExcelJS } = await import('../libs/exceljs.min.js');
-                const { saveAs } = await import('../libs/FileSaver.min.js');
-                await this.dataManager.exportToExcel(filtered, ExcelJS, saveAs);
-            } else if (type === 'pdf') {
-                const { default: html2pdf } = await import('../libs/html2pdf.bundle.min.js');
-                await this.dataManager.exportToPdf(filtered, html2pdf);
-            }
-        } catch (e) { console.error(e); showNotification('Dışa aktarma hatası.', 'error'); }
-        finally { this.renderer.showLoading(false); }
-    }
+                // ExcelJS ve FileSaver yükle (CDN üzerinden)
+                if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
+                if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
 
+                // Global nesneleri kullan
+                await this.dataManager.exportToExcel(filtered, window.ExcelJS, window.saveAs);
+                showNotification('Excel dosyası başarıyla oluşturuldu.', 'success');
+
+            } else if (type === 'pdf') {
+                // html2pdf yükle (CDN üzerinden)
+                if (!window.html2pdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+
+                await this.dataManager.exportToPdf(filtered, window.html2pdf);
+                showNotification('PDF dosyası başarıyla oluşturuldu.', 'success');
+            }
+        } catch (error) {
+            console.error('Export hatası:', error);
+            showNotification('Dışa aktarma sırasında bir hata oluştu.', 'error');
+        } finally {
+            this.renderer.showLoading(false);
+        }
+    }
+    
     render() {
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols, this.state.columnFilters);
