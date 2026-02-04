@@ -238,6 +238,33 @@
     import { loadSharedLayout } from "./js/layout-loader.js";
     import Pagination from "./js/pagination.js";
 
+    // --- PERFORMANS İÇİN ÖNBELLEK ---
+    const dbCache = new Map(); // Dokümanları (persons/ipRecords) burada tutacağız
+
+    // Gelişmiş getDocFromDb Fonksiyonu (Cache Destekli)
+    async function getDocFromDb(collectionName, id) {
+      if (!id) return null;
+      const cacheKey = `${collectionName}/${id}`;
+      
+      // 1. Cache'te varsa direkt oradan dön (Network isteği yapma)
+      if (dbCache.has(cacheKey)) {
+        return dbCache.get(cacheKey);
+      }
+
+      try {
+        // 2. Yoksa veritabanından çek
+        const docSnap = await getDoc(doc(db, collectionName, id));
+        const data = docSnap.exists() ? docSnap.data() : null;
+        
+        // 3. Sonucu cache'e kaydet
+        dbCache.set(cacheKey, data);
+        return data;
+      } catch (error) {
+        console.warn(`GetDoc Error (${collectionName}/${id}):`, error);
+        return null;
+      }
+    }
+
     const sendEmail = httpsCallable(functions, "sendEmailNotificationV2");
 
     // DOM
@@ -270,59 +297,49 @@
 
 // ---------- Resolve ipRecord, supporting associatedTransactionId ----------
 
+// Optimize edilmiş ID çözücü (Memoization)
 async function resolveIpRecordId(notification) {
-  // 1. Önce Backend'in kaydettiği 'relatedIpRecordId' alanına bak (EN ÖNEMLİ DÜZELTME)
+  // Eğer daha önce hesapladıysak, saklanan değeri direkt döndür
+  if (notification._cachedIpRecordId !== undefined) {
+    return notification._cachedIpRecordId;
+  }
+
+  let result = null;
+
+  // --- Orijinal Mantık ---
   if (notification.relatedIpRecordId) {
-    return notification.relatedIpRecordId;
-  }
-
-  // 2. Eski yöntem: notification'da ipRecordId var mı kontrol et
-  if (notification.ipRecordId) {
-    return notification.ipRecordId;
-  }
-
-  // 3. clientId varsa onu kullanarak ipRecord bul (Fallback)
-    if (notification.clientId) {
-      try {
-        const ipRecordsQuery = query(
+    result = notification.relatedIpRecordId;
+  } else if (notification.ipRecordId) {
+    result = notification.ipRecordId;
+  } else if (notification.clientId) {
+    try {
+       // Bu sorgu cache'lenemez ama nadiren çalışır (fallback)
+       const ipRecordsQuery = query(
           collection(db, "ipRecords"),
-          where("applicants", "array-contains", { id: notification.clientId }) 
+          where("applicants", "array-contains", { id: notification.clientId }),
+          limit(1) // Performans için limit ekledik
         );
-        // Not: Eğer veritabanında 'applicants' dizisindeki objelerde 'name' alanı da varsa,
-        // Firestore tam eşleşme aradığı için sadece {id: ...} sorgusu o kaydı bulamayabilir.
-        // Kesin çözüm için ipRecords koleksiyonunda sadece ID'leri tutan 'applicantIds' alanı olması önerilir.
-        
         const ipRecordsSnap = await getDocs(ipRecordsQuery);
         if (!ipRecordsSnap.empty) {
-          return ipRecordsSnap.docs[0].id;
+          result = ipRecordsSnap.docs[0].id;
         }
-      } catch (error) {
-        console.warn("Client ID ile IP Record bulunamadı:", error);
-      }
-    }
-
-  // 4. sourceDocumentId varsa (unindexed_pdfs üzerinden)
-  if (notification.sourceDocumentId) {
+    } catch (e) { }
+  } else if (notification.sourceDocumentId) {
     try {
-      const docRef = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
-      if (docRef.exists()) {
-        const docData = docRef.data();
-        return docData.ipRecordId || docData.relatedIpRecordId || docData.ipRecordRefId || null;
+      // getDocFromDb artık cache kullanıyor, burası hızlanacak
+      const docData = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+      if (docData) {
+        result = docData.ipRecordId || docData.relatedIpRecordId || docData.ipRecordRefId || null;
       }
-    } catch (error) { }
+    } catch (e) { }
   }
+  // -----------------------
 
-  return null;
+  // Sonucu objeye kaydet (Bir sonraki çağrıda tekrar hesaplamasın)
+  notification._cachedIpRecordId = result;
+  return result;
 }
 
-async function getDocFromDb(collection, id) {
-  try {
-    const docSnap = await getDoc(doc(db, collection, id));
-    return docSnap.exists() ? docSnap.data() : null;
-  } catch (error) {
-    return null;
-  }
-}
 async function getDocumentInfo(notification) {
   try {
     if (!notification.sourceDocumentId) return { fileName: '-', fileUrl: null };
