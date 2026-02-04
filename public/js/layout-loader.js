@@ -299,7 +299,7 @@ function highlightActiveMenu(currentPage) {
 // Bildirim sayıları (Firebase yüklendikten sonra çağrılır)
 function setupMenuBadges(db, collection, query, where, onSnapshot, userId) {
     try {
-        // 1. Tetiklenen Görevler (Mevcut)
+        // 1. Tetiklenen Görevler (Mevcut - Müvekkil Onayı Bekleyenler)
         const tasksQuery = query(collection(db, "tasks"), where("status", "==", "awaiting_client_approval"));
         onSnapshot(tasksQuery, (snapshot) => updateBadgeUI('triggered-tasks', snapshot.size), (e) => console.error(e));
         
@@ -308,15 +308,21 @@ function setupMenuBadges(db, collection, query, where, onSnapshot, userId) {
         onSnapshot(notificationsQuery, (snapshot) => updateBadgeUI('client-notifications', snapshot.size), (e) => console.error(e));
 
         // 3. [YENİ] İşlerim (My Tasks) Badge'i
-        // Sadece bana atanan (assignedTo_uid) ve tamamlanmamış işleri sayar.
+        // Sadece bana atanan ve aktif olan (Tamamlanmamış) işleri sayar.
         if (userId) {
             const myTasksQuery = query(collection(db, "tasks"), where("assignedTo_uid", "==", userId));
+            
             onSnapshot(myTasksQuery, (snapshot) => {
-                // Not: İndeks hatası almamak için 'status' filtresini client tarafında yapıyoruz.
+                // Client-side filtreleme ile 'completed' ve 'cancelled' olanları eliyoruz.
                 const activeCount = snapshot.docs.filter(doc => {
                     const s = doc.data().status;
-                    return s !== 'completed' && s !== 'cancelled' && s !== 'client_approval_closed' && s !== 'client_no_response_closed';
+                    // Sayılmayacak statüler:
+                    return s !== 'completed' && 
+                           s !== 'cancelled' && 
+                           s !== 'client_approval_closed' && 
+                           s !== 'client_no_response_closed';
                 }).length;
+
                 updateBadgeUI('my-tasks', activeCount);
             });
         }
