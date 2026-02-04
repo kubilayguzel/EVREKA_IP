@@ -1202,58 +1202,35 @@ body.modal-open {
     display: flex !important;
     align-items: center;
     justify-content: flex-start;
-}/* --- Tahakkuk İşlemler Menüsü Düzeltmesi --- */
+}
+/* --- Tahakkuk İşlemler Menüsü Görünürlük Düzeltmesi --- */
 
-/* Menü kutusunun kendisi beyaz olsun ve gölgesi olsun */
-.dropdown-menu {
-    background-color: #ffffff !important;
-    border: 1px solid #e1e8ed;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+/* Menü içindeki butonların arka planını beyaz/şeffaf yap */
+.dropdown-menu .btn.action-btn {
+    background-color: #ffffff !important; /* Arka plan beyaz */
+    border: 1px solid #eee !important;    /* Hafif çerçeve */
+    margin: 0 2px; /* Butonlar arasına hafif boşluk */
 }
 
-/* Menü içindeki linklerin (butonların) arka planını temizle ve yazı rengini koyu yap */
-.dropdown-item {
-    background-color: transparent !important;
-    color: #333 !important; /* Yazı rengi koyu gri/siyah */
-    display: flex;
-    align-items: center;
-    padding: 8px 15px;
-    font-weight: 500;
+/* Fare üzerine gelince arka planı hafif gri yap */
+.dropdown-menu .btn.action-btn:hover {
+    background-color: #f0f0f0 !important;
+    border-color: #ccc !important;
 }
 
-/* Hover (üzerine gelince) arka plan hafif gri olsun */
-.dropdown-item:hover {
-    background-color: #f8f9fa !important;
-    color: #000 !important;
+/* 1. GÖZ İKONU (Mavi - text-primary) */
+.dropdown-menu .btn.text-primary {
+    color: #007bff !important; /* Standart Mavi */
 }
 
-/* --- İkon Renklerini Belirginleştir --- */
-
-/* Silme İkonu (Kırmızı) */
-.dropdown-item i.fa-trash, 
-.dropdown-item i.text-danger {
-    color: #dc3545 !important; 
-    width: 20px;
-    text-align: center;
-    margin-right: 8px;
+/* 2. DÜZENLE İKONU (Sarı Yerine Turuncu) - Görünmeyen ikon bu */
+/* text-warning sınıfını eziyoruz çünkü sarı beyazda görünmez */
+.dropdown-menu .btn.text-warning {
+    color: #e67e22 !important; /* Koyu Turuncu - Çok daha net görünür */
+    font-weight: bold;
 }
 
-/* Düzenleme İkonu (Sarı/Turuncu) */
-.dropdown-item i.fa-edit, 
-.dropdown-item i.text-warning {
-    color: #ffc107 !important; /* Bootstrap sarısı */
-    /* Veya daha okunaklı bir turuncu isterseniz: #fd7e14 */
-    width: 20px;
-    text-align: center;
-    margin-right: 8px;
-}
-
-/* Görüntüleme/Diğer İkonlar (Mavi) */
-.dropdown-item i.fa-eye, 
-.dropdown-item i.text-primary,
-.dropdown-item i.text-info {
-    color: #007bff !important;
-    width: 20px;
-    text-align: center;
-    margin-right: 8px;
+/* 3. SİL İKONU (Kırmızı - text-danger) */
+.dropdown-menu .btn.text-danger {
+    color: #dc3545 !important; /* Standart Kırmızı */
 }
