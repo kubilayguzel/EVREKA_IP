@@ -153,12 +153,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
                 const applicationNumber = ipRecord?.applicationNumber || 'N/A';
                 const relatedRecordTitle = task.relatedIpRecordTitle || 'N/A';
-                const applicantName = (Array.isArray(ipRecord?.applicants) && ipRecord.applicants.length)
-                    ? ipRecord.applicants.map(a => a?.name || '').filter(Boolean).join(', ')
-                    : 'N/A';
+
+                // --- [BAŞLANGIÇ] SAHİP BİLGİSİ GÜNCELLEMESİ ---
+                
+                let resolvedOwnerName = null;
+
+                // 1. ADIM: Task Owner (Görev Sahibi) Kontrolü
+                // Veritabanındaki taskOwner dizisinin ilk elemanını alıp Kişiler (allPersons) listesinde arıyoruz.
+                if (Array.isArray(task.taskOwner) && task.taskOwner.length > 0) {
+                    const ownerId = task.taskOwner[0];
+                    // ownerId bazen yanlışlıkla TaskID olabiliyor, bu yüzden persons listesinde ID eşleşmesi var mı diye bakıyoruz.
+                    const person = this.allPersons.find(p => p.id === ownerId);
+                    if (person) {
+                        resolvedOwnerName = person.name;
+                    }
+                }
+
+                // 2. ADIM: Fallback (Yedek) - IP Record Applicants
+                // Eğer taskOwner boşsa veya geçerli bir kişi bulunamadıysa (örn: 197 nolu task hatası), dosya sahiplerini çekiyoruz.
+                if (!resolvedOwnerName) {
+                    if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+                        resolvedOwnerName = ipRecord.applicants.map(a => {
+                            // a: String ID olabilir, {name: '...'} olabilir veya {id: '...'} olabilir.
+                            if (a.name) return a.name; // İsim varsa direkt al
+                            
+                            const pId = (typeof a === 'string') ? a : a.id;
+                            if (pId) {
+                                const p = this.allPersons.find(person => person.id === pId);
+                                return p ? p.name : '';
+                            }
+                            return '';
+                        }).filter(Boolean).join(', ');
+                    }
+                }
+
+                const applicantName = resolvedOwnerName || 'N/A';
+                
+                // --- [BİTİŞ] SAHİP BİLGİSİ GÜNCELLEMESİ ---
 
                 // --- TARİH DÜZELTMESİ ---
-                // Tarihleri direkt task objesinden alıyoruz (Daha güvenilir)
                 const parseDate = (d) => {
                     if (!d) return null;
                     if (d.toDate) return d.toDate();
@@ -166,8 +199,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return new Date(d);
                 };
 
-                const operationalDueObj = parseDate(task.dueDate); // Operasyonel
-                const officialDueObj = parseDate(task.officialDueDate); // Resmi
+                const operationalDueObj = parseDate(task.dueDate); 
+                const officialDueObj = parseDate(task.officialDueDate);
 
                 const statusText = this.statusDisplayMap[task.status] || task.status;
                 const searchString = `${task.id} ${applicationNumber} ${relatedRecordTitle} ${applicantName} ${taskTypeDisplayName} ${statusText}`.toLowerCase();
@@ -176,9 +209,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ...task,
                     applicationNumber,
                     relatedRecordTitle,
-                    applicantName,
+                    applicantName, // Hesapladığımız yeni isim buraya atanıyor
                     taskTypeDisplayName,
-                    // Tarih Objeleri (Sıralama ve Görüntüleme için)
                     operationalDueObj,
                     officialDueObj,
                     statusText,
