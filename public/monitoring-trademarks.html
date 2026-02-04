@@ -1082,7 +1082,7 @@
         // Artık verilerde 'ownerName' olduğu için filtre çalışacaktır
         applyFilters();
     };
-    
+
     /**
  * create-task.js mantığıyla birebir uyumlu
  * 3. Taraf (Third Party) IP Record oluşturucu
@@ -1578,9 +1578,14 @@ async function createThirdPartyRecordFromMonitoring(monitoringItem) {
             setupEditCriteriaModal();
             await loadSharedLayout({ activeMenuLink: 'monitoring-trademarks.html' });
 
-            const personsResult = await personService.getPersons();
-            if (personsResult.success) allPersons = personsResult.data || [];
-            else console.warn('Kişiler yüklenirken hata:', personsResult.error);
+            // [GÜNCELLENDİ] Kişileri VE IP Kayıtlarını paralel yükle
+            await Promise.all([
+                (async () => {
+                    const pRes = await personService.getPersons();
+                    if (pRes.success) allPersons = pRes.data || [];
+                })(),
+                loadAllIpRecords() // <--- BURASI EKLENDİ
+            ]);
 
             const container = document.getElementById('monitoringTableContainer');
             const removeSelectedBtn = document.getElementById('removeSelectedBtn');
