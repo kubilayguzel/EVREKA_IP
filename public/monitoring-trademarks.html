@@ -647,24 +647,29 @@
         }
     }
 
-    // [GÜNCELLENDİ] Verileri zenginleştirme fonksiyonu
+
+    // [GÜNCELLENDİ] Paralel İşleme ile Performans İyileştirmesi
     async function enrichItemsWithIpRecords(items) {
-        const enriched = [];
-        for (const it of items) {
-            // Kaydın bağlı olduğu IP ID'sini bul
-            const ipId = it.ipRecordId || it.sourceRecordId || it.id; 
+        // for döngüsü yerine map ve Promise.all kullanarak tüm istekleri aynı anda başlatıyoruz.
+        // Bu sayede 20 kayıt için 20x süre beklemek yerine sadece en yavaş olanın süresi kadar beklersiniz.
+        
+        const promises = items.map(async (it) => {
+            const ipId = it.ipRecordId || it.sourceRecordId || it.id;
             
-            // Hafızadaki haritadan (Map) veriyi çek
-            const ipRec = allIpRecordsMap.get(ipId);
+            // Kayıt önbellekte veya veritabanında var mı?
+            const ipRec = await fetchIpRecordByIdCached(ipId);
             
             if (ipRec) {
-                // İzleme verisiyle IP kaydını birleştir
-                enriched.push({ ...it, ...pick(ipRec, MERGE_FIELDS), ipRecordId: ipId });
+                // Kayıt bulunduysa birleştir
+                return { ...it, ...pick(ipRec, MERGE_FIELDS), ipRecordId: ipId };
             } else {
-                enriched.push({ ...it, ipRecordId: ipId });
+                // Bulunamadıysa mevcut haliyle döndür
+                return { ...it, ipRecordId: ipId };
             }
-        }
-        return enriched;
+        });
+
+        // Tüm işlemlerin bitmesini bekle ve sonuç dizisini döndür
+        return await Promise.all(promises);
     }
 
     let currentFilters = {
@@ -964,6 +969,7 @@
                         imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
                     }
                     return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail"
+                            loading="lazy" 
                             style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                     <span style="display:none; color:#999; font-size:12px;">🖼️ Görsel yok</span>`;
