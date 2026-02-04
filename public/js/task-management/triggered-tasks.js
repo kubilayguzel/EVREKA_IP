@@ -332,11 +332,46 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const row = document.createElement('tr');
                 const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
                 
-                // Tarih gösterimleri (Güvenli kontrol)
+                // Tarih formatlama
                 const opDate = task.operationalDueObj ? task.operationalDueObj.toLocaleDateString('tr-TR') : '-';
                 const offDate = task.officialDueObj ? task.officialDueObj.toLocaleDateString('tr-TR') : '-';
                 const opISO = task.operationalDueObj ? task.operationalDueObj.toISOString().slice(0,10) : '';
                 const offISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
+
+                // --- İŞLEMLER MENÜSÜ HTML YAPISI ---
+                // Tahakkuk sayfasındaki yapının aynısı uyarlandı.
+                // Butonlara gerekli sınıflar (view-btn, edit-btn vb.) eklendiği için
+                // mevcut listener'lar otomatik olarak çalışacaktır.
+                
+                const actionMenuHtml = `
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-ellipsis-v" style="pointer-events: none;"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu dropdown-menu-right shadow-sm border-0 p-2" style="min-width: auto;">
+                            <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
+                                
+                                <button class="btn btn-sm btn-light text-primary view-btn action-btn" data-id="${task.id}" title="Detay Görüntüle">
+                                    <i class="fas fa-eye" style="pointer-events: none;"></i>
+                                </button>
+
+                                <button class="btn btn-sm btn-light text-warning edit-btn action-btn" data-id="${task.id}" title="Düzenle">
+                                    <i class="fas fa-edit" style="pointer-events: none;"></i>
+                                </button>
+
+                                <button class="btn btn-sm btn-light text-success add-accrual-btn action-btn" data-id="${task.id}" title="Ek Tahakkuk Ekle">
+                                    <i class="fas fa-file-invoice-dollar" style="pointer-events: none;"></i>
+                                </button>
+
+                                <button class="btn btn-sm btn-light text-info change-status-btn action-btn" data-id="${task.id}" title="Durum Değiştir">
+                                    <i class="fas fa-exchange-alt" style="pointer-events: none;"></i>
+                                </button>
+
+                            </div>
+                        </div>
+                    </div>
+                `;
 
                 row.innerHTML = `
                     <td>${task.id}</td>
@@ -347,11 +382,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td data-field="operationalDue" data-date="${opISO}">${opDate}</td>
                     <td data-field="officialDue" data-date="${offISO}">${offDate}</td>
                     <td><span class="status-badge ${statusClass}">${task.statusText}</span></td>
-                    <td>
-                        <button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>
-                        <button class="action-btn edit-btn" data-id="${task.id}">Düzenle</button>
-                        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk</button>
-                        <button class="action-btn change-status-btn" data-id="${task.id}">Durum</button>
+                    <td class="text-center" style="overflow:visible;">
+                        ${actionMenuHtml}
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -360,6 +392,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.DeadlineHighlighter) {
                 setTimeout(() => window.DeadlineHighlighter.refresh('triggeredTasks'), 50);
             }
+            
+            // Dropdown'ların tablodan taşmasını engellemek için gerekli Bootstrap tetiklemesi (Opsiyonel ama önerilir)
+            $('.dropdown-toggle').dropdown();
         }
 
         // --- ENTEGRASYON NOKTALARI (Shared Components) ---
