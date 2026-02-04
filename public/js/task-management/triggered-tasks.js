@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Tablo Yönetimi
             this.processedData = [];
             this.filteredData = [];
-            this.sortState = { key: 'id', direction: 'desc' };
+            this.sortState = { key: 'officialDueObj', direction: 'asc' };
             this.pagination = null;
 
             // Seçili Görevler
@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.renderTable();
         }
 
+
         sortData() {
             const { key, direction } = this.sortState;
             const multiplier = direction === 'asc' ? 1 : -1;
@@ -226,19 +227,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.filteredData.sort((a, b) => {
                 let valA = a[key];
                 let valB = b[key];
-                if (valA == null) valA = '';
-                if (valB == null) valB = '';
 
-                if (valA instanceof Date && valB instanceof Date) return (valA - valB) * multiplier;
+                // --- ÖZEL KURAL: Boş Değerler En Üstte ---
+                // Değer boş mu kontrol et (null, undefined veya boş string)
+                const isEmptyA = (valA === null || valA === undefined || valA === '');
+                const isEmptyB = (valB === null || valB === undefined || valB === '');
+
+                // Eğer ikisi de boşsa sıralama değişmez
+                if (isEmptyA && isEmptyB) return 0;
+                
+                // Eğer sadece A boşsa, A'yı en üste al (-1)
+                if (isEmptyA) return -1;
+                
+                // Eğer sadece B boşsa, B'yi en üste al (1)
+                // (Burada A dolu olduğu için B onun altına gelmeli veya tam tersi mantıkla
+                // array'in başında toplanmalılar)
+                if (isEmptyB) return 1;
+                // ------------------------------------------
+
+                // Tarih Karşılaştırması
+                if (valA instanceof Date && valB instanceof Date) {
+                    return (valA - valB) * multiplier;
+                }
+
+                // ID (Sayısal) Karşılaştırması
                 if (key === 'id') {
                     const numA = parseInt(String(valA), 10);
                     const numB = parseInt(String(valB), 10);
                     if (!isNaN(numA) && !isNaN(numB)) return (numA - numB) * multiplier;
                 }
+
+                // Metin (String) Karşılaştırması
                 return String(valA).localeCompare(String(valB), 'tr') * multiplier;
             });
+            
             this.updateSortIcons();
         }
+
 
         updateSortIcons() {
             document.querySelectorAll('#tasksTableHeaderRow th[data-sort]').forEach(th => {
