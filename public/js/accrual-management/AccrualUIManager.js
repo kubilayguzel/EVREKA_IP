@@ -130,28 +130,37 @@ export class AccrualUIManager {
 
             // Menü Yapılandırması
             const isEditDisabled = acc.status === 'paid';
-            // action-btn sınıfı eklendi (Main.js uyumluluğu için)
-            const editItemClass = isEditDisabled ? 'dropdown-item disabled text-muted' : 'dropdown-item edit-btn action-btn';
-            const editItemStyle = isEditDisabled ? 'cursor: not-allowed;' : 'cursor: pointer;';
+            
+            // Düzenle butonu için sınıflar (Yazı olmadığı için btn-light kullanıyoruz)
+            const editBtnClass = isEditDisabled 
+                ? 'btn btn-sm btn-light text-muted disabled' 
+                : 'btn btn-sm btn-light text-warning edit-btn action-btn';
+            
+            const editBtnStyle = isEditDisabled ? 'cursor: not-allowed; opacity: 0.5;' : 'cursor: pointer;';
             const editTitle = isEditDisabled ? 'Ödenmiş kayıt düzenlenemez' : 'Düzenle';
 
-            // İkonlara pointer-events: none eklendi (Tıklama hatasını önlemek için)
+            // GÜNCELLENDİ: Dropdown içinde sadece ikonlar var
             const actionMenuHtml = `
                 <div class="dropdown">
                     <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
                         <i class="fas fa-ellipsis-v" style="pointer-events: none;"></i>
                     </button>
-                    <div class="dropdown-menu dropdown-menu-right shadow-sm border-0">
-                        <a class="dropdown-item view-btn action-btn" href="#" data-id="${acc.id}">
-                            <i class="fas fa-eye mr-2 text-primary" style="pointer-events: none; width:20px;"></i> Görüntüle
-                        </a>
-                        <a class="${editItemClass}" href="#" data-id="${acc.id}" style="${editItemStyle}" title="${editTitle}">
-                            <i class="fas fa-edit mr-2 text-warning" style="pointer-events: none; width:20px;"></i> Düzenle
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item delete-btn action-btn text-danger" href="#" data-id="${acc.id}">
-                            <i class="fas fa-trash-alt mr-2" style="pointer-events: none; width:20px;"></i> Sil
-                        </a>
+                    
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm border-0 p-2" style="min-width: auto;">
+                        <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
+                            
+                            <button class="btn btn-sm btn-light text-primary view-btn action-btn" data-id="${acc.id}" title="Görüntüle">
+                                <i class="fas fa-eye" style="pointer-events: none;"></i>
+                            </button>
+
+                            <button class="${editBtnClass}" data-id="${acc.id}" style="${editBtnStyle}" title="${editTitle}">
+                                <i class="fas fa-edit" style="pointer-events: none;"></i>
+                            </button>
+
+                            <button class="btn btn-sm btn-light text-danger delete-btn action-btn" data-id="${acc.id}" title="Sil">
+                                <i class="fas fa-trash-alt" style="pointer-events: none;"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
