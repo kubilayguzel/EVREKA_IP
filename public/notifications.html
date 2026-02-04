@@ -1060,7 +1060,7 @@ let notificationsUnsub = null;
             containerId: "paginationContainer",
             itemsPerPage: 20,
             maxVisiblePages: 7,
-            onPageChange: renderCurrentPage, // Sayfa değişince render çağrılır
+            onPageChange: () => renderCurrentPage(), // Burayı arrow function yaparak bağlamı garantileyebilirsiniz
             showFirstLast: true,
             showPrevNext: true,
             showPageInfo: true,
