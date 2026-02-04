@@ -308,27 +308,44 @@ function setupMenuBadges(db, collection, query, where, onSnapshot, userId) {
         onSnapshot(notificationsQuery, (snapshot) => updateBadgeUI('client-notifications', snapshot.size), (e) => console.error(e));
 
         // 3. [YENİ] İşlerim (My Tasks) Badge'i
-        // Sadece bana atanan ve aktif olan (Tamamlanmamış) işleri sayar.
         if (userId) {
-            const myTasksQuery = query(collection(db, "tasks"), where("assignedTo_uid", "==", userId));
-            
-            onSnapshot(myTasksQuery, (snapshot) => {
-                // Client-side filtreleme ile 'completed' ve 'cancelled' olanları eliyoruz.
-                const activeCount = snapshot.docs.filter(doc => {
-                    const s = doc.data().status;
-                    // Sayılmayacak statüler:
-                    return s !== 'completed' && 
-                           s !== 'cancelled' && 
-                           s !== 'client_approval_closed' && 
-                           s !== 'client_no_response_closed';
-                }).length;
+        const myTasksQuery = query(
+            collection(db, "tasks"),
+            where("assignedTo_uid", "==", userId)
+        );
 
-                updateBadgeUI('my-tasks', activeCount);
-            });
+        onSnapshot(myTasksQuery, (snapshot) => {
+            const FINISHED = new Set([
+            "completed",
+            "cancelled",
+            "client_approval_closed",
+            "client_no_response_closed",
+            ]);
+
+            const activeCount = snapshot.docs.filter((docSnap) => {
+            const raw = docSnap.data()?.status;
+            const s = String(raw ?? "").trim().toLowerCase();
+
+            // status boşsa: aktif kabul et
+            if (!s) return true;
+
+            // net bitmiş statüler
+            if (FINISHED.has(s)) return false;
+
+            // legacy/türkçe/serbest metin kapanma durumları
+            if (s.includes("kapatıldı")) return false;
+            if (s.includes("kapandı")) return false;
+            if (s.includes("tamamlandı")) return false;
+
+            return true;
+            }).length;
+
+            updateBadgeUI("my-tasks", activeCount);
+        });
         }
 
-    } catch (e) { console.error("Badge setup error:", e); }
-}
+            } catch (e) { console.error("Badge setup error:", e); }
+        }
 
 function updateBadgeUI(menuId, count) {
     const badgeEl = document.getElementById(`badge-${menuId}`);
