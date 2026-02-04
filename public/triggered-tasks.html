@@ -32,6 +32,30 @@
         .status-completed { background-color: #28a745; }
         .form-input, .form-select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
         .total-amount-display { font-size: 1.2em; font-weight: bold; color: #1e3c72; text-align: right; margin-top: 10px; padding: 12px 15px; background-color: #f0f4f8; border-radius: 10px; }
+        /* Tabloyu Sabitleme */
+        .tasks-table {
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        /* Kolon Genişlikleri (Toplam %100 olacak şekilde) */
+        .tasks-table th:nth-child(1) { width: 60px; }  /* İş No */
+        .tasks-table th:nth-child(2) { width: 12%; }   /* Başvuru No */
+        .tasks-table th:nth-child(3) { width: 15%; }   /* İlgili Kayıt */
+        .tasks-table th:nth-child(4) { width: 15%; }   /* Sahip */
+        .tasks-table th:nth-child(5) { width: 10%; }   /* Tip */
+        .tasks-table th:nth-child(6) { width: 10%; }   /* Son Tarih */
+        .tasks-table th:nth-child(7) { width: 10%; }   /* Resmi Son Tarih */
+        .tasks-table th:nth-child(8) { width: 12%; }   /* Durum */
+        .tasks-table th:nth-child(9) { width: 160px; } /* İşlemler */
+
+        /* Uzun metinleri üç nokta (...) ile kes */
+        .tasks-table td, .tasks-table th {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
