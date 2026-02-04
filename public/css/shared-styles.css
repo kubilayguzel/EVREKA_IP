@@ -1202,36 +1202,58 @@ body.modal-open {
     display: flex !important;
     align-items: center;
     justify-content: flex-start;
+}/* --- Tahakkuk İşlemler Menüsü Düzeltmesi --- */
+
+/* Menü kutusunun kendisi beyaz olsun ve gölgesi olsun */
+.dropdown-menu {
+    background-color: #ffffff !important;
+    border: 1px solid #e1e8ed;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
-/* --- Dropdown Menü İkon Görünürlük Düzeltmesi --- */
-/* İşlemler menüsündeki ikonların rengini açık yap */
-.dropdown-menu .dropdown-item i,
-.dropdown-menu .dropdown-item i.fas,
-.dropdown-menu .dropdown-item i.far,
-.dropdown-menu .dropdown-item i.fab {
-    color: #e0e0e0 !important; /* Açık gri/Beyaz tonu */
+/* Menü içindeki linklerin (butonların) arka planını temizle ve yazı rengini koyu yap */
+.dropdown-item {
+    background-color: transparent !important;
+    color: #333 !important; /* Yazı rengi koyu gri/siyah */
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    font-weight: 500;
+}
+
+/* Hover (üzerine gelince) arka plan hafif gri olsun */
+.dropdown-item:hover {
+    background-color: #f8f9fa !important;
+    color: #000 !important;
+}
+
+/* --- İkon Renklerini Belirginleştir --- */
+
+/* Silme İkonu (Kırmızı) */
+.dropdown-item i.fa-trash, 
+.dropdown-item i.text-danger {
+    color: #dc3545 !important; 
     width: 20px;
     text-align: center;
     margin-right: 8px;
-    opacity: 1 !important; /* Saydamlığı kaldır */
 }
 
-/* Hover durumunda ikon rengi */
-.dropdown-menu .dropdown-item:hover i {
-    color: #ffffff !important; /* Üzerine gelince tam beyaz */
+/* Düzenleme İkonu (Sarı/Turuncu) */
+.dropdown-item i.fa-edit, 
+.dropdown-item i.text-warning {
+    color: #ffc107 !important; /* Bootstrap sarısı */
+    /* Veya daha okunaklı bir turuncu isterseniz: #fd7e14 */
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
 }
 
-/* Eğer menü arka planı da sorunluysa, onu da koyu lacivert (tema rengi) yapıp metni beyazlatabiliriz */
-.dropdown-menu {
-    background-color: #1e3c72 !important; /* Sidebar rengiyle uyumlu koyu arka plan */
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-.dropdown-item {
-    color: #ffffff !important; /* Metin rengi beyaz */
-}
-
-.dropdown-item:hover {
-    background-color: rgba(255,255,255,0.1) !important; /* Hover efekti */
+/* Görüntüleme/Diğer İkonlar (Mavi) */
+.dropdown-item i.fa-eye, 
+.dropdown-item i.text-primary,
+.dropdown-item i.text-info {
+    color: #007bff !important;
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
 }
