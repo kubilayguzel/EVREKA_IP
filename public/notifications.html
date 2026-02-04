@@ -82,6 +82,31 @@
       50% { transform: translateX(30%); width: 60%; }
       100% { transform: translateX(100%); width: 40%; }
     }
+
+    /* Tab Butonları Stili */
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 10px 20px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #6c757d;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      color: #1e3c72;
+      background-color: #f8f9fa;
+      border-radius: 5px 5px 0 0;
+    }
+    .tab-btn.active {
+      color: #1e3c72;
+      border-bottom-color: #1e3c72;
+    }
+    .tab-btn i {
+      margin-right: 8px;
+    }
   </style>
 
 </head>
@@ -97,6 +122,14 @@
       </section>
 
       <div class="tasks-container">
+        <div class="tabs-header" style="padding: 20px 20px 0 20px; border-bottom: 1px solid #eee; display: flex; gap: 10px;">
+          <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">
+            <i class="fas fa-clock"></i> Bekleyen Bildirimler
+          </button>
+          <button class="tab-btn" data-tab="sent" onclick="switchTab('sent')">
+            <i class="fas fa-check-circle"></i> Gönderilen Bildirimler
+          </button>
+        </div>
         <div id="loader" class="loading">Yükleniyor...</div>
         <div id="error" class="no-records" style="display:none;"></div>
 
@@ -216,6 +249,8 @@
     // Pagination
     let pagination;
     let notificationsData = [];
+    let allNotifications = []; // Tüm veriyi burada saklayacağız
+    let activeTab = 'pending'; // Varsayılan sekme (pending veya sent yapabilirsiniz)
     let __isRendering = false;
     let __renderTicket = 0;
     let __rerenderPending = false;
@@ -947,34 +982,85 @@ function collectModalRecipients() {
   };
 }
 
+// Sekme Değiştirme Mantığı
+    window.switchTab = function(tabName) {
+      activeTab = tabName;
+      
+      // Buton görünümlerini güncelle
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.dataset.tab === tabName) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+
+      // Veriyi filtrele ve sayfayı güncelle
+      applyTabFilter();
+    };
+
+    // Filtreleme Fonksiyonu
+    function applyTabFilter() {
+      if (activeTab === 'sent') {
+        // Sadece 'sent' olanlar
+        notificationsData = allNotifications.filter(n => n.status === 'sent');
+      } else {
+        // 'sent' OLMAYAN her şey (draft, pending, failed, missing_info vb.)
+        notificationsData = allNotifications.filter(n => n.status !== 'sent');
+      }
+
+      // Tablo boş mesajını güncellemek için gerekirse kontrol
+      const emptyMsg = activeTab === 'sent' ? 'Gönderilmiş bildirim bulunamadı.' : 'Bekleyen bildirim bulunamadı.';
+      
+      if (notificationsData.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="11" class="no-records">${emptyMsg}</td></tr>`;
+      }
+
+      // Sayfalamayı yeniden kur/güncelle
+      if (pagination) {
+        pagination.update(notificationsData.length);
+        // İlk sayfaya dön
+        pagination.goToPage(1); 
+      } else {
+         // Pagination henüz yoksa oluşturulmasını bekle (startListener içinde yapılacak)
+         renderCurrentPage();
+      }
+    }
 // ---------- Firestore listener ----------
 let notificationsUnsub = null;
-function startNotificationListener() {
-      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "asc"));
+// Mevcut startNotificationListener fonksiyonunu bulun ve içini şöyle güncelleyin:
+    function startNotificationListener() {
+      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "desc")); // desc: Yeniden eskiye sırala
+      
       notificationsUnsub && notificationsUnsub();
-    notificationsUnsub = onSnapshot(qy, async (snapshot) => {
+      
+      notificationsUnsub = onSnapshot(qy, async (snapshot) => {
         loader.style.display = "none";
+        
         if (snapshot.empty) {
+          allNotifications = [];
           notificationsData = [];
-          tableBody.innerHTML = '<tr><td colspan="11" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
-          if (pagination) pagination.update(0);
+          applyTabFilter(); // Boş tabloyu gösterir
           return;
         }
-        notificationsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // 1. Tüm veriyi çek ve sakla
+        allNotifications = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // 2. Pagination nesnesini bir kere oluştur
         if (!pagination) {
           pagination = new Pagination({
             containerId: "paginationContainer",
             itemsPerPage: 20,
             maxVisiblePages: 7,
-            onPageChange: renderCurrentPage,
+            onPageChange: renderCurrentPage, // Sayfa değişince render çağrılır
             showFirstLast: true,
             showPrevNext: true,
             showPageInfo: true,
             showItemsPerPageSelector: true
           });
         }
-        pagination.update(notificationsData.length);
-        await renderCurrentPage();
+
+        // 3. Mevcut sekmeye göre filtrele ve ekrana bas
+        applyTabFilter();
+
       }, (error) => {
         loader.style.display = "none";
         errorDiv.style.display = "block";
@@ -983,7 +1069,8 @@ function startNotificationListener() {
       });
     }
 
-    onAuthStateChanged(auth, (user) => {
+
+onAuthStateChanged(auth, (user) => {
       if (user) {
         loadSharedLayout({ activeMenuLink: "notifications.html" });
         startNotificationListener();
@@ -991,7 +1078,7 @@ function startNotificationListener() {
         loader.textContent = "Bu sayfayı görmek için giriş yapmalısınız.";
       }
     });
-  async function getApplicantName(notification) {
+async function getApplicantName(notification) {
   try {
     // Hızlı kontroller
     if (notification.applicant?.name) return notification.applicant.name;
