@@ -602,11 +602,25 @@
     let allMonitoringData = [];
     let filteredData = [];
     // --- Dinamik Join için IP Record önbelleği ---
-    const ipRecordCache = new Map();
+    const ipRecordCache = new Map(); // (Eski cache durabilir veya silinebilir, aşağıdakini kullanacağız)
+    let allIpRecordsMap = new Map(); // [YENİ] Tüm kayıtları tutacak
+
+    // [YENİ] IP Kayıtlarını toplu yükleyen fonksiyon
+    async function loadAllIpRecords() {
+        try {
+            const res = await ipRecordsService.getRecords();
+            if (res.success && Array.isArray(res.data)) {
+                res.data.forEach(rec => allIpRecordsMap.set(rec.id, rec));
+            }
+        } catch (e) {
+            console.error("IP Kayıtları yüklenirken hata:", e);
+        }
+    }
 
     const MERGE_FIELDS = [
         'markName', 'brandImageUrl', 'applicationNumber', 'applicationNo', 'applicationDate',
-        'status', 'niceClasses', 'owners', 'applicants', 'goodsAndServicesByClass'
+        'status', 'niceClasses', 'owners', 'applicants', 'goodsAndServicesByClass',
+        'ownerName', 'owner' // <--- [EKLENDİ]
     ];
 
     function pick(obj, fields) {
@@ -631,12 +645,18 @@
         }
     }
 
+    // [GÜNCELLENDİ] Verileri zenginleştirme fonksiyonu
     async function enrichItemsWithIpRecords(items) {
         const enriched = [];
         for (const it of items) {
-            const ipId = it.ipRecordId || it.sourceRecordId || it.id; // doc id monitoringte genelde ipRecordId oluyor
-            const ipRec = await fetchIpRecordByIdCached(ipId);
+            // Kaydın bağlı olduğu IP ID'sini bul
+            const ipId = it.ipRecordId || it.sourceRecordId || it.id; 
+            
+            // Hafızadaki haritadan (Map) veriyi çek
+            const ipRec = allIpRecordsMap.get(ipId);
+            
             if (ipRec) {
+                // İzleme verisiyle IP kaydını birleştir
                 enriched.push({ ...it, ...pick(ipRec, MERGE_FIELDS), ipRecordId: ipId });
             } else {
                 enriched.push({ ...it, ipRecordId: ipId });
@@ -1047,15 +1067,22 @@
 };
 
 
-const renderMonitoringTable = (data, userUid) => {
-        allMonitoringData = data || [];
+    // [GÜNCELLENDİ] Tabloyu render etme fonksiyonu
+    const renderMonitoringTable = async (data, userUid) => {
+        const rawData = data || [];
+        
+        // KRİTİK ADIM: Filtrelemenin çalışması için TÜM veriyi baştan zenginleştiriyoruz
+        allMonitoringData = await enrichItemsWithIpRecords(rawData);
+        
         const filterSection = document.getElementById('filterSection');
         if (filterSection && allMonitoringData.length > 0) {
             filterSection.style.display = 'block';
         }
+        
+        // Artık verilerde 'ownerName' olduğu için filtre çalışacaktır
         applyFilters();
     };
-
+    
     /**
  * create-task.js mantığıyla birebir uyumlu
  * 3. Taraf (Third Party) IP Record oluşturucu
