@@ -283,10 +283,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     matchesTab = isFinished;
                 }
 
-                // [DÜZELTME 2] Kullanıcı Filtresi: Görev gerçekten bana mı ait?
-                // activeTab ne olursa olsun, sadece bana atananları göster.
+                // [DÜZELTME] Kullanıcı Filtresi Güncellendi
+                // Artık assignedTo_uid alanını da kontrol ediyor.
                 const assigneeId = item.assignedTo?.id || item.assignedTo;
+                
                 const isMyTask = (assigneeId === currentUserId) || 
+                                 (item.assignedTo_uid === currentUserId) || // <-- EKLENEN KRİTİK SATIR
                                  (item.assignedToEmail === currentUserEmail) ||
                                  (item.assignedTo_email === currentUserEmail);
 
