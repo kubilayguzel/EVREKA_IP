@@ -618,9 +618,10 @@
     }
 
     const MERGE_FIELDS = [
+        'title', // [EKLENDİ] Ana kayıttaki marka adı (title) bilgisini garantiye alıyoruz
         'markName', 'brandImageUrl', 'applicationNumber', 'applicationNo', 'applicationDate',
         'status', 'niceClasses', 'owners', 'applicants', 'goodsAndServicesByClass',
-        'ownerName', 'owner' // <--- [EKLENDİ]
+        'ownerName', 'owner'
     ];
 
     function pick(obj, fields) {
@@ -700,21 +701,22 @@
         });
     }
 
-    // Filtreleri kur
+
+    // Filtre olay dinleyicilerini kur
     function setupFilters() {
-        const filterSection = document.getElementById('filterSection');
+        const inputs = [
+            'searchFilter', 
+            'markNameFilter', 
+            'searchTermsFilter', 
+            'statusFilter', 
+            'niceClassFilter', 
+            'ownerFilter'
+        ];
 
-        const searchInput = document.getElementById('searchFilter');
-        const markNameInput = document.getElementById('markNameFilter');       // [YENİ]
-        const searchTermsInput = document.getElementById('searchTermsFilter'); // [YENİ]
-        const statusSelect = document.getElementById('statusFilter');
-        const niceClassInput = document.getElementById('niceClassFilter');
-        const ownerInput = document.getElementById('ownerFilter');
-        const clearButton = document.getElementById('clearFilters');
-
+        // Gecikmeli filtreleme fonksiyonu (Performans için)
         const debounce = (func, wait) => {
             let timeout;
-            return function executedFunction(...args) {
+            return function(...args) {
                 const later = () => {
                     clearTimeout(timeout);
                     func(...args);
@@ -724,94 +726,112 @@
             };
         };
 
-        const applyFiltersDebounced = debounce(() => {
-            currentFilters.search = searchInput?.value || '';
-            currentFilters.markName = markNameInput?.value || '';       // [YENİ]
-            currentFilters.searchTerms = searchTermsInput?.value || ''; // [YENİ]
-            currentFilters.status = statusSelect?.value || 'all';
-            currentFilters.niceClass = niceClassInput?.value || '';
-            currentFilters.owner = ownerInput?.value || '';
-
+        const runFilter = debounce(() => {
             applyFilters();
         }, 300);
 
-        if (searchInput) searchInput.addEventListener('input', applyFiltersDebounced);
-        if (markNameInput) markNameInput.addEventListener('input', applyFiltersDebounced);       // [YENİ]
-        if (searchTermsInput) searchTermsInput.addEventListener('input', applyFiltersDebounced); // [YENİ]
-        if (statusSelect) statusSelect.addEventListener('change', applyFiltersDebounced);
-        if (niceClassInput) niceClassInput.addEventListener('input', applyFiltersDebounced);
-        if (ownerInput) ownerInput.addEventListener('input', applyFiltersDebounced);
+        // Her input için dinleyici ekle
+        inputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                // Select kutusu ise 'change', text ise 'input'
+                const eventType = el.tagName === 'SELECT' ? 'change' : 'input';
+                el.addEventListener(eventType, runFilter);
+            }
+        });
 
+        // Temizle butonu
+        const clearButton = document.getElementById('clearFilters');
         if (clearButton) {
             clearButton.addEventListener('click', () => {
-                // Tüm inputları temizle
-                if (searchInput) searchInput.value = '';
-                if (markNameInput) markNameInput.value = '';       // [YENİ]
-                if (searchTermsInput) searchTermsInput.value = ''; // [YENİ]
-                if (statusSelect) statusSelect.value = 'all';
-                if (niceClassInput) niceClassInput.value = '';
-                if (ownerInput) ownerInput.value = '';
-
-                currentFilters = { search: '', markName: '', searchTerms: '', status: 'all', niceClass: '', owner: '' };
-
+                inputs.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = (id === 'statusFilter') ? 'all' : '';
+                });
                 applyFilters();
             });
         }
     }
 
-    // Filtreleri uygula
+    // Filtreleri uygula (Doğrudan input değerlerini okur)
     function applyFilters() {
+        // 1. Input değerlerini o an oku (Senkronizasyon sorunu olmaz)
+        const searchVal = document.getElementById('searchFilter')?.value.toLowerCase().trim() || '';
+        const markNameVal = document.getElementById('markNameFilter')?.value.toLowerCase().trim() || '';
+        const searchTermsVal = document.getElementById('searchTermsFilter')?.value.toLowerCase().trim() || '';
+        const statusVal = document.getElementById('statusFilter')?.value || 'all';
+        const niceClassVal = document.getElementById('niceClassFilter')?.value.trim() || '';
+        const ownerVal = document.getElementById('ownerFilter')?.value.toLowerCase().trim() || '';
+
         filteredData = allMonitoringData.filter(item => {
-            // 1. ARAMA (Marka Adı, Sahip, Başvuru No)
-            if (currentFilters.search) {
-                const searchTerm = currentFilters.search.toLowerCase();
+            // A. GENEL ARAMA
+            if (searchVal) {
                 const markName = (item.title || item.markName || item.trademarkName || '').toLowerCase();
                 const owner = getOwnerNames(item).toLowerCase();
                 const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
+                const sTerms = [
+                    ...(item.brandTextSearch || []),
+                    item.searchMarkName
+                ].filter(Boolean).join(' ').toLowerCase();
 
-                if (!markName.includes(searchTerm) && !owner.includes(searchTerm) && !applicationNo.includes(searchTerm)) {
+                if (!markName.includes(searchVal) && 
+                    !owner.includes(searchVal) && 
+                    !applicationNo.includes(searchVal) &&
+                    !sTerms.includes(searchVal)) {
                     return false;
                 }
             }
 
-            // 2. DURUM (Status)
-            if (currentFilters.status !== 'all') {
-                const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
-                if (itemStatus !== currentFilters.status) return false;
+            // B. MARKA ADI FİLTRESİ (Kümülatif)
+            if (markNameVal) {
+                const fMarkName = (item.title || item.markName || item.trademarkName || '').toLowerCase();
+                if (!fMarkName.includes(markNameVal)) return false;
             }
 
-            // 3. NICE SINIFI
-            if (currentFilters.niceClass) {
-                const searchClass = currentFilters.niceClass.trim();
+            // C. ARANACAK İBARELER FİLTRESİ (Kümülatif)
+            if (searchTermsVal) {
+                const allTerms = [
+                    ...(item.brandTextSearch || []),
+                    item.searchMarkName
+                ].filter(Boolean).join(' ').toLowerCase();
                 
-                // Tüm sınıf kaynaklarını birleştirip string içinde ara
+                if (!allTerms.includes(searchTermsVal)) return false;
+            }
+
+            // D. DURUM (Status) (Kümülatif)
+            if (statusVal !== 'all') {
+                const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
+                if (itemStatus !== statusVal) return false;
+            }
+
+            // E. NICE SINIFI (Kümülatif - Tam Eşleşme)
+            if (niceClassVal) {
+                const searchClasses = niceClassVal.split(/[,\s]+/).filter(c => c !== '');
+                
                 const allClassSources = [
                     ...(Array.isArray(item.niceClasses) ? item.niceClasses : []),
                     ...(Array.isArray(item.niceClassSearch) ? item.niceClassSearch : []),
                     item.niceClass
-                ].filter(c => c !== null && c !== undefined);
+                ].filter(c => c !== null && c !== undefined).map(String);
 
-                // Virgülle birleştirilmiş string içinde arama yap (örn: "05, 35")
-                const classesStr = allClassSources.join(' ').toLowerCase();
-                
-                // Tam eşleşme veya içerik kontrolü
-                if (!classesStr.includes(searchClass)) return false;
+                // Aranan sınıflardan HERHANGİ BİRİ var mı?
+                const hasMatch = searchClasses.some(sClass => allClassSources.includes(sClass));
+                if (!hasMatch) return false;
             }
 
-            // 4. SAHİP (Owner)
-            if (currentFilters.owner) {
+            // F. SAHİP (Owner) (Kümülatif)
+            if (ownerVal) {
                 const ownerName = getOwnerNames(item).toLowerCase();
-                if (!ownerName.includes(currentFilters.owner.toLowerCase())) return false;
+                if (!ownerName.includes(ownerVal)) return false;
             }
 
+            // Tüm kontrolleri geçtiyse listele
             return true;
         });
 
         if (pagination) pagination.update(filteredData.length, 1);
-
         renderCurrentPage();
     }
-
 
     // Mevcut sayfadaki veriyi render et
     async function renderCurrentPage() {
