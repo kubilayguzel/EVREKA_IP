@@ -455,6 +455,16 @@
 .list-group-item.permanent-item .remove-item {
     display: none;
 }
+
+/* Seçili Satır Stili */
+tr.selected-row {
+    background-color: #e8f0fe !important; /* Açık mavi tonu */
+    transition: background-color 0.3s ease;
+}
+/* Seçili satırın üzerine gelindiğinde */
+tr.selected-row:hover {
+    background-color: #d2e3fc !important;
+}
   </style>
 </head>
 <body>
@@ -1077,15 +1087,42 @@
             });
         });
 
-        // Checkbox Event Listener
+        // Checkbox Event Listener (GÜNCELLENDİ)
         const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
+        
+        // 1. Satır Checkboxları için Dinleyici
+        container.addEventListener('change', (e) => {
+            if (e.target.classList.contains('row-checkbox')) {
+                const checkbox = e.target;
+                const row = checkbox.closest('tr'); // Checkbox'ın olduğu satırı bul
+                
+                if (checkbox.checked) {
+                    selectedMonitoringItems.add(checkbox.dataset.id);
+                    if (row) row.classList.add('selected-row'); // Sınıfı ekle
+                } else {
+                    selectedMonitoringItems.delete(checkbox.dataset.id);
+                    if (row) row.classList.remove('selected-row'); // Sınıfı kaldır
+                }
+                
+                updateSelectedButtonState();
+            }
+        });
+
+        // 2. "Tümünü Seç" Checkbox'ı için Dinleyici
         if (headerCheckbox) {
             headerCheckbox.addEventListener('change', (e) => {
                 const checkboxes = container.querySelectorAll('.row-checkbox');
                 checkboxes.forEach(checkbox => {
                     checkbox.checked = e.target.checked;
-                    if (e.target.checked) selectedMonitoringItems.add(checkbox.dataset.id);
-                    else selectedMonitoringItems.delete(checkbox.dataset.id);
+                    const row = checkbox.closest('tr');
+                    
+                    if (e.target.checked) {
+                        selectedMonitoringItems.add(checkbox.dataset.id);
+                        if (row) row.classList.add('selected-row');
+                    } else {
+                        selectedMonitoringItems.delete(checkbox.dataset.id);
+                        if (row) row.classList.remove('selected-row');
+                    }
                 });
                 updateSelectedButtonState();
             });
