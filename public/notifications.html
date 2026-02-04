@@ -996,33 +996,43 @@ function collectModalRecipients() {
       applyTabFilter();
     };
 
-    // Filtreleme Fonksiyonu
+    // Filtreleme Fonksiyonu (Düzeltilmiş Hali)
     function applyTabFilter() {
+      // 1. Veriyi filtrele
       if (activeTab === 'sent') {
-        // Sadece 'sent' olanlar
         notificationsData = allNotifications.filter(n => n.status === 'sent');
       } else {
-        // 'sent' OLMAYAN her şey (draft, pending, failed, missing_info vb.)
         notificationsData = allNotifications.filter(n => n.status !== 'sent');
       }
 
-      // Tablo boş mesajını güncellemek için gerekirse kontrol
+      // 2. Tablo boş mesajını hazırla
       const emptyMsg = activeTab === 'sent' ? 'Gönderilmiş bildirim bulunamadı.' : 'Bekleyen bildirim bulunamadı.';
       
-      if (notificationsData.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="11" class="no-records">${emptyMsg}</td></tr>`;
+      // 3. Pagination varsa güncelle
+      if (pagination) {
+        // Toplam sayıyı güncelle
+        pagination.update(notificationsData.length);
+        
+        // Sayfa numarasını 1'e çek (fakat render tetiklemesini bekleme)
+        // Eğer kütüphanenizde 'silent' modu yoksa bu işlem bazen tetiklemeyebilir.
+        // Bu yüzden aşağıda renderCurrentPage'i biz manuel çağıracağız.
+        if (pagination.currentPage !== 1) {
+            pagination.goToPage(1); 
+            // Not: Eğer sayfa zaten 1 değilse goToPage render'ı tetikler.
+            // Ancak biz her durumda garanti olsun diye aşağıda çağıracağız.
+            // Çift render olmasını önlemek için renderCurrentPage içindeki "bilet" mekanizması korur.
+        }
       }
 
-      // Sayfalamayı yeniden kur/güncelle
-      if (pagination) {
-        pagination.update(notificationsData.length);
-        // İlk sayfaya dön
-        pagination.goToPage(1); 
+      // 4. KRİTİK NOKTA: Eğer veri yoksa veya sayfa değişimi tetiklenmediyse tabloyu elle çiz
+      if (notificationsData.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="11" class="no-records">${emptyMsg}</td></tr>`;
       } else {
-         // Pagination henüz yoksa oluşturulmasını bekle (startListener içinde yapılacak)
-         renderCurrentPage();
+        // Listeyi zorla render et (Pagination tetiklemese bile)
+        renderCurrentPage();
       }
     }
+
 // ---------- Firestore listener ----------
 let notificationsUnsub = null;
 // Mevcut startNotificationListener fonksiyonunu bulun ve içini şöyle güncelleyin:
