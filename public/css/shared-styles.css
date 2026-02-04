@@ -1203,3 +1203,35 @@ body.modal-open {
     align-items: center;
     justify-content: flex-start;
 }
+
+/* --- Dropdown Menü İkon Görünürlük Düzeltmesi --- */
+/* İşlemler menüsündeki ikonların rengini açık yap */
+.dropdown-menu .dropdown-item i,
+.dropdown-menu .dropdown-item i.fas,
+.dropdown-menu .dropdown-item i.far,
+.dropdown-menu .dropdown-item i.fab {
+    color: #e0e0e0 !important; /* Açık gri/Beyaz tonu */
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
+    opacity: 1 !important; /* Saydamlığı kaldır */
+}
+
+/* Hover durumunda ikon rengi */
+.dropdown-menu .dropdown-item:hover i {
+    color: #ffffff !important; /* Üzerine gelince tam beyaz */
+}
+
+/* Eğer menü arka planı da sorunluysa, onu da koyu lacivert (tema rengi) yapıp metni beyazlatabiliriz */
+.dropdown-menu {
+    background-color: #1e3c72 !important; /* Sidebar rengiyle uyumlu koyu arka plan */
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.dropdown-item {
+    color: #ffffff !important; /* Metin rengi beyaz */
+}
+
+.dropdown-item:hover {
+    background-color: rgba(255,255,255,0.1) !important; /* Hover efekti */
+}
