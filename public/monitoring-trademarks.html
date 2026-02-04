@@ -601,6 +601,7 @@
     let pagination = null;
     let allMonitoringData = [];
     let filteredData = [];
+    let currentSort = { field: 'applicationDate', direction: 'desc' };
     // --- Dinamik Join için IP Record önbelleği ---
     const ipRecordCache = new Map(); // (Eski cache durabilir veya silinebilir, aşağıdakini kullanacağız)
     let allIpRecordsMap = new Map(); // [YENİ] Tüm kayıtları tutacak
@@ -753,6 +754,89 @@
         }
     }
 
+
+    // [YENİ] Sıralama İkonu Yardımcısı
+    const getSortIcon = (field) => {
+        if (currentSort.field !== field) return '<i class="fas fa-sort" style="color:#ccc; font-size:0.8em; margin-left:5px;"></i>';
+        return currentSort.direction === 'asc' 
+            ? '<i class="fas fa-sort-up" style="color:#333; margin-left:5px;"></i>' 
+            : '<i class="fas fa-sort-down" style="color:#333; margin-left:5px;"></i>';
+    };
+
+    // [YENİ] Veri Sıralama Fonksiyonu
+    const sortData = (data) => {
+        if (!currentSort.field) return data;
+
+        return data.sort((a, b) => {
+            let valA, valB;
+            
+            switch (currentSort.field) {
+                case 'markName':
+                    valA = (a.title || a.markName || '').toLowerCase();
+                    valB = (b.title || b.markName || '').toLowerCase();
+                    break;
+                case 'searchTerms':
+                    const getTerms = (item) => {
+                        const terms = [item.searchMarkName, ...(item.brandTextSearch || [])].filter(Boolean);
+                        // Eğer özel terim yoksa marka adını kullan (render mantığıyla aynı)
+                        return terms.length ? terms.join(' ').toLowerCase() : (item.title || item.markName || '').toLowerCase();
+                    };
+                    valA = getTerms(a);
+                    valB = getTerms(b);
+                    break;
+                case 'owner':
+                    valA = getOwnerNames(a).toLowerCase();
+                    valB = getOwnerNames(b).toLowerCase();
+                    break;
+                case 'applicationNumber':
+                    valA = (a.applicationNumber || a.applicationNo || '').toLowerCase();
+                    valB = (b.applicationNumber || b.applicationNo || '').toLowerCase();
+                    break;
+                case 'applicationDate':
+                    valA = new Date(a.applicationDate || 0).getTime();
+                    valB = new Date(b.applicationDate || 0).getTime();
+                    break;
+                case 'niceClasses':
+                    // İlk sınıf numarasına göre sırala
+                    const getFirstClass = (item) => {
+                         const classes = new Set();
+                         if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass)) {
+                            item.goodsAndServicesByClass.forEach(classItem => {
+                                if (classItem.classNo) classes.add(String(classItem.classNo));
+                            });
+                         }
+                         if (item.niceClassSearch && Array.isArray(item.niceClassSearch)) {
+                            item.niceClassSearch.forEach(c => classes.add(String(c)));
+                         } else if (item.niceClasses) {
+                            const extras = Array.isArray(item.niceClasses) ? item.niceClasses : [item.niceClasses];
+                            extras.forEach(c => classes.add(String(c)));
+                         }
+                         
+                         const sorted = Array.from(classes)
+                            .map(c => parseInt(c))
+                            .filter(n => !isNaN(n))
+                            .sort((x,y) => x-y);
+                            
+                         return sorted.length ? sorted[0] : 999;
+                    };
+                    valA = getFirstClass(a);
+                    valB = getFirstClass(b);
+                    break;
+                case 'status':
+                    // Görünen metne göre sırala (örn: 'Başvuru', 'Tescilli')
+                    valA = getStatusInTurkish(a.status).text.toLowerCase();
+                    valB = getStatusInTurkish(b.status).text.toLowerCase();
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
     // Filtreleri uygula (Doğrudan input değerlerini okur)
     function applyFilters() {
         // 1. Input değerlerini o an oku (Senkronizasyon sorunu olmaz)
@@ -828,10 +912,11 @@
             // Tüm kontrolleri geçtiyse listele
             return true;
         });
-
+        sortData(filteredData);
         if (pagination) pagination.update(filteredData.length, 1);
         renderCurrentPage();
     }
+
 
     // Mevcut sayfadaki veriyi render et
     async function renderCurrentPage() {
@@ -855,16 +940,17 @@
             return;
         }
 
+        // [GÜNCELLENDİ] Tablo Başlıkları: sortable class'ı ve data-sort özellikleri eklendi
         let html = `<table class="accruals-table"><thead><tr>
                         <th><input type="checkbox" id="headerSelectAllCheckbox" /></th>
                         <th>Görsel</th>
-                        <th>Marka Adı</th>
-                        <th>Aranacak İbareler</th>
-                        <th>Sahip</th>
-                        <th>Başvuru No</th>
-                        <th>Başvuru Tarihi</th>
-                        <th>Nice Sınıfı</th>
-                        <th>Durum</th>
+                        <th class="sortable" data-sort="markName" style="cursor:pointer">Marka Adı ${getSortIcon('markName')}</th>
+                        <th class="sortable" data-sort="searchTerms" style="cursor:pointer">Aranacak İbareler ${getSortIcon('searchTerms')}</th>
+                        <th class="sortable" data-sort="owner" style="cursor:pointer">Sahip ${getSortIcon('owner')}</th>
+                        <th class="sortable" data-sort="applicationNumber" style="cursor:pointer">Başvuru No ${getSortIcon('applicationNumber')}</th>
+                        <th class="sortable" data-sort="applicationDate" style="cursor:pointer">Başvuru Tarihi ${getSortIcon('applicationDate')}</th>
+                        <th class="sortable" data-sort="niceClasses" style="cursor:pointer">Nice Sınıfı ${getSortIcon('niceClasses')}</th>
+                        <th class="sortable" data-sort="status" style="cursor:pointer">Durum ${getSortIcon('status')}</th>
                     </tr></thead><tbody>`;
 
         currentPageDataEnriched.forEach(r => {
@@ -875,7 +961,6 @@
                 if (r.brandImageUrl && r.brandImageUrl.trim() !== '') {
                     let imageUrl = r.brandImageUrl;
                     if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
-                        // Firebase Storage bucket URL'inizi buraya yazın
                         imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
                     }
                     return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail"
@@ -887,7 +972,6 @@
             })();
 
             // --- HOVER İÇİN METİN HAZIRLIĞI ---
-            // tırnak işaretleri HTML'i bozmasın diye replace ile temizliyoruz
             const markNameText = r.title || r.markName || '-';
             const safeMarkName = markNameText.replace(/"/g, '&quot;');
             
@@ -897,23 +981,19 @@
             // --- ARANACAK İBARELER ---
             const searchTermsPlain = (() => {
                 let terms = [];
-                // 1. Manuel girilen searchMarkName
                 if (r.searchMarkName && r.searchMarkName.trim()) {
                     terms.push(r.searchMarkName);
                 }
-                // 2. brandTextSearch listesi
                 if (Array.isArray(r.brandTextSearch)) {
                     r.brandTextSearch.forEach(t => { 
                         if(t !== r.searchMarkName) terms.push(t); 
                     });
                 }
-                // Hiçbiri yoksa orijinal marka adını kullan
                 return terms.length > 0 ? terms.join(', ') : markNameText;
             })();
             
             const safeSearchTerms = searchTermsPlain.replace(/"/g, '&quot;');
 
-            // HTML Görünümü (Renkli, İkonlu vs.)
             const searchTermsHtml = (() => {
                  let htmlParts = [];
                  if (r.searchMarkName && r.searchMarkName.trim()) {
@@ -959,17 +1039,12 @@
             })();
 
             // --- TABLO SATIRINI OLUŞTUR ---
-            // Not: title="..." özelliği sayesinde üzerine gelince tam metin görünür.
             html += `<tr data-id="${r.id}">
                         <td><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${isSelected}></td>
                         <td>${trademarkImageHtml}</td>
-                        
                         <td style="font-weight: 500;" title="${safeMarkName}">${markNameText}</td>
-                        
                         <td style="font-size: 0.9em;" title="${safeSearchTerms}">${searchTermsHtml}</td>
-                        
                         <td><div class="owner-cell" title="${safeOwnerNames}">${ownerNames}</div></td>
-                        
                         <td>${r.applicationNumber || r.applicationNo || '-'}</td>
                         <td>${formatTurkishDate(r.applicationDate)}</td>
                         <td>${niceClassesHtml}</td>
@@ -979,6 +1054,22 @@
 
         html += `</tbody></table>`;
         container.innerHTML = html;
+
+        // [GÜNCELLENDİ] Sıralama Event Listener'ları
+        container.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.dataset.sort;
+                // Aynı kolona tıklandıysa yönü değiştir, farklıysa artan (asc) yap
+                if (currentSort.field === field) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.field = field;
+                    currentSort.direction = 'asc';
+                }
+                // Filtreleri tekrar uygula (bu da sıralamayı tetikler)
+                applyFilters();
+            });
+        });
 
         // Checkbox Event Listener
         const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
@@ -994,7 +1085,7 @@
             });
         }
 
-        // Görsel Hover Efekti (Büyütme)
+        // Görsel Hover Efekti
         container.querySelectorAll('.trademark-image-thumbnail').forEach(img => {
             let hoverElement = null;
             img.addEventListener('mouseenter', (e) => {
