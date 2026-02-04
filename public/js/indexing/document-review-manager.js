@@ -756,7 +756,6 @@ updateChildTransactionOptions() {
                 // [DÜZELTME]: Sadece Tescil Numarasını güncelliyoruz. Başvuru numarasına dokunmuyoruz.
                 if (regNoVal) {
                     updates.registrationNumber = regNoVal;
-                    // updates.applicationNumber = regNoVal; // <-- BU SATIR SİLİNDİ (Hatalıydı)
                 }
                 
                 if (regDateVal) {
@@ -798,7 +797,7 @@ updateChildTransactionOptions() {
             let oppositionEpatsFileUrl = null;
             let oppositionEpatsFileName = null;
 
-            if (childTypeId === '27') { 
+            if (String(childTypeId) === '27') { 
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
                 const epatsFileInput = document.getElementById('oppositionEpatsPetitionFile')?.files?.[0] || null;
@@ -819,7 +818,7 @@ updateChildTransactionOptions() {
                 let newParentTypeId = '20'; 
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
-                if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
+                if (parentAlias.includes('İtiraz') || String(parentTypeObj?.id) === '20') {
                     newParentTypeId = '19'; 
                     newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
                 }
@@ -865,7 +864,7 @@ updateChildTransactionOptions() {
                 await updateDoc(txRef, { documents: arrayUnion(mainDocPayload) });
             }
 
-            if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
+            if (String(childTypeId) === '27' && oppositionFileUrl && txResult.success) {
                 const docsToAdd = [];
                 const oppDocPayload = {
                     id: generateUUID(),
@@ -892,23 +891,38 @@ updateChildTransactionOptions() {
                 await updateDoc(txRef, { documents: arrayUnion(...docsToAdd) });
             }
 
-            // 3. İş Tetikleme (Task)
+            // 3. İş Tetikleme (Task) - [DÜZELTİLDİ: SIRALI KONTROL]
             let createdTaskId = null;
             let shouldTriggerTask = false;
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
-            const parentTypeId = parentTx.type;
             
+            // ID'lerin String olduğundan emin oluyoruz (Önemli!)
+            const parentTypeId = String(parentTx.type); 
+            const childTypeIdStr = String(childTypeId);
+            
+            // Matrix sadece ÖZEL durumları tanımlar (Örn: 20 -> 50/51)
             const taskTriggerMatrix = {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
             };
 
+            // ADIM 1: Önce Matrix'e Bak (Varsa tetikle)
             if (taskTriggerMatrix[parentTypeId] && taskTriggerMatrix[parentTypeId][recordType]) {
-                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeId)) shouldTriggerTask = true;
-            } else {
-                if (childTypeObj.taskTriggered) shouldTriggerTask = true;
+                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeIdStr)) {
+                    shouldTriggerTask = true;
+                }
             }
 
+            // ADIM 2: Eğer Matrix tetiklemediyse, Standart Tanıma Bak (Fallback)
+            // Bu sayede Parent=20 olsa bile, listede olmayan bir iş (Örn: 27) gelirse,
+            // kendi taskTriggered değeri (Örn: 38) devreye girer.
+            if (!shouldTriggerTask) {
+                if (childTypeObj.taskTriggered) {
+                    shouldTriggerTask = true;
+                }
+            }
+
+            // --- GÖREV OLUŞTURMA BLOĞU ---
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
                 const deliveryDate = new Date(deliveryDateStr);
                 
