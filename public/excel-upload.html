@@ -3,106 +3,322 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRO Excel Portföy Yükleyici | Evreka IP</title>
+    <title>Toplu Portföy Yükleme | Evreka IP</title>
+    
     <link rel="stylesheet" href="css/shared-styles.css">
-    <link rel="stylesheet" href="css/data-entry.css">
-    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    
     <style>
-        .upload-wrapper { padding: 40px; max-width: 1100px; margin: 40px auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-        .header-section { text-align: center; margin-bottom: 40px; }
-        .header-section h2 { color: #1e3c72; font-weight: 700; margin-bottom: 10px; }
-        .header-section p { color: #6c757d; }
+        :root {
+            --primary-color: #1e3c72;
+            --primary-light: #f0f7ff;
+            --border-color: #e2e8f0;
+            --text-dark: #1e293b;
+            --text-gray: #64748b;
+            --bg-gray: #f3f4f6;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
 
-        .config-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 25px; border-radius: 12px; margin-bottom: 30px; }
-        
-        /* Müşteri Arama ve Seçim Stilleri */
-        .client-search-container { position: relative; margin-bottom: 15px; }
-        .search-input { width: 100%; padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; }
-        .search-input:focus { border-color: #1e3c72; outline: none; }
-        
-        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e9ecef; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto; z-index: 100; display: none; }
-        .search-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
-        .search-item:hover { background: #f8f9fa; color: #1e3c72; }
-        .search-item:last-child { border-bottom: none; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-gray);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+        }
 
-        .selected-clients-area { display: flex; flex-wrap: wrap; gap: 10px; min-height: 40px; }
-        .client-tag { background: #e0e7ff; color: #1e3c72; padding: 8px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: 1px solid #c7d2fe; }
-        .client-tag i { cursor: pointer; color: #ef4444; transition: color 0.2s; }
-        .client-tag i:hover { color: #b91c1c; }
+        /* Ana Layout */
+        .main-content {
+            padding: 30px 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+            margin-left: 260px; /* Sidebar payı - Layout loader'a göre ayarlanabilir */
+        }
 
-        .drop-zone { border: 2px dashed #cbd5e1; padding: 60px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; background: #fff; }
-        .drop-zone:hover { border-color: #1e3c72; background: #f0f7ff; transform: translateY(-2px); }
-        
-        .progress-container { margin-top: 30px; display: none; }
-        .progress-track { background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden; }
-        .progress-fill { background: linear-gradient(90deg, #1e3c72, #2a5298); width: 0%; height: 100%; transition: width 0.3s ease; border-radius: 10px; }
-        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; color: #334155; }
+        /* Sayfa Başlığı */
+        .page-header {
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+        }
+        .page-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin: 0 0 5px 0;
+        }
+        .page-title p {
+            color: var(--text-gray);
+            font-size: 14px;
+            margin: 0;
+        }
 
-        /* Hata Raporu Stilleri */
-        .error-report-container { margin-top: 30px; display: none; border: 1px solid #fecaca; background: #fef2f2; border-radius: 12px; overflow: hidden; }
-        .error-header { background: #fee2e2; padding: 15px 20px; color: #991b1b; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-        .error-list { max-height: 300px; overflow-y: auto; padding: 0; margin: 0; list-style: none; }
-        .error-item { padding: 12px 20px; border-bottom: 1px solid #fecaca; display: flex; align-items: flex-start; gap: 10px; color: #7f1d1d; font-size: 14px; }
-        .error-badge { background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        /* Beyaz Kart Yapısı */
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            padding: 30px;
+            border: 1px solid var(--border-color);
+        }
 
-        .status-log { margin-top: 30px; max-height: 200px; overflow-y: auto; padding: 20px; background: #1e293b; color: #f1f5f9; border-radius: 12px; font-family: monospace; font-size: 13px; display: none; }
-        .log-item { margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        /* Form Elemanları */
+        .form-section {
+            margin-bottom: 30px;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            background: #fff;
+        }
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+            outline: none;
+        }
+
+        /* Müşteri Arama & Tagler */
+        .client-search-wrapper { position: relative; }
+        .search-results {
+            position: absolute;
+            top: 105%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+        }
+        .search-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .search-item:hover { background-color: var(--primary-light); color: var(--primary-color); }
+        .search-item i { color: var(--text-gray); font-size: 12px; }
+
+        .selected-clients-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            min-height: 38px;
+        }
+        .client-tag {
+            background: var(--primary-light);
+            color: var(--primary-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #bfdbfe;
+        }
+        .client-tag i { cursor: pointer; color: #93c5fd; transition: 0.2s; }
+        .client-tag i:hover { color: var(--primary-color); }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 50px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .drop-zone:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-light);
+        }
+        .drop-zone-icon {
+            font-size: 42px;
+            color: #94a3b8;
+            margin-bottom: 15px;
+            transition: 0.3s;
+        }
+        .drop-zone:hover .drop-zone-icon { color: var(--primary-color); transform: translateY(-5px); }
+        .drop-zone h3 { margin: 0 0 5px 0; font-size: 16px; color: var(--text-dark); }
+        .drop-zone p { margin: 0; font-size: 13px; color: var(--text-gray); }
+
+        /* İlerleme Çubuğu */
+        .progress-section { margin-top: 30px; display: none; }
+        .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+        .progress-track { height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #1e3c72, #3b82f6); width: 0%; transition: width 0.3s; }
+
+        /* Hata Raporu */
+        .error-report {
+            margin-top: 30px;
+            display: none;
+            border: 1px solid #fecaca;
+            background: #fff1f2;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .error-header {
+            background: #ffe4e6;
+            padding: 12px 20px;
+            color: #9f1239;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .error-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .error-item {
+            padding: 10px 20px;
+            border-bottom: 1px solid #fecaca;
+            font-size: 13px;
+            color: #881337;
+            display: flex;
+            gap: 15px;
+        }
+        .error-badge {
+            background: #f43f5e;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            height: fit-content;
+        }
+
+        /* Log Alanı */
+        .status-log {
+            margin-top: 20px;
+            background: #0f172a;
+            color: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+        .log-item { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
         .log-success { color: #4ade80; }
         .log-error { color: #f87171; }
 
-        .btn-restart { display: none; margin-top: 20px; width: 100%; padding: 15px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        /* Buton */
+        .btn-restart {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            float: right;
+        }
+        .btn-restart:hover { background: #162c55; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content { margin-left: 0; padding: 20px; }
+        }
     </style>
 </head>
 <body>
     <div id="layout-placeholder"></div>
 
-    <div class="upload-wrapper">
-        <div class="header-section">
-            <h2>Excel Portföy Aktarımı (Pro)</h2>
-            <p>Validasyonlu, Hata Raporlu ve Çoklu Müşteri Seçimi</p>
+    <div class="main-content">
+        <div class="page-header">
+            <div class="page-title">
+                <h1>Excel Veri Aktarımı</h1>
+                <p>Toplu portföy verilerini doğrulayarak sisteme yükleyin.</p>
+            </div>
+            <div>
+                </div>
         </div>
 
-        <div class="config-card">
-            <label style="display:block; margin-bottom: 10px; font-weight: 600; color:#334155;">
-                <i class="fas fa-users mr-2" style="color: #1e3c72;"></i> Hedef Müşteri(ler)
-            </label>
+        <div class="form-card">
             
-            <div class="client-search-container">
-                <input type="text" id="clientSearchInput" class="search-input" placeholder="Müşteri adı ile arama yapın...">
-                <div id="searchResults" class="search-results"></div>
+            <div class="form-section">
+                <label class="form-label">Hedef Müşteri(ler)</label>
+                <div class="client-search-wrapper">
+                    <div class="input-group">
+                        <span style="position: absolute; left: 15px; top: 12px; color: #94a3b8;"><i class="fas fa-search"></i></span>
+                        <input type="text" id="clientSearchInput" class="form-control" style="padding-left: 40px;" placeholder="Müşteri adı yazarak arayın...">
+                    </div>
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+                
+                <div id="selectedClientsList" class="selected-clients-area">
+                    <span style="color: #94a3b8; font-size: 13px; font-style: italic;">Henüz müşteri seçilmedi.</span>
+                </div>
             </div>
 
-            <div id="selectedClientsList" class="selected-clients-area">
-                <span style="color: #94a3b8; font-size: 14px; padding: 8px;">Henüz müşteri seçilmedi.</span>
+            <div class="form-section">
+                <label class="form-label">Excel Dosyası</label>
+                <div id="dropZone" class="drop-zone">
+                    <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
+                    <i class="fas fa-file-excel drop-zone-icon"></i>
+                    <h3>Dosyayı Sürükleyin veya Tıklayın</h3>
+                    <p>Sadece .xlsx formatı desteklenmektedir</p>
+                </div>
+            </div>
+
+            <div id="progressContainer" class="progress-section">
+                <div class="progress-header">
+                    <span id="progressText">Analiz ediliyor...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="errorReport" class="error-report">
+                <div class="error-header">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
+                </div>
+                <ul id="errorList" class="error-list"></ul>
+            </div>
+
+            <div id="statusLog" class="status-log"></div>
+
+            <div style="overflow: hidden;">
+                <button id="restartBtn" class="btn-restart"><i class="fas fa-redo-alt mr-2"></i> Yeni Yükleme Başlat</button>
             </div>
         </div>
-
-        <div id="dropZone" class="drop-zone">
-            <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #1e3c72; margin-bottom: 15px;"></i>
-            <p><strong>Excel Dosyasını Sürükleyin</strong></p>
-            <p style="font-size: 14px; margin-top: 5px; opacity: 0.7;">veya dosya seçmek için tıklayın</p>
-        </div>
-
-        <div id="progressContainer" class="progress-container">
-            <div class="progress-info">
-                <span id="progressText">Analiz ediliyor...</span>
-                <span id="progressPercent">0%</span>
-            </div>
-            <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
-        </div>
-
-        <div id="errorReport" class="error-report-container">
-            <div class="error-header">
-                <span><i class="fas fa-exclamation-triangle mr-2"></i> Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
-            </div>
-            <ul id="errorList" class="error-list"></ul>
-        </div>
-
-        <div id="statusLog" class="status-log"></div>
-        <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
     <script type="module">
@@ -114,8 +330,8 @@
         
         // Veri Saklama
         let ALL_COUNTRIES = []; 
-        let ALL_CLIENTS = []; // Tüm müşterileri burada tutacağız (Arama için)
-        let SELECTED_CLIENTS = []; // Seçilen müşteriler
+        let ALL_CLIENTS = []; 
+        let SELECTED_CLIENTS = []; 
         let FAILED_ROWS = [];
 
         let elements = {}; 
@@ -170,8 +386,8 @@
             if (elements.dropZone && elements.fileInput) {
                 elements.dropZone.onclick = () => elements.fileInput.click();
                 elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
-                elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; };
-                elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#fff"; };
+                elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; elements.dropZone.style.borderColor = "#1e3c72"; };
+                elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f8fafc"; elements.dropZone.style.borderColor = "#cbd5e1"; };
                 elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
             }
 
@@ -180,7 +396,7 @@
                 elements.clientSearchInput.addEventListener('input', (e) => filterClients(e.target.value));
                 // Dışarı tıklandığında listeyi kapat
                 document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.client-search-container')) {
+                    if (!e.target.closest('.client-search-wrapper')) {
                         elements.searchResults.style.display = 'none';
                     }
                 });
@@ -241,7 +457,7 @@
             results.forEach(client => {
                 const div = document.createElement('div');
                 div.className = 'search-item';
-                div.textContent = client.name;
+                div.innerHTML = `<i class="fas fa-user-circle"></i> ${client.name}`;
                 div.onclick = () => addSelectedClient(client);
                 elements.searchResults.appendChild(div);
             });
@@ -270,7 +486,7 @@
         function renderSelectedClients() {
             elements.selectedClientsList.innerHTML = '';
             if (SELECTED_CLIENTS.length === 0) {
-                elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 14px; padding: 8px;">Henüz müşteri seçilmedi.</span>';
+                elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 13px; font-style: italic;">Henüz müşteri seçilmedi.</span>';
                 return;
             }
 
@@ -278,7 +494,7 @@
                 const tag = document.createElement('div');
                 tag.className = 'client-tag';
                 tag.innerHTML = `
-                    ${client.name}
+                    <span>${client.name}</span>
                     <i class="fas fa-times" onclick="window.removeClientGlobal('${client.id}')"></i>
                 `;
                 elements.selectedClientsList.appendChild(tag);
@@ -481,7 +697,7 @@
                     }));
 
                     const baseData = {
-                        applicants: applicantsArray, // ARTIK ARRAY GİDİYOR
+                        applicants: applicantsArray, 
                         
                         title: formattedBrandText, 
                         brandText: formattedBrandText,
