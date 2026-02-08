@@ -1,30 +1,131 @@
-<script type="module">
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRO Excel Portföy Yükleyici | Evreka IP</title>
+    <link rel="stylesheet" href="css/shared-styles.css">
+    <link rel="stylesheet" href="css/data-entry.css">
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <style>
+        .upload-wrapper { padding: 40px; max-width: 1100px; margin: 40px auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .header-section { text-align: center; margin-bottom: 40px; }
+        .header-section h2 { color: #1e3c72; font-weight: 700; margin-bottom: 10px; }
+        .header-section p { color: #6c757d; }
+
+        .config-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 25px; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
+        .config-icon { font-size: 24px; color: #1e3c72; }
+        .client-select { flex-grow: 1; padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; }
+        .client-select:focus { border-color: #1e3c72; outline: none; }
+
+        .drop-zone { border: 2px dashed #cbd5e1; padding: 60px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; background: #fff; }
+        .drop-zone:hover { border-color: #1e3c72; background: #f0f7ff; transform: translateY(-2px); }
+        .drop-zone i { font-size: 48px; color: #1e3c72; margin-bottom: 15px; }
+        .drop-zone p { margin: 0; color: #64748b; font-size: 16px; }
+
+        /* Progress Bar Stilleri */
+        .progress-container { margin-top: 30px; display: none; }
+        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; color: #334155; }
+        .progress-track { background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden; }
+        .progress-fill { background: linear-gradient(90deg, #1e3c72, #2a5298); width: 0%; height: 100%; transition: width 0.3s ease; border-radius: 10px; }
+
+        /* Log Alanı */
+        .status-log { margin-top: 30px; max-height: 250px; overflow-y: auto; padding: 20px; background: #1e293b; color: #f1f5f9; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.6; display: none; }
+        .log-item { margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+        .log-success { color: #4ade80; }
+        .log-error { color: #f87171; }
+        .log-info { color: #94a3b8; }
+        
+        .btn-restart { display: none; margin-top: 20px; width: 100%; padding: 15px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-restart:hover { background: #162c55; }
+    </style>
+</head>
+<body>
+    <div id="layout-placeholder"></div>
+
+    <div class="upload-wrapper">
+        <div class="header-section">
+            <h2>Excel Portföy Aktarımı (Pro)</h2>
+            <p>Yüksek performanslı veri işleme, WIPO hiyerarşisi, Otomatik Transaction ve Dinamik Ülke Eşleşmesi.</p>
+        </div>
+
+        <div class="config-card">
+            <div class="config-icon"><i class="fas fa-user-tie"></i></div>
+            <div style="flex-grow: 1;">
+                <label style="display:block; margin-bottom: 8px; font-weight: 600; color:#334155;">Hedef Müşteri</label>
+                <select id="clientSelect" class="client-select">
+                    <option value="">Yükleniyor...</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="dropZone" class="drop-zone">
+            <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p><strong>Excel Dosyasını Sürükleyin</strong></p>
+            <p style="font-size: 14px; margin-top: 5px; opacity: 0.7;">veya dosya seçmek için tıklayın</p>
+        </div>
+
+        <div id="progressContainer" class="progress-container">
+            <div class="progress-info">
+                <span id="progressText">İşleniyor...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-track">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+        </div>
+
+        <div id="statusLog" class="status-log"></div>
+
+        <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
+    </div>
+
+    <script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
-        document.addEventListener('DOMContentLoaded', () => {
-             loadSharedLayout({ activeMenuLink: 'excel-upload.html' });
-        });
-
-        // --- SABİTLER ---
-        const MAX_CONCURRENT_UPLOADS = 5; 
-        
         // --- GLOBAL DEĞİŞKENLER ---
+        const MAX_CONCURRENT_UPLOADS = 5; 
         let ALL_COUNTRIES = []; 
+        let elements = {}; // Elementleri sonradan dolduracağız
 
-        // --- DOM ELEMENTLERİ ---
-        const elements = {
-            dropZone: document.getElementById('dropZone'),
-            fileInput: document.getElementById('fileInput'),
-            clientSelect: document.getElementById('clientSelect'),
-            progressContainer: document.getElementById('progressContainer'),
-            progressFill: document.getElementById('progressFill'),
-            progressText: document.getElementById('progressText'),
-            progressPercent: document.getElementById('progressPercent'),
-            statusLog: document.getElementById('statusLog'),
-            restartBtn: document.getElementById('restartBtn')
-        };
+        // --- DOM HAZIR OLDUĞUNDA ÇALIŞACAK KODLAR ---
+        document.addEventListener('DOMContentLoaded', () => {
+             // 1. Layout Yükle
+             loadSharedLayout({ activeMenuLink: 'excel-upload.html' });
+
+             // 2. Elementleri Seç
+             elements = {
+                dropZone: document.getElementById('dropZone'),
+                fileInput: document.getElementById('fileInput'),
+                clientSelect: document.getElementById('clientSelect'),
+                progressContainer: document.getElementById('progressContainer'),
+                progressFill: document.getElementById('progressFill'),
+                progressText: document.getElementById('progressText'),
+                progressPercent: document.getElementById('progressPercent'),
+                statusLog: document.getElementById('statusLog'),
+                restartBtn: document.getElementById('restartBtn')
+            };
+
+            // 3. Event Listener'ları Ekle (Elementler varsa)
+            if (elements.dropZone && elements.fileInput) {
+                elements.dropZone.onclick = () => elements.fileInput.click();
+                elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
+                
+                elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; };
+                elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#fff"; };
+                elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
+            } else {
+                console.error("Kritik elementler (dropZone veya fileInput) bulunamadı!");
+            }
+
+            // 4. Verileri Başlat
+            init();
+        });
 
         // --- 1. BAŞLATMA VE VERİ YÜKLEME ---
         async function init() {
@@ -36,6 +137,7 @@
         }
 
         async function loadClients() {
+            if (!elements.clientSelect) return;
             const q = query(collection(db, "persons"), orderBy("name"));
             const snap = await getDocs(q);
             elements.clientSelect.innerHTML = '<option value="">-- Lütfen Müşteri Seçiniz --</option>';
@@ -44,7 +146,6 @@
                 opt.value = doc.id;
                 opt.textContent = doc.data().name;
                 opt.dataset.name = doc.data().name;
-                // Varsa email ve type bilgisini de dataset'e ekleyelim
                 opt.dataset.email = doc.data().email || "";
                 opt.dataset.type = doc.data().type || "legal_entity";
                 elements.clientSelect.appendChild(opt);
@@ -57,14 +158,12 @@
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     ALL_COUNTRIES = docSnap.data().list || [];
-                    log(`${ALL_COUNTRIES.length} adet ülke yüklendi.`, 'success');
+                    console.log(`${ALL_COUNTRIES.length} adet ülke yüklendi.`);
                 }
             } catch (e) { console.error(e); }
         }
 
         // --- 2. YARDIMCI PARSER FONKSİYONLARI ---
-
-        // Data Entry Formatına Uygun Tarih (YYYY-MM-DD String)
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
             let dateObj = null;
@@ -72,13 +171,11 @@
             if (cellValue instanceof Date) {
                 dateObj = cellValue;
             } else {
-                // String veya sayı ise çevirmeyi dene
                 const d = new Date(cellValue);
                 if (!isNaN(d.getTime())) dateObj = d;
             }
 
             if (dateObj) {
-                // YYYY-MM-DD formatına çevir
                 const year = dateObj.getFullYear();
                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                 const day = String(dateObj.getDate()).padStart(2, '0');
@@ -120,6 +217,7 @@
 
         // --- 3. LOGLAMA VE UI ---
         function log(msg, type = 'info') {
+            if (!elements.statusLog) return;
             elements.statusLog.style.display = 'block';
             const div = document.createElement('div');
             div.className = `log-item log-${type}`;
@@ -129,13 +227,14 @@
         }
 
         function updateProgress(current, total) {
+            if (!elements.progressFill) return;
             const percent = Math.round((current / total) * 100);
             elements.progressFill.style.width = `${percent}%`;
             elements.progressPercent.textContent = `${percent}%`;
             elements.progressText.textContent = `${current}/${total} İşlendi`;
         }
 
-        // --- 4. EXCEL İŞLEME MANTIĞI (DATA ENTRY UYUMLU) ---
+        // --- 4. EXCEL İŞLEME MANTIĞI ---
         async function handleFile(file) {
             const clientId = elements.clientSelect.value;
             if (!clientId) {
@@ -147,7 +246,6 @@
             elements.dropZone.style.display = 'none';
             elements.progressContainer.style.display = 'block';
             
-            // Seçili müşterinin detaylarını al (Applicants array'i için)
             const selectedOption = elements.clientSelect.options[elements.clientSelect.selectedIndex];
             const clientName = selectedOption.dataset.name;
             const clientEmail = selectedOption.dataset.email || "";
@@ -172,7 +270,7 @@
                     "Goods and services": row.getCell(6).text,
                     "App. no.": row.getCell(7).text,
                     "Reg. no": row.getCell(8).text,
-                    "App. date": row.getCell(9).value, // Ham değer gönderiyoruz, aşağıda formatlayacağız
+                    "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
                     "Jurisdictions": row.getCell(13).text
                 };
@@ -193,37 +291,27 @@
                     const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
                     
                     const mappedStatus = mapStatus(rowData.Status);
-                    
-                    // Tarihleri Data Entry Formatına (YYYY-MM-DD String) Çevir
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
 
-                    // Data Entry Standardına Uygun Obje
                     const baseData = {
-                        // Kök dizinde clientId/Name yerine applicants dizisi kullanılır
                         applicants: [{
                             id: clientId,
                             name: clientName,
                             email: clientEmail,
                             type: clientType
                         }],
-                        
-                        title: rowData.Name.replace(/\n/g, ' ').trim(), // Data Entry'de ana alan 'title'dır
-                        brandText: rowData.Name.replace(/\n/g, ' ').trim(), // Yedek olarak brandText de tutulabilir
-                        
-                        brandCategory: "Ticaret/Hizmet Markası", // Data Entry varsayılanı
-                        brandImageUrl: null, // Şimdilik null, Data Entry'de URL bekleniyor
-                        
+                        title: rowData.Name.replace(/\n/g, ' ').trim(),
+                        brandText: rowData.Name.replace(/\n/g, ' ').trim(),
+                        brandCategory: "Ticaret/Hizmet Markası",
+                        brandImageUrl: null,
                         status: mappedStatus,
                         applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
                         registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no."]) : "",
-                        
-                        applicationDate: appDateStr, // "2026-02-06" formatında String veya null
+                        applicationDate: appDateStr,
                         registrationDate: regDateStr,
-                        
                         niceClasses: parsedJS.classes,
                         goodsAndServicesByClass: [{ classNo: parsedJS.classes[0] || '0', items: [parsedJS.cleanText] }],
-                        
                         source: "Excel Import",
                         type: "trademark",
                         createdAt: new Date().toISOString()
@@ -232,7 +320,6 @@
                     let createdRecords = [];
 
                     if (isWipo) {
-                        // --- WIPO PARENT ---
                         const parentResult = await ipRecordsService.addRecord({
                             ...baseData,
                             country: "WIPO", 
@@ -243,7 +330,6 @@
                         if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
-                        // --- WIPO CHILDREN ---
                         const countries = rawJurisdictions.split(',').map(c => c.trim());
                         for (const country of countries) {
                             const childCode = getCountryCode(country);
@@ -259,7 +345,6 @@
                             }
                         }
                     } else {
-                        // --- NORMAL TEKİL KAYIT ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         const countryCode = getCountryCode(singleCountry);
                         
@@ -274,13 +359,12 @@
                         createdRecords.push({ id: res.id || res.data?.id, role: 'parent' });
                     }
 
-                    // --- TRANSACTION OLUŞTURMA ---
                     for (const rec of createdRecords) {
                         await ipRecordsService.addTransactionToRecord(rec.id, {
                             type: '2', 
                             designation: 'Başvuru',
                             description: 'Excel ile otomatik oluşturulan başvuru kaydı.',
-                            timestamp: new Date().toISOString(), // Transaction timestamp'i gerçek kayıt zamanı olsun
+                            timestamp: new Date().toISOString(),
                             transactionHierarchy: rec.role
                         });
                     }
@@ -303,14 +387,6 @@
             log(`İŞLEM TAMAMLANDI: ${successCount} Başarılı, ${errorCount} Hatalı.`, successCount === totalRows ? 'success' : 'info');
             elements.restartBtn.style.display = 'block';
         }
-
-        // --- EVENT LISTENERS ---
-        elements.dropZone.onclick = () => elements.fileInput.click();
-        elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
-        
-        elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; };
-        elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#fff"; };
-        elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
-
-        init();
     </script>
+</body>
+</html>
