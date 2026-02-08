@@ -84,12 +84,19 @@
     </div>
 
     <script type="module">
-        import { db, storage } from './firebase-config.js';
+        // DÜZELTME: ipRecordsService artık firebase-config.js'den çekiliyor
+        import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { ipRecordsService } from './js/portfolio/PortfolioDataManager.js'; // Servis importu
+        
+        // Load layout
+        import { loadSharedLayout } from './js/layout-loader.js';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             loadSharedLayout({ activeMenuLink: 'excel-upload.html' });
+        });
 
         // --- SABİTLER VE AYARLAR ---
-        const MAX_CONCURRENT_UPLOADS = 5; // Aynı anda işlenecek satır sayısı (Hız için)
+        const MAX_CONCURRENT_UPLOADS = 5; // Aynı anda işlenecek satır sayısı
         const COUNTRY_MAP = {
             "Albania": "AL", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ", "Brazil": "BR",
             "Bulgaria": "BG", "China": "CN", "Czech Republic": "CZ", "Denmark": "DK", "France": "FR",
@@ -146,8 +153,9 @@
         }
 
         function getCountryCode(countryName) {
-            if (!countryName) return "TR"; // Varsayılan
+            if (!countryName) return "TR"; 
             const cleanName = countryName.trim();
+            // Tam eşleşme yoksa ilk 2 harfi al (Fallback)
             return COUNTRY_MAP[cleanName] || cleanName.substring(0, 2).toUpperCase();
         }
 
@@ -203,6 +211,8 @@
                     return isNaN(d.getTime()) ? null : d;
                 };
 
+                // Excel Sütunlarını Oku (Indeksler Excel'deki sütun sırasına göre)
+                // Name(1), Logo(2), Registry(3), Status(4), Classes(5), Goods(6), AppNo(7), RegNo(8), AppDate(9), RegDate(10)... Jurisdictions(13)
                 const rawData = {
                     rowNumber,
                     Name: row.getCell(1).text,
@@ -226,17 +236,19 @@
             let successCount = 0;
             let errorCount = 0;
 
-            // Kuyruk işleyici
+            // Tek bir satırı işleyen asenkron fonksiyon
             const processRow = async (rowData) => {
                 try {
                     const parsedJS = parseClassesAndServices(rowData["Goods and services"]);
                     const rawJurisdictions = rowData.Jurisdictions || "";
+                    // WIPO Kontrolü: Registry "INT WIPO" ise VE birden fazla ülke varsa (virgül içeriyorsa)
                     const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
 
                     const baseData = {
                         clientId,
                         clientName,
-                        title: rowData.Name.replace(/\n/g, ' ').trim(), // 'title' olarak kaydediyoruz (sistem standardı)
+                        // Veritabanı şemasına uygun alan adları
+                        title: rowData.Name.replace(/\n/g, ' ').trim(), 
                         brandText: rowData.Name.replace(/\n/g, ' ').trim(),
                         status: rowData.Status || "Active",
                         applicationNumber: rowData["App. no."] || "",
@@ -244,25 +256,25 @@
                         applicationDate: rowData["App. date"],
                         registrationDate: rowData["Reg. date"],
                         niceClasses: parsedJS.classes,
-                        goodsAndServices: parsedJS.cleanText, // goodsServices -> goodsAndServices (standart)
+                        goodsAndServicesByClass: [{ classNo: parsedJS.classes[0], items: [parsedJS.cleanText] }], // Basitleştirilmiş format
                         source: "Excel Import",
-                        type: "trademark", // Varsayılan tip
+                        type: "trademark",
                         createdAt: new Date().toISOString()
                     };
 
                     if (isWipo) {
                         // --- WIPO SENARYOSU ---
-                        // 1. Parent Kayıt
+                        // 1. Parent Kayıt (WIPO)
                         const parentResult = await ipRecordsService.addRecord({
                             ...baseData,
-                            country: "WIPO", // countryCode yerine country
-                            transactionHierarchy: "parent", // isParent yerine
+                            country: "WIPO", 
+                            transactionHierarchy: "parent",
                             origin: "WIPO"
                         });
 
                         if (!parentResult.success) throw new Error("Parent WIPO oluşturulamadı: " + parentResult.error);
 
-                        // 2. Child Kayıtlar
+                        // 2. Child Kayıtlar (Ülkeler)
                         const countries = rawJurisdictions.split(',').map(c => c.trim());
                         for (const country of countries) {
                             await ipRecordsService.addRecord({
@@ -274,13 +286,13 @@
                             });
                         }
                     } else {
-                        // --- NORMAL SENARYO ---
+                        // --- NORMAL SENARYO (TEKİL KAYIT) ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         await ipRecordsService.addRecord({
                             ...baseData,
                             country: getCountryCode(singleCountry),
                             transactionHierarchy: "parent",
-                            origin: "Yurtdışı Ulusal" // Veya TÜRKPATENT, duruma göre
+                            origin: "Yurtdışı Ulusal"
                         });
                     }
                     successCount++;
@@ -293,7 +305,7 @@
                 }
             };
 
-            // Chunk'lar halinde çalıştırma (Promise Pool Mantığı)
+            // Promise Pool: Aynı anda en fazla MAX_CONCURRENT_UPLOADS kadar işlemi çalıştır
             for (let i = 0; i < rowsToProcess.length; i += MAX_CONCURRENT_UPLOADS) {
                 const chunk = rowsToProcess.slice(i, i + MAX_CONCURRENT_UPLOADS);
                 await Promise.all(chunk.map(row => processRow(row)));
