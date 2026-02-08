@@ -16,30 +16,30 @@
         .header-section p { color: #6c757d; }
 
         .config-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 25px; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
-        .config-icon { font-size: 24px; color: #1e3c72; }
-        .client-select { flex-grow: 1; padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; }
-        .client-select:focus { border-color: #1e3c72; outline: none; }
+        .client-select { flex-grow: 1; padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 15px; }
 
         .drop-zone { border: 2px dashed #cbd5e1; padding: 60px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; background: #fff; }
         .drop-zone:hover { border-color: #1e3c72; background: #f0f7ff; transform: translateY(-2px); }
-        .drop-zone i { font-size: 48px; color: #1e3c72; margin-bottom: 15px; }
-        .drop-zone p { margin: 0; color: #64748b; font-size: 16px; }
-
-        /* Progress Bar Stilleri */
+        
         .progress-container { margin-top: 30px; display: none; }
-        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; color: #334155; }
         .progress-track { background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden; }
         .progress-fill { background: linear-gradient(90deg, #1e3c72, #2a5298); width: 0%; height: 100%; transition: width 0.3s ease; border-radius: 10px; }
+        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; color: #334155; }
 
-        /* Log Alanı */
-        .status-log { margin-top: 30px; max-height: 250px; overflow-y: auto; padding: 20px; background: #1e293b; color: #f1f5f9; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.6; display: none; }
-        .log-item { margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+        /* Hata Raporu Stilleri */
+        .error-report-container { margin-top: 30px; display: none; border: 1px solid #fecaca; background: #fef2f2; border-radius: 12px; overflow: hidden; }
+        .error-header { background: #fee2e2; padding: 15px 20px; color: #991b1b; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+        .error-list { max-height: 300px; overflow-y: auto; padding: 0; margin: 0; list-style: none; }
+        .error-item { padding: 12px 20px; border-bottom: 1px solid #fecaca; display: flex; align-items: flex-start; gap: 10px; color: #7f1d1d; font-size: 14px; }
+        .error-item:last-child { border-bottom: none; }
+        .error-badge { background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+        .status-log { margin-top: 30px; max-height: 200px; overflow-y: auto; padding: 20px; background: #1e293b; color: #f1f5f9; border-radius: 12px; font-family: monospace; font-size: 13px; display: none; }
+        .log-item { margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .log-success { color: #4ade80; }
         .log-error { color: #f87171; }
-        .log-info { color: #94a3b8; }
-        
+
         .btn-restart { display: none; margin-top: 20px; width: 100%; padding: 15px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
-        .btn-restart:hover { background: #162c55; }
     </style>
 </head>
 <body>
@@ -48,52 +48,53 @@
     <div class="upload-wrapper">
         <div class="header-section">
             <h2>Excel Portföy Aktarımı (Pro)</h2>
-            <p>Gelişmiş Mal/Hizmet Ayrıştırma ve Doğru Ülke Eşleştirme</p>
+            <p>Validasyonlu ve Güvenli Veri Aktarımı</p>
         </div>
 
         <div class="config-card">
-            <div class="config-icon"><i class="fas fa-user-tie"></i></div>
+            <i class="fas fa-user-tie" style="font-size: 24px; color: #1e3c72;"></i>
             <div style="flex-grow: 1;">
                 <label style="display:block; margin-bottom: 8px; font-weight: 600; color:#334155;">Hedef Müşteri</label>
-                <select id="clientSelect" class="client-select">
-                    <option value="">Yükleniyor...</option>
-                </select>
+                <select id="clientSelect" class="client-select"><option value="">Yükleniyor...</option></select>
             </div>
         </div>
 
         <div id="dropZone" class="drop-zone">
             <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-            <i class="fas fa-cloud-upload-alt"></i>
+            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #1e3c72; margin-bottom: 15px;"></i>
             <p><strong>Excel Dosyasını Sürükleyin</strong></p>
             <p style="font-size: 14px; margin-top: 5px; opacity: 0.7;">veya dosya seçmek için tıklayın</p>
         </div>
 
         <div id="progressContainer" class="progress-container">
             <div class="progress-info">
-                <span id="progressText">İşleniyor...</span>
+                <span id="progressText">Analiz ediliyor...</span>
                 <span id="progressPercent">0%</span>
             </div>
-            <div class="progress-track">
-                <div id="progressFill" class="progress-fill"></div>
+            <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+        </div>
+
+        <div id="errorReport" class="error-report-container">
+            <div class="error-header">
+                <span><i class="fas fa-exclamation-triangle mr-2"></i> Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
             </div>
+            <ul id="errorList" class="error-list"></ul>
         </div>
 
         <div id="statusLog" class="status-log"></div>
-
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
-<script type="module">
+    <script type="module">
         import { db, storage, ipRecordsService, auth } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
-        // --- GLOBAL DEĞİŞKENLER ---
         const MAX_CONCURRENT_UPLOADS = 5; 
         let ALL_COUNTRIES = []; 
         let elements = {}; 
+        let FAILED_ROWS = []; // Hatalı satırları tutacak dizi
 
-        // İNGİLİZCE ÜLKE İSİMLERİ -> ISO KODLARI HARİTASI
         const ENGLISH_TO_CODE_MAP = {
             "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", "Andorra": "AD", "Angola": "AO", 
             "Argentina": "AR", "Armenia": "AM", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ",
@@ -120,7 +121,6 @@
             "Vietnam": "VN", "Yemen": "YE", "Benelux (Belgium, Netherlands, Luxembourg)": "BX"
         };
 
-        // --- DOM HAZIR OLDUĞUNDA ---
         document.addEventListener('DOMContentLoaded', () => {
              loadSharedLayout({ activeMenuLink: 'excel-upload.html' });
 
@@ -133,7 +133,10 @@
                 progressText: document.getElementById('progressText'),
                 progressPercent: document.getElementById('progressPercent'),
                 statusLog: document.getElementById('statusLog'),
-                restartBtn: document.getElementById('restartBtn')
+                restartBtn: document.getElementById('restartBtn'),
+                errorReport: document.getElementById('errorReport'),
+                errorList: document.getElementById('errorList'),
+                errorCountHeader: document.getElementById('errorCountHeader')
             };
 
             if (elements.dropZone && elements.fileInput) {
@@ -147,7 +150,6 @@
             init();
         });
 
-        // --- BAŞLATMA ---
         async function init() {
             try { await Promise.all([loadClients(), loadCountries()]); } catch (e) { log(e.message, 'error'); }
         }
@@ -175,7 +177,6 @@
             } catch (e) { console.error(e); }
         }
 
-        // --- YARDIMCI FONKSİYONLAR ---
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
             let dateObj = null;
@@ -214,7 +215,6 @@
             
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
             if (found) return found.code;
-            
             return "TR";
         }
 
@@ -256,7 +256,22 @@
             elements.progressText.textContent = `${current}/${total} İşlendi`;
         }
 
-        // --- EXCEL İŞLEME MANTIĞI ---
+        function addErrorToReport(rowNumber, name, message) {
+            FAILED_ROWS.push({ rowNumber, name, message });
+            elements.errorReport.style.display = 'block';
+            elements.errorCountHeader.textContent = FAILED_ROWS.length;
+            
+            const li = document.createElement('li');
+            li.className = 'error-item';
+            li.innerHTML = `
+                <span class="error-badge">Satır ${rowNumber}</span>
+                <div>
+                    <strong>${name || 'İsimsiz Kayıt'}</strong>: ${message}
+                </div>
+            `;
+            elements.errorList.appendChild(li);
+        }
+
         async function handleFile(file) {
             const clientId = elements.clientSelect.value;
             if (!clientId) {
@@ -265,15 +280,18 @@
                 return;
             }
 
-            // Aktif Kullanıcı Bilgilerini Al
             const currentUser = auth.currentUser;
             const currentUserId = currentUser ? currentUser.uid : "";
             const currentUserEmail = currentUser ? currentUser.email : "";
             const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
 
+            // UI Sıfırlama
             elements.dropZone.style.display = 'none';
             elements.progressContainer.style.display = 'block';
-            
+            elements.errorReport.style.display = 'none';
+            elements.errorList.innerHTML = '';
+            FAILED_ROWS = [];
+
             const selectedOption = elements.clientSelect.options[elements.clientSelect.selectedIndex];
             const clientName = selectedOption.dataset.name;
             const clientEmail = selectedOption.dataset.email || "";
@@ -287,6 +305,7 @@
             const rowsToProcess = [];
             sheet.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return;
+                // Boş satır kontrolü (İlk hücre boşsa atla)
                 if (!row.getCell(1).value) return;
 
                 const rawData = {
@@ -315,6 +334,20 @@
 
             const processRow = async (rowData) => {
                 try {
+                    // --- VALİDASYON (DOĞRULAMA) KATMANI ---
+                    // 1. Marka Adı Kontrolü
+                    if (!rowData.Name || rowData.Name.trim().length === 0) {
+                        throw new Error("Marka adı (Name) boş olamaz.");
+                    }
+                    // 2. Registry Kontrolü
+                    if (!rowData.Registry) {
+                        throw new Error("Registry (Tescil Ofisi) bilgisi eksik.");
+                    }
+                    // 3. Durum Kontrolü
+                    if (!rowData.Status) {
+                        throw new Error("Durum (Status) bilgisi eksik.");
+                    }
+
                     const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     
                     let finalNiceClasses = parsedGS.classes;
@@ -384,6 +417,11 @@
                             .filter(c => c.length > 0)
                             .map(cName => getCountryCode(cName));
 
+                        // Validasyon: WIPO ama ülke listesi boşsa
+                        if (countryCodes.length === 0) {
+                            throw new Error("WIPO kaydı için ülke listesi (Jurisdictions) okunamadı veya boş.");
+                        }
+
                         const wipoParentData = {
                             ...baseData,
                             countries: countryCodes, 
@@ -396,7 +434,7 @@
                         };
 
                         const parentResult = await ipRecordsService.addRecord(wipoParentData);
-                        if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
+                        if (!parentResult.success) throw new Error("Veritabanı hatası (WIPO Parent): " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
                         // --- WIPO CHILD KAYITLARI ---
@@ -428,30 +466,24 @@
                             origin: "Yurtdışı Ulusal"
                         });
                         
-                        if(!res.success) throw new Error("Kayıt hatası: " + res.error);
+                        if(!res.success) throw new Error("Veritabanı hatası: " + res.error);
                         createdRecords.push({ id: res.id || res.data?.id, role: 'parent' });
                     }
 
-                    // --- TRANSACTION OLUŞTURMA (ÖZELLEŞTİRİLMİŞ) ---
+                    // --- TRANSACTION OLUŞTURMA ---
                     for (const rec of createdRecords) {
-                        
                         let descriptionText = "Başvuru işlemi.";
-                        if (rec.role === 'child') {
-                            descriptionText = "Ülke başvurusu işlemi.";
-                        }
+                        if (rec.role === 'child') descriptionText = "Ülke başvurusu işlemi.";
 
                         await ipRecordsService.addTransactionToRecord(rec.id, {
                             type: "2", 
                             transactionTypeId: "2",
-                            designation: "Başvuru", // UI için gerekli olabilir
-                            
+                            designation: "Başvuru",
                             description: descriptionText,
                             transactionHierarchy: rec.role,
-                            
                             userId: currentUserId,
                             userEmail: currentUserEmail,
                             userName: currentUserName,
-                            
                             timestamp: now,
                             createdFrom: "excel_upload"
                         });
@@ -460,7 +492,10 @@
                     successCount++;
                 } catch (err) {
                     errorCount++;
-                    log(`Satır ${rowData.rowNumber} Hatası: ${err.message}`, 'error');
+                    const name = rowData.Name ? rowData.Name.replace(/\n/g, ' ').trim() : "Bilinmeyen Kayıt";
+                    // HATA RAPORUNA EKLE
+                    addErrorToReport(rowData.rowNumber, name, err.message);
+                    log(`Satır ${rowData.rowNumber} Atlandı: ${err.message}`, 'error');
                 } finally {
                     processedCount++;
                     updateProgress(processedCount, totalRows);
@@ -472,7 +507,10 @@
                 await Promise.all(chunk.map(row => processRow(row)));
             }
 
-            log(`İŞLEM TAMAMLANDI: ${successCount} Başarılı, ${errorCount} Hatalı.`, successCount === totalRows ? 'success' : 'info');
+            const resultMsg = `İŞLEM BİTTİ: ${successCount} Aktarıldı, ${errorCount} Başarısız.`;
+            log(resultMsg, errorCount > 0 ? 'error' : 'success');
+            if (errorCount > 0) alert(resultMsg + "\nLütfen aşağıdaki hata raporunu inceleyiniz.");
+            
             elements.restartBtn.style.display = 'block';
         }
     </script>
