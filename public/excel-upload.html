@@ -83,7 +83,7 @@
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
-<script type="module">
+    <script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
@@ -147,7 +147,6 @@
                 opt.textContent = doc.data().name;
                 opt.dataset.name = doc.data().name;
                 opt.dataset.email = doc.data().email || "";
-                // 'type' datasını artık kullanmıyoruz ama dataset'te durabilir, zararı yok
                 elements.clientSelect.appendChild(opt);
             });
         }
@@ -164,14 +163,6 @@
         }
 
         // --- 2. YARDIMCI PARSER FONKSİYONLARI ---
-        
-        // Türkçe Title Case Çevirici (ÜZÜM KIZI -> Üzüm Kızı)
-        function toTitleCase(str) {
-            if (!str) return "";
-            return str.toLocaleLowerCase('tr-TR').split(' ').map(word => 
-                word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1)
-            ).join(' ');
-        }
 
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
@@ -205,8 +196,8 @@
         function getCountryCode(countryName) {
             if (!countryName) return "TR"; 
             const search = String(countryName).trim().toLowerCase();
-            if (search.includes('wipo')) return 'WIPO';
-            if (search.includes('aripo')) return 'ARIPO';
+            if (search.includes('wipo')) return 'WO'; // WIPO için WO kodu döner
+            if (search.includes('aripo')) return 'AP'; // ARIPO için AP
             
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === search);
             if (found) return found.code;
@@ -277,7 +268,7 @@
                     Status: row.getCell(4).text,
                     "Goods and services": row.getCell(6).text,
                     "App. no.": row.getCell(7).text,
-                    "Reg. no": row.getCell(8).text,
+                    "Reg. no": row.getCell(8).text, // DİKKAT: Anahtar "Reg. no"
                     "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
                     "Jurisdictions": row.getCell(13).text
@@ -302,23 +293,23 @@
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
                     
-                    // Marka adını düzenle (Title Case)
-                    const formattedBrandText = toTitleCase(rowData.Name.replace(/\n/g, ' ').trim());
+                    // Marka adını tamamen küçük harfe çevir
+                    const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
 
                     const baseData = {
                         applicants: [{
                             id: clientId,
                             name: clientName,
                             email: clientEmail
-                            // type alanı kaldırıldı
                         }],
                         title: formattedBrandText, 
                         brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
-                        brandImageUrl: null, // Resim yakalanamadığı için boş
+                        brandImageUrl: null, 
                         status: mappedStatus,
+                        // DİKKAT: rowData["Reg. no"] kullanıyoruz (noktasız)
                         applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
-                        registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no."]) : "",
+                        registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no"]) : "",
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
                         niceClasses: parsedJS.classes,
@@ -332,15 +323,22 @@
 
                     if (isWipo) {
                         // --- WIPO PARENT KAYDI ---
-                        // Parent için App No ve App Date alanlarını Reg No ve Reg Date ile değiştiriyoruz.
+                        
+                        // 1. Ülke kodları listesini hazırla
+                        const countryCodes = rawJurisdictions.split(',')
+                            .map(c => c.trim())
+                            .map(cName => getCountryCode(cName));
+
+                        // 2. Parent verisini oluştur
                         const wipoParentData = {
                             ...baseData,
-                            country: "WIPO", 
+                            country: "WO", // Standart WIPO kodu (String "WIPO" yerine)
+                            countries: countryCodes, // [DE, FR, IT...]
                             transactionHierarchy: "parent",
                             origin: "WIPO",
-                            // Parent için özel override:
-                            applicationNumber: baseData.registrationNumber, // Tescil No -> Başvuru No
-                            applicationDate: baseData.registrationDate      // Tescil Tarihi -> Başvuru Tarihi
+                            // Parent için özel override: Tescil No -> Başvuru No
+                            applicationNumber: baseData.registrationNumber, 
+                            applicationDate: baseData.registrationDate      
                         };
 
                         const parentResult = await ipRecordsService.addRecord(wipoParentData);
@@ -348,11 +346,14 @@
                         if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
-                        // --- WIPO CHILD KAYITLARI (Ülkeler) ---
-                        const countries = rawJurisdictions.split(',').map(c => c.trim());
-                        for (const country of countries) {
-                            const childCode = getCountryCode(country);
-                            // Child kayıtlar orijinal baseData'yı kullanır (Normal App No/Date ile)
+                        // --- WIPO CHILD KAYITLARI ---
+                        // Not: countryCodes listesini zaten oluşturduk ama döngü için isimlere ihtiyacımız olabilir
+                        // veya direkt kodları kullanabiliriz.
+                        const countryNames = rawJurisdictions.split(',').map(c => c.trim());
+                        
+                        for (const countryName of countryNames) {
+                            const childCode = getCountryCode(countryName);
+                            // Child kayıtlar orijinal baseData'yı kullanır
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
