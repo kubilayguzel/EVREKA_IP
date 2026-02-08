@@ -82,7 +82,6 @@
 
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
-
     <script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -196,8 +195,11 @@
         function getCountryCode(countryName) {
             if (!countryName) return "TR"; 
             const search = String(countryName).trim().toLowerCase();
-            if (search.includes('wipo')) return 'WO'; // WIPO için WO kodu döner
-            if (search.includes('aripo')) return 'AP'; // ARIPO için AP
+            
+            // Özel Kodlar
+            if (search.includes('wipo')) return 'WO'; 
+            if (search.includes('aripo')) return 'AP';
+            if (search.includes('european union')) return 'EU';
             
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === search);
             if (found) return found.code;
@@ -268,7 +270,7 @@
                     Status: row.getCell(4).text,
                     "Goods and services": row.getCell(6).text,
                     "App. no.": row.getCell(7).text,
-                    "Reg. no": row.getCell(8).text, // DİKKAT: Anahtar "Reg. no"
+                    "Reg. no": row.getCell(8).text,
                     "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
                     "Jurisdictions": row.getCell(13).text
@@ -307,7 +309,6 @@
                         brandCategory: "Ticaret/Hizmet Markası",
                         brandImageUrl: null, 
                         status: mappedStatus,
-                        // DİKKAT: rowData["Reg. no"] kullanıyoruz (noktasız)
                         applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
                         registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no"]) : "",
                         applicationDate: appDateStr,
@@ -315,6 +316,7 @@
                         niceClasses: parsedJS.classes,
                         goodsAndServicesByClass: [{ classNo: parsedJS.classes[0] || '0', items: [parsedJS.cleanText] }],
                         source: "Excel Import",
+                        createdFrom: "excel_upload", // Yeni Metadata Alanı
                         type: "trademark",
                         createdAt: new Date().toISOString()
                     };
@@ -324,19 +326,21 @@
                     if (isWipo) {
                         // --- WIPO PARENT KAYDI ---
                         
-                        // 1. Ülke kodları listesini hazırla
+                        // 1. Ülkeleri Parsele (Boşlukları temizle ve kodları bul)
+                        // Örn: "Germany, France " -> ["DE", "FR"]
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
+                            .filter(c => c.length > 0)
                             .map(cName => getCountryCode(cName));
 
-                        // 2. Parent verisini oluştur
+                        // 2. Parent Verisini Oluştur
                         const wipoParentData = {
                             ...baseData,
-                            country: "WO", // Standart WIPO kodu (String "WIPO" yerine)
-                            countries: countryCodes, // [DE, FR, IT...]
+                            // country alanı kaldırıldı (İstek 2)
+                            countries: countryCodes, // Kod array'i (İstek 1)
                             transactionHierarchy: "parent",
                             origin: "WIPO",
-                            // Parent için özel override: Tescil No -> Başvuru No
+                            // Parent için özel override:
                             applicationNumber: baseData.registrationNumber, 
                             applicationDate: baseData.registrationDate      
                         };
@@ -346,14 +350,13 @@
                         if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
-                        // --- WIPO CHILD KAYITLARI ---
-                        // Not: countryCodes listesini zaten oluşturduk ama döngü için isimlere ihtiyacımız olabilir
-                        // veya direkt kodları kullanabiliriz.
-                        const countryNames = rawJurisdictions.split(',').map(c => c.trim());
+                        // --- WIPO CHILD KAYITLARI (Ülkeler) ---
+                        // Çocuk kayıtlar için hala ülke isminden koda gitmemiz gerekiyor
+                        const countryNames = rawJurisdictions.split(',').map(c => c.trim()).filter(c => c.length > 0);
                         
                         for (const countryName of countryNames) {
                             const childCode = getCountryCode(countryName);
-                            // Child kayıtlar orijinal baseData'yı kullanır
+                            // Child kayıtta tekil 'country' alanı olmalı
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
@@ -388,7 +391,8 @@
                             designation: 'Başvuru',
                             description: 'Excel ile otomatik oluşturulan başvuru kaydı.',
                             timestamp: new Date().toISOString(),
-                            transactionHierarchy: rec.role
+                            transactionHierarchy: rec.role,
+                            createdFrom: "excel_upload" // Transaction'a da eklenebilir
                         });
                     }
 
