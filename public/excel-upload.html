@@ -14,126 +14,119 @@
     <style>
         :root {
             --primary-color: #1e3c72;
-            --primary-light: #f0f7ff;
+            --primary-light: #eff6ff;
             --border-color: #e2e8f0;
-            --text-dark: #1e293b;
+            --text-dark: #0f172a;
             --text-gray: #64748b;
-            --bg-gray: #f8f9fa; /* Daha kurumsal bir gri */
-            --danger: #ef4444;
-            --success: #10b981;
+            --bg-body: #f1f5f9;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-gray);
+            background-color: var(--bg-body);
             color: var(--text-dark);
             margin: 0;
             padding: 0;
         }
 
-        /* Ana İçerik Alanı (Sidebar'ın yanına oturması için) */
+        /* Ana İçerik Alanı */
         .main-content {
-            padding: 30px 40px;
-            /* Layout loader sidebar genişliği kadar margin bırakır, 
-               ancak garanti olsun diye min-margin ekleyebiliriz */
+            padding: 40px;
             max-width: 1600px;
-            margin: 0 auto; 
+            margin: 0 auto;
+            /* Sidebar varsa margin-left otomatik layout loader ile gelir, yoksa ortalar */
         }
 
-        /* Sayfa Başlığı */
+        /* Başlık */
         .page-header {
             margin-bottom: 30px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 20px;
         }
         .page-title h1 {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 700;
             color: var(--text-dark);
             margin: 0 0 8px 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
         }
         .page-title p {
             color: var(--text-gray);
             font-size: 15px;
+        }
+
+        /* Grid Sistemi - Kartların Sayfaya Yayılması */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* İki Eşit Kolon */
+            gap: 24px;
+            align-items: start;
+        }
+
+        /* Kart Yapısı */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid white;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: var(--border-color);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .card-header i {
+            font-size: 20px;
+            color: var(--primary-color);
+            background: var(--primary-light);
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-dark);
             margin: 0;
         }
 
-        /* Form Kartı */
-        .form-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color);
-            padding: 0; /* İçerik padding'i section'larda verilecek */
-            overflow: hidden;
-        }
-
-        .card-section {
-            padding: 30px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .card-section:last-child {
-            border-bottom: none;
-        }
-
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .section-title i { color: var(--primary-color); }
-
-        /* Form Elemanları */
-        .form-group { margin-bottom: 20px; }
-        
-        .form-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-dark);
-            margin-bottom: 8px;
-        }
-        
+        /* Müşteri Arama */
+        .client-search-wrapper { position: relative; }
         .form-control {
             width: 100%;
-            padding: 12px 16px;
+            padding: 14px 16px;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
-            transition: all 0.2s;
             background: #fff;
-            color: var(--text-dark);
+            transition: all 0.2s;
         }
         .form-control:focus {
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
             outline: none;
+            box-shadow: 0 0 0 4px rgba(30, 60, 114, 0.1);
         }
 
-        /* Müşteri Arama & Sonuçlar */
-        .client-search-wrapper { position: relative; }
-        
         .search-results {
             position: absolute;
-            top: 100%;
+            top: 110%;
             left: 0;
             right: 0;
             background: white;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
             max-height: 250px;
             overflow-y: auto;
             z-index: 50;
             display: none;
-            margin-top: 5px;
         }
         .search-item {
             padding: 12px 16px;
@@ -145,7 +138,6 @@
             gap: 10px;
         }
         .search-item:hover { background-color: var(--primary-light); color: var(--primary-color); }
-        .search-item:last-child { border-bottom: none; }
 
         .selected-clients-area {
             display: flex;
@@ -154,17 +146,18 @@
             margin-top: 15px;
             padding: 15px;
             background: #f8fafc;
-            border-radius: 8px;
+            border-radius: 10px;
             border: 1px dashed var(--border-color);
-            min-height: 50px;
+            min-height: 60px;
+            align-items: center;
         }
         .client-tag {
             background: white;
             color: var(--primary-color);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -172,88 +165,93 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
         .client-tag i { cursor: pointer; color: #94a3b8; transition: 0.2s; }
-        .client-tag i:hover { color: var(--danger); }
+        .client-tag i:hover { color: #ef4444; }
 
-        /* Drop Zone - Daha Geniş */
+        /* Drop Zone */
         .drop-zone {
             border: 2px dashed #cbd5e1;
             background: #f8fafc;
             border-radius: 12px;
-            padding: 60px 20px;
-            text-align: center;
+            height: 200px; /* Sabit yükseklik, daha dengeli görünüm */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            position: relative;
         }
         .drop-zone:hover {
             border-color: var(--primary-color);
             background: var(--primary-light);
         }
-        .drop-zone-icon {
-            font-size: 48px;
-            color: #94a3b8;
-            margin-bottom: 15px;
-            transition: 0.3s;
+        .drop-zone-icon { font-size: 48px; color: #94a3b8; margin-bottom: 15px; }
+        .drop-zone h3 { margin: 0 0 5px 0; font-size: 16px; font-weight: 600; }
+        .drop-zone p { margin: 0; font-size: 13px; color: var(--text-gray); }
+
+        /* Full Width Card (Loglar için) */
+        .full-width {
+            grid-column: span 2;
         }
-        .drop-zone:hover .drop-zone-icon { color: var(--primary-color); transform: scale(1.1); }
-        .drop-zone h3 { margin: 0 0 8px 0; font-size: 18px; color: var(--text-dark); font-weight: 600; }
-        .drop-zone p { margin: 0; font-size: 14px; color: var(--text-gray); }
 
         /* Progress & Logs */
         .progress-section { margin-top: 20px; display: none; }
-        .progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+        .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+        .progress-track { height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--primary-color); width: 0%; transition: width 0.3s; }
-        .progress-labels { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--text-dark); }
 
         .error-report {
             margin-top: 25px;
             display: none;
             border: 1px solid #fee2e2;
             background: #fff5f5;
-            border-radius: 8px;
+            border-radius: 12px;
+            overflow: hidden;
         }
         .error-header {
-            background: #fee2e2;
+            background: #ffe4e6;
             padding: 12px 20px;
-            color: #991b1b;
+            color: #9f1239;
             font-weight: 600;
             font-size: 14px;
-            border-bottom: 1px solid #fecaca;
         }
-        .error-list { padding: 0; margin: 0; list-style: none; max-height: 200px; overflow-y: auto; }
-        .error-item { padding: 10px 20px; border-bottom: 1px solid #fecaca; font-size: 13px; color: #7f1d1d; display: flex; gap: 10px; }
-        .error-badge { background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; height: fit-content; }
-
+        .error-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; }
+        .error-item { padding: 12px 20px; border-bottom: 1px solid #fecaca; font-size: 13px; color: #881337; }
+        
         .status-log {
             margin-top: 20px;
-            background: #1e293b;
-            color: #94a3b8;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Consolas', monospace;
             font-size: 12px;
-            max-height: 150px;
+            max-height: 300px;
             overflow-y: auto;
             display: none;
         }
-        .log-item { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; }
+        .log-item { margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
         .log-success { color: #4ade80; }
         .log-error { color: #f87171; }
 
         .btn-restart {
-            margin-top: 20px;
-            padding: 12px 24px;
+            margin-top: 15px;
+            padding: 14px 28px;
             background: var(--primary-color);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-weight: 500;
+            border-radius: 10px;
+            font-weight: 600;
             cursor: pointer;
+            width: 100%;
             display: none;
-            font-size: 14px;
         }
         .btn-restart:hover { background: #162c55; }
 
+        /* Mobil Uyumluluk */
+        @media (max-width: 992px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .full-width { grid-column: span 1; }
+        }
     </style>
 </head>
 <body>
@@ -262,48 +260,55 @@
     <div class="main-content">
         <div class="page-header">
             <div class="page-title">
-                <h1><i class="fas fa-file-import" style="color: #1e3c72;"></i> Excel Portföy Yükleme</h1>
-                <p>Toplu marka ve patent verilerini doğrulayarak sisteme aktarın.</p>
+                <h1>Excel Portföy Aktarımı (Pro)</h1>
+                <p>Verileri doğrulayın, otomatik işlem oluşturun ve sisteme aktarın.</p>
             </div>
         </div>
 
-        <div class="form-card">
+        <div class="dashboard-grid">
             
-            <div class="card-section">
-                <div class="section-title">
-                    <i class="fas fa-users"></i> Hedef Müşteri Seçimi
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-user-friends"></i>
+                    <h3 class="card-title">Hedef Müşteri(ler)</h3>
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Müşteri Arayın</label>
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">Müşteri Arayın</label>
                     <div class="client-search-wrapper">
-                        <input type="text" id="clientSearchInput" class="form-control" placeholder="Müşteri adı veya unvanı yazmaya başlayın...">
+                        <input type="text" id="clientSearchInput" class="form-control" placeholder="Müşteri adı yazın...">
                         <div id="searchResults" class="search-results"></div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Seçili Müşteriler</label>
-                    <div id="selectedClientsList" class="selected-clients-area">
-                        <span style="color: #94a3b8; font-size: 14px; font-style: italic;">Henüz müşteri seçilmedi. Listeye eklemek için yukarıdan arama yapın.</span>
-                    </div>
+                <label style="display:block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">Seçili Müşteriler</label>
+                <div id="selectedClientsList" class="selected-clients-area">
+                    <span style="color: #94a3b8; font-size: 13px;">Listeye eklemek için arama yapın.</span>
                 </div>
             </div>
 
-            <div class="card-section">
-                <div class="section-title">
-                    <i class="fas fa-file-excel"></i> Excel Dosyası
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h3 class="card-title">Dosya Yükleme</h3>
                 </div>
-                
+
                 <div id="dropZone" class="drop-zone">
                     <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-                    <i class="fas fa-cloud-upload-alt drop-zone-icon"></i>
-                    <h3>Dosyayı Buraya Sürükleyin</h3>
-                    <p>veya dosya seçmek için tıklayın (.xlsx)</p>
+                    <i class="fas fa-file-excel drop-zone-icon"></i>
+                    <h3>Excel Dosyasını Sürükleyin</h3>
+                    <p>veya seçmek için tıklayın</p>
+                </div>
+            </div>
+
+            <div class="card full-width" id="statusCard" style="display:none;">
+                <div class="card-header">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3 class="card-title">İşlem Durumu</h3>
                 </div>
 
                 <div id="progressContainer" class="progress-section">
-                    <div class="progress-labels">
+                    <div class="progress-header">
                         <span id="progressText">Analiz ediliyor...</span>
                         <span id="progressPercent">0%</span>
                     </div>
@@ -314,17 +319,15 @@
 
                 <div id="errorReport" class="error-report">
                     <div class="error-header">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span style="margin-left:8px;">Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
                     </div>
                     <ul id="errorList" class="error-list"></ul>
                 </div>
 
                 <div id="statusLog" class="status-log"></div>
 
-                <div style="text-align: right;">
-                    <button id="restartBtn" class="btn-restart"><i class="fas fa-redo"></i> Yeni Dosya Yükle</button>
-                </div>
+                <button id="restartBtn" class="btn-restart"><i class="fas fa-sync-alt"></i> Yeni İşlem Başlat</button>
             </div>
 
         </div>
@@ -378,6 +381,8 @@
                 clientSearchInput: document.getElementById('clientSearchInput'),
                 searchResults: document.getElementById('searchResults'),
                 selectedClientsList: document.getElementById('selectedClientsList'),
+                
+                statusCard: document.getElementById('statusCard'), // Yeni eklenen kart
                 progressContainer: document.getElementById('progressContainer'),
                 progressFill: document.getElementById('progressFill'),
                 progressText: document.getElementById('progressText'),
@@ -392,7 +397,7 @@
             if (elements.dropZone && elements.fileInput) {
                 elements.dropZone.onclick = () => elements.fileInput.click();
                 elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
-                elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; elements.dropZone.style.borderColor = "#1e3c72"; };
+                elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#eff6ff"; elements.dropZone.style.borderColor = "#1e3c72"; };
                 elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f8fafc"; elements.dropZone.style.borderColor = "#cbd5e1"; };
                 elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
             }
@@ -482,7 +487,7 @@
         function renderSelectedClients() {
             elements.selectedClientsList.innerHTML = '';
             if (SELECTED_CLIENTS.length === 0) {
-                elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 14px; font-style: italic;">Henüz müşteri seçilmedi. Listeye eklemek için yukarıdan arama yapın.</span>';
+                elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 13px;">Listeye eklemek için arama yapın.</span>';
                 return;
             }
             SELECTED_CLIENTS.forEach(client => {
@@ -604,7 +609,11 @@
             const currentUserEmail = currentUser ? currentUser.email : "";
             const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
 
-            elements.dropZone.style.display = 'none';
+            // UI GÜNCELLEME (Kartları açma/kapama)
+            elements.statusCard.style.display = 'block'; // Sonuç kartını göster
+            elements.dropZone.style.pointerEvents = 'none'; // Tekrar yüklemeyi engelle
+            elements.dropZone.style.opacity = '0.5';
+
             elements.progressContainer.style.display = 'block';
             elements.errorReport.style.display = 'none';
             elements.errorList.innerHTML = '';
@@ -709,9 +718,7 @@
                         const wipoAppNoToCheck = baseData.registrationNumber;
                         const isDuplicate = await checkDuplicate(wipoAppNoToCheck, 'WO');
 
-                        if (isDuplicate) {
-                            throw new Error(`Bu kayıt zaten sistemde mevcut! (WIPO: ${wipoAppNoToCheck})`);
-                        }
+                        if (isDuplicate) throw new Error(`Bu kayıt zaten sistemde mevcut! (WIPO: ${wipoAppNoToCheck})`);
 
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
@@ -756,10 +763,7 @@
                         const countryCode = getCountryCode(singleCountry);
                         
                         const isDuplicate = await checkDuplicate(baseData.applicationNumber, countryCode);
-
-                        if (isDuplicate) {
-                            throw new Error(`Bu kayıt zaten sistemde mevcut! (App No: ${baseData.applicationNumber}, Ülke: ${countryCode})`);
-                        }
+                        if (isDuplicate) throw new Error(`Bu kayıt zaten sistemde mevcut! (App No: ${baseData.applicationNumber}, Ülke: ${countryCode})`);
 
                         const res = await ipRecordsService.addRecord({
                             ...baseData,
