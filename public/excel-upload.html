@@ -83,7 +83,7 @@
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
-    <script type="module">
+<script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
@@ -91,7 +91,7 @@
         // --- GLOBAL DEĞİŞKENLER ---
         const MAX_CONCURRENT_UPLOADS = 5; 
         let ALL_COUNTRIES = []; 
-        let elements = {}; // Elementleri sonradan dolduracağız
+        let elements = {}; 
 
         // --- DOM HAZIR OLDUĞUNDA ÇALIŞACAK KODLAR ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -111,7 +111,7 @@
                 restartBtn: document.getElementById('restartBtn')
             };
 
-            // 3. Event Listener'ları Ekle (Elementler varsa)
+            // 3. Event Listener'ları Ekle
             if (elements.dropZone && elements.fileInput) {
                 elements.dropZone.onclick = () => elements.fileInput.click();
                 elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
@@ -147,7 +147,7 @@
                 opt.textContent = doc.data().name;
                 opt.dataset.name = doc.data().name;
                 opt.dataset.email = doc.data().email || "";
-                opt.dataset.type = doc.data().type || "legal_entity";
+                // 'type' datasını artık kullanmıyoruz ama dataset'te durabilir, zararı yok
                 elements.clientSelect.appendChild(opt);
             });
         }
@@ -164,6 +164,15 @@
         }
 
         // --- 2. YARDIMCI PARSER FONKSİYONLARI ---
+        
+        // Türkçe Title Case Çevirici (ÜZÜM KIZI -> Üzüm Kızı)
+        function toTitleCase(str) {
+            if (!str) return "";
+            return str.toLocaleLowerCase('tr-TR').split(' ').map(word => 
+                word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1)
+            ).join(' ');
+        }
+
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
             let dateObj = null;
@@ -249,7 +258,6 @@
             const selectedOption = elements.clientSelect.options[elements.clientSelect.selectedIndex];
             const clientName = selectedOption.dataset.name;
             const clientEmail = selectedOption.dataset.email || "";
-            const clientType = selectedOption.dataset.type || "legal_entity";
 
             log(`Dosya okunuyor: ${file.name}`, 'info');
 
@@ -293,18 +301,21 @@
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
+                    
+                    // Marka adını düzenle (Title Case)
+                    const formattedBrandText = toTitleCase(rowData.Name.replace(/\n/g, ' ').trim());
 
                     const baseData = {
                         applicants: [{
                             id: clientId,
                             name: clientName,
-                            email: clientEmail,
-                            type: clientType
+                            email: clientEmail
+                            // type alanı kaldırıldı
                         }],
-                        title: rowData.Name.replace(/\n/g, ' ').trim(),
-                        brandText: rowData.Name.replace(/\n/g, ' ').trim(),
+                        title: formattedBrandText, 
+                        brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
-                        brandImageUrl: null,
+                        brandImageUrl: null, // Resim yakalanamadığı için boş
                         status: mappedStatus,
                         applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
                         registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no."]) : "",
@@ -320,19 +331,28 @@
                     let createdRecords = [];
 
                     if (isWipo) {
-                        const parentResult = await ipRecordsService.addRecord({
+                        // --- WIPO PARENT KAYDI ---
+                        // Parent için App No ve App Date alanlarını Reg No ve Reg Date ile değiştiriyoruz.
+                        const wipoParentData = {
                             ...baseData,
                             country: "WIPO", 
                             transactionHierarchy: "parent",
-                            origin: "WIPO"
-                        });
+                            origin: "WIPO",
+                            // Parent için özel override:
+                            applicationNumber: baseData.registrationNumber, // Tescil No -> Başvuru No
+                            applicationDate: baseData.registrationDate      // Tescil Tarihi -> Başvuru Tarihi
+                        };
+
+                        const parentResult = await ipRecordsService.addRecord(wipoParentData);
 
                         if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
+                        // --- WIPO CHILD KAYITLARI (Ülkeler) ---
                         const countries = rawJurisdictions.split(',').map(c => c.trim());
                         for (const country of countries) {
                             const childCode = getCountryCode(country);
+                            // Child kayıtlar orijinal baseData'yı kullanır (Normal App No/Date ile)
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
@@ -345,6 +365,7 @@
                             }
                         }
                     } else {
+                        // --- NORMAL TEKİL KAYIT ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         const countryCode = getCountryCode(singleCountry);
                         
@@ -359,6 +380,7 @@
                         createdRecords.push({ id: res.id || res.data?.id, role: 'parent' });
                     }
 
+                    // --- TRANSACTION OLUŞTURMA ---
                     for (const rec of createdRecords) {
                         await ipRecordsService.addTransactionToRecord(rec.id, {
                             type: '2', 
