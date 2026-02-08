@@ -83,7 +83,7 @@
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
-    <script type="module">
+<script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
@@ -207,46 +207,34 @@
             const search = String(countryName).trim();
             const searchLower = search.toLowerCase();
             
-            // 1. Önce Static English Map'e bak (Excel İngilizce olduğu için)
             if (ENGLISH_TO_CODE_MAP[search]) return ENGLISH_TO_CODE_MAP[search];
-            
-            // 2. Özel Kodlar
             if (searchLower.includes('wipo')) return 'WO'; 
             if (searchLower.includes('aripo')) return 'AP';
             if (searchLower.includes('european union')) return 'EU';
             
-            // 3. Veritabanı Listesine Bak (Türkçe isimler için)
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
             if (found) return found.code;
             
             return "TR";
         }
 
-        // GÜNCELLENMİŞ AYRIŞTIRICI: [32]: Metin yapısını parse eder
         function parseGoodsAndServicesStructured(text) {
             if (!text) return { classes: [], goodsByClass: [] };
-            
-            // Regex: [32]: ile başlayıp bir sonraki [xx]: veya sona kadar olan kısmı al
             const regex = /\[(\d+)\]:\s*([\s\S]*?)(?=\s*\[\d+\]:|$)/g;
             const goodsByClass = [];
             const classes = [];
-            
             let match;
             let foundMatch = false;
             while ((match = regex.exec(text)) !== null) {
                 foundMatch = true;
                 const cls = match[1];
                 const desc = match[2].trim();
-                
                 if (!classes.includes(cls)) classes.push(cls);
                 goodsByClass.push({ classNo: cls, items: [desc] });
             }
-            
-            // Eğer [xx]: formatı bulunamazsa, ham metni döndür (İşlem sırasında sınıf atanacak)
             if (!foundMatch && text.trim().length > 0) {
                 return { classes: [], goodsByClass: [], raw: text.trim() };
             }
-
             return { classes, goodsByClass };
         }
 
@@ -300,12 +288,13 @@
                     Name: row.getCell(1).text,
                     Registry: row.getCell(3).text,
                     Status: row.getCell(4).text,
-                    Classes: row.getCell(5).text, // Classes sütunu eklendi
+                    Classes: row.getCell(5).text, 
                     "Goods and services": row.getCell(6).text,
                     "App. no.": row.getCell(7).text,
                     "Reg. no": row.getCell(8).text,
                     "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
+                    "Exp. date": row.getCell(11).value, // 11. Kolon: Exp date
                     "Jurisdictions": row.getCell(13).text
                 };
                 rowsToProcess.push(rawData);
@@ -320,20 +309,17 @@
 
             const processRow = async (rowData) => {
                 try {
-                    // 1. Mal ve Hizmetleri Ayrıştır (Structured)
+                    // Mal ve Hizmetleri Ayrıştır
                     const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     
                     let finalNiceClasses = parsedGS.classes;
                     let finalGoodsByClass = parsedGS.goodsByClass;
                     
-                    // Eğer metin içinde sınıf bulunamadıysa, "Classes" sütunundan al
                     if (finalNiceClasses.length === 0) {
-                        const classCol = rowData["Classes"]; // Örn: "32, 33" veya 33
+                        const classCol = rowData["Classes"];
                         if (classCol) {
-                            finalNiceClasses = String(classCol).split(',').map(c => c.trim().replace(/\D/g, '')); // Sadece sayıları al
+                            finalNiceClasses = String(classCol).split(',').map(c => c.trim().replace(/\D/g, ''));
                         }
-                        
-                        // Eğer metin var ama sınıf etiketi yoksa, metni ilk sınıfa veya 0'a ata
                         if (parsedGS.raw) {
                             const mainClass = finalNiceClasses.length > 0 ? finalNiceClasses[0] : '0';
                             finalGoodsByClass = [{ classNo: mainClass, items: [parsedGS.raw] }];
@@ -346,7 +332,10 @@
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
+                    const expDateStr = formatDateForDataEntry(rowData["Exp. date"]); // Yenileme tarihi
+                    
                     const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
+                    const now = new Date().toISOString();
 
                     const baseData = {
                         applicants: [{
@@ -359,27 +348,32 @@
                         brandCategory: "Ticaret/Hizmet Markası",
                         brandImageUrl: null, 
                         status: mappedStatus,
+                        
                         applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
                         registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no"]) : "",
+                        
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
-                        
-                        // Güncellenmiş Sınıf ve Mal/Hizmet Yapısı
+                        renewalDate: expDateStr, // İSTEK 4: Exp. date -> renewalDate
+
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
                         
                         source: "Excel Import",
-                        createdFrom: "excel_upload",
+                        createdFrom: "excel_upload", 
+                        
                         type: "trademark",
-                        createdAt: new Date().toISOString()
+                        ipType: "trademark", // İSTEK 2: ipType eklemesi
+                        portfolioStatus: "Active", // İSTEK 3: Active status
+                        
+                        createdAt: now,
+                        updatedAt: now // İSTEK 5: updatedAt eklemesi
                     };
 
                     let createdRecords = [];
 
                     if (isWipo) {
                         // --- WIPO PARENT KAYDI ---
-                        
-                        // 1. Ülkeleri Parsele (Boşlukları temizle ve kodları bul)
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
                             .filter(c => c.length > 0)
@@ -387,11 +381,17 @@
 
                         const wipoParentData = {
                             ...baseData,
-                            countries: countryCodes, // Kod array'i (Örn: ["DE", "FR"])
+                            countries: countryCodes, 
                             transactionHierarchy: "parent",
                             origin: "WIPO",
+                            
+                            // Parent için özel override:
                             applicationNumber: baseData.registrationNumber, 
-                            applicationDate: baseData.registrationDate      
+                            applicationDate: baseData.registrationDate,
+                            
+                            // İSTEK 1: WIPO Özel Alanları
+                            internationalRegNumber: baseData.registrationNumber,
+                            wipoIR: baseData.registrationNumber
                         };
 
                         const parentResult = await ipRecordsService.addRecord(wipoParentData);
@@ -408,7 +408,10 @@
                                 country: childCode,
                                 transactionHierarchy: "child",
                                 parentId: parentResult.id || parentResult.data?.id,
-                                origin: "WIPO"
+                                origin: "WIPO",
+                                
+                                // İSTEK 1: Child için wipoIR
+                                wipoIR: baseData.registrationNumber
                             });
                             if(childRes.success) {
                                 createdRecords.push({ id: childRes.id || childRes.data?.id, role: 'child' });
@@ -436,7 +439,7 @@
                             type: '2', 
                             designation: 'Başvuru',
                             description: 'Excel ile otomatik oluşturulan başvuru kaydı.',
-                            timestamp: new Date().toISOString(),
+                            timestamp: now,
                             transactionHierarchy: rec.role,
                             createdFrom: "excel_upload"
                         });
