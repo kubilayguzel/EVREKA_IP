@@ -48,7 +48,7 @@
     <div class="upload-wrapper">
         <div class="header-section">
             <h2>Excel Portföy Aktarımı (Pro)</h2>
-            <p>Yüksek performanslı veri işleme, WIPO hiyerarşisi, Otomatik Transaction ve Dinamik Ülke Eşleşmesi.</p>
+            <p>Gelişmiş Mal/Hizmet Ayrıştırma ve Doğru Ülke Eşleştirme</p>
         </div>
 
         <div class="config-card">
@@ -82,6 +82,7 @@
 
         <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
+
     <script type="module">
         import { db, storage, ipRecordsService } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -92,12 +93,37 @@
         let ALL_COUNTRIES = []; 
         let elements = {}; 
 
-        // --- DOM HAZIR OLDUĞUNDA ÇALIŞACAK KODLAR ---
+        // İNGİLİZCE ÜLKE İSİMLERİ -> ISO KODLARI HARİTASI
+        const ENGLISH_TO_CODE_MAP = {
+            "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", "Andorra": "AD", "Angola": "AO", 
+            "Argentina": "AR", "Armenia": "AM", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ",
+            "Bahrain": "BH", "Bangladesh": "BD", "Belarus": "BY", "Belgium": "BE", "Benelux": "BX",
+            "Bosnia and Herzegovina": "BA", "Brazil": "BR", "Bulgaria": "BG", "Canada": "CA", "Chile": "CL",
+            "China": "CN", "Colombia": "CO", "Croatia": "HR", "Cuba": "CU", "Cyprus": "CY",
+            "Czech Republic": "CZ", "Denmark": "DK", "Egypt": "EG", "Estonia": "EE", "Finland": "FI",
+            "France": "FR", "Georgia": "GE", "Germany": "DE", "Greece": "GR", "Hungary": "HU",
+            "Iceland": "IS", "India": "IN", "Indonesia": "ID", "Iran": "IR", "Iraq": "IQ",
+            "Ireland": "IE", "Israel": "IL", "Italy": "IT", "Japan": "JP", "Jordan": "JO",
+            "Kazakhstan": "KZ", "Kenya": "KE", "Korea, North": "KP", "Korea, South": "KR", "Kuwait": "KW",
+            "Kyrgyzstan": "KG", "Latvia": "LV", "Lebanon": "LB", "Libya": "LY", "Liechtenstein": "LI",
+            "Lithuania": "LT", "Luxembourg": "LU", "Macedonia": "MK", "North Macedonia": "MK", "Malaysia": "MY",
+            "Malta": "MT", "Mexico": "MX", "Moldova": "MD", "Monaco": "MC", "Mongolia": "MN",
+            "Montenegro": "ME", "Morocco": "MA", "Netherlands": "NL", "New Zealand": "NZ", "Nigeria": "NG",
+            "Norway": "NO", "Oman": "OM", "Pakistan": "PK", "Peru": "PE", "Philippines": "PH",
+            "Poland": "PL", "Portugal": "PT", "Qatar": "QA", "Romania": "RO", "Russia": "RU",
+            "Russian Federation": "RU", "San Marino": "SM", "Saudi Arabia": "SA", "Serbia": "RS",
+            "Singapore": "SG", "Slovakia": "SK", "Slovenia": "SI", "South Africa": "ZA", "Spain": "ES",
+            "Sri Lanka": "LK", "Sweden": "SE", "Switzerland": "CH", "Syria": "SY", "Taiwan": "TW",
+            "Tajikistan": "TJ", "Thailand": "TH", "Tunisia": "TN", "Turkey": "TR", "Turkmenistan": "TM",
+            "Ukraine": "UA", "United Arab Emirates": "AE", "United Kingdom": "GB", "United States": "US",
+            "United States of America": "US", "Uruguay": "UY", "Uzbekistan": "UZ", "Venezuela": "VE",
+            "Vietnam": "VN", "Yemen": "YE", "Benelux (Belgium, Netherlands, Luxembourg)": "BX"
+        };
+
+        // --- DOM HAZIR OLDUĞUNDA ---
         document.addEventListener('DOMContentLoaded', () => {
-             // 1. Layout Yükle
              loadSharedLayout({ activeMenuLink: 'excel-upload.html' });
 
-             // 2. Elementleri Seç
              elements = {
                 dropZone: document.getElementById('dropZone'),
                 fileInput: document.getElementById('fileInput'),
@@ -110,29 +136,20 @@
                 restartBtn: document.getElementById('restartBtn')
             };
 
-            // 3. Event Listener'ları Ekle
             if (elements.dropZone && elements.fileInput) {
                 elements.dropZone.onclick = () => elements.fileInput.click();
                 elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
-                
                 elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; };
                 elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#fff"; };
                 elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
-            } else {
-                console.error("Kritik elementler (dropZone veya fileInput) bulunamadı!");
             }
 
-            // 4. Verileri Başlat
             init();
         });
 
-        // --- 1. BAŞLATMA VE VERİ YÜKLEME ---
+        // --- BAŞLATMA ---
         async function init() {
-            try {
-                await Promise.all([loadClients(), loadCountries()]);
-            } catch (e) {
-                log(`Başlatma hatası: ${e.message}`, 'error');
-            }
+            try { await Promise.all([loadClients(), loadCountries()]); } catch (e) { log(e.message, 'error'); }
         }
 
         async function loadClients() {
@@ -154,26 +171,19 @@
             try {
                 const docRef = doc(db, 'common', 'countries');
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    ALL_COUNTRIES = docSnap.data().list || [];
-                    console.log(`${ALL_COUNTRIES.length} adet ülke yüklendi.`);
-                }
+                if (docSnap.exists()) ALL_COUNTRIES = docSnap.data().list || [];
             } catch (e) { console.error(e); }
         }
 
-        // --- 2. YARDIMCI PARSER FONKSİYONLARI ---
-
+        // --- YARDIMCI FONKSİYONLAR ---
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
             let dateObj = null;
-            
-            if (cellValue instanceof Date) {
-                dateObj = cellValue;
-            } else {
+            if (cellValue instanceof Date) dateObj = cellValue;
+            else {
                 const d = new Date(cellValue);
                 if (!isNaN(d.getTime())) dateObj = d;
             }
-
             if (dateObj) {
                 const year = dateObj.getFullYear();
                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -194,30 +204,52 @@
 
         function getCountryCode(countryName) {
             if (!countryName) return "TR"; 
-            const search = String(countryName).trim().toLowerCase();
+            const search = String(countryName).trim();
+            const searchLower = search.toLowerCase();
             
-            // Özel Kodlar
-            if (search.includes('wipo')) return 'WO'; 
-            if (search.includes('aripo')) return 'AP';
-            if (search.includes('european union')) return 'EU';
+            // 1. Önce Static English Map'e bak (Excel İngilizce olduğu için)
+            if (ENGLISH_TO_CODE_MAP[search]) return ENGLISH_TO_CODE_MAP[search];
             
-            const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === search);
+            // 2. Özel Kodlar
+            if (searchLower.includes('wipo')) return 'WO'; 
+            if (searchLower.includes('aripo')) return 'AP';
+            if (searchLower.includes('european union')) return 'EU';
+            
+            // 3. Veritabanı Listesine Bak (Türkçe isimler için)
+            const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
             if (found) return found.code;
+            
             return "TR";
         }
 
-        function parseClassesAndServices(text) {
-            if (!text) return { classes: [], cleanText: "" };
-            const classRegex = /\[(\d+)\]:/g;
+        // GÜNCELLENMİŞ AYRIŞTIRICI: [32]: Metin yapısını parse eder
+        function parseGoodsAndServicesStructured(text) {
+            if (!text) return { classes: [], goodsByClass: [] };
+            
+            // Regex: [32]: ile başlayıp bir sonraki [xx]: veya sona kadar olan kısmı al
+            const regex = /\[(\d+)\]:\s*([\s\S]*?)(?=\s*\[\d+\]:|$)/g;
+            const goodsByClass = [];
             const classes = [];
+            
             let match;
-            while ((match = classRegex.exec(text)) !== null) {
-                if (!classes.includes(match[1])) classes.push(match[1]);
+            let foundMatch = false;
+            while ((match = regex.exec(text)) !== null) {
+                foundMatch = true;
+                const cls = match[1];
+                const desc = match[2].trim();
+                
+                if (!classes.includes(cls)) classes.push(cls);
+                goodsByClass.push({ classNo: cls, items: [desc] });
             }
-            return { classes, cleanText: text.trim() };
+            
+            // Eğer [xx]: formatı bulunamazsa, ham metni döndür (İşlem sırasında sınıf atanacak)
+            if (!foundMatch && text.trim().length > 0) {
+                return { classes: [], goodsByClass: [], raw: text.trim() };
+            }
+
+            return { classes, goodsByClass };
         }
 
-        // --- 3. LOGLAMA VE UI ---
         function log(msg, type = 'info') {
             if (!elements.statusLog) return;
             elements.statusLog.style.display = 'block';
@@ -236,7 +268,7 @@
             elements.progressText.textContent = `${current}/${total} İşlendi`;
         }
 
-        // --- 4. EXCEL İŞLEME MANTIĞI ---
+        // --- EXCEL İŞLEME MANTIĞI ---
         async function handleFile(file) {
             const clientId = elements.clientSelect.value;
             if (!clientId) {
@@ -268,6 +300,7 @@
                     Name: row.getCell(1).text,
                     Registry: row.getCell(3).text,
                     Status: row.getCell(4).text,
+                    Classes: row.getCell(5).text, // Classes sütunu eklendi
                     "Goods and services": row.getCell(6).text,
                     "App. no.": row.getCell(7).text,
                     "Reg. no": row.getCell(8).text,
@@ -287,15 +320,32 @@
 
             const processRow = async (rowData) => {
                 try {
-                    const parsedJS = parseClassesAndServices(rowData["Goods and services"]);
+                    // 1. Mal ve Hizmetleri Ayrıştır (Structured)
+                    const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
+                    
+                    let finalNiceClasses = parsedGS.classes;
+                    let finalGoodsByClass = parsedGS.goodsByClass;
+                    
+                    // Eğer metin içinde sınıf bulunamadıysa, "Classes" sütunundan al
+                    if (finalNiceClasses.length === 0) {
+                        const classCol = rowData["Classes"]; // Örn: "32, 33" veya 33
+                        if (classCol) {
+                            finalNiceClasses = String(classCol).split(',').map(c => c.trim().replace(/\D/g, '')); // Sadece sayıları al
+                        }
+                        
+                        // Eğer metin var ama sınıf etiketi yoksa, metni ilk sınıfa veya 0'a ata
+                        if (parsedGS.raw) {
+                            const mainClass = finalNiceClasses.length > 0 ? finalNiceClasses[0] : '0';
+                            finalGoodsByClass = [{ classNo: mainClass, items: [parsedGS.raw] }];
+                        }
+                    }
+
                     const rawJurisdictions = rowData.Jurisdictions || "";
                     const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
                     
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
-                    
-                    // Marka adını tamamen küçük harfe çevir
                     const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
 
                     const baseData = {
@@ -313,10 +363,13 @@
                         registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no"]) : "",
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
-                        niceClasses: parsedJS.classes,
-                        goodsAndServicesByClass: [{ classNo: parsedJS.classes[0] || '0', items: [parsedJS.cleanText] }],
+                        
+                        // Güncellenmiş Sınıf ve Mal/Hizmet Yapısı
+                        niceClasses: finalNiceClasses,
+                        goodsAndServicesByClass: finalGoodsByClass,
+                        
                         source: "Excel Import",
-                        createdFrom: "excel_upload", // Yeni Metadata Alanı
+                        createdFrom: "excel_upload",
                         type: "trademark",
                         createdAt: new Date().toISOString()
                     };
@@ -327,36 +380,29 @@
                         // --- WIPO PARENT KAYDI ---
                         
                         // 1. Ülkeleri Parsele (Boşlukları temizle ve kodları bul)
-                        // Örn: "Germany, France " -> ["DE", "FR"]
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
                             .filter(c => c.length > 0)
                             .map(cName => getCountryCode(cName));
 
-                        // 2. Parent Verisini Oluştur
                         const wipoParentData = {
                             ...baseData,
-                            // country alanı kaldırıldı (İstek 2)
-                            countries: countryCodes, // Kod array'i (İstek 1)
+                            countries: countryCodes, // Kod array'i (Örn: ["DE", "FR"])
                             transactionHierarchy: "parent",
                             origin: "WIPO",
-                            // Parent için özel override:
                             applicationNumber: baseData.registrationNumber, 
                             applicationDate: baseData.registrationDate      
                         };
 
                         const parentResult = await ipRecordsService.addRecord(wipoParentData);
-
                         if (!parentResult.success) throw new Error("Parent WIPO hatası: " + parentResult.error);
                         createdRecords.push({ id: parentResult.id || parentResult.data?.id, role: 'parent' });
 
-                        // --- WIPO CHILD KAYITLARI (Ülkeler) ---
-                        // Çocuk kayıtlar için hala ülke isminden koda gitmemiz gerekiyor
+                        // --- WIPO CHILD KAYITLARI ---
                         const countryNames = rawJurisdictions.split(',').map(c => c.trim()).filter(c => c.length > 0);
                         
                         for (const countryName of countryNames) {
                             const childCode = getCountryCode(countryName);
-                            // Child kayıtta tekil 'country' alanı olmalı
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
@@ -392,7 +438,7 @@
                             description: 'Excel ile otomatik oluşturulan başvuru kaydı.',
                             timestamp: new Date().toISOString(),
                             transactionHierarchy: rec.role,
-                            createdFrom: "excel_upload" // Transaction'a da eklenebilir
+                            createdFrom: "excel_upload"
                         });
                     }
 
