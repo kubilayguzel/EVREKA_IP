@@ -49,7 +49,6 @@
         .card-title { font-size: 16px; font-weight: 600; color: var(--text-dark); margin: 0; }
         .card-body { padding: 25px; }
 
-        /* Müşteri Arama */
         .client-search-wrapper { position: relative; max-width: 600px; }
         .form-control { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.2s; }
         .form-control:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1); }
@@ -61,14 +60,12 @@
         .client-tag i { cursor: pointer; color: #94a3b8; transition: 0.2s; }
         .client-tag i:hover { color: #ef4444; }
 
-        /* Drop Zone */
         .drop-zone { border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .drop-zone:hover { border-color: var(--primary-color); background: var(--primary-light); }
         .drop-zone-icon { font-size: 40px; color: #94a3b8; margin-bottom: 15px; }
         .drop-zone h3 { margin: 0 0 5px 0; font-size: 16px; font-weight: 600; }
         .drop-zone p { margin: 0; font-size: 13px; color: var(--text-gray); }
 
-        /* Progress & Logs */
         .progress-section { margin-top: 25px; display: none; }
         .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
         .progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
@@ -81,7 +78,6 @@
         .log-item { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
         .log-success { color: #4ade80; }
         .log-error { color: #f87171; }
-        .log-warning { color: #fbbf24; }
         .btn-restart { margin-top: 20px; padding: 12px 24px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; display: none; float: right; }
         .btn-restart:hover { background: #162c55; }
         @media (max-width: 768px) { .main-content { padding: 20px; padding-top: 100px; } }
@@ -151,7 +147,6 @@
     <script type="module">
         import { db, storage, ipRecordsService, auth } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        // Storage importları eklendi
         import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
@@ -386,16 +381,13 @@
             return !snapshot.empty; 
         }
 
-        // --- RESİM YÜKLEME YARDIMCISI ---
+        // --- RESİM YÜKLEME ---
         async function uploadImageToStorage(buffer, extension, brandName) {
             try {
                 const safeName = brandName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 const filename = `brand-logos/${Date.now()}_${safeName}.${extension}`;
                 const storageRef = ref(storage, filename);
-                
-                // Buffer'ı Blob'a çevir (ExcelJS buffer'ı ArrayBuffer olarak verir)
                 const blob = new Blob([buffer], { type: `image/${extension}` });
-                
                 await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(storageRef);
                 return url;
@@ -405,34 +397,18 @@
             }
         }
 
-        // --- EXCEL RESİM AYRIŞTIRICI ---
+        // --- RESİM AYRIŞTIRMA ---
         function extractImagesFromSheet(workbook, sheet) {
             const imageMap = {};
-            
-            // Workbook içindeki medyaları al
-            // Sheet.getImages() -> [{ range: {tl, br}, imageId: '1' }, ...]
             const images = sheet.getImages();
-            
             if (!images || images.length === 0) return imageMap;
-
             images.forEach(img => {
-                // tl.nativeRow = 0-indexed satır numarası
-                // tl.nativeCol = 0-indexed sütun numarası. Logo sütunu B ise (index 1) kontrol edebiliriz.
-                
-                // ExcelJS'de range.tl.nativeCol bize sütunu verir.
-                // Bizim Logo sütunu 2. sütun (B) -> index 1
-                
-                const rowIndex = img.range.tl.nativeRow + 1; // 1-based satır numarası (workbook loop'u ile uyumlu olması için)
+                const rowIndex = img.range.tl.nativeRow + 1; 
                 const colIndex = img.range.tl.nativeCol;
-
-                // Sadece Logo sütunundakileri al (B sütunu = index 1)
                 if (colIndex === 1) { 
                     const media = workbook.getImage(img.imageId);
                     if (media) {
-                        imageMap[rowIndex] = {
-                            buffer: media.buffer,
-                            extension: media.extension
-                        };
+                        imageMap[rowIndex] = { buffer: media.buffer, extension: media.extension };
                     }
                 }
             });
@@ -462,12 +438,9 @@
             await workbook.xlsx.load(file);
             const sheet = workbook.getWorksheet(1);
             
-            // 1. ADIM: RESİMLERİ AYRIŞTIR
-            log("Resimler taranıyor...", 'info');
+            // Resimleri Tara
             const rowImages = extractImagesFromSheet(workbook, sheet);
-            const imageCount = Object.keys(rowImages).length;
-            if (imageCount > 0) log(`${imageCount} adet logo bulundu. Yükleme sırasında işlenecek.`, 'success');
-
+            
             const rowsToProcess = [];
             sheet.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return;
@@ -504,11 +477,10 @@
                     
                     const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
 
-                    // --- RESİM YÜKLEME ---
+                    // Resim Varsa Yükle
                     let uploadedImageUrl = null;
                     if (rowImages[rowData.rowNumber]) {
                         const imgData = rowImages[rowData.rowNumber];
-                        // log(`Logo yükleniyor: ${formattedBrandText}...`, 'warning'); // Çok fazla log olmaması için kapalı
                         uploadedImageUrl = await uploadImageToStorage(imgData.buffer, imgData.extension, formattedBrandText);
                     }
 
@@ -545,7 +517,7 @@
                         brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
                         
-                        brandImageUrl: uploadedImageUrl, // ARTIK RESİM URL'İ BURAYA GELİYOR
+                        brandImageUrl: uploadedImageUrl,
 
                         status: mappedStatus,
                         applicationNumber: appNum,
@@ -553,7 +525,10 @@
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
                         renewalDate: expDateStr,
-                        vekil: rowData.Representative ? rowData.Representative.trim() : "",
+                        
+                        // --- GÜNCELLEME BURADA ---
+                        representative: rowData.Representative ? rowData.Representative.trim() : "", // vekil -> representative
+                        
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
                         source: "Excel Import",
