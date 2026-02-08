@@ -688,48 +688,77 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('createTaskAccrualModal').classList.add('show');
         }
 
-        async handleSaveNewAccrual() {
-            if (!this.currentTaskForAccrual) return;
+        async handleSaveNewAccrual() { 
+        if (!this.currentTaskForAccrual) return;
 
-            const result = this.createTaskFormManager.getData();
-            if (!result.success) { showNotification(result.error, 'error'); return; }
-            const formData = result.data;
+        // ✅ çift submit engeli (buton id'niz farklıysa düzenleyin)
+        const btn = document.getElementById('saveNewAccrualBtn') || document.getElementById('submitNewAccrualBtn');
+        if (btn) btn.disabled = true;
 
-            let loader = window.showSimpleLoading ? window.showSimpleLoading('Tahakkuk Kaydediliyor') : null;
+        const result = this.createTaskFormManager.getData();
+        if (!result.success) { 
+            showNotification(result.error, 'error'); 
+            if (btn) btn.disabled = false;
+            return; 
+        }
 
-            let uploadedFiles = [];
-            if (formData.files && formData.files.length > 0) {
-                try {
-                    const file = formData.files[0];
-                    const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
-                    const snapshot = await uploadBytes(storageRef, file);
-                    const url = await getDownloadURL(snapshot.ref);
-                    uploadedFiles.push({ name: file.name, url, type: 'foreign_invoice', documentDesignation: 'Yurtdışı Fatura/Debit', uploadedAt: new Date().toISOString() });
-                } catch(err) { 
-                    if(loader) loader.hide(); showNotification("Dosya yüklenemedi.", "error"); return; 
-                }
+        const formData = result.data;
+
+        let loader = window.showSimpleLoading ? window.showSimpleLoading('Tahakkuk Kaydediliyor') : null;
+
+        // ✅ FileList'i DB'ye yazmıyoruz; upload sonrası metadata yazıyoruz
+        const { files, ...formDataNoFiles } = formData;
+
+        let uploadedFiles = [];
+        if (files && files.length > 0) {
+            try {
+                const file = files[0];
+                const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                const url = await getDownloadURL(snapshot.ref);
+
+                uploadedFiles.push({ 
+                    name: file.name, 
+                    url, 
+                    type: 'foreign_invoice', 
+                    documentDesignation: 'Yurtdışı Fatura/Debit', 
+                    uploadedAt: new Date().toISOString() 
+                });
+            } catch(err) { 
+                if (loader) loader.hide(); 
+                showNotification("Dosya yüklenemedi.", "error"); 
+                if (btn) btn.disabled = false;
+                return; 
             }
+        }
 
-            const newAccrual = {
-                taskId: this.currentTaskForAccrual.id,
-                taskTitle: this.currentTaskForAccrual.title,
-                officialFee: formData.officialFee,
-                serviceFee: formData.serviceFee,
-                vatRate: formData.vatRate, 
-                applyVatToOfficialFee: formData.applyVatToOfficialFee,
-                totalAmount: formData.totalAmount, 
-                totalAmountCurrency: 'TRY', 
-                remainingAmount: formData.totalAmount, 
-                status: 'unpaid',
-                tpInvoiceParty: formData.tpInvoiceParty,
-                serviceInvoiceParty: formData.serviceInvoiceParty,
-                isForeignTransaction: formData.isForeignTransaction, 
-                createdAt: new Date().toISOString(),
-                files: uploadedFiles
-            };
+        // ✅ En geniş payload: formDataNoFiles bazlı
+        // Not: taskId / taskTitle ve status/remainingAmount gibi sistem alanlarını biz belirliyoruz.
+        const newAccrual = {
+            taskId: this.currentTaskForAccrual.id,
+            taskTitle: this.currentTaskForAccrual.title,
 
+            ...formDataNoFiles,
+
+            // ✅ normalize: boş string -> null
+            tpeInvoiceNo: formDataNoFiles.tpeInvoiceNo?.trim() || null,
+            evrekaInvoiceNo: formDataNoFiles.evrekaInvoiceNo?.trim() || null,
+
+            // ✅ currency: formdan gelmiyorsa TRY fallback (istersen kaldır)
+            totalAmountCurrency: formDataNoFiles.totalAmountCurrency || 'TRY',
+
+            // ✅ kalan tutar ilk oluşturma anında total ile başlar
+            remainingAmount: formDataNoFiles.totalAmount,
+
+            status: 'unpaid',
+            createdAt: new Date().toISOString(),
+
+            files: uploadedFiles
+        };
+
+        try {
             const res = await accrualService.addAccrual(newAccrual);
-            if(loader) loader.hide();
+            if (loader) loader.hide();
 
             if (res.success) { 
                 showNotification('Ek tahakkuk başarıyla oluşturuldu!', 'success'); 
@@ -738,10 +767,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else { 
                 showNotification('Hata: ' + res.error, 'error'); 
             }
+        } catch (e) {
+            if (loader) loader.hide();
+            showNotification('Hata: ' + (e?.message || e), 'error');
+        } finally {
+            if (btn) btn.disabled = false;
         }
+    }
+
 
         // --- Tahakkuk Tamamlama Mantığı ---
-        openCompleteAccrualModal(taskId) {
+        async openCompleteAccrualModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
 
@@ -757,74 +793,160 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (parent?.details?.epatsDocument) epatsDoc = parent.details.epatsDocument;
                 }
                 this.completeTaskFormManager.showEpatsDoc(epatsDoc);
+                // ✅ Eğer bu task bir tahakkuk GÜNCELLEME işi ise, hedef tahakkuku çekip forma bas
+                const targetAccrualId = task.details?.targetAccrualId;
+                if (targetAccrualId) {
+                    try {
+                        const accRef = doc(db, 'accruals', String(targetAccrualId));
+                        const accSnap = await getDoc(accRef);
+                        if (accSnap.exists()) {
+                            this.completeTaskFormManager.setData(accSnap.data());
+                        }
+                    } catch (e) {
+                        console.warn('Target accrual fetch error:', e);
+                    }
+                }
+
             }
 
             document.getElementById('completeAccrualTaskModal').classList.add('show');
         }
 
         async handleCompleteAccrualSubmission() {
-             const taskId = document.getElementById('targetTaskIdForCompletion')?.value;
-             const task = this.allTasks.find(t => t.id === taskId);
-             if(!task) return;
+            const taskId = document.getElementById('targetTaskIdForCompletion')?.value;
+            const task = this.allTasks.find(t => t.id === taskId);
+            if (!task) return;
 
-             const result = this.completeTaskFormManager.getData();
-             if(!result.success) { showNotification(result.error, 'error'); return; }
-             const formData = result.data;
+            // ✅ çift submit engeli
+            const btn = document.getElementById('submitCompleteAccrualBtn');
+            if (btn) btn.disabled = true;
 
-             let loader = window.showSimpleLoading ? window.showSimpleLoading('İşlem Tamamlanıyor') : null;
+            const result = this.completeTaskFormManager.getData();
+            if (!result.success) {
+                showNotification(result.error, 'error');
+                if (btn) btn.disabled = false;
+                return;
+            }
 
-             let uploadedFiles = [];
-             if (formData.files && formData.files.length > 0) {
-                 try {
-                     const file = formData.files[0];
-                     const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
-                     const snapshot = await uploadBytes(storageRef, file);
-                     const url = await getDownloadURL(snapshot.ref);
-                     uploadedFiles.push({ name: file.name, url, type: 'foreign_invoice', documentDesignation: 'Yurtdışı Fatura/Debit', uploadedAt: new Date().toISOString() });
-                 } catch(err) { if(loader) loader.hide(); showNotification("Dosya yükleme hatası.", "error"); return; }
-             }
+            const formData = result.data;
+            const { files, ...formDataNoFiles } = formData; // FileList DB'ye gitmesin
 
-             const cleanTitle = task.title ? task.title.replace('Tahakkuk Oluşturma: ', '') : 'Tahakkuk';
-             
-             const accrualData = {
-                 taskId: task.relatedTaskId || taskId, 
-                 taskTitle: cleanTitle,
-                 officialFee: formData.officialFee,
-                 serviceFee: formData.serviceFee,
-                 vatRate: formData.vatRate, 
-                 applyVatToOfficialFee: formData.applyVatToOfficialFee,
-                 totalAmount: formData.totalAmount, 
-                 totalAmountCurrency: 'TRY', 
-                 status: 'unpaid', 
-                 remainingAmount: formData.totalAmount,
-                 tpInvoiceParty: formData.tpInvoiceParty,
-                 serviceInvoiceParty: formData.serviceInvoiceParty,
-                 isForeignTransaction: formData.isForeignTransaction,
-                 createdAt: new Date().toISOString(),
-                 files: uploadedFiles
-             };
+            let loader = window.showSimpleLoading ? window.showSimpleLoading('İşlem Tamamlanıyor') : null;
 
-             try {
-                 const accResult = await accrualService.addAccrual(accrualData);
-                 if (!accResult.success) throw new Error(accResult.error);
-                 
-                 const updateData = {
-                     status: 'completed', updatedAt: new Date().toISOString(),
-                     history: [...(task.history || []), { action: 'Tahakkuk oluşturularak görev tamamlandı.', timestamp: new Date().toISOString(), userEmail: this.currentUser.email }]
-                 };
-                 const taskResult = await taskService.updateTask(taskId, updateData);
-                 
-                 if(loader) loader.hide();
-                 if (taskResult.success) { 
-                     showNotification('Tahakkuk oluşturuldu ve görev tamamlandı.', 'success'); 
-                     this.closeModal('completeAccrualTaskModal'); 
-                     await this.loadAllData(); 
-                 } 
-                 else throw new Error('Görev güncellenemedi.');
-             } catch(e) { 
-                 if(loader) loader.hide(); 
-                 showNotification('Hata: ' + e.message, 'error'); 
-             }
+            // Dosya upload
+            let uploadedFiles = [];
+            if (files && files.length > 0) {
+                try {
+                    const file = files[0];
+                    const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
+                    const snapshot = await uploadBytes(storageRef, file);
+                    const url = await getDownloadURL(snapshot.ref);
+                    uploadedFiles.push({
+                        name: file.name,
+                        url,
+                        type: 'foreign_invoice',
+                        documentDesignation: 'Yurtdışı Fatura/Debit',
+                        uploadedAt: new Date().toISOString()
+                    });
+                } catch (err) {
+                    if (loader) loader.hide();
+                    showNotification("Dosya yükleme hatası.", "error");
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+            }
+
+            const cleanTitle = task.title ? task.title.replace('Tahakkuk Oluşturma: ', '') : 'Tahakkuk';
+
+            // ✅ En geniş payload: AccrualFormManager çıktısını baz al
+            const basePayload = {
+                taskId: task.relatedTaskId || taskId,
+                taskTitle: cleanTitle,
+                ...formDataNoFiles,
+
+                // normalize: boş string yerine null
+                tpeInvoiceNo: formDataNoFiles.tpeInvoiceNo?.trim() || null,
+                evrekaInvoiceNo: formDataNoFiles.evrekaInvoiceNo?.trim() || null
+            };
+
+            const targetAccrualId = task.details?.targetAccrualId;
+
+            try {
+                // 1) UPDATE yolu: targetAccrualId varsa yeni tahakkuk açma!
+                if (targetAccrualId) {
+                    const accRef = doc(db, 'accruals', String(targetAccrualId));
+                    const accSnap = await getDoc(accRef);
+                    if (!accSnap.exists()) throw new Error('Güncellenecek tahakkuk bulunamadı.');
+
+                    const existing = accSnap.data();
+                    const mergedFiles = uploadedFiles.length > 0
+                        ? [ ...(existing.files || []), ...uploadedFiles ]
+                        : (existing.files || []);
+
+                    // remainingAmount’ı güvenli güncelle (eski remainingAmount = eski totalAmount ise yeni total’a eşitle)
+                    let remainingAmountUpdate = {};
+                    try {
+                        const sameRemaining =
+                            JSON.stringify(existing.remainingAmount || null) === JSON.stringify(existing.totalAmount || null);
+                        if (sameRemaining) remainingAmountUpdate = { remainingAmount: basePayload.totalAmount };
+                    } catch (_) {}
+
+                    const updates = {
+                        ...basePayload,
+                        files: mergedFiles,
+                        ...remainingAmountUpdate
+                        // createdAt/createdBy/status gibi alanları bilerek set etmiyoruz
+                    };
+
+                    const updRes = await accrualService.updateAccrual(String(targetAccrualId), updates);
+                    if (!updRes.success) throw new Error(updRes.error);
+
+                } else {
+                    // 2) ADD yolu: targetAccrualId yoksa yeni tahakkuk oluştur
+                    const newAccrual = {
+                        ...basePayload,
+                        status: 'unpaid',
+                        remainingAmount: basePayload.totalAmount,
+                        files: uploadedFiles
+                    };
+
+                    const addRes = await accrualService.addAccrual(newAccrual);
+                    if (!addRes.success) throw new Error(addRes.error);
+
+                    // ✅ yeni oluşan tahakkuk id’sini task.details.targetAccrualId olarak yaz
+                    await taskService.updateTask(taskId, {
+                        details: { ...(task.details || {}), targetAccrualId: addRes.data.id }
+                    });
+                }
+
+                // Görevi kapat
+                const updateData = {
+                    status: 'completed',
+                    updatedAt: new Date().toISOString(),
+                    history: [
+                        ...(task.history || []),
+                        {
+                            action: targetAccrualId ? 'Tahakkuk güncellenerek görev tamamlandı.' : 'Tahakkuk oluşturularak görev tamamlandı.',
+                            timestamp: new Date().toISOString(),
+                            userEmail: this.currentUser.email
+                        }
+                    ]
+                };
+
+                const taskResult = await taskService.updateTask(taskId, updateData);
+                if (!taskResult.success) throw new Error('Görev güncellenemedi.');
+
+                if (loader) loader.hide();
+                showNotification(targetAccrualId ? 'Tahakkuk güncellendi ve görev tamamlandı.' : 'Tahakkuk oluşturuldu ve görev tamamlandı.', 'success');
+                this.closeModal('completeAccrualTaskModal');
+                await this.loadAllData();
+
+            } catch (e) {
+                if (loader) loader.hide();
+                showNotification('Hata: ' + e.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         closeModal(modalId) {
