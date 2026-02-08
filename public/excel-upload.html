@@ -3,495 +3,198 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPGATE - Excel Yükleme</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="stylesheet" href="./css/shared-styles.css">
+    <title>Excel ile Portföy Yükleme | Evreka IP</title>
+    <link rel="stylesheet" href="css/shared-styles.css">
+    <link rel="stylesheet" href="css/data-entry.css">
+    <link rel="stylesheet" href="css/simple-loading.css">
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
     <style>
-        /* Bu sayfaya özel stiller */
-        /* Genel body, page-wrapper, main-container stilleri shared-styles.css'ten gelecektir. */
-        /* Sadece bu sayfaya özgü ve çakışmayan stilleri burada tutun */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #333;
-            display: flex;
-        }
-        
-        .page-wrapper {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow-y: auto;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        }
-
-        .main-container { width: 100%; padding: 30px; padding-top: 120px; }
-        .breadcrumb { display: flex; align-items: center; gap: 10px; color: #666; font-size: 1.1em; }
-        .breadcrumb a { color: #1e3c72; text-decoration: none; }
-        .back-btn { background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; }
-        .back-btn:hover { background: #5a6268; transform: translateY(-1px); }
-
-        /* === EXCEL UPLOAD SAYFASINA AİT ORİJİNAL STİLLER === */
-        .page-header-section { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); text-align: center; margin-bottom: 30px; }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .form-container { background: rgba(255, 255, 255, 0.95); padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .notification-message { padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-        .notification-message.success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
-        .notification-message.error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
-        .notification-message.info { background: #cce5ff; color: #004085; border-left: 4px solid #007bff; }
-        .form-group { margin-bottom: 25px; }
-        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        .form-input, .form-select { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; background: white; }
-        .form-input:focus, .form-select:focus { outline: none; border-color: #1e3c72; box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1); }
-        .file-upload-area { border: 2px dashed #e1e8ed; border-radius: 10px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.3s ease; }
-        .file-upload-area:hover { border-color: #1e3c72; background: #f0f4f8; }
-        .upload-icon { font-size: 3em; color: #1e3c72; margin-bottom: 15px; }
-        .preview-table-container { max-height: 400px; overflow-y: auto; border: 1px solid #e1e8ed; border-radius: 10px; margin-top: 20px; display: none; }
-        .preview-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-        .preview-table th, .preview-table td { padding: 10px 15px; border: 1px solid #e1e8ed; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .preview-table th { background: #f8f9fa; font-weight: 600; color: #333; position: sticky; top: 0; z-index: 1; }
-        .preview-table tbody tr:nth-child(even) { background: #fcfcfc; }
-        .preview-table tbody tr:hover { background: #f0f4f8; }
-        .form-actions { display: flex; gap: 15px; margin-top: 40px; padding-top: 30px; border-top: 2px solid #e1e8ed; justify-content: flex-end; }
-        .btn { padding: 15px 30px; border: none; border-radius: 10px; font-size: 1.1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
-        .btn-primary { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(30, 60, 114, 0.3); }
-        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #5a6268; }
-        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #ffffff; border-radius: 50%; border-top-color: transparent; animation: spin 1s ease-in-out infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .column-mapping-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e8ed; }
-        .column-mapping-section h3 { font-size: 1.2em; color: #1e3c72; margin-bottom: 20px; }
-        .mapping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .mapping-item { display: flex; flex-direction: column; gap: 5px; }
-        .mapping-label { font-weight: 500; color: #333; font-size: 0.95em; }
-        .mapping-select { width: 100%; padding: 8px 12px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 0.9em; }
-        @media (max-width: 768px) { .form-actions { flex-direction: column; } .btn { width: 100%; } .column-mapping-section .mapping-grid { grid-template-columns: 1fr; } }
+        .upload-wrapper { padding: 30px; max-width: 1000px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .config-card { background: #fdfdfd; border: 1px solid #eef0f2; padding: 20px; border-radius: 8px; margin-bottom: 25px; }
+        .drop-zone { border: 2px dashed #3498db; padding: 50px; text-align: center; border-radius: 10px; cursor: pointer; transition: background 0.3s; }
+        .drop-zone:hover { background: #f7faff; }
+        .status-log { margin-top: 25px; max-height: 300px; overflow-y: auto; padding: 15px; background: #2c3e50; color: #ecf0f1; border-radius: 6px; font-family: monospace; font-size: 13px; }
+        .log-success { color: #2ecc71; }
+        .log-error { color: #e74c3c; }
+        .client-select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-top: 8px; font-size: 15px; }
     </style>
 </head>
 <body>
-    <div id="layout-placeholder"></div>
-    <div class="page-wrapper">
-        <main class="main-container">
-            <div class="page-header-section">
-                <h1 class="page-title">Excel Veri Yükleme</h1>
-                <p class="page-subtitle">Excel dosyanızdaki fikri mülkiyet kayıtlarını toplu olarak sisteme aktarın.</p>
-            </div>
-    
-            <div class="form-container">
-                <div class="notification-message success" id="successMessage" style="display: none;"><span>✅</span><span id="successText">Veriler başarıyla yüklendi!</span></div>
-                <div class="notification-message error" id="errorMessage" style="display: none;"><span>❌</span><span id="errorText">Bir hata oluştu. Lütfen tekrar deneyin.</span></div>
-                <div class="notification-message info" id="infoMessage" style="display: none;"><span>ℹ️</span><span id="infoText"></span></div>
-    
-                <form id="excelUploadForm" onsubmit="return false;">
-                    <div class="form-group">
-                        <label class="form-label" for="excelFile">1. Excel Dosyasını Seçin <span style="color:red;">*</span></label>
-                        <div class="file-upload-area" id="fileUploadArea">
-                            <div class="upload-icon">📄</div>
-                            <div>Dosyayı buraya sürükleyin veya tıklayın</div>
-                            <div style="font-size: 0.8em; color: #666; margin-top: 5px;">Sadece .xlsx veya .xls uzantılı dosyalar.</div>
-                            <input type="file" id="excelFile" hidden accept=".xlsx, .xls">
-                        </div>
-                    </div>
-    
-                    <div class="form-group" id="sheetSelectionGroup" style="display: none;">
-                        <label class="form-label" for="sheetName">2. Hangi Sayfayı Yükleyeceksiniz?</label>
-                        <select id="sheetName" class="form-select"></select>
-                    </div>
-    
-                    <div class="form-group" id="headerRowGroup" style="display: none;">
-                        <label class="form-label">3. İlk Satır Başlık Satırı Mı?</label>
-                        <input type="checkbox" id="hasHeader" checked> Evet, ilk satır sütun başlıklarını içeriyor.
-                    </div>
-    
-                    <div class="preview-table-container" id="previewTableContainer">
-                        <table class="preview-table"><thead></thead><tbody></tbody></table>
-                    </div>
-    
-                    <div class="column-mapping-section" id="columnMappingSection" style="display: none;">
-                        <h3>4. Sütun Eşleştirme (Zorunlu Alanlar)</h3>
-                        <p style="font-size: 0.9em; color: #666; margin-bottom: 20px;">Veritabanı alanlarını Excel sütunlarınızla eşleştirin.</p>
-                        <div class="mapping-grid">
-                            <div class="mapping-item"><label class="mapping-label">IP Türü <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="type"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Başlık/Ad <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="title"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Durum <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="status"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Başvuru Tarihi <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="applicationDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Açıklama <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="description"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Hak Sahipleri (İsimler) <span style="color:red;">*</span></label><select class="mapping-select required-mapping" data-db-field="owners"></select><small style="font-size:0.8em; color:#888;">Birden fazla ise virgül ile ayırın.</small></div>
-                            <div class="mapping-item"><label class="mapping-label">Başvuru Numarası</label><select class="mapping-select" data-db-field="applicationNumber"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Tescil Numarası</label><select class="mapping-select" data-db-field="registrationNumber"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Yenileme Tarihi</label><select class="mapping-select" data-db-field="renewalDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Bülten Tarihi</label><select class="mapping-select" data-db-field="bulletinDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Bülten Numarası</label><select class="mapping-select" data-db-field="bulletinNumber"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Patent Sınıfı</label><select class="mapping-select" data-db-field="patentClass"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Son Geçerlilik Tarihi</label><select class="mapping-select" data-db-field="expiryDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Öncelik Tarihi</label><select class="mapping-select" data-db-field="priority"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Patent İstekleri</label><select class="mapping-select" data-db-field="claims"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Marka Türü</label><select class="mapping-select" data-db-field="trademarkType"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Nice Sınıfı</label><select class="mapping-select" data-db-field="niceClass"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Mal ve Hizmetler</label><select class="mapping-select" data-db-field="goodsServices"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Eser Türü</label><select class="mapping-select" data-db-field="workType"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Eser Oluşturulma Tarihi</label><select class="mapping-select" data-db-field="creationDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Yayın Tarihi</label><select class="mapping-select" data-db-field="publicationDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Yayınevi/Yapımcı</label><select class="mapping-select" data-db-field="publisher"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Tasarım Türü</label><select class="mapping-select" data-db-field="designType"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Locarno Sınıfı</label><select class="mapping-select" data-db-field="locarnoClass"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Tasarım Tarihi</label><select class="mapping-select" data-db-field="designDate"></select></div>
-                            <div class="mapping-item"><label class="mapping-label">Tasarım Özellikleri</label><select class="mapping-select" data-db-field="designFeatures"></select></div>
-                        </div>
-                    </div>
-    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" id="cancelUploadBtn">İptal</button>
-                        <button type="button" class="btn btn-primary" id="uploadBtn" disabled><span id="uploadText">Verileri Yükle</span><span class="loading-spinner" id="uploadLoading" style="display: none;"></span></button>
-                    </div>
-                </form>
-            </div>
-        </main>
+    <div id="layout-header"></div>
+
+    <div class="upload-wrapper">
+        <h2>Excel ile Portföy Kaydı Aktarımı</h2>
+        <p>Excel dosyasındaki verileri otomatik olarak parçalar, WIPO hiyerarşisini kurar ve seçilen müşteriye atar.</p>
+
+        <div class="config-card">
+            <label><strong>1. Aktarılacak Müşteriyi Seçin</strong></label>
+            <select id="clientSelect" class="client-select">
+                <option value="">Müşteri listesi yükleniyor...</option>
+            </select>
+        </div>
+
+        <div id="dropZone" class="drop-zone">
+            <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
+            <p><strong>Dosyayı Buraya Sürükleyin</strong></p>
+            <p>veya tıklayarak dosya seçin (.xlsx)</p>
+        </div>
+
+        <div id="statusLog" class="status-log" style="display: none;"></div>
     </div>
 
-    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script type="module">
-        import { authService, ipRecordsService, personService, auth } from './firebase-config.js';
-        import { showNotification } from './utils.js';
-        import { loadSharedLayout } from './js/layout-loader.js'; // layout-loader.js eklendi
-        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { db, storage } from './firebase-config.js';
+        import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { ipRecordsService } from './js/portfolio/PortfolioDataManager.js';
 
-        let excelUploadModule;
-
-        class ExcelUploadModule {
-            constructor() {
-                this.selectedFile = null;
-                this.workbook = null;
-                this.dataRows = [];
-                this.columnHeaders = [];
-                this.currentUser = null;
-                this.allPersons = [];
-                this.init();
-            }
-
-            init() {
-            const user = auth.currentUser || authService.getCurrentUser();
-            if (!user) { 
-                // Redirect burada yapılmıyor; sayfa guard’ı halledecek
-                return; 
-            }
-            this.currentUser = user;
-            this.loadAllPersons().then(() => {
-                this.initializeEventListeners();
-            }).catch(console.error);
-            }
-            // updateUserInfo() { /* Bu fonksiyon artık layout-loader.js içinde */ }
-            
-            async loadAllPersons() {
-                const result = await personService.getPersons();
-                if (result.success) {
-                    this.allPersons = result.data;
-                } else {
-                    console.error('Kişiler yüklenirken hata:', result.error);
-                    showNotification('Kişiler yüklenirken bir hata oluştu.', 'error');
-                }
-            }
-            
-            initializeEventListeners() {
-                const fileUploadArea = document.getElementById('fileUploadArea');
-                const excelFileInput = document.getElementById('excelFile');
-                fileUploadArea.addEventListener('click', () => excelFileInput.click());
-                excelFileInput.addEventListener('change', (e) => this.handleFile(e.target.files[0]));
-                fileUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); fileUploadArea.style.borderColor = '#1e3c72'; fileUploadArea.style.background = '#f0f4f8'; });
-                fileUploadArea.addEventListener('dragleave', () => { fileUploadArea.style.borderColor = '#e1e8ed'; fileUploadArea.style.background = 'transparent'; });
-                fileUploadArea.addEventListener('drop', (e) => { e.preventDefault(); fileUploadArea.style.borderColor = '#e1e8ed'; fileUploadArea.style.background = 'transparent'; this.handleFile(e.dataTransfer.files[0]); });
-                document.getElementById('sheetName').addEventListener('change', () => this.readSelectedSheet());
-                document.getElementById('hasHeader').addEventListener('change', () => this.readSelectedSheet());
-                document.getElementById('uploadBtn').addEventListener('click', () => this.uploadDataToDatabase());
-                document.getElementById('cancelUploadBtn').addEventListener('click', () => this.resetForm());
-            }
-
-            showNotification(message, type = 'info') {
-                showNotification(message, type);
-            }
-
-            setLoading(isLoading) {
-                const uploadBtn = document.getElementById('uploadBtn');
-                const uploadText = document.getElementById('uploadText');
-                const uploadLoading = document.getElementById('uploadLoading');
-
-                uploadBtn.disabled = isLoading;
-                uploadText.style.display = isLoading ? 'none' : 'inline';
-                uploadLoading.style.display = isLoading ? 'inline-block' : 'none';
-            }
-
-            handleFile(file) {
-                this.resetForm();
-                this.selectedFile = file;
-
-                if (!this.selectedFile) {
-                    this.showNotification('Lütfen bir Excel dosyası seçin.', 'error');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const data = new Uint8Array(e.target.result);
-                    this.workbook = XLSX.read(data, { type: 'array' });
-                    this.populateSheetSelection();
-                };
-                reader.onerror = (error) => {
-                    this.showNotification('Dosya okuma hatası: ' + error.message, 'error');
-                };
-                reader.readAsArrayBuffer(this.selectedFile);
-            }
-
-            populateSheetSelection() {
-                const sheetNameSelect = document.getElementById('sheetName');
-                sheetNameSelect.innerHTML = '';
-                this.workbook.SheetNames.forEach(sheetName => {
-                    const option = document.createElement('option');
-                    option.value = sheetName;
-                    option.textContent = sheetName;
-                    sheetNameSelect.appendChild(option);
-                });
-                document.getElementById('sheetSelectionGroup').style.display = 'block';
-                document.getElementById('headerRowGroup').style.display = 'block';
-                this.readSelectedSheet();
-            }
-
-            readSelectedSheet() {
-                const sheetName = document.getElementById('sheetName').value;
-                const hasHeader = document.getElementById('hasHeader').checked;
-                const sheet = this.workbook.Sheets[sheetName];
-                
-                const jsonData = XLSX.utils.sheet_to_json(sheet, { header: hasHeader ? 1 : undefined });
-
-                this.columnHeaders = hasHeader && jsonData.length > 0 ? jsonData[0] : [];
-                this.dataRows = hasHeader ? jsonData.slice(1) : jsonData;
-
-                this.renderPreviewTable();
-                this.populateColumnMappings();
-            }
-
-            renderPreviewTable() {
-                const previewTableContainer = document.getElementById('previewTableContainer');
-                const previewTableHead = previewTableContainer.querySelector('thead');
-                const previewTableBody = previewTableContainer.querySelector('tbody');
-
-                previewTableHead.innerHTML = '';
-                previewTableBody.innerHTML = '';
-
-                if (this.dataRows.length === 0) {
-                    previewTableContainer.style.display = 'none';
-                    return;
-                }
-
-                previewTableContainer.style.display = 'block';
-
-                let headerHtml = '<tr>';
-                if (this.columnHeaders.length > 0) {
-                    this.columnHeaders.forEach(header => {
-                        headerHtml += `<th>${header}</th>`;
-                    });
-                } else {
-                    if (this.dataRows[0]) {
-                        for (let i = 0; i < Object.keys(this.dataRows[0]).length; i++) {
-                            headerHtml += `<th>Sütun ${i + 1}</th>`;
-                        }
-                    }
-                }
-                headerHtml += '</tr>';
-                previewTableHead.innerHTML = headerHtml;
-
-                let bodyHtml = '';
-                this.dataRows.slice(0, 10).forEach(row => {
-                    bodyHtml += '<tr>';
-                    Object.values(row).forEach(cell => {
-                        bodyHtml += `<td>${cell !== undefined ? cell : ''}</td>`;
-                    });
-                    bodyHtml += '</tr>';
-                });
-                previewTableBody.innerHTML = bodyHtml;
-            }
-
-            populateColumnMappings() {
-                const columnMappingSection = document.getElementById('columnMappingSection');
-                const mappingSelects = columnMappingSection.querySelectorAll('.mapping-select');
-
-                mappingSelects.forEach(select => {
-                    select.innerHTML = '<option value="">Eşleştirme Yok</option>';
-                    this.columnHeaders.forEach((header, index) => {
-                        const option = document.createElement('option');
-                        option.value = header;
-                        option.textContent = header;
-                        select.appendChild(option);
-                    });
-                });
-                columnMappingSection.style.display = 'block';
-                this.checkRequiredMappings();
-            }
-
-            checkRequiredMappings() {
-                const requiredMappings = document.querySelectorAll('.required-mapping');
-                let allRequiredMapped = true;
-
-                requiredMappings.forEach(select => {
-                    if (!select.value) {
-                        allRequiredMapped = false;
-                        return;
-                    }
-                });
-                document.getElementById('uploadBtn').disabled = !allRequiredMapped;
-            }
-            
-            async uploadDataToDatabase() {
-                this.setLoading(true);
-                const mappings = {};
-                document.querySelectorAll('.mapping-select').forEach(select => {
-                    if (select.value) {
-                        mappings[select.dataset.dbField] = select.value;
-                    }
-                });
-
-                const recordsToUpload = [];
-                for (const row of this.dataRows) {
-                    const record = {};
-                    let isValidRow = true;
-                    for (const dbField in mappings) {
-                        const excelColumnHeader = mappings[dbField];
-                        const columnIndex = this.columnHeaders.indexOf(excelColumnHeader);
-                        let cellValue = (columnIndex !== -1 && row[excelColumnHeader] !== undefined) ? row[excelColumnHeader] : '';
-
-                        if (dbField.includes('Date') && cellValue) {
-                            if (typeof cellValue === 'number') {
-                                const date = new Date(Math.round((cellValue - 25569) * 86400 * 1000));
-                                cellValue = date.toISOString().split('T')[0];
-                            } else {
-                                const date = new Date(cellValue);
-                                if (!isNaN(date.getTime())) {
-                                    cellValue = date.toISOString().split('T')[0];
-                                } else {
-                                    this.showNotification(`Hata: Geçersiz tarih formatı "${cellValue}". Lütfen YYYY-MM-DD formatını kullanın veya Excel tarih formatını kontrol edin.`, 'error', 10000);
-                                    isValidRow = false;
-                                    break;
-                                }
-                            }
-                        } else if (dbField === 'owners' && cellValue) {
-                            const ownerNames = cellValue.split(',').map(name => name.trim());
-                            const ownersArray = [];
-                            for (const name of ownerNames) {
-                                let person = this.allPersons.find(p => p.name.toLowerCase() === name.toLowerCase());
-                                if (!person) {
-                                    const newPersonData = { name: name, type: 'individual', email: null, phone: null, address: null };
-                                    const addPersonResult = await personService.addPerson(newPersonData);
-                                    if (addPersonResult.success) {
-                                        person = addPersonResult.data;
-                                        this.allPersons.push(person);
-                                    } else {
-                                        this.showNotification(`Hata: Hak sahibi "${name}" oluşturulamadı.`, 'error');
-                                        isValidRow = false;
-                                        break;
-                                    }
-                                }
-                                ownersArray.push({ id: person.id, name: person.name, type: person.type, email: person.email });
-                            }
-                            cellValue = ownersArray;
-                        }
-
-                        record[dbField] = cellValue;
-                    }
-                    if (isValidRow) {
-                        recordsToUpload.push(record);
-                    }
-                }
-
-                if (recordsToUpload.length === 0) {
-                    this.showNotification('Yüklenecek geçerli kayıt bulunamadı.', 'error');
-                    this.setLoading(false);
-                    return;
-                }
-
-                let successCount = 0;
-                let errorCount = 0;
-
-                for (const recordData of recordsToUpload) {
-                    try {
-                        const result = await ipRecordsService.addRecord(recordData);
-                        if (result.success) {
-                            successCount++;
-                        } else {
-                            throw new Error(result.error || 'Bilinmeyen hata');
-                        }
-                    } catch (error) {
-                        errorCount++;
-                        console.error('Kayıt yüklenirken hata:', recordData, error);
-                    }
-                }
-
-                if (successCount > 0) {
-                    this.showNotification(`${successCount} kayıt başarıyla yüklendi.`, 'success');
-                }
-                if (errorCount > 0) {
-                    this.showNotification(`${errorCount} kayıt yüklenirken hata oluştu. Lütfen konsolu kontrol edin.`, 'error');
-                }
-                this.setLoading(false);
-                this.resetForm();
-            }
-
-            resetForm() {
-                this.selectedFile = null;
-                this.workbook = null;
-                this.dataRows = [];
-                this.columnHeaders = [];
-                
-                document.getElementById('excelFile').value = '';
-                document.getElementById('sheetSelectionGroup').style.display = 'none';
-                document.getElementById('sheetName').innerHTML = '';
-                document.getElementById('headerRowGroup').style.display = 'none';
-                document.getElementById('hasHeader').checked = true;
-                document.getElementById('previewTableContainer').style.display = 'none';
-                document.getElementById('previewTableContainer').querySelector('thead').innerHTML = '';
-                document.getElementById('previewTableContainer').querySelector('tbody').innerHTML = '';
-                document.getElementById('columnMappingSection').style.display = 'none';
-                document.getElementById('uploadBtn').disabled = true;
-
-                this.showNotification('Form temizlendi.', 'info');
-            }
-        }
-
-        // Modül başlatma
-        document.addEventListener('DOMContentLoaded', () => {
-        // 1) Ortak layout’u arka planda yükle (bekleme yok)
-        loadSharedLayout({ activeMenuLink: 'excel-upload.html' }).catch(console.error);
-
-        // 2) Tek auth guard
-        let started = false;
-        const boot = () => {
-            if (started) return;
-            started = true;
-
-            if (!excelUploadModule) {
-            excelUploadModule = new ExcelUploadModule();
-            }
-            // Sınıf içindeki init artık redirect yapmıyor; sadece mevcut user varsa başlatıyor
-            excelUploadModule.init();
+        // --- ÜLKE MAPPER (ISO-2 KODLARI) ---
+        const COUNTRY_MAP = {
+            "Albania": "AL", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ", "Brazil": "BR",
+            "Bulgaria": "BG", "China": "CN", "Czech Republic": "CZ", "Denmark": "DK", "France": "FR",
+            "Georgia": "GE", "Germany": "DE", "Greece": "GR", "Israel": "IL", "Italy": "IT",
+            "Kazakhstan": "KZ", "Kyrgyzstan": "KG", "New Zealand": "NZ", "North Korea": "KP",
+            "North Macedonia": "MK", "Romania": "RO", "Russia": "RU", "Singapore": "SG",
+            "Spain": "ES", "Sweden": "SE", "Switzerland": "CH", "Ukraine": "UA", "United Kingdom": "GB",
+            "Turkey": "TR", "Benelux (Belgium, Netherlands, Luxembourg)": "BX", "Bosnia and Herzegovina": "BA",
+            "Colombia": "CO", "WIPO": "WIPO"
         };
 
-        // Kullanıcı zaten girişliyse anında başlat
-        if (auth.currentUser || authService.getCurrentUser()) boot();
+        const statusLog = document.getElementById('statusLog');
+        const clientSelect = document.getElementById('clientSelect');
 
-        // Değilse auth event’ini bekle; yoksa login’e REPLACE ile dön
-        onAuthStateChanged(auth, (user) => {
-            if (user) boot();
-            else window.location.replace('index.html');
-        });
-        });
+        // 1. Müşterileri Yükle
+        async function init() {
+            try {
+                const q = query(collection(db, "persons"), orderBy("name"));
+                const snap = await getDocs(q);
+                clientSelect.innerHTML = '<option value="">-- Müşteri Seçiniz --</option>';
+                snap.forEach(doc => {
+                    const opt = document.createElement('option');
+                    opt.value = doc.id;
+                    opt.textContent = doc.data().name;
+                    opt.dataset.name = doc.data().name;
+                    clientSelect.appendChild(opt);
+                });
+            } catch (e) { console.error("Müşteri yükleme hatası:", e); }
+        }
+
+        // 2. Sınıf ve Mal/Hizmet Ayrıştırıcı
+        function parseClassesAndServices(text) {
+            if (!text) return { classes: [], cleanText: "" };
+            const classRegex = /\[(\d+)\]:/g;
+            const classes = [];
+            let match;
+            while ((match = classRegex.exec(text)) !== null) {
+                if (!classes.includes(match[1])) classes.push(match[1]);
+            }
+            return { classes, cleanText: text.trim() };
+        }
+
+        // 3. Log Yazdır
+        function log(msg, type = '') {
+            statusLog.style.display = 'block';
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'log-error' : (type === 'success' ? 'log-success' : '');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            statusLog.appendChild(div);
+            statusLog.scrollTop = statusLog.scrollHeight;
+        }
+
+        // 4. Excel İşleme ve Kayıt
+        async function handleFile(file) {
+            const clientId = clientSelect.value;
+            if (!clientId) return alert("Lütfen önce müşteri seçin!");
+
+            log("Excel okunuyor...");
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(file);
+            const sheet = workbook.getWorksheet(1);
+            
+            const clientName = clientSelect.options[clientSelect.selectedIndex].dataset.name;
+
+            // Satırları dön (Başlıktan sonra - 2. satır)
+            for (let i = 2; i <= sheet.rowCount; i++) {
+                const row = sheet.getRow(i);
+                if (!row.getCell(1).value) continue; // Boş satır kontrolü
+
+                const rawName = row.getCell(1).text;
+                const registry = row.getCell(3).text;
+                const rawJurisdictions = row.getCell(13).text;
+                const parsedJS = parseClassesAndServices(row.getCell(6).text);
+
+                const baseData = {
+                    clientId,
+                    clientName,
+                    trademarkName: rawName.replace(/\n/g, ' ').trim(),
+                    status: row.getCell(4).text || "Active",
+                    applicationNumber: row.getCell(7).text || "",
+                    registrationNumber: row.getCell(8).text || "",
+                    applicationDate: row.getCell(9).value ? new Date(row.getCell(9).value) : null,
+                    registrationDate: row.getCell(10).value ? new Date(row.getCell(10).value) : null,
+                    niceClasses: parsedJS.classes,
+                    goodsServices: parsedJS.cleanText,
+                    source: "Excel Import"
+                };
+
+                try {
+                    if (registry === "INT WIPO" && rawJurisdictions.includes(",")) {
+                        // --- WIPO PARENT VE CHILD MANTIĞI ---
+                        log(`${baseData.trademarkName} için WIPO yapısı kuruluyor...`);
+                        
+                        // Parent Kaydı
+                        const parentId = await ipRecordsService.createRecord({
+                            ...baseData,
+                            countryCode: "WIPO",
+                            isParent: true,
+                            parentId: null
+                        });
+
+                        // Ülkeleri Ayır ve Child Olarak Ekle
+                        const countries = rawJurisdictions.split(',').map(c => c.trim());
+                        for (const country of countries) {
+                            const cCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
+                            await ipRecordsService.createRecord({
+                                ...baseData,
+                                countryCode: cCode,
+                                isParent: false,
+                                parentId: parentId
+                            });
+                        }
+                        log(`${baseData.trademarkName} ve bağlı ${countries.length} ülke eklendi.`, 'success');
+                    } else {
+                        // --- NORMAL TEKİL KAYIT ---
+                        const singleCountry = rawJurisdictions.split(',')[0].trim();
+                        const cCode = COUNTRY_MAP[singleCountry] || singleCountry.substring(0, 2).toUpperCase();
+                        
+                        await ipRecordsService.createRecord({
+                            ...baseData,
+                            countryCode: cCode,
+                            isParent: false,
+                            parentId: null
+                        });
+                        log(`${baseData.trademarkName} (${cCode}) eklendi.`, 'success');
+                    }
+                } catch (err) {
+                    log(`Hata (Satır ${i}): ${err.message}`, 'error');
+                }
+            }
+            log("Tüm işlemler tamamlandı.", 'success');
+        }
+
+        // Event Listeners
+        document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
+        document.getElementById('fileInput').onchange = (e) => handleFile(e.target.files[0]);
+        
+        // Sürükle-Bırak
+        document.getElementById('dropZone').ondragover = (e) => { e.preventDefault(); e.currentTarget.style.background = "#f0f7ff"; };
+        document.getElementById('dropZone').ondragleave = (e) => { e.preventDefault(); e.currentTarget.style.background = "#fff"; };
+        document.getElementById('dropZone').ondrop = (e) => {
+            e.preventDefault();
+            handleFile(e.dataTransfer.files[0]);
+        };
+
+        init();
     </script>
 </body>
 </html>
