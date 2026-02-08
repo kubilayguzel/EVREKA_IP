@@ -3,52 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel ile Portföy Yükleme | Evreka IP</title>
+    <title>PRO Excel Portföy Yükleyici | Evreka IP</title>
     <link rel="stylesheet" href="css/shared-styles.css">
     <link rel="stylesheet" href="css/data-entry.css">
-    <link rel="stylesheet" href="css/simple-loading.css">
     <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
     <style>
-        .upload-wrapper { padding: 30px; max-width: 1000px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .config-card { background: #fdfdfd; border: 1px solid #eef0f2; padding: 20px; border-radius: 8px; margin-bottom: 25px; }
-        .drop-zone { border: 2px dashed #3498db; padding: 50px; text-align: center; border-radius: 10px; cursor: pointer; transition: background 0.3s; }
-        .drop-zone:hover { background: #f7faff; }
-        .status-log { margin-top: 25px; max-height: 300px; overflow-y: auto; padding: 15px; background: #2c3e50; color: #ecf0f1; border-radius: 6px; font-family: monospace; font-size: 13px; }
-        .log-success { color: #2ecc71; }
-        .log-error { color: #e74c3c; }
-        .client-select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-top: 8px; font-size: 15px; }
+        .upload-wrapper { padding: 40px; max-width: 1100px; margin: 40px auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .header-section { text-align: center; margin-bottom: 40px; }
+        .header-section h2 { color: #1e3c72; font-weight: 700; margin-bottom: 10px; }
+        .header-section p { color: #6c757d; }
+
+        .config-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 25px; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
+        .config-icon { font-size: 24px; color: #1e3c72; }
+        .client-select { flex-grow: 1; padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; }
+        .client-select:focus { border-color: #1e3c72; outline: none; }
+
+        .drop-zone { border: 2px dashed #cbd5e1; padding: 60px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; background: #fff; }
+        .drop-zone:hover { border-color: #1e3c72; background: #f0f7ff; transform: translateY(-2px); }
+        .drop-zone i { font-size: 48px; color: #1e3c72; margin-bottom: 15px; }
+        .drop-zone p { margin: 0; color: #64748b; font-size: 16px; }
+
+        /* Progress Bar Stilleri */
+        .progress-container { margin-top: 30px; display: none; }
+        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; color: #334155; }
+        .progress-track { background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden; }
+        .progress-fill { background: linear-gradient(90deg, #1e3c72, #2a5298); width: 0%; height: 100%; transition: width 0.3s ease; border-radius: 10px; }
+
+        /* Log Alanı */
+        .status-log { margin-top: 30px; max-height: 250px; overflow-y: auto; padding: 20px; background: #1e293b; color: #f1f5f9; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.6; display: none; }
+        .log-item { margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+        .log-success { color: #4ade80; }
+        .log-error { color: #f87171; }
+        .log-info { color: #94a3b8; }
+        
+        .btn-restart { display: none; margin-top: 20px; width: 100%; padding: 15px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-restart:hover { background: #162c55; }
     </style>
 </head>
 <body>
     <div id="layout-header"></div>
 
     <div class="upload-wrapper">
-        <h2>Excel ile Portföy Kaydı Aktarımı</h2>
-        <p>Excel dosyasındaki verileri otomatik olarak parçalar, WIPO hiyerarşisini kurar ve seçilen müşteriye atar.</p>
+        <div class="header-section">
+            <h2>Excel Portföy Aktarımı (Pro)</h2>
+            <p>Yüksek performanslı veri işleme, WIPO hiyerarşisi ve otomatik müşteri eşleşmesi.</p>
+        </div>
 
         <div class="config-card">
-            <label><strong>1. Aktarılacak Müşteriyi Seçin</strong></label>
-            <select id="clientSelect" class="client-select">
-                <option value="">Müşteri listesi yükleniyor...</option>
-            </select>
+            <div class="config-icon"><i class="fas fa-user-tie"></i></div>
+            <div style="flex-grow: 1;">
+                <label style="display:block; margin-bottom: 8px; font-weight: 600; color:#334155;">Hedef Müşteri</label>
+                <select id="clientSelect" class="client-select">
+                    <option value="">Yükleniyor...</option>
+                </select>
+            </div>
         </div>
 
         <div id="dropZone" class="drop-zone">
             <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-            <p><strong>Dosyayı Buraya Sürükleyin</strong></p>
-            <p>veya tıklayarak dosya seçin (.xlsx)</p>
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p><strong>Excel Dosyasını Sürükleyin</strong></p>
+            <p style="font-size: 14px; margin-top: 5px; opacity: 0.7;">veya dosya seçmek için tıklayın</p>
         </div>
 
-        <div id="statusLog" class="status-log" style="display: none;"></div>
+        <div id="progressContainer" class="progress-container">
+            <div class="progress-info">
+                <span id="progressText">İşleniyor...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-track">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+        </div>
+
+        <div id="statusLog" class="status-log"></div>
+
+        <button id="restartBtn" class="btn-restart" onclick="location.reload()"><i class="fas fa-redo mr-2"></i>Yeni Dosya Yükle</button>
     </div>
 
     <script type="module">
         import { db, storage } from './firebase-config.js';
         import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-        import { ipRecordsService } from './js/portfolio/PortfolioDataManager.js';
+        import { ipRecordsService } from './js/portfolio/PortfolioDataManager.js'; // Servis importu
 
-        // --- ÜLKE MAPPER (ISO-2 KODLARI) ---
+        // --- SABİTLER VE AYARLAR ---
+        const MAX_CONCURRENT_UPLOADS = 5; // Aynı anda işlenecek satır sayısı (Hız için)
         const COUNTRY_MAP = {
             "Albania": "AL", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ", "Brazil": "BR",
             "Bulgaria": "BG", "China": "CN", "Czech Republic": "CZ", "Denmark": "DK", "France": "FR",
@@ -57,31 +98,44 @@
             "North Macedonia": "MK", "Romania": "RO", "Russia": "RU", "Singapore": "SG",
             "Spain": "ES", "Sweden": "SE", "Switzerland": "CH", "Ukraine": "UA", "United Kingdom": "GB",
             "Turkey": "TR", "Benelux (Belgium, Netherlands, Luxembourg)": "BX", "Bosnia and Herzegovina": "BA",
-            "Colombia": "CO", "WIPO": "WIPO"
+            "Colombia": "CO", "WIPO": "WIPO", "European Union": "EU"
         };
 
-        const statusLog = document.getElementById('statusLog');
-        const clientSelect = document.getElementById('clientSelect');
+        // --- DOM ELEMENTLERİ ---
+        const elements = {
+            dropZone: document.getElementById('dropZone'),
+            fileInput: document.getElementById('fileInput'),
+            clientSelect: document.getElementById('clientSelect'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressFill: document.getElementById('progressFill'),
+            progressText: document.getElementById('progressText'),
+            progressPercent: document.getElementById('progressPercent'),
+            statusLog: document.getElementById('statusLog'),
+            restartBtn: document.getElementById('restartBtn')
+        };
 
-        // 1. Müşterileri Yükle
+        // --- 1. BAŞLATMA VE MÜŞTERİLERİ YÜKLEME ---
         async function init() {
             try {
                 const q = query(collection(db, "persons"), orderBy("name"));
                 const snap = await getDocs(q);
-                clientSelect.innerHTML = '<option value="">-- Müşteri Seçiniz --</option>';
+                elements.clientSelect.innerHTML = '<option value="">-- Lütfen Müşteri Seçiniz --</option>';
                 snap.forEach(doc => {
                     const opt = document.createElement('option');
                     opt.value = doc.id;
                     opt.textContent = doc.data().name;
                     opt.dataset.name = doc.data().name;
-                    clientSelect.appendChild(opt);
+                    elements.clientSelect.appendChild(opt);
                 });
-            } catch (e) { console.error("Müşteri yükleme hatası:", e); }
+            } catch (e) {
+                log(`Müşteri listesi yüklenemedi: ${e.message}`, 'error');
+            }
         }
 
-        // 2. Sınıf ve Mal/Hizmet Ayrıştırıcı
+        // --- 2. YARDIMCI PARSER FONKSİYONLARI ---
         function parseClassesAndServices(text) {
             if (!text) return { classes: [], cleanText: "" };
+            // Regex: [33]: veya sadece sayı yakalamak için esnek yapı
             const classRegex = /\[(\d+)\]:/g;
             const classes = [];
             let match;
@@ -91,108 +145,172 @@
             return { classes, cleanText: text.trim() };
         }
 
-        // 3. Log Yazdır
-        function log(msg, type = '') {
-            statusLog.style.display = 'block';
-            const div = document.createElement('div');
-            div.className = type === 'error' ? 'log-error' : (type === 'success' ? 'log-success' : '');
-            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            statusLog.appendChild(div);
-            statusLog.scrollTop = statusLog.scrollHeight;
+        function getCountryCode(countryName) {
+            if (!countryName) return "TR"; // Varsayılan
+            const cleanName = countryName.trim();
+            return COUNTRY_MAP[cleanName] || cleanName.substring(0, 2).toUpperCase();
         }
 
-        // 4. Excel İşleme ve Kayıt
-        async function handleFile(file) {
-            const clientId = clientSelect.value;
-            if (!clientId) return alert("Lütfen önce müşteri seçin!");
+        // --- 3. LOGLAMA VE UI GÜNCELLEME ---
+        function log(msg, type = 'info') {
+            elements.statusLog.style.display = 'block';
+            const div = document.createElement('div');
+            div.className = `log-item log-${type}`;
+            div.innerHTML = `<span style="opacity:0.6">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            elements.statusLog.appendChild(div);
+            elements.statusLog.scrollTop = elements.statusLog.scrollHeight;
+        }
 
-            log("Excel okunuyor...");
+        function updateProgress(current, total) {
+            const percent = Math.round((current / total) * 100);
+            elements.progressFill.style.width = `${percent}%`;
+            elements.progressPercent.textContent = `${percent}%`;
+            elements.progressText.textContent = `${current}/${total} İşlendi`;
+        }
+
+        // --- 4. EXCEL İŞLEME MANTIĞI (PRO LEVEL) ---
+        async function handleFile(file) {
+            const clientId = elements.clientSelect.value;
+            if (!clientId) {
+                alert("Lütfen önce listeden bir müşteri seçin!");
+                elements.fileInput.value = ''; // Reset
+                return;
+            }
+
+            // UI Hazırlığı
+            elements.dropZone.style.display = 'none';
+            elements.progressContainer.style.display = 'block';
+            const clientName = elements.clientSelect.options[elements.clientSelect.selectedIndex].dataset.name;
+
+            log(`Dosya okunuyor: ${file.name}`, 'info');
+
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(file);
             const sheet = workbook.getWorksheet(1);
             
-            const clientName = clientSelect.options[clientSelect.selectedIndex].dataset.name;
+            // Veri Satırlarını Hazırla
+            const rowsToProcess = [];
+            sheet.eachRow((row, rowNumber) => {
+                if (rowNumber === 1) return; // Başlığı atla
+                if (!row.getCell(1).value) return; // Boş satır
 
-            // Satırları dön (Başlıktan sonra - 2. satır)
-            for (let i = 2; i <= sheet.rowCount; i++) {
-                const row = sheet.getRow(i);
-                if (!row.getCell(1).value) continue; // Boş satır kontrolü
-
-                const rawName = row.getCell(1).text;
-                const registry = row.getCell(3).text;
-                const rawJurisdictions = row.getCell(13).text;
-                const parsedJS = parseClassesAndServices(row.getCell(6).text);
-
-                const baseData = {
-                    clientId,
-                    clientName,
-                    trademarkName: rawName.replace(/\n/g, ' ').trim(),
-                    status: row.getCell(4).text || "Active",
-                    applicationNumber: row.getCell(7).text || "",
-                    registrationNumber: row.getCell(8).text || "",
-                    applicationDate: row.getCell(9).value ? new Date(row.getCell(9).value) : null,
-                    registrationDate: row.getCell(10).value ? new Date(row.getCell(10).value) : null,
-                    niceClasses: parsedJS.classes,
-                    goodsServices: parsedJS.cleanText,
-                    source: "Excel Import"
+                // Tarih hücresi güvenli okuma
+                const getDate = (cell) => {
+                    if (!cell.value) return null;
+                    if (cell.value instanceof Date) return cell.value;
+                    // String ise parse etmeyi dene
+                    const d = new Date(cell.value);
+                    return isNaN(d.getTime()) ? null : d;
                 };
 
+                const rawData = {
+                    rowNumber,
+                    Name: row.getCell(1).text,
+                    Registry: row.getCell(3).text,
+                    Status: row.getCell(4).text,
+                    "Goods and services": row.getCell(6).text,
+                    "App. no.": row.getCell(7).text,
+                    "Reg. no": row.getCell(8).text,
+                    "App. date": getDate(row.getCell(9)),
+                    "Reg. date": getDate(row.getCell(10)),
+                    "Jurisdictions": row.getCell(13).text
+                };
+                rowsToProcess.push(rawData);
+            });
+
+            const totalRows = rowsToProcess.length;
+            log(`${totalRows} adet kayıt bulundu. İşlem başlıyor...`, 'info');
+
+            // --- CONCURRENCY (EŞ ZAMANLI İŞLEME) KUYRUĞU ---
+            let processedCount = 0;
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Kuyruk işleyici
+            const processRow = async (rowData) => {
                 try {
-                    if (registry === "INT WIPO" && rawJurisdictions.includes(",")) {
-                        // --- WIPO PARENT VE CHILD MANTIĞI ---
-                        log(`${baseData.trademarkName} için WIPO yapısı kuruluyor...`);
-                        
-                        // Parent Kaydı
-                        const parentId = await ipRecordsService.createRecord({
+                    const parsedJS = parseClassesAndServices(rowData["Goods and services"]);
+                    const rawJurisdictions = rowData.Jurisdictions || "";
+                    const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
+
+                    const baseData = {
+                        clientId,
+                        clientName,
+                        title: rowData.Name.replace(/\n/g, ' ').trim(), // 'title' olarak kaydediyoruz (sistem standardı)
+                        brandText: rowData.Name.replace(/\n/g, ' ').trim(),
+                        status: rowData.Status || "Active",
+                        applicationNumber: rowData["App. no."] || "",
+                        registrationNumber: rowData["Reg. no"] || "",
+                        applicationDate: rowData["App. date"],
+                        registrationDate: rowData["Reg. date"],
+                        niceClasses: parsedJS.classes,
+                        goodsAndServices: parsedJS.cleanText, // goodsServices -> goodsAndServices (standart)
+                        source: "Excel Import",
+                        type: "trademark", // Varsayılan tip
+                        createdAt: new Date().toISOString()
+                    };
+
+                    if (isWipo) {
+                        // --- WIPO SENARYOSU ---
+                        // 1. Parent Kayıt
+                        const parentResult = await ipRecordsService.addRecord({
                             ...baseData,
-                            countryCode: "WIPO",
-                            isParent: true,
-                            parentId: null
+                            country: "WIPO", // countryCode yerine country
+                            transactionHierarchy: "parent", // isParent yerine
+                            origin: "WIPO"
                         });
 
-                        // Ülkeleri Ayır ve Child Olarak Ekle
+                        if (!parentResult.success) throw new Error("Parent WIPO oluşturulamadı: " + parentResult.error);
+
+                        // 2. Child Kayıtlar
                         const countries = rawJurisdictions.split(',').map(c => c.trim());
                         for (const country of countries) {
-                            const cCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
-                            await ipRecordsService.createRecord({
+                            await ipRecordsService.addRecord({
                                 ...baseData,
-                                countryCode: cCode,
-                                isParent: false,
-                                parentId: parentId
+                                country: getCountryCode(country),
+                                transactionHierarchy: "child",
+                                parentId: parentResult.id || parentResult.data?.id,
+                                origin: "WIPO"
                             });
                         }
-                        log(`${baseData.trademarkName} ve bağlı ${countries.length} ülke eklendi.`, 'success');
                     } else {
-                        // --- NORMAL TEKİL KAYIT ---
+                        // --- NORMAL SENARYO ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
-                        const cCode = COUNTRY_MAP[singleCountry] || singleCountry.substring(0, 2).toUpperCase();
-                        
-                        await ipRecordsService.createRecord({
+                        await ipRecordsService.addRecord({
                             ...baseData,
-                            countryCode: cCode,
-                            isParent: false,
-                            parentId: null
+                            country: getCountryCode(singleCountry),
+                            transactionHierarchy: "parent",
+                            origin: "Yurtdışı Ulusal" // Veya TÜRKPATENT, duruma göre
                         });
-                        log(`${baseData.trademarkName} (${cCode}) eklendi.`, 'success');
                     }
+                    successCount++;
                 } catch (err) {
-                    log(`Hata (Satır ${i}): ${err.message}`, 'error');
+                    errorCount++;
+                    log(`Satır ${rowData.rowNumber} Hatası: ${err.message}`, 'error');
+                } finally {
+                    processedCount++;
+                    updateProgress(processedCount, totalRows);
                 }
+            };
+
+            // Chunk'lar halinde çalıştırma (Promise Pool Mantığı)
+            for (let i = 0; i < rowsToProcess.length; i += MAX_CONCURRENT_UPLOADS) {
+                const chunk = rowsToProcess.slice(i, i + MAX_CONCURRENT_UPLOADS);
+                await Promise.all(chunk.map(row => processRow(row)));
             }
-            log("Tüm işlemler tamamlandı.", 'success');
+
+            // --- BİTİŞ ---
+            log(`İŞLEM TAMAMLANDI: ${successCount} Başarılı, ${errorCount} Hatalı.`, successCount === totalRows ? 'success' : 'info');
+            elements.restartBtn.style.display = 'block';
         }
 
-        // Event Listeners
-        document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
-        document.getElementById('fileInput').onchange = (e) => handleFile(e.target.files[0]);
+        // --- EVENT LISTENERS ---
+        elements.dropZone.onclick = () => elements.fileInput.click();
+        elements.fileInput.onchange = (e) => { if(e.target.files.length) handleFile(e.target.files[0]); };
         
-        // Sürükle-Bırak
-        document.getElementById('dropZone').ondragover = (e) => { e.preventDefault(); e.currentTarget.style.background = "#f0f7ff"; };
-        document.getElementById('dropZone').ondragleave = (e) => { e.preventDefault(); e.currentTarget.style.background = "#fff"; };
-        document.getElementById('dropZone').ondrop = (e) => {
-            e.preventDefault();
-            handleFile(e.dataTransfer.files[0]);
-        };
+        elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.background = "#f0f7ff"; };
+        elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.background = "#fff"; };
+        elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
 
         init();
     </script>
