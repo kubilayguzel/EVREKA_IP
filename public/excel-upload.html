@@ -30,172 +30,40 @@
             padding: 0;
         }
 
-        /* --- DÜZELTME BURADA --- */
-        /* Header'ın altında kalmaması için padding-top artırıldı */
         .main-content {
-            padding: 40px; 
-            padding-top: 120px; /* Header payı */
+            padding: 30px 40px;
+            padding-top: 120px; 
             width: 100%;
             box-sizing: border-box;
             max-width: 1600px;
             margin: 0 auto;
         }
 
-        /* Başlık */
-        .page-header {
-            margin-bottom: 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .page-title h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .page-title p {
-            color: var(--text-gray);
-            font-size: 14px;
-            margin: 5px 0 0 0;
-        }
+        .page-header { margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
+        .page-title h1 { font-size: 24px; font-weight: 700; color: var(--text-dark); margin: 0; display: flex; align-items: center; gap: 12px; }
+        .page-title p { color: var(--text-gray); font-size: 14px; margin: 5px 0 0 0; }
 
-        /* KART YAPISI - DİKEY AKIŞ */
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 0;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color);
-            margin-bottom: 25px;
-            width: 100%;
-        }
-
-        .card-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #fff;
-            border-radius: 12px 12px 0 0;
-        }
-        
-        .step-icon {
-            width: 32px;
-            height: 32px;
-            background: var(--primary-light);
-            color: var(--primary-color);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 14px;
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin: 0;
-        }
-
-        .card-body {
-            padding: 25px;
-        }
+        .card { background: white; border-radius: 12px; padding: 0; box-shadow: var(--card-shadow); border: 1px solid var(--border-color); margin-bottom: 25px; width: 100%; }
+        .card-header { padding: 20px 25px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 12px 12px 0 0; }
+        .step-icon { width: 32px; height: 32px; background: var(--primary-light); color: var(--primary-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+        .card-title { font-size: 16px; font-weight: 600; color: var(--text-dark); margin: 0; }
+        .card-body { padding: 25px; }
 
         /* Müşteri Arama */
         .client-search-wrapper { position: relative; max-width: 600px; }
-        .form-control {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 14px;
-            background: #fff;
-            transition: all 0.2s;
-        }
-        .form-control:focus {
-            border-color: var(--primary-color);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-        }
-
-        .search-results {
-            position: absolute;
-            top: 105%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            max-height: 250px;
-            overflow-y: auto;
-            z-index: 50;
-            display: none;
-        }
-        .search-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .form-control { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.2s; }
+        .form-control:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1); }
+        .search-results { position: absolute; top: 105%; left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); max-height: 250px; overflow-y: auto; z-index: 50; display: none; }
+        .search-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 14px; display: flex; align-items: center; gap: 10px; }
         .search-item:hover { background-color: var(--primary-light); color: var(--primary-color); }
-
-        .selected-clients-area {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8fafc;
-            border-radius: 8px;
-            border: 1px dashed var(--border-color);
-            min-height: 50px;
-            align-items: center;
-        }
-        .client-tag {
-            background: white;
-            color: var(--primary-color);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
+        .selected-clients-area { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px dashed var(--border-color); min-height: 50px; align-items: center; }
+        .client-tag { background: white; color: var(--primary-color); padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .client-tag i { cursor: pointer; color: #94a3b8; transition: 0.2s; }
         .client-tag i:hover { color: #ef4444; }
 
         /* Drop Zone */
-        .drop-zone {
-            border: 2px dashed #cbd5e1;
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .drop-zone:hover {
-            border-color: var(--primary-color);
-            background: var(--primary-light);
-        }
+        .drop-zone { border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .drop-zone:hover { border-color: var(--primary-color); background: var(--primary-light); }
         .drop-zone-icon { font-size: 40px; color: #94a3b8; margin-bottom: 15px; }
         .drop-zone h3 { margin: 0 0 5px 0; font-size: 16px; font-weight: 600; }
         .drop-zone p { margin: 0; font-size: 13px; color: var(--text-gray); }
@@ -205,59 +73,18 @@
         .progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
         .progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--primary-color); width: 0%; transition: width 0.3s; }
-
-        .error-report {
-            margin-top: 25px;
-            display: none;
-            border: 1px solid #fee2e2;
-            background: #fff5f5;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .error-header {
-            background: #ffe4e6;
-            padding: 12px 20px;
-            color: #9f1239;
-            font-weight: 600;
-            font-size: 14px;
-        }
+        .error-report { margin-top: 25px; display: none; border: 1px solid #fee2e2; background: #fff5f5; border-radius: 8px; overflow: hidden; }
+        .error-header { background: #ffe4e6; padding: 12px 20px; color: #9f1239; font-weight: 600; font-size: 14px; }
         .error-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; }
         .error-item { padding: 10px 20px; border-bottom: 1px solid #fecaca; font-size: 13px; color: #881337; }
-        
-        .status-log {
-            margin-top: 20px;
-            background: #0f172a;
-            color: #e2e8f0;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: 'Consolas', monospace;
-            font-size: 12px;
-            max-height: 200px;
-            overflow-y: auto;
-            display: none;
-        }
+        .status-log { margin-top: 20px; background: #0f172a; color: #e2e8f0; padding: 15px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 12px; max-height: 200px; overflow-y: auto; display: none; }
         .log-item { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
         .log-success { color: #4ade80; }
         .log-error { color: #f87171; }
-
-        .btn-restart {
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            cursor: pointer;
-            display: none;
-            float: right;
-        }
+        .log-warning { color: #fbbf24; }
+        .btn-restart { margin-top: 20px; padding: 12px 24px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; display: none; float: right; }
         .btn-restart:hover { background: #162c55; }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .main-content { padding: 20px; padding-top: 100px; }
-        }
+        @media (max-width: 768px) { .main-content { padding: 20px; padding-top: 100px; } }
     </style>
 </head>
 <body>
@@ -272,10 +99,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <div class="step-icon">1</div>
-                <h3 class="card-title">Müşteri Seçimi</h3>
-            </div>
+            <div class="card-header"><div class="step-icon">1</div><h3 class="card-title">Müşteri Seçimi</h3></div>
             <div class="card-body">
                 <div class="form-group">
                     <label style="display:block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">Müşteri Arayın</label>
@@ -284,7 +108,6 @@
                         <div id="searchResults" class="search-results"></div>
                     </div>
                 </div>
-
                 <div class="form-group" style="margin-top: 15px;">
                     <label style="display:block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">Seçili Müşteriler</label>
                     <div id="selectedClientsList" class="selected-clients-area">
@@ -295,10 +118,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <div class="step-icon">2</div>
-                <h3 class="card-title">Dosya Yükleme</h3>
-            </div>
+            <div class="card-header"><div class="step-icon">2</div><h3 class="card-title">Dosya Yükleme</h3></div>
             <div class="card-body">
                 <div id="dropZone" class="drop-zone">
                     <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
@@ -310,42 +130,29 @@
         </div>
 
         <div class="card" id="statusCard" style="display:none;">
-            <div class="card-header">
-                <div class="step-icon"><i class="fas fa-check"></i></div>
-                <h3 class="card-title">İşlem Durumu</h3>
-            </div>
+            <div class="card-header"><div class="step-icon"><i class="fas fa-check"></i></div><h3 class="card-title">İşlem Durumu</h3></div>
             <div class="card-body">
                 <div id="progressContainer" class="progress-section">
-                    <div class="progress-header">
-                        <span id="progressText">Analiz ediliyor...</span>
-                        <span id="progressPercent">0%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div id="progressFill" class="progress-fill"></div>
-                    </div>
+                    <div class="progress-header"><span id="progressText">Analiz ediliyor...</span><span id="progressPercent">0%</span></div>
+                    <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
                 </div>
-
                 <div id="errorReport" class="error-report">
-                    <div class="error-header">
-                        <i class="fas fa-exclamation-triangle mr-2"></i>
-                        <span>Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span>
-                    </div>
+                    <div class="error-header"><i class="fas fa-exclamation-triangle mr-2"></i><span>Aktarılamayan Kayıtlar (<span id="errorCountHeader">0</span>)</span></div>
                     <ul id="errorList" class="error-list"></ul>
                 </div>
-
                 <div id="statusLog" class="status-log"></div>
-
                 <div style="overflow: hidden;">
                     <button id="restartBtn" class="btn-restart"><i class="fas fa-sync-alt mr-2"></i> Yeni İşlem Başlat</button>
                 </div>
             </div>
         </div>
-
     </div>
 
     <script type="module">
         import { db, storage, ipRecordsService, auth } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // Storage importları eklendi
+        import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
         const MAX_CONCURRENT_UPLOADS = 5; 
@@ -391,7 +198,6 @@
                 clientSearchInput: document.getElementById('clientSearchInput'),
                 searchResults: document.getElementById('searchResults'),
                 selectedClientsList: document.getElementById('selectedClientsList'),
-                
                 statusCard: document.getElementById('statusCard'), 
                 progressContainer: document.getElementById('progressContainer'),
                 progressFill: document.getElementById('progressFill'),
@@ -414,11 +220,7 @@
 
             if (elements.clientSearchInput) {
                 elements.clientSearchInput.addEventListener('input', (e) => filterClients(e.target.value));
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.client-search-wrapper')) {
-                        elements.searchResults.style.display = 'none';
-                    }
-                });
+                document.addEventListener('click', (e) => { if (!e.target.closest('.client-search-wrapper')) elements.searchResults.style.display = 'none'; });
             }
 
             init();
@@ -433,13 +235,7 @@
                 const q = query(collection(db, "persons"), orderBy("name"));
                 const snap = await getDocs(q);
                 ALL_CLIENTS = [];
-                snap.forEach(doc => {
-                    ALL_CLIENTS.push({
-                        id: doc.id,
-                        name: doc.data().name,
-                        email: doc.data().email || ""
-                    });
-                });
+                snap.forEach(doc => { ALL_CLIENTS.push({ id: doc.id, name: doc.data().name, email: doc.data().email || "" }); });
             } catch(e) { console.error("Müşteri yükleme hatası", e); }
         }
 
@@ -452,10 +248,7 @@
         }
 
         function filterClients(searchText) {
-            if (!searchText || searchText.length < 2) {
-                elements.searchResults.style.display = 'none';
-                return;
-            }
+            if (!searchText || searchText.length < 2) { elements.searchResults.style.display = 'none'; return; }
             const lowerText = searchText.toLowerCase();
             const filtered = ALL_CLIENTS.filter(c => c.name.toLowerCase().includes(lowerText));
             renderSearchResults(filtered);
@@ -463,10 +256,7 @@
 
         function renderSearchResults(results) {
             elements.searchResults.innerHTML = '';
-            if (results.length === 0) {
-                elements.searchResults.style.display = 'none';
-                return;
-            }
+            if (results.length === 0) { elements.searchResults.style.display = 'none'; return; }
             results.forEach(client => {
                 const div = document.createElement('div');
                 div.className = 'search-item';
@@ -478,11 +268,7 @@
         }
 
         function addSelectedClient(client) {
-            if (SELECTED_CLIENTS.some(c => c.id === client.id)) {
-                elements.clientSearchInput.value = '';
-                elements.searchResults.style.display = 'none';
-                return; 
-            }
+            if (SELECTED_CLIENTS.some(c => c.id === client.id)) { elements.clientSearchInput.value = ''; elements.searchResults.style.display = 'none'; return; }
             SELECTED_CLIENTS.push(client);
             renderSelectedClients();
             elements.clientSearchInput.value = '';
@@ -496,10 +282,7 @@
 
         function renderSelectedClients() {
             elements.selectedClientsList.innerHTML = '';
-            if (SELECTED_CLIENTS.length === 0) {
-                elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 13px;">Listeye eklemek için arama yapın.</span>';
-                return;
-            }
+            if (SELECTED_CLIENTS.length === 0) { elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 13px;">Listeye eklemek için arama yapın.</span>'; return; }
             SELECTED_CLIENTS.forEach(client => {
                 const tag = document.createElement('div');
                 tag.className = 'client-tag';
@@ -598,28 +381,72 @@
 
         async function checkDuplicate(applicationNumber, countryCode) {
             if (!applicationNumber || !countryCode) return false;
-            const q = query(
-                collection(db, "ipRecords"), 
-                where("applicationNumber", "==", String(applicationNumber)),
-                where("country", "==", countryCode)
-            );
+            const q = query(collection(db, "ipRecords"), where("applicationNumber", "==", String(applicationNumber)), where("country", "==", countryCode));
             const snapshot = await getDocs(q);
             return !snapshot.empty; 
         }
 
-        async function handleFile(file) {
-            if (SELECTED_CLIENTS.length === 0) {
-                alert("Lütfen en az bir müşteri seçin!");
-                elements.fileInput.value = ''; 
-                return;
+        // --- RESİM YÜKLEME YARDIMCISI ---
+        async function uploadImageToStorage(buffer, extension, brandName) {
+            try {
+                const safeName = brandName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const filename = `brand-logos/${Date.now()}_${safeName}.${extension}`;
+                const storageRef = ref(storage, filename);
+                
+                // Buffer'ı Blob'a çevir (ExcelJS buffer'ı ArrayBuffer olarak verir)
+                const blob = new Blob([buffer], { type: `image/${extension}` });
+                
+                await uploadBytes(storageRef, blob);
+                const url = await getDownloadURL(storageRef);
+                return url;
+            } catch (error) {
+                console.error("Resim yükleme hatası:", error);
+                return null;
             }
+        }
+
+        // --- EXCEL RESİM AYRIŞTIRICI ---
+        function extractImagesFromSheet(workbook, sheet) {
+            const imageMap = {};
+            
+            // Workbook içindeki medyaları al
+            // Sheet.getImages() -> [{ range: {tl, br}, imageId: '1' }, ...]
+            const images = sheet.getImages();
+            
+            if (!images || images.length === 0) return imageMap;
+
+            images.forEach(img => {
+                // tl.nativeRow = 0-indexed satır numarası
+                // tl.nativeCol = 0-indexed sütun numarası. Logo sütunu B ise (index 1) kontrol edebiliriz.
+                
+                // ExcelJS'de range.tl.nativeCol bize sütunu verir.
+                // Bizim Logo sütunu 2. sütun (B) -> index 1
+                
+                const rowIndex = img.range.tl.nativeRow + 1; // 1-based satır numarası (workbook loop'u ile uyumlu olması için)
+                const colIndex = img.range.tl.nativeCol;
+
+                // Sadece Logo sütunundakileri al (B sütunu = index 1)
+                if (colIndex === 1) { 
+                    const media = workbook.getImage(img.imageId);
+                    if (media) {
+                        imageMap[rowIndex] = {
+                            buffer: media.buffer,
+                            extension: media.extension
+                        };
+                    }
+                }
+            });
+            return imageMap;
+        }
+
+        async function handleFile(file) {
+            if (SELECTED_CLIENTS.length === 0) { alert("Lütfen en az bir müşteri seçin!"); elements.fileInput.value = ''; return; }
 
             const currentUser = auth.currentUser;
             const currentUserId = currentUser ? currentUser.uid : "";
             const currentUserEmail = currentUser ? currentUser.email : "";
             const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
 
-            // UI GÜNCELLEME
             elements.statusCard.style.display = 'block'; 
             elements.dropZone.style.pointerEvents = 'none'; 
             elements.dropZone.style.opacity = '0.5';
@@ -635,6 +462,12 @@
             await workbook.xlsx.load(file);
             const sheet = workbook.getWorksheet(1);
             
+            // 1. ADIM: RESİMLERİ AYRIŞTIR
+            log("Resimler taranıyor...", 'info');
+            const rowImages = extractImagesFromSheet(workbook, sheet);
+            const imageCount = Object.keys(rowImages).length;
+            if (imageCount > 0) log(`${imageCount} adet logo bulundu. Yükleme sırasında işlenecek.`, 'success');
+
             const rowsToProcess = [];
             sheet.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return;
@@ -669,6 +502,16 @@
                 try {
                     if (!rowData.Name || rowData.Name.trim().length === 0) throw new Error("Marka adı (Name) boş olamaz.");
                     
+                    const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
+
+                    // --- RESİM YÜKLEME ---
+                    let uploadedImageUrl = null;
+                    if (rowImages[rowData.rowNumber]) {
+                        const imgData = rowImages[rowData.rowNumber];
+                        // log(`Logo yükleniyor: ${formattedBrandText}...`, 'warning'); // Çok fazla log olmaması için kapalı
+                        uploadedImageUrl = await uploadImageToStorage(imgData.buffer, imgData.extension, formattedBrandText);
+                    }
+
                     const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     let finalNiceClasses = parsedGS.classes;
                     let finalGoodsByClass = parsedGS.goodsByClass;
@@ -684,17 +527,13 @@
 
                     const rawJurisdictions = rowData.Jurisdictions || "";
                     const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
-                    
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
                     const expDateStr = formatDateForDataEntry(rowData["Exp. date"]);
-                    const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
                     const now = new Date().toISOString();
                     const applicantsArray = SELECTED_CLIENTS.map(client => ({
-                        id: client.id,
-                        name: client.name,
-                        email: client.email
+                        id: client.id, name: client.name, email: client.email
                     }));
 
                     let appNum = rowData["App. no."] ? String(rowData["App. no."]) : "";
@@ -705,7 +544,9 @@
                         title: formattedBrandText, 
                         brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
-                        brandImageUrl: null, 
+                        
+                        brandImageUrl: uploadedImageUrl, // ARTIK RESİM URL'İ BURAYA GELİYOR
+
                         status: mappedStatus,
                         applicationNumber: appNum,
                         registrationNumber: regNum,
