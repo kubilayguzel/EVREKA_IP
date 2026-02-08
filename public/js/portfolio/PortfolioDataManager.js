@@ -448,11 +448,32 @@ export class PortfolioDataManager {
             return d.toLocaleDateString('tr-TR');
         } catch { return '-'; }
     }
-    _parseDate(str) {
-        if(!str || str === '-') return 0;
-        const parts = str.split('.');
-        if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
-        return new Date(str).getTime() || 0;
+    _parseDate(val) {
+        if (!val || val === '-') return 0;
+
+        // 1. Eğer zaten Date objesiyse (Excel'den gelenler gibi)
+        if (val instanceof Date) return val.getTime();
+
+        // 2. Eğer Firestore Timestamp objesiyse (toDate fonksiyonu varsa)
+        if (val && typeof val.toDate === 'function') {
+            return val.toDate().getTime();
+        }
+
+        // 3. Eğer metin (String) değilse, güvenli bir şekilde sayıya çevirmeyi dene
+        if (typeof val !== 'string') return 0;
+
+        // 4. "25.10.2023" gibi noktalı metin formatı (Eski kayıtlar için)
+        if (val.includes('.')) {
+            const parts = val.split('.');
+            if (parts.length === 3) {
+                // Ay bilgisini 0-11 arasına çekmek için parts[1]-1 yapıyoruz
+                return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+            }
+        }
+
+        // 5. ISO formatı veya diğer metin formatları
+        const parsed = new Date(val).getTime();
+        return isNaN(parsed) ? 0 : parsed;
     }
     getCountryName(code) {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
