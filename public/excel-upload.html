@@ -30,11 +30,15 @@
             padding: 0;
         }
 
-        /* Ana İçerik Alanı */
+        /* --- DÜZELTME BURADA --- */
+        /* Header'ın altında kalmaması için padding-top artırıldı */
         .main-content {
-            padding: 30px 40px;
-            width: 100%; /* Tam genişlik */
+            padding: 40px; 
+            padding-top: 120px; /* Header payı */
+            width: 100%;
             box-sizing: border-box;
+            max-width: 1600px;
+            margin: 0 auto;
         }
 
         /* Başlık */
@@ -63,10 +67,10 @@
         .card {
             background: white;
             border-radius: 12px;
-            padding: 0; /* İçerik padding'i section'larda */
+            padding: 0;
             box-shadow: var(--card-shadow);
             border: 1px solid var(--border-color);
-            margin-bottom: 25px; /* Kartlar arası boşluk */
+            margin-bottom: 25px;
             width: 100%;
         }
 
@@ -174,7 +178,7 @@
         .client-tag i { cursor: pointer; color: #94a3b8; transition: 0.2s; }
         .client-tag i:hover { color: #ef4444; }
 
-        /* Drop Zone - Yatay ve Geniş */
+        /* Drop Zone */
         .drop-zone {
             border: 2px dashed #cbd5e1;
             background: #f8fafc;
@@ -252,7 +256,7 @@
 
         /* Responsive */
         @media (max-width: 768px) {
-            .main-content { padding: 20px; }
+            .main-content { padding: 20px; padding-top: 100px; }
         }
     </style>
 </head>
@@ -615,9 +619,9 @@
             const currentUserEmail = currentUser ? currentUser.email : "";
             const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
 
-            // UI GÜNCELLEME (Kartları açma/kapama)
-            elements.statusCard.style.display = 'block'; // Sonuç kartını göster
-            elements.dropZone.style.pointerEvents = 'none'; // Tekrar yüklemeyi engelle
+            // UI GÜNCELLEME
+            elements.statusCard.style.display = 'block'; 
+            elements.dropZone.style.pointerEvents = 'none'; 
             elements.dropZone.style.opacity = '0.5';
 
             elements.progressContainer.style.display = 'block';
@@ -648,6 +652,7 @@
                     "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
                     "Exp. date": row.getCell(11).value,
+                    "Representative": row.getCell(12).text,
                     "Jurisdictions": row.getCell(13).text
                 };
                 rowsToProcess.push(rawData);
@@ -706,7 +711,8 @@
                         registrationNumber: regNum,
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
-                        renewalDate: expDateStr, 
+                        renewalDate: expDateStr,
+                        vekil: rowData.Representative ? rowData.Representative.trim() : "",
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
                         source: "Excel Import",
