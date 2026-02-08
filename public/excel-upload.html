@@ -323,7 +323,7 @@
 
     <script type="module">
         import { db, storage, ipRecordsService, auth } from './firebase-config.js'; 
-        import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, getDocs, query, orderBy, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
         const MAX_CONCURRENT_UPLOADS = 5; 
@@ -391,10 +391,8 @@
                 elements.dropZone.ondrop = (e) => { e.preventDefault(); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
             }
 
-            // Arama Event Listener
             if (elements.clientSearchInput) {
                 elements.clientSearchInput.addEventListener('input', (e) => filterClients(e.target.value));
-                // Dışarı tıklandığında listeyi kapat
                 document.addEventListener('click', (e) => {
                     if (!e.target.closest('.client-search-wrapper')) {
                         elements.searchResults.style.display = 'none';
@@ -433,17 +431,13 @@
             } catch (e) { console.error(e); }
         }
 
-        // --- MÜŞTERİ SEÇİM FONKSİYONLARI ---
-
         function filterClients(searchText) {
             if (!searchText || searchText.length < 2) {
                 elements.searchResults.style.display = 'none';
                 return;
             }
-            
             const lowerText = searchText.toLowerCase();
             const filtered = ALL_CLIENTS.filter(c => c.name.toLowerCase().includes(lowerText));
-            
             renderSearchResults(filtered);
         }
 
@@ -453,7 +447,6 @@
                 elements.searchResults.style.display = 'none';
                 return;
             }
-
             results.forEach(client => {
                 const div = document.createElement('div');
                 div.className = 'search-item';
@@ -465,13 +458,11 @@
         }
 
         function addSelectedClient(client) {
-            // Zaten seçili mi kontrol et
             if (SELECTED_CLIENTS.some(c => c.id === client.id)) {
                 elements.clientSearchInput.value = '';
                 elements.searchResults.style.display = 'none';
                 return; 
             }
-
             SELECTED_CLIENTS.push(client);
             renderSelectedClients();
             elements.clientSearchInput.value = '';
@@ -489,22 +480,15 @@
                 elements.selectedClientsList.innerHTML = '<span style="color: #94a3b8; font-size: 13px; font-style: italic;">Henüz müşteri seçilmedi.</span>';
                 return;
             }
-
             SELECTED_CLIENTS.forEach(client => {
                 const tag = document.createElement('div');
                 tag.className = 'client-tag';
-                tag.innerHTML = `
-                    <span>${client.name}</span>
-                    <i class="fas fa-times" onclick="window.removeClientGlobal('${client.id}')"></i>
-                `;
+                tag.innerHTML = `<span>${client.name}</span><i class="fas fa-times" onclick="window.removeClientGlobal('${client.id}')"></i>`;
                 elements.selectedClientsList.appendChild(tag);
             });
         }
-        
-        // Modül dışından erişim için global fonksiyon (Remove işlemi için)
         window.removeClientGlobal = (id) => removeSelectedClient(id);
 
-        // --- DİĞER YARDIMCI FONKSİYONLAR ---
         function formatDateForDataEntry(cellValue) {
             if (!cellValue) return null;
             let dateObj = null;
@@ -535,12 +519,10 @@
             if (!countryName) return "TR"; 
             const search = String(countryName).trim();
             const searchLower = search.toLowerCase();
-            
             if (ENGLISH_TO_CODE_MAP[search]) return ENGLISH_TO_CODE_MAP[search];
             if (searchLower.includes('wipo')) return 'WO'; 
             if (searchLower.includes('aripo')) return 'AP';
             if (searchLower.includes('european union')) return 'EU';
-            
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
             if (found) return found.code;
             return "TR";
@@ -588,20 +570,30 @@
             FAILED_ROWS.push({ rowNumber, name, message });
             elements.errorReport.style.display = 'block';
             elements.errorCountHeader.textContent = FAILED_ROWS.length;
-            
             const li = document.createElement('li');
             li.className = 'error-item';
-            li.innerHTML = `
-                <span class="error-badge">Satır ${rowNumber}</span>
-                <div>
-                    <strong>${name || 'İsimsiz Kayıt'}</strong>: ${message}
-                </div>
-            `;
+            li.innerHTML = `<span class="error-badge">Satır ${rowNumber}</span><div><strong>${name || 'İsimsiz Kayıt'}</strong>: ${message}</div>`;
             elements.errorList.appendChild(li);
         }
 
+        // --- DUPLICATE CHECK FUNCTION ---
+        async function checkDuplicate(applicationNumber, countryCode) {
+            if (!applicationNumber || !countryCode) return false;
+            
+            // Eğer WIPO parent kaydıysa ve application number undefined ise registration'a bakılabilir ama
+            // WIPO parent için zaten app no = reg no override ediyoruz.
+            
+            const q = query(
+                collection(db, "ipRecords"), 
+                where("applicationNumber", "==", String(applicationNumber)),
+                where("country", "==", countryCode)
+            );
+            
+            const snapshot = await getDocs(q);
+            return !snapshot.empty; // Eğer kayıt varsa true döner
+        }
+
         async function handleFile(file) {
-            // MÜŞTERİ KONTROLÜ (Çoklu Seçim)
             if (SELECTED_CLIENTS.length === 0) {
                 alert("Lütfen en az bir müşteri seçin!");
                 elements.fileInput.value = ''; 
@@ -613,7 +605,6 @@
             const currentUserEmail = currentUser ? currentUser.email : "";
             const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
 
-            // UI Sıfırlama
             elements.dropZone.style.display = 'none';
             elements.progressContainer.style.display = 'block';
             elements.errorReport.style.display = 'none';
@@ -657,21 +648,16 @@
 
             const processRow = async (rowData) => {
                 try {
-                    // Validasyon
+                    // Temel Validasyon
                     if (!rowData.Name || rowData.Name.trim().length === 0) throw new Error("Marka adı (Name) boş olamaz.");
-                    if (!rowData.Registry) throw new Error("Registry bilgisi eksik.");
-                    if (!rowData.Status) throw new Error("Status bilgisi eksik.");
-
-                    const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     
+                    const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     let finalNiceClasses = parsedGS.classes;
                     let finalGoodsByClass = parsedGS.goodsByClass;
                     
                     if (finalNiceClasses.length === 0) {
                         const classCol = rowData["Classes"];
-                        if (classCol) {
-                            finalNiceClasses = String(classCol).split(',').map(c => c.trim().replace(/\D/g, ''));
-                        }
+                        if (classCol) finalNiceClasses = String(classCol).split(',').map(c => c.trim().replace(/\D/g, ''));
                         if (parsedGS.raw) {
                             const mainClass = finalNiceClasses.length > 0 ? finalNiceClasses[0] : '0';
                             finalGoodsByClass = [{ classNo: mainClass, items: [parsedGS.raw] }];
@@ -685,43 +671,37 @@
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
                     const expDateStr = formatDateForDataEntry(rowData["Exp. date"]);
-                    
                     const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
                     const now = new Date().toISOString();
-
-                    // Applicants Dizisi: Seçili tüm müşteriler eklenir
                     const applicantsArray = SELECTED_CLIENTS.map(client => ({
                         id: client.id,
                         name: client.name,
                         email: client.email
                     }));
 
+                    // Application Number Hazırlığı
+                    let appNum = rowData["App. no."] ? String(rowData["App. no."]) : "";
+                    let regNum = rowData["Reg. no"] ? String(rowData["Reg. no"]) : "";
+
                     const baseData = {
                         applicants: applicantsArray, 
-                        
                         title: formattedBrandText, 
                         brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
                         brandImageUrl: null, 
                         status: mappedStatus,
-                        
-                        applicationNumber: rowData["App. no."] ? String(rowData["App. no."]) : "",
-                        registrationNumber: rowData["Reg. no"] ? String(rowData["Reg. no"]) : "",
-                        
+                        applicationNumber: appNum,
+                        registrationNumber: regNum,
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
                         renewalDate: expDateStr, 
-
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
-                        
                         source: "Excel Import",
                         createdFrom: "excel_upload", 
-                        
                         type: "trademark",
                         ipType: "trademark",
                         portfolioStatus: "Active",
-                        
                         createdAt: now,
                         updatedAt: now
                     };
@@ -729,6 +709,16 @@
                     let createdRecords = [];
 
                     if (isWipo) {
+                        // --- WIPO DUPLICATE CHECK ---
+                        // WIPO Parent için ülke 'WIPO' (WO) ve AppNo (biz burada RegNo kullanıyoruz) kontrol edilir
+                        // DİKKAT: WIPO Parent kaydında applicationNumber olarak RegistrationNumber kullanıyoruz.
+                        const wipoAppNoToCheck = baseData.registrationNumber;
+                        const isDuplicate = await checkDuplicate(wipoAppNoToCheck, 'WO'); // WO standardını kullanıyoruz
+
+                        if (isDuplicate) {
+                            throw new Error(`Bu kayıt zaten sistemde mevcut! (WIPO: ${wipoAppNoToCheck})`);
+                        }
+
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
                             .filter(c => c.length > 0)
@@ -755,6 +745,9 @@
                         
                         for (const countryName of countryNames) {
                             const childCode = getCountryCode(countryName);
+                            // Child kayıtlar için de duplicate check yapılabilir ama parent yoksa child da yoktur mantığı güdüyoruz genelde.
+                            // Yine de güvenlik için eklenebilir ama performans düşer. Parent check yeterli.
+                            
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
@@ -768,9 +761,16 @@
                             }
                         }
                     } else {
+                        // --- TEKİL KAYIT DUPLICATE CHECK ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         const countryCode = getCountryCode(singleCountry);
                         
+                        const isDuplicate = await checkDuplicate(baseData.applicationNumber, countryCode);
+
+                        if (isDuplicate) {
+                            throw new Error(`Bu kayıt zaten sistemde mevcut! (App No: ${baseData.applicationNumber}, Ülke: ${countryCode})`);
+                        }
+
                         const res = await ipRecordsService.addRecord({
                             ...baseData,
                             country: countryCode,
