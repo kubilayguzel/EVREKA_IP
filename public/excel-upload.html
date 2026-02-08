@@ -84,7 +84,7 @@
     </div>
 
 <script type="module">
-        import { db, storage, ipRecordsService } from './firebase-config.js'; 
+        import { db, storage, ipRecordsService, auth } from './firebase-config.js'; 
         import { collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { loadSharedLayout } from './js/layout-loader.js';
         
@@ -265,6 +265,12 @@
                 return;
             }
 
+            // Aktif Kullanıcı Bilgilerini Al
+            const currentUser = auth.currentUser;
+            const currentUserId = currentUser ? currentUser.uid : "";
+            const currentUserEmail = currentUser ? currentUser.email : "";
+            const currentUserName = currentUser ? (currentUser.displayName || currentUser.email) : "Sistem";
+
             elements.dropZone.style.display = 'none';
             elements.progressContainer.style.display = 'block';
             
@@ -294,7 +300,7 @@
                     "Reg. no": row.getCell(8).text,
                     "App. date": row.getCell(9).value,
                     "Reg. date": row.getCell(10).value,
-                    "Exp. date": row.getCell(11).value, // 11. Kolon: Exp date
+                    "Exp. date": row.getCell(11).value,
                     "Jurisdictions": row.getCell(13).text
                 };
                 rowsToProcess.push(rawData);
@@ -309,7 +315,6 @@
 
             const processRow = async (rowData) => {
                 try {
-                    // Mal ve Hizmetleri Ayrıştır
                     const parsedGS = parseGoodsAndServicesStructured(rowData["Goods and services"]);
                     
                     let finalNiceClasses = parsedGS.classes;
@@ -332,7 +337,7 @@
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
                     const regDateStr = formatDateForDataEntry(rowData["Reg. date"]);
-                    const expDateStr = formatDateForDataEntry(rowData["Exp. date"]); // Yenileme tarihi
+                    const expDateStr = formatDateForDataEntry(rowData["Exp. date"]);
                     
                     const formattedBrandText = rowData.Name.replace(/\n/g, ' ').trim().toLowerCase();
                     const now = new Date().toISOString();
@@ -354,7 +359,7 @@
                         
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
-                        renewalDate: expDateStr, // İSTEK 4: Exp. date -> renewalDate
+                        renewalDate: expDateStr, 
 
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
@@ -363,11 +368,11 @@
                         createdFrom: "excel_upload", 
                         
                         type: "trademark",
-                        ipType: "trademark", // İSTEK 2: ipType eklemesi
-                        portfolioStatus: "Active", // İSTEK 3: Active status
+                        ipType: "trademark",
+                        portfolioStatus: "Active",
                         
                         createdAt: now,
-                        updatedAt: now // İSTEK 5: updatedAt eklemesi
+                        updatedAt: now
                     };
 
                     let createdRecords = [];
@@ -384,12 +389,8 @@
                             countries: countryCodes, 
                             transactionHierarchy: "parent",
                             origin: "WIPO",
-                            
-                            // Parent için özel override:
                             applicationNumber: baseData.registrationNumber, 
                             applicationDate: baseData.registrationDate,
-                            
-                            // İSTEK 1: WIPO Özel Alanları
                             internationalRegNumber: baseData.registrationNumber,
                             wipoIR: baseData.registrationNumber
                         };
@@ -409,8 +410,6 @@
                                 transactionHierarchy: "child",
                                 parentId: parentResult.id || parentResult.data?.id,
                                 origin: "WIPO",
-                                
-                                // İSTEK 1: Child için wipoIR
                                 wipoIR: baseData.registrationNumber
                             });
                             if(childRes.success) {
@@ -433,14 +432,27 @@
                         createdRecords.push({ id: res.id || res.data?.id, role: 'parent' });
                     }
 
-                    // --- TRANSACTION OLUŞTURMA ---
+                    // --- TRANSACTION OLUŞTURMA (ÖZELLEŞTİRİLMİŞ) ---
                     for (const rec of createdRecords) {
+                        
+                        let descriptionText = "Başvuru işlemi.";
+                        if (rec.role === 'child') {
+                            descriptionText = "Ülke başvurusu işlemi.";
+                        }
+
                         await ipRecordsService.addTransactionToRecord(rec.id, {
-                            type: '2', 
-                            designation: 'Başvuru',
-                            description: 'Excel ile otomatik oluşturulan başvuru kaydı.',
-                            timestamp: now,
+                            type: "2", 
+                            transactionTypeId: "2",
+                            designation: "Başvuru", // UI için gerekli olabilir
+                            
+                            description: descriptionText,
                             transactionHierarchy: rec.role,
+                            
+                            userId: currentUserId,
+                            userEmail: currentUserEmail,
+                            userName: currentUserName,
+                            
+                            timestamp: now,
                             createdFrom: "excel_upload"
                         });
                     }
