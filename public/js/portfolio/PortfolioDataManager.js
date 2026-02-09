@@ -553,18 +553,30 @@ export class PortfolioDataManager {
 
     sortRecords(data, column, direction) {
         return [...data].sort((a, b) => {
-            let valA = a[column] || '';
-            let valB = b[column] || '';
+            let valA = a[column];
+            let valB = b[column];
+            
+            // Boş değerleri kontrol et
+            const isEmptyA = (valA === null || valA === undefined || valA === '');
+            const isEmptyB = (valB === null || valB === undefined || valB === '');
+            
+            if (isEmptyA && isEmptyB) return 0;
+            if (isEmptyA) return direction === 'asc' ? 1 : -1; // Boşlar sona
+            if (isEmptyB) return direction === 'asc' ? -1 : 1; // Boşlar sona
+            
+            // Tarih sütunları
             if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
-               valA = this._parseDate(valA) || new Date(valA).getTime();
-               valB = this._parseDate(valB) || new Date(valB).getTime();
-            } else {
-               valA = String(valA).toLowerCase();
-               valB = String(valB).toLowerCase();
+            valA = this._parseDate(valA) || new Date(valA).getTime();
+            valB = this._parseDate(valB) || new Date(valB).getTime();
+            return direction === 'asc' ? valA - valB : valB - valA;
             }
-            if (valA < valB) return direction === 'asc' ? -1 : 1;
-            if (valA > valB) return direction === 'asc' ? 1 : -1;
-            return 0;
+            
+            // String karşılaştırması (TÜRKÇE DESTEK)
+            const strA = String(valA);
+            const strB = String(valB);
+            const comparison = strA.localeCompare(strB, 'tr-TR', { sensitivity: 'base' });
+            
+            return direction === 'asc' ? comparison : -comparison;
         });
     }
 }
