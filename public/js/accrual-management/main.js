@@ -256,23 +256,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
- * Aktif filtre sayısını badge'de gösterir
- */
-        updateFilterBadge() {
-            const badge = document.getElementById('activeFilterBadge');
-            const count = Object.keys(this.state.columnFilters).length;
-            
-            if (badge) {
-                if (count > 0) {
-                    badge.textContent = count;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-        }
-
         /**
          * Olay Dinleyicileri (Event Listeners)
          */
@@ -338,14 +321,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         delete this.state.columnFilters[column];
                     }
                     
-                    this.updateFilterBadge(); // EKLE
                     this.renderPage();
                 });
-            });
-
-            const columnFiltersForeign = document.querySelectorAll('.column-filter-foreign');
-            columnFiltersForeign.forEach(input => {
-                input.addEventListener('input', (e) => {
+                
+                // Select için change event de ekle
+                input.addEventListener('change', (e) => {
                     const column = e.target.dataset.column;
                     const value = e.target.value.trim().toLowerCase();
                     
@@ -358,7 +338,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.renderPage();
                 });
             });
-
             // --- SEÇİM İŞLEMLERİ ---
 
             // 5.1 Tümünü Seç
@@ -658,7 +637,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.querySelectorAll('.column-filter').forEach(input => {
                         input.value = '';
                     });
-                    this.updateFilterBadge();
                     this.renderPage();
                 });
             }
