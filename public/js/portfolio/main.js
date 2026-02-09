@@ -63,8 +63,26 @@ class PortfolioController {
             // DÜZELTME BURADA: Pagination'ı render'dan ÖNCE kurmalıyız
             this.setupPagination(); 
 
-            // Şimdi tabloyu çizebiliriz (Artık this.pagination tanımlı)
+            // 1. EĞER HAFIZADA KAYITLI SAYFA VARSA ONU YÜKLE
+            const savedPage = sessionStorage.getItem('lastPageNumber');
+            if (savedPage) {
+                this.state.currentPage = parseInt(savedPage);
+                // Pagination bileşeninin iç state'ini de güncelle (Eğer varsa)
+                if (this.pagination) this.pagination.currentPage = this.state.currentPage;
+                sessionStorage.removeItem('lastPageNumber'); // Tek kullanımlık olsun
+            }
+
+            // Şimdi tabloyu çizebiliriz
             this.render();
+
+            // 2. GÜNCELLENEN KAYDI BUL VE RENKLENDİR (Render'dan sonra çalışmalı)
+            setTimeout(() => {
+                const updatedId = sessionStorage.getItem('updatedRecordId');
+                if (updatedId) {
+                    this.highlightUpdatedRow(updatedId);
+                    sessionStorage.removeItem('updatedRecordId'); // Tekrar yanmasın
+                }
+            }, 500); // Tablo çizimi için yarım saniye pay bırakıyoruz
 
             // Listener başlat
             this.unsubscribe = this.dataManager.startListening(() => {
@@ -244,8 +262,9 @@ class PortfolioController {
                 } else if (btn.classList.contains('delete-btn')) {
                     this.handleDelete(id);
                 } else if (btn.classList.contains('edit-btn')) {
-                     if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
-                     else window.location.href = `data-entry.html?id=${id}`;
+                    sessionStorage.setItem('lastPageNumber', this.state.currentPage);
+                    if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
+                    else window.location.href = `data-entry.html?id=${id}`;
                 }
             }
         });
@@ -446,6 +465,22 @@ class PortfolioController {
         this.renderer.tbody.appendChild(frag);
         this.updateSelectAllCheckbox();
         this.updateBulkActionButtons();
+    }
+
+    highlightUpdatedRow(id) {
+        const row = document.querySelector(`tr[data-id="${id}"]`);
+        if (row) {
+            // Satıra efekti ver
+            row.classList.add('recently-updated');
+            
+            // Kullanıcının önüne getir (Scroll)
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // 3 saniye sonra efekti kaldır
+            setTimeout(() => {
+                row.classList.remove('recently-updated');
+            }, 3000);
+        }
     }
 
     getColumnsForTab(tab) {
