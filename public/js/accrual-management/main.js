@@ -95,6 +95,167 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         /**
+ * Excel'e Aktar (Seçili veya Tümü)
+ */
+    async exportToExcel(type) {
+        // 1. Veriyi Hazırla
+        const criteria = { 
+            tab: this.state.activeTab, 
+            status: this.state.filterStatus, 
+            search: this.state.searchQuery 
+        };
+        let allFilteredData = this.dataManager.filterAndSort(criteria, this.state.sort);
+
+        let dataToExport = [];
+
+        if (type === 'selected') {
+            if (this.state.selectedIds.size === 0) {
+                showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
+                return;
+            }
+            dataToExport = allFilteredData.filter(item => this.state.selectedIds.has(item.id));
+        } else {
+            dataToExport = [...allFilteredData];
+        }
+
+        if (dataToExport.length === 0) {
+            showNotification('Aktarılacak veri bulunamadı.', 'warning');
+            return;
+        }
+
+        this.uiManager.toggleLoading(true);
+
+        try {
+            // 2. Kütüphaneleri Dinamik Yükle
+            const loadScript = (src) => {
+                return new Promise((resolve, reject) => {
+                    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            };
+
+            if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
+            if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
+
+            // 3. Excel Oluştur
+            const ExcelJS = window.ExcelJS;
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Tahakkuklar');
+
+            // 4. Kolon Tanımları
+            const isMainTab = this.state.activeTab === 'main';
+            
+            if (isMainTab) {
+                worksheet.columns = [
+                    { header: 'ID', key: 'id', width: 10 },
+                    { header: 'Durum', key: 'status', width: 15 },
+                    { header: 'İş Tipi', key: 'taskType', width: 25 },
+                    { header: 'Dosya No', key: 'fileNo', width: 20 },
+                    { header: 'Konu', key: 'subject', width: 30 },
+                    { header: 'Alan', key: 'field', width: 15 },
+                    { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
+                    { header: 'Hizmet Ücreti', key: 'serviceFee', width: 15 },
+                    { header: 'Toplam Tutar', key: 'totalAmount', width: 15 },
+                    { header: 'Kalan', key: 'remaining', width: 15 },
+                    { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
+                ];
+            } else {
+                worksheet.columns = [
+                    { header: 'ID', key: 'id', width: 10 },
+                    { header: 'Durum', key: 'status', width: 15 },
+                    { header: 'İş Tipi', key: 'taskType', width: 25 },
+                    { header: 'Ödeme Yapan', key: 'paymentParty', width: 25 },
+                    { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
+                    { header: 'Kalan', key: 'remaining', width: 15 },
+                    { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
+                ];
+            }
+
+            // 5. Header Stili
+            worksheet.getRow(1).eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FF1E3C72' }
+                };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // 6. Veri Satırları
+            dataToExport.forEach(acc => {
+                const task = this.dataManager.allTasks[String(acc.taskId)];
+                const typeObj = task ? this.dataManager.allTransactionTypes.find(t => t.id === task.taskType) : null;
+                const taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (acc.taskTitle || '-');
+
+                let statusText = 'Bilinmiyor';
+                if (acc.status === 'paid') statusText = 'Ödendi';
+                else if (acc.status === 'unpaid') statusText = 'Ödenmedi';
+                else if (acc.status === 'partially_paid') statusText = 'K.Ödendi';
+
+                const formatMoney = (val, curr) => {
+                    if (Array.isArray(val)) {
+                        return val.map(item => `${parseFloat(item.amount) || 0} ${item.currency}`).join(' + ');
+                    }
+                    return `${parseFloat(val) || 0} ${curr || 'TRY'}`;
+                };
+
+                const row = {
+                    id: acc.id,
+                    status: statusText,
+                    taskType: taskDisplay,
+                    createdAt: acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-'
+                };
+
+                if (isMainTab) {
+                    const ipRec = task?.relatedIpRecordId ? 
+                        this.dataManager.allIpRecords.find(r => r.id === task.relatedIpRecordId) : null;
+                    
+                    row.fileNo = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '-') : '-';
+                    row.subject = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '-') : '-';
+                    row.field = typeObj?.ipType ? 
+                        ({ 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' }[typeObj.ipType] || typeObj.ipType) : '-';
+                    row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
+                    row.serviceFee = acc.serviceFee ? formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
+                    row.totalAmount = acc.totalAmount ? formatMoney(acc.totalAmount, acc.totalAmountCurrency) : '-';
+                    row.remaining = acc.remainingAmount !== undefined ? formatMoney(acc.remainingAmount, acc.totalAmountCurrency) : '-';
+                } else {
+                    row.paymentParty = acc.paymentParty || '-';
+                    row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
+                    const rem = acc.foreignRemainingAmount !== undefined ? acc.foreignRemainingAmount : acc.officialFee?.amount;
+                    row.remaining = rem ? formatMoney(rem, acc.officialFee?.currency || 'EUR') : '-';
+                }
+
+                worksheet.addRow(row);
+            });
+
+            // 7. Dosyayı Kaydet
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const fileName = `tahakkuklar_${this.state.activeTab}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            window.saveAs(blob, fileName);
+
+            showNotification(`${dataToExport.length} kayıt başarıyla aktarıldı!`, 'success');
+
+        } catch (error) {
+            console.error('Excel export hatası:', error);
+            showNotification('Excel oluşturulurken hata oluştu: ' + error.message, 'error');
+        } finally {
+            this.uiManager.toggleLoading(false);
+        }
+    }
+
+        /**
          * Olay Dinleyicileri (Event Listeners)
          */
         setupEventListeners() {
@@ -418,6 +579,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                             </div>
                         `).join('');
                     });
+                });
+            }
+            // --- 8. EXCEL EXPORT ---
+            const btnExportSelected = document.getElementById('btnExportSelectedAccruals');
+            const btnExportAll = document.getElementById('btnExportAllAccruals');
+
+            if (btnExportSelected) {
+                btnExportSelected.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.exportToExcel('selected');
+                });
+            }
+
+            if (btnExportAll) {
+                btnExportAll.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.exportToExcel('all');
                 });
             }
         }
