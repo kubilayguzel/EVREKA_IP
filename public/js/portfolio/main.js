@@ -14,6 +14,7 @@ class PortfolioController {
         
         this.state = {
             activeTab: 'trademark',
+            subTab: 'turkpatent',
             searchQuery: '',
             columnFilters: {},
             sort: { column: 'applicationDate', direction: 'desc' },
@@ -285,7 +286,7 @@ class PortfolioController {
     }
 
     getCurrentPageRecords() {
-        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
+        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters,this.state.subTab);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         return this.pagination.getCurrentPageData(filtered);
     }
@@ -378,7 +379,8 @@ class PortfolioController {
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
-            this.state.columnFilters
+            this.state.columnFilters,
+            this.state.subTab
         );
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         
@@ -434,7 +436,8 @@ class PortfolioController {
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
-            this.state.columnFilters
+            this.state.columnFilters,
+            this.state.subTab
         );
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
