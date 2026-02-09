@@ -438,6 +438,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.uiManager.showPaymentModal(selected, this.state.activeTab); 
             });
 
+            const btnUnpaid = document.getElementById('bulkMarkUnpaidBtn');
+            if (btnUnpaid) {
+                btnUnpaid.addEventListener('click', async () => {
+                    if (this.state.selectedIds.size === 0) return;
+
+                    if (confirm(`${this.state.selectedIds.size} adet kaydı "Ödenmedi" durumuna getirmek istiyor musunuz? Mevcut ödeme bilgileri silinecektir.`)) {
+                        this.uiManager.toggleLoading(true);
+                        try {
+                            // DataManager'da batchUpdateStatus metodunu çağırıyoruz
+                            await this.dataManager.batchUpdateStatus(this.state.selectedIds, 'unpaid');
+                            
+                            this.state.selectedIds.clear(); // Seçimleri temizle
+                            this.renderPage(); // Sayfayı yenile
+                            showNotification('Kayıtlar "Ödenmedi" olarak güncellendi.', 'success');
+                        } catch (e) {
+                            console.error(e);
+                            showNotification('Hata: ' + e.message, 'error');
+                        } finally {
+                            this.uiManager.toggleLoading(false);
+                        }
+                    }
+                });
+            }
+
              // Kaydet Butonları
             document.getElementById('saveAccrualChangesBtn').addEventListener('click', async () => {
                 const formResult = this.uiManager.getEditFormData();
