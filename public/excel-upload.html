@@ -129,7 +129,6 @@
         let FAILED_ROWS = [];
         let elements = {}; 
 
-        // GÜNCELLENMİŞ HARİTA (EU -> EUIPO, African -> OAPI)
         const ENGLISH_TO_CODE_MAP = {
             "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", "Andorra": "AD", "Angola": "AO", 
             "Argentina": "AR", "Armenia": "AM", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ",
@@ -154,8 +153,6 @@
             "Ukraine": "UA", "United Arab Emirates": "AE", "United Kingdom": "GB", "United States": "US",
             "United States of America": "US", "Uruguay": "UY", "Uzbekistan": "UZ", "Venezuela": "VE",
             "Vietnam": "VN", "Yemen": "YE", "Benelux (Belgium, Netherlands, Luxembourg)": "BX",
-            
-            // --- GÜNCEL KODLAR ---
             "European Union": "EUIPO", 
             "African Intellectual Property Organization": "OAPI",
             "OAPI": "OAPI"
@@ -294,16 +291,11 @@
             if (!countryName) return "TR"; 
             const search = String(countryName).trim();
             const searchLower = search.toLowerCase();
-            
-            // Öncelikli olarak statik haritaya bak
             if (ENGLISH_TO_CODE_MAP[search]) return ENGLISH_TO_CODE_MAP[search];
-            
-            // Özel Kurallar
-            if (searchLower.includes('european union')) return 'EUIPO'; // EU -> EUIPO
-            if (searchLower.includes('african intellectual')) return 'OAPI'; // African.. -> OAPI
+            if (searchLower.includes('european union')) return 'EUIPO'; 
+            if (searchLower.includes('african intellectual')) return 'OAPI'; 
             if (searchLower.includes('wipo')) return 'WO'; 
             if (searchLower.includes('aripo')) return 'AP';
-            
             const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
             if (found) return found.code;
             return "TR";
@@ -381,6 +373,11 @@
 
         function extractImagesFromSheet(workbook, sheet) {
             const imageMap = {};
+            // --- HATA DÜZELTME: Sheet kontrolü ---
+            if (!sheet || typeof sheet.getImages !== 'function') {
+                return imageMap;
+            }
+
             const images = sheet.getImages();
             if (!images || images.length === 0) return imageMap;
             images.forEach(img => {
@@ -416,8 +413,31 @@
             log(`Dosya okunuyor: ${file.name}`, 'info');
 
             const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(file);
-            const sheet = workbook.getWorksheet(1);
+            try {
+                await workbook.xlsx.load(file);
+            } catch (err) {
+                alert("Dosya yüklenirken hata oluştu. Lütfen geçerli bir .xlsx dosyası yüklediğinizden emin olun.");
+                console.error(err);
+                elements.dropZone.style.pointerEvents = 'auto';
+                elements.dropZone.style.opacity = '1';
+                return;
+            }
+
+            // --- HATA DÜZELTME: Sheet alma yöntemi ---
+            let sheet = workbook.getWorksheet(1);
+            if (!sheet) {
+                // Eğer ID ile bulunamazsa, ilk sıradaki sayfayı al
+                if (workbook.worksheets && workbook.worksheets.length > 0) {
+                    sheet = workbook.worksheets[0];
+                }
+            }
+
+            if (!sheet) {
+                alert("Excel dosyasında okunabilir bir çalışma sayfası bulunamadı!");
+                elements.dropZone.style.pointerEvents = 'auto';
+                elements.dropZone.style.opacity = '1';
+                return;
+            }
             
             const rowImages = extractImagesFromSheet(workbook, sheet);
             
@@ -565,15 +585,12 @@
                             }
                         }
                     } else {
-                        // --- TEKİL KAYIT (DIRECT APPLICATION) ---
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         const countryCode = getCountryCode(singleCountry);
                         
                         const isDuplicate = await checkDuplicate(baseData.applicationNumber, countryCode);
                         if (isDuplicate) throw new Error(`Bu kayıt zaten sistemde mevcut! (App No: ${baseData.applicationNumber}, Ülke: ${countryCode})`);
 
-                        // --- MENŞE (ORIGIN) MANTIĞI GÜNCELLENDİ ---
-                        // Eğer EUIPO veya OAPI ise, origin de bu kod olmalı.
                         let originValue = "Yurtdışı Ulusal";
                         if (countryCode === "EUIPO") originValue = "EUIPO";
                         if (countryCode === "OAPI") originValue = "OAPI";
@@ -582,7 +599,7 @@
                             ...baseData,
                             country: countryCode,
                             transactionHierarchy: "parent",
-                            origin: originValue // GÜNCEL MENŞE
+                            origin: originValue 
                         });
                         
                         if(!res.success) throw new Error("Kayıt hatası: " + res.error);
