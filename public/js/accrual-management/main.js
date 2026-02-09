@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 activeTab: 'main',       // 'main' | 'foreign'
                 filterStatus: 'all',     // 'all' | 'paid' | 'unpaid' | ...
                 searchQuery: '',
+                columnFilters: {},
                 sort: { column: 'createdAt', direction: 'desc' },
                 selectedIds: new Set(),
                 itemsPerPage: 10
@@ -303,6 +304,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const icon = th.querySelector('i');
                     if(icon) icon.className = `fas fa-sort-${this.state.sort.direction === 'asc' ? 'up' : 'down'} sort-icon`;
 
+                    this.renderPage();
+                });
+            });
+
+            // --- 5. KOLON FİLTRELERİ ---
+            const columnFilters = document.querySelectorAll('.column-filter');
+            columnFilters.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const column = e.target.dataset.column;
+                    const value = e.target.value.trim().toLowerCase();
+                    
+                    if (value) {
+                        this.state.columnFilters[column] = value;
+                    } else {
+                        delete this.state.columnFilters[column];
+                    }
+                    
+                    this.renderPage();
+                });
+            });
+
+            const columnFiltersForeign = document.querySelectorAll('.column-filter-foreign');
+            columnFiltersForeign.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const column = e.target.dataset.column;
+                    const value = e.target.value.trim().toLowerCase();
+                    
+                    if (value) {
+                        this.state.columnFilters[column] = value;
+                    } else {
+                        delete this.state.columnFilters[column];
+                    }
+                    
                     this.renderPage();
                 });
             });
