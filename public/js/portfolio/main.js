@@ -82,7 +82,7 @@ class PortfolioController {
                     this.highlightUpdatedRow(updatedId);
                     sessionStorage.removeItem('updatedRecordId'); // Tekrar yanmasın
                 }
-            }, 500); // Tablo çizimi için yarım saniye pay bırakıyoruz
+            }, 800); // Tablo çizimi için yarım saniye pay bırakıyoruz
 
             // Listener başlat
             this.unsubscribe = this.dataManager.startListening(() => {
@@ -469,18 +469,18 @@ class PortfolioController {
 
     highlightUpdatedRow(id) {
         const row = document.querySelector(`tr[data-id="${id}"]`);
-        console.log("Aranan ID:", id, "Bulunan Satır:", row); // Bu satırı ekleyin
+        
+        console.log("🔍 Satır Aranıyor... ID:", id, "Bulunan:", row); // Kontrol için log
+
         if (row) {
-            // Satıra efekti ver
             row.classList.add('recently-updated');
-            
-            // Kullanıcının önüne getir (Scroll)
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // 3 saniye sonra efekti kaldır
             setTimeout(() => {
                 row.classList.remove('recently-updated');
             }, 3000);
+        } else {
+            console.warn("⚠️ Satır bulunamadı! Sayfa verisi yüklenmemiş olabilir.");
         }
     }
 
