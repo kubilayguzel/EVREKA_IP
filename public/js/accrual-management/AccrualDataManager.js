@@ -204,23 +204,45 @@ export class AccrualDataManager {
         if (!this.allAccruals || this.allAccruals.length === 0) {
             return [];
         }
-        let data = tab === 'foreign' ? this.foreignAccruals : this.mainAccruals;
+
+        // --- DÜZELTME BAŞLANGICI ---
+        // HATA KAYNAĞI: this.mainAccruals ve this.foreignAccruals tanımlı değildi.
+        // ÇÖZÜM: Veri kaynağı olarak this.allAccruals kullanılıyor.
+        
+        let data = [];
+        
+        if (tab === 'foreign') {
+            // Yurt dışı sekmesi için filtreleme (İsteğe bağlı özelleştirilebilir)
+            // Şu an için tüm verileri gösteriyoruz, eğer yurt dışı ayrımı için özel bir alanınız varsa (örn: isForeign) buraya ekleyebilirsiniz.
+            // Örnek: data = this.allAccruals.filter(item => item.isForeign === true);
+            data = this.allAccruals; 
+        } else {
+            // Ana sekme için tüm veriler
+            data = this.allAccruals;
+        }
+        // --- DÜZELTME BİTİŞİ ---
 
         // 1. Durum Filtresi
         if (status && status !== 'all') {
-            data = data.filter(item => item.status === status);
+            // Yurt dışı sekmesi için foreignStatus, ana sekme için normal status kontrolü
+            if (tab === 'foreign') {
+                 data = data.filter(item => (item.foreignStatus || 'unpaid') === status);
+            } else {
+                 data = data.filter(item => item.status === status);
+            }
         }
 
         // 2. Genel Arama
         if (search) {
             const s = search.toLowerCase();
             data = data.filter(item => {
-                const searchStr = Object.values(item).join(' ').toLowerCase();
+                // searchString önceden oluşturulmuşsa onu kullan, yoksa oluştur
+                const searchStr = item.searchString || Object.values(item).join(' ').toLowerCase();
                 return searchStr.includes(s);
             });
         }
 
-        // 3. KOLON FİLTRELERİ (YENİ)
+        // 3. KOLON FİLTRELERİ
         for (const [column, filterValue] of Object.entries(columnFilters)) {
             if (!filterValue) continue;
             
@@ -257,10 +279,9 @@ export class AccrualDataManager {
                     const task = this.allTasks[String(item.taskId)];
                     const typeObj = task ? this.allTransactionTypes.find(t => t.id === task.taskType) : null;
                     cellValue = typeObj ? (typeObj.alias || typeObj.name) : (item.taskTitle || '');
-                } else if (column === 'party') {
-                    cellValue = item.paymentParty || '';
-                } else if (column === 'paymentParty') {
-                    cellValue = item.paymentParty || '';
+                } else if (column === 'party' || column === 'paymentParty') {
+                    // paymentParty veya invoiceParty isimlerini kontrol et
+                    cellValue = item.paymentParty || (item.tpInvoiceParty?.name) || (item.serviceInvoiceParty?.name) || '';
                 }
                 
                 return cellValue.toLowerCase().includes(filterValue);
@@ -268,6 +289,24 @@ export class AccrualDataManager {
         }
 
         // 4. Sıralama
+        if (sort && sort.column) {
+            data.sort((a, b) => {
+                let valA = a[sort.column];
+                let valB = b[sort.column];
+
+                // Özel kolon eşleştirmeleri
+                if (sort.column === 'taskTitle') {
+                    // Task başlığına göre sıralama (karmaşık obje erişimi gerekebilir, basitleştirilmiş hali)
+                    valA = a.taskTitle || '';
+                    valB = b.taskTitle || '';
+                }
+
+                if (valA < valB) return sort.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
        return data;
     }
 
