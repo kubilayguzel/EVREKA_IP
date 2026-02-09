@@ -558,31 +558,31 @@ class PortfolioController {
     }
 
     /**
-     * Gelişmiş Excel Aktarımı (Resimli, Hiyerarşik ve Detaylı)
-     * @param {string} type - 'selected' veya 'all'
+     * Gelişmiş Excel Aktarımı (Parent + Child Destekli)
      */
     async exportToExcel(type) {
-        // 1. Veriyi Hazırla
+        // 1. Veriyi Hazırla (Mevcut filtre ve sıralamaya göre - Sadece Parentlar gelir)
         let dataToExport = [];
 
-        // Filtrelenmiş (ekranda görünen) veriyi baz alıyoruz
+        // Filtrelenmiş veriyi al (Not: Bu listede child kayıtlar yoktur, sadece parentlar vardır)
         if (type === 'selected') {
-            const selectedIds = this.state.selectedRecords; // Düzeltme: selectedRows yerine selectedRecords olabilir, kontrol ediniz.
+            const selectedIds = this.state.selectedRecords; 
             if (!selectedIds || selectedIds.size === 0) {
-                alert('Lütfen en az bir kayıt seçiniz.');
+                showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
                 return;
             }
+            // Sadece seçili olanları al
             dataToExport = this.state.filteredData.filter(item => selectedIds.has(item.id));
         } else {
+            // Ekranda görünen tüm listeyi al
             dataToExport = [...this.state.filteredData];
         }
 
         if (dataToExport.length === 0) {
-            alert('Aktarılacak veri bulunamadı.');
+            showNotification('Aktarılacak veri bulunamadı.', 'warning');
             return;
         }
 
-        // Yükleniyor...
         this.renderer.showLoading(true);
 
         try {
@@ -601,47 +601,50 @@ class PortfolioController {
             if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
             if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
 
-            // 3. Veriyi Hiyerarşik Sıraya Sok
+            // 3. Veriyi Hiyerarşik Sıraya Sok (Parent -> Children)
             const sortedData = [];
             const processedIds = new Set();
-            const parents = dataToExport.filter(item => item.transactionHierarchy !== 'child');
             
-            parents.forEach(parent => {
+            // Parent kayıtlar üzerinde dönüyoruz
+            dataToExport.forEach(parent => {
                 if (!processedIds.has(parent.id)) {
+                    // Parent'ı ekle
                     sortedData.push(parent);
                     processedIds.add(parent.id);
 
-                    const children = dataToExport.filter(child => 
-                        child.transactionHierarchy === 'child' && 
-                        (child.parentId === parent.id || (parent.registrationNumber && child.wipoIR === parent.registrationNumber))
-                    );
-
-                    children.forEach(child => {
-                        if (!processedIds.has(child.id)) {
-                            sortedData.push(child);
-                            processedIds.add(child.id);
+                    // EĞER WIPO/ARIPO ise ve Parent ise, Child kayıtlarını bulup altına ekle
+                    if ((parent.origin === 'WIPO' || parent.origin === 'ARIPO') && parent.transactionHierarchy === 'parent') {
+                        const irNo = parent.wipoIR || parent.aripoIR;
+                        if (irNo) {
+                            // DataManager'dan çocukları çek (Ekrandaki filtreden bağımsız olarak tüm çocukları getirir)
+                            const children = this.dataManager.getWipoChildren(irNo);
+                            
+                            if (children && children.length > 0) {
+                                // Çocukları da listeye ekle
+                                children.forEach(child => {
+                                    if (!processedIds.has(child.id)) {
+                                        sortedData.push(child);
+                                        processedIds.add(child.id);
+                                    }
+                                });
+                            }
                         }
-                    });
+                    }
                 }
-            });
-
-            // Yetim kayıtları ekle
-            dataToExport.forEach(item => {
-                if (!processedIds.has(item.id)) sortedData.push(item);
             });
 
             // 4. Excel Workbook Oluştur
             const workbook = new window.ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Portföy Listesi');
 
-            // --- SÜTUN TANIMLARI (GÜNCELLENDİ) ---
+            // Sütunlar
             worksheet.columns = [
                 { header: 'Görsel', key: 'logo', width: 12 },
                 { header: 'Marka/Konu Adı', key: 'title', width: 40 },
-                { header: 'Başvuru Sahibi', key: 'applicant', width: 35 }, // YENİ
+                { header: 'Başvuru Sahibi', key: 'applicant', width: 35 },
                 { header: 'Başvuru No', key: 'appNo', width: 20 },
                 { header: 'Tescil No', key: 'regNo', width: 20 },
-                { header: 'Ülke', key: 'countryName', width: 20 },        // GÜNCELLENDİ (Ülke Adı)
+                { header: 'Ülke', key: 'countryName', width: 20 },
                 { header: 'Sınıflar', key: 'classes', width: 15 },
                 { header: 'Durum', key: 'status', width: 20 },
                 { header: 'Başvuru Tarihi', key: 'appDate', width: 15 },
@@ -659,7 +662,7 @@ class PortfolioController {
             for (let i = 0; i < sortedData.length; i++) {
                 const record = sortedData[i];
 
-                // --- BAŞVURU SAHİBİ FORMATI ---
+                // Başvuru Sahibi
                 let applicantStr = '';
                 if (record.applicants && Array.isArray(record.applicants)) {
                     applicantStr = record.applicants.map(a => a.name).join(', ');
@@ -667,37 +670,34 @@ class PortfolioController {
                     applicantStr = record.applicantName;
                 }
 
-                // --- ÜLKE ADI ÇEVİRİMİ ---
-                // DataManager'daki getCountryName fonksiyonunu kullanıyoruz
+                // Ülke Adı
                 const countryNameStr = this.dataManager.getCountryName(record.country);
 
                 const row = worksheet.addRow({
                     title: record.title || '',
-                    applicant: applicantStr, // YENİ
+                    applicant: applicantStr,
                     appNo: record.applicationNumber || '',
                     regNo: record.registrationNumber || '',
-                    countryName: countryNameStr, // YENİ (Kod yerine İsim)
+                    countryName: countryNameStr,
                     classes: Array.isArray(record.niceClasses) ? record.niceClasses.join(', ') : (record.niceClasses || ''),
                     status: record.statusText || record.status || '',
                     appDate: record.applicationDate ? new Date(record.applicationDate).toLocaleDateString('tr-TR') : '',
                     regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
                 });
 
-                // Hiyerarşi Girintisi
+                // GÖRSEL HİYERARŞİ: Child kayıtları girintili ve italik yap
                 if (record.transactionHierarchy === 'child') {
                     row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
-                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
+                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } }; 
                 } else {
                     row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
                     row.font = { bold: true };
                 }
 
-                // Hizalamalar
+                // Diğer Hücre Hizalamaları
                 ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
                    if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
                 });
-                
-                // Applicant sütunu için sola dayalı ama dikey ortalı
                 row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
 
                 // Resim Ekleme (Varsa)
@@ -729,7 +729,7 @@ class PortfolioController {
             
         } catch (error) {
             console.error('Excel oluşturma hatası:', error);
-            alert('Excel oluşturulurken bir hata oluştu.');
+            showNotification('Excel oluşturulurken bir hata oluştu.', 'error');
         } finally {
             this.renderer.showLoading(false);
         }
