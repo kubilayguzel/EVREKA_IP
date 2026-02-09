@@ -1234,3 +1234,9 @@ body.modal-open {
 .dropdown-menu .btn.text-danger {
     color: #dc3545 !important; /* Standart Kırmızı */
 }
+/* Güncellenen satır vurgusu */
+.recently-updated {
+    background-color: #d1e7dd !important; /* Açık yeşil ton */
+    transition: background-color 2s ease-out; /* 2 saniye içinde yavaşça solar */
+    border-left: 4px solid #0f5132; /* Sol tarafına belirgin çizgi */
+}
