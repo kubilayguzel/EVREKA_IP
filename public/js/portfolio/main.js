@@ -533,11 +533,11 @@ class PortfolioController {
     }
     
     /**
-     * Tabloyu ekrana çizer
-     */
+ * Tabloyu ekrana çizer
+ */
     async render() {
         this.renderer.showLoading(true);
-        this.renderer.clearTable(); // Tabloyu temizle
+        this.renderer.clearTable();
 
         // 1. Verileri Filtrele ve Sırala
         let filtered = this.dataManager.filterRecords(
@@ -546,6 +546,11 @@ class PortfolioController {
             this.state.columnFilters,
             this.state.subTab 
         );
+        
+        console.log('🔍 RENDER - activeTab:', this.state.activeTab);
+        console.log('🔍 RENDER - subTab:', this.state.subTab);
+        console.log('🔍 RENDER - Filtered count:', filtered?.length);
+        console.log('🔍 RENDER - tbody element:', this.renderer.tbody);
 
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         this.state.filteredData = filtered;
@@ -570,10 +575,12 @@ class PortfolioController {
         const endIndex = startIndex + this.ITEMS_PER_PAGE;
         const pageData = filtered.slice(startIndex, endIndex);
 
-        // DocumentFragment oluştur
+        console.log('📊 RENDER - pageData count:', pageData.length);
+        console.log('📊 RENDER - İlk kayıt:', pageData[0]);
+
         const frag = document.createDocumentFragment();
 
-        // 4. Satırları Oluştur (DÖNGÜ BURADA)
+        // 4. Satırları Oluştur
         pageData.forEach((item, index) => {
             const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
@@ -583,12 +590,14 @@ class PortfolioController {
                 frag.appendChild(tr);
 
             } else if (this.state.activeTab === 'litigation') {
-                 if (this.renderer.renderLitigationRow) {
+                if (this.renderer.renderLitigationRow) {
                     frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
-                 }
+                }
             } else {
                 const isSelected = this.state.selectedRecords.has(String(item.id));
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
+                
+                console.log('🎯 Row oluşturuldu:', tr); // DEBUG
                 frag.appendChild(tr);
 
                 // Child Kayıtlar (WIPO/ARIPO)
@@ -613,21 +622,21 @@ class PortfolioController {
                     }
                 }
             }
-        }); 
+        });
 
-        // --- KRİTİK DÜZELTME BURASI ---
-        // Döngü bitti, şimdi oluşturduğumuz parçayı (frag) tabloya ekliyoruz.
-        // Bu kısım pageData.forEach bloğunun DIŞINDA olmalı.
-        
+        console.log('📦 Fragment child count:', frag.childNodes.length); // DEBUG
+
+        // 5. Fragment'ı DOM'a ekle
         if (this.renderer.tbody) {
             this.renderer.tbody.appendChild(frag);
+            console.log('✅ Fragment DOM\'a eklendi, tbody children:', this.renderer.tbody.children.length);
         } else {
-            // Yedek plan: ID ile bulmaya çalış
             const fallbackBody = document.getElementById('portfolioTableBody');
             if (fallbackBody) {
                 fallbackBody.appendChild(frag);
+                console.log('✅ Fragment fallback ile eklendi');
             } else {
-                console.error('HATA: Tablo gövdesi (tbody) bulunamadı, veriler eklenemiyor.');
+                console.error('❌ HATA: Tablo gövdesi (tbody) bulunamadı.');
             }
         }
         
@@ -637,6 +646,7 @@ class PortfolioController {
         }
 
         this.renderer.showLoading(false);
+        console.log('🏁 RENDER tamamlandı');
     }
 
     // Bu fonksiyonu PortfolioController sınıfının içine ekleyin
