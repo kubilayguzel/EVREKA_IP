@@ -30,6 +30,11 @@ export class PortfolioDataManager {
             this.loadPersons(), // Kişileri çek ve haritala
             this.loadCountries()
         ]);
+        this.allRecords.forEach(record => {
+            if (record.country) {
+                record.formattedCountryName = this.getCountryName(record.country);
+            }
+        });
         return await this.loadRecords();
     }
 
@@ -553,8 +558,9 @@ export class PortfolioDataManager {
 
     sortRecords(data, column, direction) {
         return [...data].sort((a, b) => {
-            let valA = a[column];
-            let valB = b[column];
+        // Ülke kolonunda kod yerine ad ile sırala
+        let valA = column === 'country' ? (a.formattedCountryName || a[column]) : a[column];
+        let valB = column === 'country' ? (b.formattedCountryName || b[column]) : b[column];
             
             // Boş değerleri kontrol et
             const isEmptyA = (valA === null || valA === undefined || valA === '');
