@@ -513,6 +513,19 @@ class PortfolioController {
             this.renderer.showLoading(false);
         }
     }
+
+    // Bu fonksiyon main.js dosyasında PortfolioController sınıfı içine eklenmelidir.
+    updateSubTabUI() {
+        const subBtns = document.querySelectorAll('#trademarkSubMenu button');
+        if (subBtns) {
+            subBtns.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.sub === this.state.subTab) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+    }
     
     /**
      * Tabloyu ekrana çizer
