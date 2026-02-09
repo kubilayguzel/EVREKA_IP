@@ -160,13 +160,22 @@ class PortfolioController {
     }
 
     setupPagination() {
+        const container = document.getElementById('paginationContainer');
+        if (!container) {
+            console.warn('Pagination konteyneri bulunamadı (id="paginationContainer").');
+            return;
+        }
+
+        // Pagination sınıfını başlat
         this.pagination = new Pagination({
             containerId: 'paginationContainer',
-            itemsPerPage: 20,
+            itemsPerPage: this.ITEMS_PER_PAGE,
             onPageChange: (page) => {
                 this.state.currentPage = page;
-                this.render();
+                this.render(); // Sayfa değişince render'ı tekrar çağır
                 this.updateSelectAllCheckbox();
+                // Tablo başına kaydır
+                document.querySelector('.portfolio-table-container')?.scrollIntoView({ behavior: 'smooth' });
             }
         });
     }
@@ -505,77 +514,64 @@ class PortfolioController {
         }
     }
     
-    /**
-     * Tabloyu ekrana çizer
-     */
-    async render() {
-        this.renderer.showLoading(true);
-        
-        // Tabloyu temizle
-        if (typeof this.renderer.clearTable === 'function') {
-            this.renderer.clearTable();
-        } else {
-            const tbody = document.getElementById('portfolioTableBody');
-            if(tbody) tbody.innerHTML = '';
-        }
+    render() {
+        const cols = this.getColumnsForTab(this.state.activeTab);
+        this.renderer.renderHeaders(cols, this.state.columnFilters);
 
-        // 1. Verileri Filtrele ve Sırala
+        // 1. Filtreleme ve Sıralama
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
             this.state.columnFilters,
             this.state.subTab 
         );
-
+        
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         this.state.filteredData = filtered;
 
-        // 2. Sayfalama Hesapla
-        const totalItems = filtered.length;
-        const totalPages = Math.ceil(totalItems / this.ITEMS_PER_PAGE);
-        
-        // Eğer updatePaginationUI fonksiyonu tanımlıysa çağır
-        if (typeof this.updatePaginationUI === 'function') {
-            this.updatePaginationUI(totalItems, totalPages);
+        // 2. Pagination Güncellemesi
+        if (!this.pagination) {
+            this.setupPagination(); // Pagination yoksa kur
+        }
+        if (this.pagination) {
+            this.pagination.update(filtered.length);
         }
 
-        if (totalItems === 0) {
+        // 3. Tabloyu Temizle
+        if (typeof this.renderer.clearTable === 'function') {
+            this.renderer.clearTable();
+        }
+
+        // 4. Veri Yoksa Göster ve Çık
+        if (filtered.length === 0) {
             this.renderer.renderEmptyState();
-            this.renderer.showLoading(false);
-            return;
+            this.updateSelectAllCheckbox();
+            this.updateBulkActionButtons();
+            return; // Veri yoksa devam etme
         }
 
-        // 3. Mevcut Sayfanın Verilerini Al
-        const startIndex = (this.state.currentPage - 1) * this.ITEMS_PER_PAGE;
-        const endIndex = startIndex + this.ITEMS_PER_PAGE;
-        const pageData = filtered.slice(startIndex, endIndex);
+        // 5. Sayfa Verilerini Al
+        const pageData = this.pagination ? this.pagination.getCurrentPageData(filtered) : filtered;
 
         const frag = document.createDocumentFragment();
 
-        // 4. Satırları Oluştur
+        // 6. Satırları Oluştur
         pageData.forEach((item, index) => {
             const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
-            // --- TAB KONTROLLERİ ---
             if (this.state.activeTab === 'objections') {
-                // İtirazlar Sekmesi
                 const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
                 if (item.isChild) tr.style.display = 'none';
                 frag.appendChild(tr);
-
             } else if (this.state.activeTab === 'litigation') {
-                 // Davalar Sekmesi
-                 if (this.renderer.renderLitigationRow) {
+                 if(this.renderer.renderLitigationRow) {
                     frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
                  }
-
             } else {
-                // Standart (Marka/Patent/Tasarım)
                 const isSelected = this.state.selectedRecords.has(String(item.id));
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
-                // Child Kayıtlar (Parent WIPO/ARIPO ise)
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     if(irNo) {
@@ -599,20 +595,16 @@ class PortfolioController {
             }
         });
 
-        // --- HATA DÜZELTME BURADA ---
-        // document.querySelector('#portfolioTable tbody') YERİNE this.renderer.tbody KULLANIYORUZ
+        // 7. GÜVENLİ EKLEME (Sorunun Çözümü)
+        // Renderer'daki getter sayesinde o anki tbody'i çeker
         if (this.renderer.tbody) {
             this.renderer.tbody.appendChild(frag);
         } else {
-            console.error('HATA: Tablo gövdesi (tbody) bulunamadı. HTML ID kontrol ediniz.');
+            console.warn('Tablo gövdesi (tbody) bulunamadı, tablo çizilemedi.');
         }
         
-        // Tooltip'leri etkinleştir
-        if(typeof $ !== 'undefined' && $.fn.tooltip) {
-            $('[data-toggle="tooltip"]').tooltip();
-        }
-
-        this.renderer.showLoading(false);
+        this.updateSelectAllCheckbox();
+        this.updateBulkActionButtons();
     }
 
     // Bu fonksiyonu PortfolioController sınıfının içine ekleyin
