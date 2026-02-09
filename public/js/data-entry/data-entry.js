@@ -618,6 +618,7 @@ class DataEntryModule {
                 }
 
                 alert('Kayıt başarıyla güncellendi.');
+                sessionStorage.setItem('updatedRecordId', this.editingRecordId);
 
             } else {
                 // --- YENİ KAYIT (CREATE) MODU ---
