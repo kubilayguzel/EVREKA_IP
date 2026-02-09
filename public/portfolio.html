@@ -185,7 +185,19 @@
                         <span>&#x2795;</span> Yeni Kayıt
                     </button>
                     
-                    <button id="exportExcelBtn" class="btn-secondary">Excel'e Aktar</button>
+                    <div class="btn-group">
+                        <button type="button" class="btn-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="display: flex; align-items: center; gap: 5px;">
+                            Excel'e Aktar
+                        </button>
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" href="#" id="btnExportSelected">
+                                <i class="fas fa-check-square mr-2"></i>Sadece Seçilenleri Aktar
+                            </a>
+                            <a class="dropdown-item" href="#" id="btnExportAll">
+                                <i class="fas fa-list mr-2"></i>Tüm Listeyi Aktar
+                            </a>
+                        </div>
+                    </div>
                     <button id="exportPdfBtn" class="btn-secondary">PDF'e Aktar</button>
                 </div>
             </div>
