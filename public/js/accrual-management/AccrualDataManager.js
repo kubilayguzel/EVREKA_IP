@@ -199,6 +199,11 @@ export class AccrualDataManager {
 
     filterAndSort(criteria, sort) {
         const { tab, status, search, columnFilters = {} } = criteria;
+        
+        // Eğer veri henüz yüklenmediyse boş array dön
+        if (!this.allAccruals || this.allAccruals.length === 0) {
+            return [];
+        }
         let data = tab === 'foreign' ? this.foreignAccruals : this.mainAccruals;
 
         // 1. Durum Filtresi
