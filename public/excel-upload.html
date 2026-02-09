@@ -349,11 +349,32 @@
             elements.errorList.appendChild(li);
         }
 
-        async function checkDuplicate(applicationNumber, countryCode) {
-            if (!applicationNumber || !countryCode) return false;
-            const q = query(collection(db, "ipRecords"), where("applicationNumber", "==", String(applicationNumber)), where("country", "==", countryCode));
-            const snapshot = await getDocs(q);
-            return !snapshot.empty; 
+        // --- GÜNCELLENEN DUPLICATE KONTROLÜ ---
+        // Hem Başvuru Hem Tescil Numarasını Kontrol Eder
+        async function checkDuplicate(appNo, regNo, countryCode) {
+            // 1. Başvuru Numarası Kontrolü (Varsa)
+            if (appNo) {
+                const qApp = query(
+                    collection(db, "ipRecords"), 
+                    where("applicationNumber", "==", String(appNo)),
+                    where("country", "==", countryCode)
+                );
+                const snapApp = await getDocs(qApp);
+                if (!snapApp.empty) return true;
+            }
+
+            // 2. Tescil Numarası Kontrolü (Varsa)
+            if (regNo) {
+                const qReg = query(
+                    collection(db, "ipRecords"), 
+                    where("registrationNumber", "==", String(regNo)),
+                    where("country", "==", countryCode)
+                );
+                const snapReg = await getDocs(qReg);
+                if (!snapReg.empty) return true;
+            }
+
+            return false;
         }
 
         async function uploadImageToStorage(buffer, extension, brandName) {
@@ -373,10 +394,7 @@
 
         function extractImagesFromSheet(workbook, sheet) {
             const imageMap = {};
-            // --- HATA DÜZELTME: Sheet kontrolü ---
-            if (!sheet || typeof sheet.getImages !== 'function') {
-                return imageMap;
-            }
+            if (!sheet || typeof sheet.getImages !== 'function') return imageMap;
 
             const images = sheet.getImages();
             if (!images || images.length === 0) return imageMap;
@@ -413,24 +431,15 @@
             log(`Dosya okunuyor: ${file.name}`, 'info');
 
             const workbook = new ExcelJS.Workbook();
-            try {
-                await workbook.xlsx.load(file);
-            } catch (err) {
-                alert("Dosya yüklenirken hata oluştu. Lütfen geçerli bir .xlsx dosyası yüklediğinizden emin olun.");
-                console.error(err);
+            try { await workbook.xlsx.load(file); } catch (err) {
+                alert("Dosya yüklenirken hata oluştu.");
                 elements.dropZone.style.pointerEvents = 'auto';
                 elements.dropZone.style.opacity = '1';
                 return;
             }
 
-            // --- HATA DÜZELTME: Sheet alma yöntemi ---
             let sheet = workbook.getWorksheet(1);
-            if (!sheet) {
-                // Eğer ID ile bulunamazsa, ilk sıradaki sayfayı al
-                if (workbook.worksheets && workbook.worksheets.length > 0) {
-                    sheet = workbook.worksheets[0];
-                }
-            }
+            if (!sheet && workbook.worksheets.length > 0) sheet = workbook.worksheets[0];
 
             if (!sheet) {
                 alert("Excel dosyasında okunabilir bir çalışma sayfası bulunamadı!");
@@ -515,18 +524,14 @@
                         title: formattedBrandText, 
                         brandText: formattedBrandText,
                         brandCategory: "Ticaret/Hizmet Markası",
-                        
                         brandImageUrl: uploadedImageUrl,
-
                         status: mappedStatus,
                         applicationNumber: appNum,
                         registrationNumber: regNum,
                         applicationDate: appDateStr,
                         registrationDate: regDateStr,
                         renewalDate: expDateStr,
-                        
                         representative: rowData.Representative ? rowData.Representative.trim() : "",
-                        
                         niceClasses: finalNiceClasses,
                         goodsAndServicesByClass: finalGoodsByClass,
                         source: "Excel Import",
@@ -541,8 +546,14 @@
                     let createdRecords = [];
 
                     if (isWipo) {
+                        // WIPO için: Ana numara Tescil No (RegNo)'dur.
+                        // Duplicate kontrolünde hem AppNo hem RegNo'yu kontrol etmeye gerek yok
+                        // çünkü WIPO'da AppNo genelde boştur veya yerel ofis nosudur.
+                        // Yine de güvenli olsun diye baseData.registrationNumber'ı hem app hem reg olarak check ediyoruz.
+                        
                         const wipoAppNoToCheck = baseData.registrationNumber;
-                        const isDuplicate = await checkDuplicate(wipoAppNoToCheck, 'WO');
+                        // checkDuplicate(AppNo, RegNo, Country)
+                        const isDuplicate = await checkDuplicate(wipoAppNoToCheck, wipoAppNoToCheck, 'WO');
 
                         if (isDuplicate) throw new Error(`Bu kayıt zaten sistemde mevcut! (WIPO: ${wipoAppNoToCheck})`);
 
@@ -588,8 +599,11 @@
                         const singleCountry = rawJurisdictions.split(',')[0].trim();
                         const countryCode = getCountryCode(singleCountry);
                         
-                        const isDuplicate = await checkDuplicate(baseData.applicationNumber, countryCode);
-                        if (isDuplicate) throw new Error(`Bu kayıt zaten sistemde mevcut! (App No: ${baseData.applicationNumber}, Ülke: ${countryCode})`);
+                        // --- TEKİL KAYIT İÇİN ÇİFT YÖNLÜ KONTROL ---
+                        const isDuplicate = await checkDuplicate(baseData.applicationNumber, baseData.registrationNumber, countryCode);
+                        if (isDuplicate) {
+                             throw new Error(`Bu kayıt zaten mevcut! (App: ${baseData.applicationNumber} / Reg: ${baseData.registrationNumber})`);
+                        }
 
                         let originValue = "Yurtdışı Ulusal";
                         if (countryCode === "EUIPO") originValue = "EUIPO";
