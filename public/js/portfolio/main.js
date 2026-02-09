@@ -469,6 +469,7 @@ class PortfolioController {
 
     highlightUpdatedRow(id) {
         const row = document.querySelector(`tr[data-id="${id}"]`);
+        console.log("Aranan ID:", id, "Bulunan Satır:", row); // Bu satırı ekleyin
         if (row) {
             // Satıra efekti ver
             row.classList.add('recently-updated');
