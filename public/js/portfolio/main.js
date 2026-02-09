@@ -175,63 +175,55 @@ class PortfolioController {
         // --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                // Sınıf temizliği (Aktif sınıfını diğerlerinden kaldır)
+                // Sınıf temizliği
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
                 
-                // Tıklanan butonu aktif yap
-                const targetBtn = e.target.closest('.tab-button'); // closest ile varsa içindeki span/icon yerine butonu seç
+                const targetBtn = e.target.closest('.tab-button');
                 if(targetBtn) {
                    targetBtn.classList.add('active');
                    this.state.activeTab = targetBtn.dataset.type;
                 }
 
-                // MARKALAR sekmesi için ALT MENÜ YÖNETİMİ
+                // Marka alt menü yönetimi
                 const subMenu = document.getElementById('trademarkSubMenu');
                 if (subMenu) {
                     if (this.state.activeTab === 'trademark') {
-                        subMenu.style.display = 'flex'; // Marka sekmesindeysek göster
-                        this.state.subTab = 'turkpatent'; // Varsayılan olarak TÜRKPATENT seç
-                        this.updateSubTabUI(); // UI butonlarını güncelle
+                        subMenu.style.display = 'flex';
+                        this.state.subTab = 'turkpatent'; // Varsayılan TÜRKPATENT
+                        this.updateSubTabUI();
                     } else {
-                        subMenu.style.display = 'none'; // Diğer sekmelerde gizle
-                        this.state.subTab = null; // Alt sekme filtresini temizle
+                        subMenu.style.display = 'none';
+                        this.state.subTab = null;
                     }
                 }
 
-                // Durumları Sıfırla
+                // Sıfırlama
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
-                this.state.selectedRecords.clear(); // Seçimleri temizle
+                this.state.selectedRecords.clear();
                 
-                // UI Elemanlarını Temizle
                 const searchInput = document.getElementById('searchInput');
                 if(searchInput) searchInput.value = '';
                 
-                // Tabloyu Yenile
                 this.renderer.clearTable();
                 this.render();
             });
         });
 
-        // --- 2. ALT SEKME (SUB-TAB) DEĞİŞİMİ (TÜRKPATENT / YURTDIŞI) ---
-        // Bu butonlar HTML'de trademarkSubMenu içinde yer almalı
+        // --- 2. ALT SEKME (SUB-TAB) DEĞİŞİMİ ---
         const subTabButtons = document.querySelectorAll('#trademarkSubMenu button');
         if (subTabButtons) {
             subTabButtons.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // UI Güncelle (Diğer butonların aktifliğini kaldır)
                     subTabButtons.forEach(b => b.classList.remove('active'));
-                    
                     const clickedBtn = e.target.closest('button');
-                    clickedBtn.classList.add('active'); // Tıklananı aktif yap
+                    clickedBtn.classList.add('active');
 
-                    // State Güncelle
-                    this.state.subTab = clickedBtn.dataset.sub; // 'turkpatent' veya 'foreign'
-                    this.state.currentPage = 1; // İlk sayfaya dön
-                    this.state.selectedRecords.clear(); // Seçimleri temizle
+                    this.state.subTab = clickedBtn.dataset.sub;
+                    this.state.currentPage = 1;
+                    this.state.selectedRecords.clear();
 
-                    // Tabloyu Yenile
                     this.render();
                 });
             });
@@ -241,17 +233,16 @@ class PortfolioController {
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
-                // Debounce mekanizması (Hızlı yazarken sürekli sorgu atmamak için)
                 if (this.searchTimeout) clearTimeout(this.searchTimeout);
                 this.searchTimeout = setTimeout(() => {
                     this.state.searchQuery = e.target.value.trim();
                     this.state.currentPage = 1;
                     this.render();
-                }, 300); // 300ms bekle
+                }, 300);
             });
         }
 
-        // --- 4. SAYFALAMA (PAGINATION) ---
+        // --- 4. SAYFALAMA ---
         const prevBtn = document.getElementById('prevPage');
         const nextBtn = document.getElementById('nextPage');
 
@@ -274,57 +265,97 @@ class PortfolioController {
             });
         }
 
-        // --- 5. FİLTRELERİ TEMİZLE BUTONU ---
+        // --- 5. FİLTRELERİ TEMİZLE ---
         const clearFiltersBtn = document.getElementById('clearFilters');
         if (clearFiltersBtn) {
             clearFiltersBtn.addEventListener('click', () => {
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
                 if(searchInput) searchInput.value = '';
-                
-                // Kolon filtre inputlarını da temizle (TableManager içinde varsa)
                 document.querySelectorAll('.column-filter-input').forEach(input => input.value = '');
-
                 this.render();
             });
         }
 
-        // --- 6. EXCEL'E AKTAR (EXPORT) ---
+        // --- 6. EXCEL İŞLEMLERİ (EXPORT & IMPORT) ---
         const btnExportSelected = document.getElementById('btnExportSelected');
         const btnExportAll = document.getElementById('btnExportAll');
-
-        if (btnExportSelected) {
-            btnExportSelected.addEventListener('click', (e) => {
-                e.preventDefault(); // Link olduğu için sayfa yenilenmesin
-                this.exportToExcel('selected');
-            });
-        }
-
-        if (btnExportAll) {
-            btnExportAll.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.exportToExcel('all');
-            });
-        }
-
-        // --- 7. EXCEL İLE VERİ YÜKLEME (IMPORT) ---
         const btnExcelUpload = document.getElementById('btnExcelUpload');
         const fileInput = document.getElementById('fileInput');
 
+        if (btnExportSelected) {
+            btnExportSelected.addEventListener('click', (e) => { e.preventDefault(); this.exportToExcel('selected'); });
+        }
+        if (btnExportAll) {
+            btnExportAll.addEventListener('click', (e) => { e.preventDefault(); this.exportToExcel('all'); });
+        }
         if (btnExcelUpload && fileInput) {
-            btnExcelUpload.addEventListener('click', () => {
-                fileInput.click(); // Gizli input'u tetikle
-            });
-
+            btnExcelUpload.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', async (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    // Dosya yükleme mantığını burada çağırabilirsiniz
-                    // Örn: await this.handleFileUpload(file);
-                    console.log("Dosya seçildi:", file.name);
+                 if (e.target.files.length > 0) {
+                     // Dosya yükleme işlemleri burada yapılır
+                     console.log("Dosya seçildi:", e.target.files[0].name);
+                     fileInput.value = ''; 
+                 }
+            });
+        }
+
+        // --- 7. TABLO İÇİ İŞLEMLER (AKORDEON, BUTONLAR, CHECKBOX) ---
+        // (EKSİK OLAN VE SORUNU ÇÖZEN KISIM BURASI)
+        const tableBody = document.getElementById('portfolioTableBody');
+        if (tableBody) {
+            tableBody.addEventListener('click', (e) => {
+                
+                // A. CHECKBOX SEÇİMİ (Event Delegation)
+                if (e.target.classList.contains('record-checkbox')) {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) {
+                        this.state.selectedRecords.add(String(id)); // ID'yi string olarak sakla
+                    } else {
+                        this.state.selectedRecords.delete(String(id));
+                    }
+                    return; // İşlem tamam, diğer kontrollere gerek yok
+                }
+
+                // B. AKORDEON AÇMA/KAPAMA (Caret veya Grup Başlığına Tıklama)
+                // Butonlara veya checkbox'a tıklanmadığından emin ol
+                const caret = e.target.closest('.row-caret') || 
+                              (e.target.closest('tr.group-header') && !e.target.closest('button, a, input, .action-btn'));
+                
+                if (caret) {
+                    this.toggleAccordion(e.target.closest('tr') || caret);
+                    return;
+                }
+
+                // C. AKSİYON BUTONLARI (Görüntüle, Düzenle, Sil)
+                const btn = e.target.closest('.action-btn');
+                if (btn) {
+                    e.stopPropagation(); // Satır tıklamasını engelle
                     
-                    // İşlem bitince inputu sıfırla ki aynı dosyayı tekrar seçebilsin
-                    fileInput.value = ''; 
+                    const id = btn.dataset.id;
+                    if (!id) return;
+
+                    if (btn.classList.contains('view-btn')) {
+                        // GÖRÜNTÜLE
+                        if (this.state.activeTab === 'litigation') {
+                            window.location.href = `suit-detail.html?id=${id}`;
+                        } else {
+                            window.open(`portfolio-detail.html?id=${id}`, '_blank', 'noopener');
+                        }
+                    } 
+                    else if (btn.classList.contains('edit-btn')) {
+                        // DÜZENLE
+                        sessionStorage.setItem('lastPageNumber', this.state.currentPage);
+                        if (this.state.activeTab === 'litigation') {
+                            window.location.href = `suit-detail.html?id=${id}`;
+                        } else {
+                            window.location.href = `data-entry.html?id=${id}`;
+                        }
+                    } 
+                    else if (btn.classList.contains('delete-btn')) {
+                        // SİL
+                        this.handleDelete(id);
+                    }
                 }
             });
         }
