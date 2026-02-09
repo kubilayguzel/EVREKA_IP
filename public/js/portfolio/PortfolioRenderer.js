@@ -97,17 +97,27 @@ export class PortfolioRenderer {
     }
 
     // --- STANDART ROW ---
+    // --- STANDART ROW ---
     renderStandardRow(record, isTrademarkTab, isSelected) {
         const tr = document.createElement('tr');
         tr.dataset.id = record.id;
         
         const isWipoParent = (record.origin === 'WIPO' || record.origin === 'ARIPO') && record.transactionHierarchy === 'parent';
         const isChild = record.transactionHierarchy === 'child'; 
-        const irNo = record.wipoIR || record.aripoIR;
+        const irNo = record.wipoIR || record.aripoIR; // WIPO veya ARIPO No
         
-        if (isWipoParent && irNo) {
-            tr.dataset.groupId = irNo;
-            tr.className = 'group-header';
+        // DÜZELTME 2 & 3: Parent Renklendirme ve Grup ID Kontrolü
+        if (isWipoParent) {
+            // Eğer IR numarası varsa grup başlığı yap
+            if (irNo) {
+                tr.dataset.groupId = irNo;
+                tr.className = 'group-header';
+            }
+            // Parent satırları AÇIK MAVİ olsun
+            tr.style.backgroundColor = '#e3f2fd'; 
+        } else if (isChild) {
+             // Child satırlar BEYAZ (veya varsayılan)
+             tr.style.backgroundColor = '#ffffff';
         }
 
         const countryName = this.dataManager.getCountryName(record.country);
@@ -122,9 +132,10 @@ export class PortfolioRenderer {
             </div>
         `;
 
-        const caret = isWipoParent ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
+        // DÜZELTME: Caret (Ok işareti) sadece IR Numarası varsa gösterilsin
+        const caret = (isWipoParent && irNo) ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
 
-        // Güvenli Veri Erişimi (Null check ve String'e çevirme)
+        // Güvenli Veri Erişimi
         const titleText = record.title || record.brandText || '-';
         const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-');
         const applicantText = record.formattedApplicantName || '-';
@@ -132,7 +143,6 @@ export class PortfolioRenderer {
         let html = `
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
             <td class="toggle-cell text-center">${caret}</td>
-            
         `;
 
         if (!isTrademarkTab) {
@@ -149,12 +159,9 @@ export class PortfolioRenderer {
 
         html += `<td title="${appNoText}">${appNoText}</td>`;
         html += `<td>${this.formatDate(record.applicationDate)}</td>`;
-        
-        // Başvuru Durumu (Child ise boş, değilse Utils'den çevrilmiş metin)
         html += `<td>${isChild ? '' : this.getStatusBadge(record)}</td>`;
-        
         html += `<td><small title="${applicantText}">${applicantText}</small></td>`;
-        // YENİ: Nice Sınıfları
+        
         const niceText = record.formattedNiceClasses || '-';
         html += `<td title="${niceText}">${niceText}</td>`;
         html += `<td>${actions}</td>`;
