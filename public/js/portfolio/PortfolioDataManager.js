@@ -30,11 +30,23 @@ export class PortfolioDataManager {
             this.loadPersons(), // Kişileri çek ve haritala
             this.loadCountries()
         ]);
-        this.allRecords.forEach(record => {
+                // Sıralama için ülke adlarını ekle
+        console.log('🌍 Ülke adları ekleniyor...');
+        this.allRecords.forEach((record, idx) => {
             if (record.country) {
                 record.formattedCountryName = this.getCountryName(record.country);
+                
+                // İlk 5 kayıt için debug
+                if (idx < 5) {
+                    console.log(`🔍 Kayıt ${idx}:`, {
+                        country: record.country,
+                        formatted: record.formattedCountryName,
+                        allCountriesSize: this.allCountries?.length
+                    });
+                }
             }
         });
+        console.log('✅ Ülke adları eklendi, toplam kayıt:', this.allRecords.length);
         return await this.loadRecords();
     }
 
@@ -557,32 +569,42 @@ export class PortfolioDataManager {
     }
 
     sortRecords(data, column, direction) {
-        return [...data].sort((a, b) => {
+    return [...data].sort((a, b) => {
         // Ülke kolonunda kod yerine ad ile sırala
         let valA = column === 'country' ? (a.formattedCountryName || a[column]) : a[column];
         let valB = column === 'country' ? (b.formattedCountryName || b[column]) : b[column];
-            
-            // Boş değerleri kontrol et
-            const isEmptyA = (valA === null || valA === undefined || valA === '');
-            const isEmptyB = (valB === null || valB === undefined || valB === '');
-            
-            if (isEmptyA && isEmptyB) return 0;
-            if (isEmptyA) return direction === 'asc' ? 1 : -1; // Boşlar sona
-            if (isEmptyB) return direction === 'asc' ? -1 : 1; // Boşlar sona
-            
-            // Tarih sütunları
-            if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
-            valA = this._parseDate(valA) || new Date(valA).getTime();
-            valB = this._parseDate(valB) || new Date(valB).getTime();
-            return direction === 'asc' ? valA - valB : valB - valA;
-            }
-            
-            // String karşılaştırması (TÜRKÇE DESTEK)
-            const strA = String(valA);
-            const strB = String(valB);
-            const comparison = strA.localeCompare(strB, 'tr-TR', { sensitivity: 'base' });
-            
-            return direction === 'asc' ? comparison : -comparison;
-        });
-    }
+        
+        // DEBUG: İlk 5 kayıt için log
+        if (column === 'country' && Math.random() < 0.01) {
+            console.log('🔍 Sıralama:', {
+                codeA: a.country,
+                nameA: valA,
+                codeB: b.country,
+                nameB: valB
+            });
+        }
+        
+        // Boş değerleri kontrol et
+        const isEmptyA = (valA === null || valA === undefined || valA === '');
+        const isEmptyB = (valB === null || valB === undefined || valB === '');
+        
+        if (isEmptyA && isEmptyB) return 0;
+        if (isEmptyA) return direction === 'asc' ? 1 : -1; // Boşlar sona
+        if (isEmptyB) return direction === 'asc' ? -1 : 1; // Boşlar sona
+        
+        // Tarih sütunları
+        if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
+           valA = this._parseDate(valA) || new Date(valA).getTime();
+           valB = this._parseDate(valB) || new Date(valB).getTime();
+           return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        
+        // String karşılaştırması (TÜRKÇE DESTEK)
+        const strA = String(valA);
+        const strB = String(valB);
+        const comparison = strA.localeCompare(strB, 'tr-TR', { sensitivity: 'base' });
+        
+        return direction === 'asc' ? comparison : -comparison;
+    });
+}
 }
