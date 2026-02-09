@@ -97,7 +97,6 @@ class PortfolioController {
 
             // Listener başlat
             this.unsubscribe = this.dataManager.startListening(() => {
-                console.log("🔄 Veritabanında değişim algılandı, tablo güncelleniyor...");
                 this.render();
             });
 
@@ -592,11 +591,6 @@ class PortfolioController {
             this.state.columnFilters,
             this.state.subTab 
         );
-        
-        console.log('🔍 RENDER - activeTab:', this.state.activeTab);
-        console.log('🔍 RENDER - subTab:', this.state.subTab);
-        console.log('🔍 RENDER - Filtered count:', filtered?.length);
-        console.log('🔍 RENDER - tbody element:', this.renderer.tbody);
 
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         this.state.filteredData = filtered;
@@ -617,16 +611,9 @@ class PortfolioController {
         }
 
         // 3. Mevcut Sayfanın Verilerini Al
-        console.log('🔢 currentPage:', this.state.currentPage);
-        console.log('🔢 ITEMS_PER_PAGE:', this.ITEMS_PER_PAGE);
         const startIndex = (this.state.currentPage - 1) * this.ITEMS_PER_PAGE;
         const endIndex = startIndex + this.ITEMS_PER_PAGE;
-        console.log('🔢 startIndex:', startIndex, 'endIndex:', endIndex);
         const pageData = filtered.slice(startIndex, endIndex);
-
-        console.log('📊 RENDER - pageData count:', pageData.length);
-        console.log('📊 RENDER - İlk kayıt:', pageData[0]);
-
         const frag = document.createDocumentFragment();
 
         // 4. Satırları Oluştur
@@ -646,7 +633,6 @@ class PortfolioController {
                 const isSelected = this.state.selectedRecords.has(String(item.id));
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 
-                console.log('🎯 Row oluşturuldu:', tr); // DEBUG
                 frag.appendChild(tr);
 
                 // Child Kayıtlar (WIPO/ARIPO)
