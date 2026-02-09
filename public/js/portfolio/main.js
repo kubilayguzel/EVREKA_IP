@@ -474,59 +474,276 @@ class PortfolioController {
         }
     }
     
-    render() {
-        const cols = this.getColumnsForTab(this.state.activeTab);
-        this.renderer.renderHeaders(cols, this.state.columnFilters);
+    /**
+     * Tabloyu ekrana çizer
+     */
+    async render() {
+        this.renderer.showLoading(true);
+        this.renderer.clearTable();
 
+        // 1. Verileri Filtrele ve Sırala
+        // subTab (TÜRKPATENT/YURTDIŞI) parametresini de gönderiyoruz
         let filtered = this.dataManager.filterRecords(
+            this.state.activeTab, 
+            this.state.searchQuery, 
+            this.state.columnFilters,
+            this.state.subTab 
+        );
+
+        filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
+        this.state.filteredData = filtered;
+
+        // 2. Sayfalama Hesapla
+        const totalItems = filtered.length;
+        const totalPages = Math.ceil(totalItems / this.ITEMS_PER_PAGE);
+        this.updatePaginationUI(totalItems, totalPages);
+
+        if (totalItems === 0) {
+            this.renderer.renderEmptyState();
+            this.renderer.showLoading(false);
+            return;
+        }
+
+        // 3. Mevcut Sayfanın Verilerini Al
+        const startIndex = (this.state.currentPage - 1) * this.ITEMS_PER_PAGE;
+        const endIndex = startIndex + this.ITEMS_PER_PAGE;
+        const pageData = filtered.slice(startIndex, endIndex);
+
+        const frag = document.createDocumentFragment();
+
+        // 4. Satırları Oluştur
+        pageData.forEach(item => {
+            const isSelected = this.state.selectedRecords.has(String(item.id));
+            
+            // Parent Satırı Çiz (Mavi arka plan Renderer içinde halledilecek)
+            const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
+            frag.appendChild(tr);
+
+            // Eğer WIPO/ARIPO Parent ise ve akordeon yapısı gerekiyorsa CHILD'ları hazırla
+            if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
+                const irNo = item.wipoIR || item.aripoIR;
+                if (irNo) {
+                    const children = this.dataManager.getWipoChildren(irNo);
+                    
+                    if (children && children.length > 0) {
+                        children.forEach(child => {
+                            // Child satırı çiz
+                            const childIsSelected = this.state.selectedRecords.has(String(child.id));
+                            const childTr = this.renderer.renderStandardRow(child, this.state.activeTab === 'trademark', childIsSelected);
+                            
+                            // Child satırına özel ayarlar
+                            childTr.classList.add('child-row');
+                            childTr.dataset.parentId = irNo;
+                            childTr.style.display = 'none'; // Başlangıçta gizli
+                            childTr.style.backgroundColor = '#ffffff'; // RENK DÜZELTME: Child'lar BEYAZ
+                            
+                            // Child satırında ok işareti (caret) olmamalı, temizle
+                            const toggleCell = childTr.querySelector('.toggle-cell');
+                            if(toggleCell) toggleCell.innerHTML = ''; 
+
+                            frag.appendChild(childTr);
+                        });
+                    }
+                }
+            }
+        });
+
+        document.querySelector('#portfolioTable tbody').appendChild(frag);
+        
+        // Tooltip'leri etkinleştir (Bootstrap varsa)
+        if(typeof $ !== 'undefined' && $.fn.tooltip) {
+            $('[data-toggle="tooltip"]').tooltip();
+        }
+
+        this.renderer.showLoading(false);
+    }
+
+    /**
+     * Excel'e Aktar (Seçili veya Tümü)
+     */
+    async exportToExcel(type) {
+        // 1. Veriyi Hazırla (Mevcut filtre, sıralama ve alt sekme durumuna göre)
+        let allFilteredData = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
             this.state.columnFilters,
             this.state.subTab
         );
-        filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
+        allFilteredData = this.dataManager.sortRecords(allFilteredData, this.state.sort.column, this.state.sort.direction);
 
-        this.pagination.update(filtered.length);
-        const pageData = this.pagination.getCurrentPageData(filtered);
+        let dataToExport = [];
 
-        this.renderer.clear();
-        const frag = document.createDocumentFragment();
-        
-        const itemsPerPage = 20; 
-        
-        pageData.forEach((item, index) => {
-            const globalIndex = ((this.state.currentPage - 1) * itemsPerPage) + index + 1;
-
-            if (this.state.activeTab === 'objections') {
-                const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
-                if (item.isChild) tr.style.display = 'none';
-                frag.appendChild(tr);
-            } else if (this.state.activeTab === 'litigation') {
-                 frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
-            } else {
-                const isSelected = this.state.selectedRecords.has(item.id);
-                const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
-                frag.appendChild(tr);
-
-                if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
-                    const irNo = item.wipoIR || item.aripoIR;
-                    const children = this.dataManager.getWipoChildren(irNo);
-                    children.forEach(child => {
-                        const childTr = this.renderer.renderStandardRow(child, this.state.activeTab === 'trademark', false);
-                        childTr.classList.add('child-row');
-                        childTr.dataset.parentId = irNo;
-                        childTr.style.display = 'none';
-                        childTr.style.backgroundColor = '#f9f9f9';
-                        childTr.querySelector('.toggle-cell').innerHTML = ''; 
-                        frag.appendChild(childTr);
-                    });
-                }
+        if (type === 'selected') {
+            const selectedIds = this.state.selectedRecords;
+            if (!selectedIds || selectedIds.size === 0) {
+                // Eğer notification fonksiyonunuz yoksa alert kullanabilirsiniz
+                if(typeof showNotification === 'function') showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
+                else alert('Lütfen en az bir kayıt seçiniz.');
+                return;
             }
-        });
-        
-        this.renderer.tbody.appendChild(frag);
-        this.updateSelectAllCheckbox();
-        this.updateBulkActionButtons();
+            
+            // DÜZELTME: ID Karşılaştırmasında String dönüşümü (Checkbox sorunu çözümü)
+            dataToExport = allFilteredData.filter(item => selectedIds.has(String(item.id)));
+        } else {
+            // Tüm filtrelenmiş listeyi al
+            dataToExport = [...allFilteredData];
+        }
+
+        if (dataToExport.length === 0) {
+            if(typeof showNotification === 'function') showNotification('Aktarılacak veri bulunamadı.', 'warning');
+            else alert('Aktarılacak veri bulunamadı.');
+            return;
+        }
+
+        this.renderer.showLoading(true);
+
+        try {
+            // 2. Kütüphaneleri Dinamik Yükle
+            const loadScript = (src) => {
+                return new Promise((resolve, reject) => {
+                    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            };
+
+            if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
+            if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
+
+            // 3. Veriyi Hiyerarşik Sıraya Sok (Export için)
+            const sortedData = [];
+            const processedIds = new Set(); // Çift eklemeyi önlemek için
+
+            dataToExport.forEach(parent => {
+                if (!processedIds.has(String(parent.id))) {
+                    sortedData.push(parent);
+                    processedIds.add(String(parent.id));
+
+                    // Eğer bu bir parent kayıt ise, çocuklarını bul ve hemen altına ekle
+                    if ((parent.origin === 'WIPO' || parent.origin === 'ARIPO') && parent.transactionHierarchy === 'parent') {
+                        const irNo = parent.wipoIR || parent.aripoIR;
+                        if (irNo) {
+                            // Ekranda filtreli olsa bile child kayıtlarını veritabanından/cache'ten çek
+                            const children = this.dataManager.getWipoChildren(irNo);
+                            
+                            children.forEach(child => {
+                                // Eğer çocuk daha önce eklenmediyse ekle
+                                if (!processedIds.has(String(child.id))) {
+                                    sortedData.push(child);
+                                    processedIds.add(String(child.id));
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+
+            // 4. Workbook ve Worksheet Oluştur
+            const workbook = new window.ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Portföy Listesi');
+
+            // Sütunlar
+            worksheet.columns = [
+                { header: 'Görsel', key: 'logo', width: 12 },
+                { header: 'Marka/Konu Adı', key: 'title', width: 40 },
+                { header: 'Başvuru Sahibi', key: 'applicant', width: 35 },
+                { header: 'Başvuru No', key: 'appNo', width: 20 },
+                { header: 'Tescil No', key: 'regNo', width: 20 },
+                { header: 'Ülke', key: 'countryName', width: 20 },
+                { header: 'Sınıflar', key: 'classes', width: 15 },
+                { header: 'Durum', key: 'status', width: 20 },
+                { header: 'Başvuru Tarihi', key: 'appDate', width: 15 },
+                { header: 'Tescil Tarihi', key: 'regDate', width: 15 }
+            ];
+
+            // Başlık Stili
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3C72' } };
+            headerRow.height = 30;
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            // 5. Satırları İşle
+            for (let i = 0; i < sortedData.length; i++) {
+                const record = sortedData[i];
+
+                // Veri Formatlama
+                let applicantStr = '';
+                if (record.applicants && Array.isArray(record.applicants)) {
+                    applicantStr = record.applicants.map(a => a.name).join(', ');
+                } else if (record.applicantName) {
+                    applicantStr = record.applicantName;
+                }
+
+                const countryNameStr = this.dataManager.getCountryName(record.country);
+
+                const row = worksheet.addRow({
+                    title: record.title || '',
+                    applicant: applicantStr,
+                    appNo: record.applicationNumber || '',
+                    regNo: record.registrationNumber || '',
+                    countryName: countryNameStr,
+                    classes: Array.isArray(record.niceClasses) ? record.niceClasses.join(', ') : (record.niceClasses || ''),
+                    status: record.statusText || record.status || '',
+                    appDate: record.applicationDate ? new Date(record.applicationDate).toLocaleDateString('tr-TR') : '',
+                    regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
+                });
+
+                // Hiyerarşi Görselleştirmesi
+                if (record.transactionHierarchy === 'child') {
+                    row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
+                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
+                } else {
+                    row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
+                    row.font = { bold: true };
+                }
+
+                // Hücre Hizalamaları
+                ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
+                   if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+                row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+                // Resim Ekleme
+                if (record.brandImageUrl) {
+                    try {
+                        const response = await fetch(record.brandImageUrl);
+                        if (response.ok) {
+                            const buffer = await response.arrayBuffer();
+                            let ext = 'png';
+                            if (record.brandImageUrl.toLowerCase().includes('.jpg') || record.brandImageUrl.toLowerCase().includes('.jpeg')) ext = 'jpeg';
+
+                            const imageId = workbook.addImage({ buffer: buffer, extension: ext });
+                            worksheet.addImage(imageId, {
+                                tl: { col: 0, row: i + 1 },
+                                br: { col: 1, row: i + 2 },
+                                editAs: 'oneCell'
+                            });
+                            row.height = 50; 
+                        } else { row.height = 30; }
+                    } catch (err) { row.height = 30; }
+                } else { row.height = 30; }
+            }
+
+            // İndirme İşlemi
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const dateStr = new Date().toISOString().slice(0,10);
+            const fileName = type === 'selected' ? `Secili_Portfoy_${dateStr}.xlsx` : `Tum_Portfoy_${dateStr}.xlsx`;
+            
+            window.saveAs(blob, fileName);
+            
+        } catch (error) {
+            console.error('Excel hatası:', error);
+            if(typeof showNotification === 'function') showNotification('Excel oluşturulurken bir hata oluştu.', 'error');
+            else alert('Hata oluştu.');
+        } finally {
+            this.renderer.showLoading(false);
+        }
     }
 
     highlightUpdatedRow(id) {
@@ -604,37 +821,47 @@ class PortfolioController {
 
         return columns;
     }
-
     /**
-     * Gelişmiş Excel Aktarımı (Parent + Child Destekli)
+     * Excel'e Aktar (Seçili veya Tümü)
      */
     async exportToExcel(type) {
-        // 1. Veriyi Hazırla (Mevcut filtre ve sıralamaya göre - Sadece Parentlar gelir)
+        // 1. Veriyi Hazırla (Mevcut filtre, sıralama ve alt sekme durumuna göre)
+        let allFilteredData = this.dataManager.filterRecords(
+            this.state.activeTab, 
+            this.state.searchQuery, 
+            this.state.columnFilters,
+            this.state.subTab
+        );
+        allFilteredData = this.dataManager.sortRecords(allFilteredData, this.state.sort.column, this.state.sort.direction);
+
         let dataToExport = [];
 
-        // Filtrelenmiş veriyi al (Not: Bu listede child kayıtlar yoktur, sadece parentlar vardır)
         if (type === 'selected') {
-            const selectedIds = this.state.selectedRecords; 
+            const selectedIds = this.state.selectedRecords;
             if (!selectedIds || selectedIds.size === 0) {
-                showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
+                // Eğer notification fonksiyonunuz yoksa alert kullanabilirsiniz
+                if(typeof showNotification === 'function') showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
+                else alert('Lütfen en az bir kayıt seçiniz.');
                 return;
             }
-            // Sadece seçili olanları al
-            dataToExport = this.state.filteredData.filter(item => selectedIds.has(item.id));
+            
+            // DÜZELTME: ID Karşılaştırmasında String dönüşümü (Checkbox sorunu çözümü)
+            dataToExport = allFilteredData.filter(item => selectedIds.has(String(item.id)));
         } else {
-            // Ekranda görünen tüm listeyi al
-            dataToExport = [...this.state.filteredData];
+            // Tüm filtrelenmiş listeyi al
+            dataToExport = [...allFilteredData];
         }
 
         if (dataToExport.length === 0) {
-            showNotification('Aktarılacak veri bulunamadı.', 'warning');
+            if(typeof showNotification === 'function') showNotification('Aktarılacak veri bulunamadı.', 'warning');
+            else alert('Aktarılacak veri bulunamadı.');
             return;
         }
 
         this.renderer.showLoading(true);
 
         try {
-            // 2. Kütüphaneleri Yükle
+            // 2. Kütüphaneleri Dinamik Yükle
             const loadScript = (src) => {
                 return new Promise((resolve, reject) => {
                     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -649,39 +876,35 @@ class PortfolioController {
             if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
             if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
 
-            // 3. Veriyi Hiyerarşik Sıraya Sok (Parent -> Children)
+            // 3. Veriyi Hiyerarşik Sıraya Sok (Export için)
             const sortedData = [];
-            const processedIds = new Set();
-            
-            // Parent kayıtlar üzerinde dönüyoruz
-            dataToExport.forEach(parent => {
-                if (!processedIds.has(parent.id)) {
-                    // Parent'ı ekle
-                    sortedData.push(parent);
-                    processedIds.add(parent.id);
+            const processedIds = new Set(); // Çift eklemeyi önlemek için
 
-                    // EĞER WIPO/ARIPO ise ve Parent ise, Child kayıtlarını bulup altına ekle
+            dataToExport.forEach(parent => {
+                if (!processedIds.has(String(parent.id))) {
+                    sortedData.push(parent);
+                    processedIds.add(String(parent.id));
+
+                    // Eğer bu bir parent kayıt ise, çocuklarını bul ve hemen altına ekle
                     if ((parent.origin === 'WIPO' || parent.origin === 'ARIPO') && parent.transactionHierarchy === 'parent') {
                         const irNo = parent.wipoIR || parent.aripoIR;
                         if (irNo) {
-                            // DataManager'dan çocukları çek (Ekrandaki filtreden bağımsız olarak tüm çocukları getirir)
+                            // Ekranda filtreli olsa bile child kayıtlarını veritabanından/cache'ten çek
                             const children = this.dataManager.getWipoChildren(irNo);
                             
-                            if (children && children.length > 0) {
-                                // Çocukları da listeye ekle
-                                children.forEach(child => {
-                                    if (!processedIds.has(child.id)) {
-                                        sortedData.push(child);
-                                        processedIds.add(child.id);
-                                    }
-                                });
-                            }
+                            children.forEach(child => {
+                                // Eğer çocuk daha önce eklenmediyse ekle
+                                if (!processedIds.has(String(child.id))) {
+                                    sortedData.push(child);
+                                    processedIds.add(String(child.id));
+                                }
+                            });
                         }
                     }
                 }
             });
 
-            // 4. Excel Workbook Oluştur
+            // 4. Workbook ve Worksheet Oluştur
             const workbook = new window.ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Portföy Listesi');
 
@@ -710,7 +933,7 @@ class PortfolioController {
             for (let i = 0; i < sortedData.length; i++) {
                 const record = sortedData[i];
 
-                // Başvuru Sahibi
+                // Veri Formatlama
                 let applicantStr = '';
                 if (record.applicants && Array.isArray(record.applicants)) {
                     applicantStr = record.applicants.map(a => a.name).join(', ');
@@ -718,7 +941,6 @@ class PortfolioController {
                     applicantStr = record.applicantName;
                 }
 
-                // Ülke Adı
                 const countryNameStr = this.dataManager.getCountryName(record.country);
 
                 const row = worksheet.addRow({
@@ -733,22 +955,22 @@ class PortfolioController {
                     regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
                 });
 
-                // GÖRSEL HİYERARŞİ: Child kayıtları girintili ve italik yap
+                // Hiyerarşi Görselleştirmesi
                 if (record.transactionHierarchy === 'child') {
                     row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
-                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } }; 
+                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
                 } else {
                     row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
                     row.font = { bold: true };
                 }
 
-                // Diğer Hücre Hizalamaları
+                // Hücre Hizalamaları
                 ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
                    if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
                 });
                 row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
 
-                // Resim Ekleme (Varsa)
+                // Resim Ekleme
                 if (record.brandImageUrl) {
                     try {
                         const response = await fetch(record.brandImageUrl);
@@ -758,7 +980,6 @@ class PortfolioController {
                             if (record.brandImageUrl.toLowerCase().includes('.jpg') || record.brandImageUrl.toLowerCase().includes('.jpeg')) ext = 'jpeg';
 
                             const imageId = workbook.addImage({ buffer: buffer, extension: ext });
-                            
                             worksheet.addImage(imageId, {
                                 tl: { col: 0, row: i + 1 },
                                 br: { col: 1, row: i + 2 },
@@ -770,18 +991,24 @@ class PortfolioController {
                 } else { row.height = 30; }
             }
 
-            // Dosyayı İndir
+            // İndirme İşlemi
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            window.saveAs(blob, `Portfoy_Listesi_${new Date().toISOString().slice(0,10)}.xlsx`);
+            
+            const dateStr = new Date().toISOString().slice(0,10);
+            const fileName = type === 'selected' ? `Secili_Portfoy_${dateStr}.xlsx` : `Tum_Portfoy_${dateStr}.xlsx`;
+            
+            window.saveAs(blob, fileName);
             
         } catch (error) {
-            console.error('Excel oluşturma hatası:', error);
-            showNotification('Excel oluşturulurken bir hata oluştu.', 'error');
+            console.error('Excel hatası:', error);
+            if(typeof showNotification === 'function') showNotification('Excel oluşturulurken bir hata oluştu.', 'error');
+            else alert('Hata oluştu.');
         } finally {
             this.renderer.showLoading(false);
         }
     }
+
 }
 
 new PortfolioController();
