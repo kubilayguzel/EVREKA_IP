@@ -197,130 +197,150 @@ export class AccrualDataManager {
         });
     }
 
-    /**
-     * Verileri filtreler ve sıralar (GÜNCELLENMİŞ VERSİYON)
-     */
     filterAndSort(criteria, sort) {
-        let data = [...this.allAccruals];
+    let data = [...this.allAccruals];
 
-        // 1. Tab Filtresi
-        if (criteria.tab === 'foreign') {
-            data = data.filter(a => a.isForeignTransaction === true);
-        }
-
-        // 2. Durum Filtresi
-        if (criteria.status && criteria.status !== 'all') {
-            data = data.filter(a => a.status === criteria.status);
-        }
-
-        // 3. Arama Filtresi
-        if (criteria.search) {
-            const query = criteria.search.toLocaleLowerCase('tr');
-            data = data.filter(item => item.searchString.includes(query));
-        }
-
-        // 4. Sıralama
-        const { column, direction } = sort;
-        
-        data.sort((a, b) => {
-            let valA, valB;
-
-            // --- Yardımcı Fonksiyonlar ---
-            const getPartyName = (item) => item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
-            const getRemainingTotal = (item) => {
-                 if (Array.isArray(item.remainingAmount)) {
-                     return item.remainingAmount.reduce((sum, curr) => sum + (Number(curr.amount) || 0), 0);
-                 }
-                 return 0;
-            };
-
-            // --- ID Sıralaması (Sayısal Öncelikli) ---
-            if (column === 'id') {
-                const numA = parseFloat(a.id);
-                const numB = parseFloat(b.id);
-                if (!isNaN(numA) && !isNaN(numB)) {
-                    return direction === 'asc' ? numA - numB : numB - numA;
-                }
-                // Sayı değilse metin olarak sırala
-                valA = (a.id || '').toString();
-                valB = (b.id || '').toString();
-                return direction === 'asc' 
-                    ? valA.localeCompare(valB, 'tr', { numeric: true }) 
-                    : valB.localeCompare(valA, 'tr', { numeric: true });
-            }
-
-            // --- Diğer Kolonlar ---
-            switch (column) {
-                case 'status': 
-                    valA = (a.status || '').toLowerCase(); 
-                    valB = (b.status || '').toLowerCase(); 
-                    break;
-                
-                case 'subject': // EKLENEN KISIM: Konu Sıralaması
-                    valA = (a.subject || a.description || '').toLowerCase();
-                    valB = (b.subject || b.description || '').toLowerCase();
-                    break;
-
-                case 'party': // EKLENEN KISIM: Taraf Sıralaması
-                    valA = getPartyName(a).toLowerCase();
-                    valB = getPartyName(b).toLowerCase();
-                    break;
-
-                case 'taskTitle':
-                    const tA = this.allTasks[String(a.taskId)];
-                    const tB = this.allTasks[String(b.taskId)];
-                    valA = (tA ? tA.title : (a.taskTitle || '')).toLowerCase();
-                    valB = (tB ? tB.title : (b.taskTitle || '')).toLowerCase();
-                    break;
-
-                case 'officialFee': 
-                    valA = Number(a.officialFee?.amount) || 0; 
-                    valB = Number(b.officialFee?.amount) || 0; 
-                    break;
-
-                case 'serviceFee': 
-                    valA = Number(a.serviceFee?.amount) || 0; 
-                    valB = Number(b.serviceFee?.amount) || 0; 
-                    break;
-
-                case 'totalAmount': 
-                    valA = Number(a.totalAmount) || 0; 
-                    valB = Number(b.totalAmount) || 0; 
-                    break;
-
-                case 'remainingAmount': // EKLENEN KISIM: Kalan Tutar
-                    valA = getRemainingTotal(a);
-                    valB = getRemainingTotal(b);
-                    break;
-
-                case 'createdAt': 
-                    // Date objesi kontrolü (null safety)
-                    valA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
-                    valB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
-                    return direction === 'asc' ? valA - valB : valB - valA;
-
-                default:
-                    // Bilinmeyen kolonlar için güvenli varsayılan
-                    valA = (a[column] || '').toString().toLowerCase();
-                    valB = (b[column] || '').toString().toLowerCase();
-            }
-
-            // --- Karşılaştırma (Türkçe Karakter Uyumlu) ---
-            if (typeof valA === 'string' && typeof valB === 'string') {
-                return direction === 'asc' 
-                    ? valA.localeCompare(valB, 'tr', { sensitivity: 'base' }) 
-                    : valB.localeCompare(valA, 'tr', { sensitivity: 'base' });
-            }
-
-            // Sayısal Karşılaştırma
-            if (valA < valB) return direction === 'asc' ? -1 : 1;
-            if (valA > valB) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-
-        this.processedData = data;
-        return this.processedData;
+    // 1. Tab Filtresi
+    if (criteria.tab === 'foreign') {
+        data = data.filter(a => a.isForeignTransaction === true);
     }
+
+    // 2. Durum Filtresi
+    if (criteria.status && criteria.status !== 'all') {
+        data = data.filter(a => a.status === criteria.status);
+    }
+
+    // 3. Arama Filtresi
+    if (criteria.search) {
+        const query = criteria.search.toLocaleLowerCase('tr');
+        data = data.filter(item => item.searchString.includes(query));
+    }
+
+    // 4. Sıralama
+    const { column, direction } = sort;
+
+    data.sort((a, b) => {
+        let valA, valB;
+
+        // --- Yardımcı Fonksiyonlar ---
+        const getPartyName = (item) =>
+            item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
+
+        const getRemainingTotal = (item) => {
+            if (Array.isArray(item.remainingAmount)) {
+                return item.remainingAmount.reduce(
+                    (sum, curr) => sum + (Number(curr.amount) || 0),
+                    0
+                );
+            }
+            return 0;
+        };
+
+        // UI'daki "Konu" sütunu ipRecords'tan geliyor; sıralama da aynı kaynağı kullanmalı.
+        const getSubjectText = (item) => {
+            const task = this.allTasks[String(item.taskId)];
+            const recId = task?.relatedIpRecordId ? String(task.relatedIpRecordId) : null;
+            const ipRec = recId ? this.ipRecordsMap[recId] : null;
+
+            return (
+                ipRec?.markName ||
+                ipRec?.title ||
+                ipRec?.name ||
+                ipRec?.applicationNumber ||
+                ipRec?.applicationNo ||
+                item.subject ||
+                item.description ||
+                ''
+            ).toString();
+        };
+
+        // --- ID Sıralaması (Sayısal Öncelikli) ---
+        if (column === 'id') {
+            const numA = parseFloat(a.id);
+            const numB = parseFloat(b.id);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return direction === 'asc' ? numA - numB : numB - numA;
+            }
+            // Sayı değilse metin olarak sırala
+            valA = (a.id || '').toString();
+            valB = (b.id || '').toString();
+            return direction === 'asc'
+                ? valA.localeCompare(valB, 'tr', { numeric: true })
+                : valB.localeCompare(valA, 'tr', { numeric: true });
+        }
+
+        // --- Diğer Kolonlar ---
+        switch (column) {
+            case 'status':
+                valA = (a.status || '').toLowerCase();
+                valB = (b.status || '').toLowerCase();
+                break;
+
+            case 'subject': // ✅ GÜNCELLENDİ: Konu sıralaması artık UI ile aynı kaynaktan
+                valA = getSubjectText(a).toLocaleLowerCase('tr');
+                valB = getSubjectText(b).toLocaleLowerCase('tr');
+                break;
+
+            case 'party':
+                valA = getPartyName(a).toLocaleLowerCase('tr');
+                valB = getPartyName(b).toLocaleLowerCase('tr');
+                break;
+
+            case 'taskTitle': {
+                const tA = this.allTasks[String(a.taskId)];
+                const tB = this.allTasks[String(b.taskId)];
+                valA = (tA ? tA.title : (a.taskTitle || '')).toLocaleLowerCase('tr');
+                valB = (tB ? tB.title : (b.taskTitle || '')).toLocaleLowerCase('tr');
+                break;
+            }
+
+            case 'officialFee':
+                valA = Number(a.officialFee?.amount) || 0;
+                valB = Number(b.officialFee?.amount) || 0;
+                break;
+
+            case 'serviceFee':
+                valA = Number(a.serviceFee?.amount) || 0;
+                valB = Number(b.serviceFee?.amount) || 0;
+                break;
+
+            case 'totalAmount':
+                valA = Number(a.totalAmount) || 0;
+                valB = Number(b.totalAmount) || 0;
+                break;
+
+            case 'remainingAmount':
+                valA = getRemainingTotal(a);
+                valB = getRemainingTotal(b);
+                break;
+
+            case 'createdAt':
+                valA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+                valB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+                return direction === 'asc' ? valA - valB : valB - valA;
+
+            default:
+                valA = (a[column] || '').toString().toLocaleLowerCase('tr');
+                valB = (b[column] || '').toString().toLocaleLowerCase('tr');
+        }
+
+        // --- Karşılaştırma (Türkçe Karakter Uyumlu) ---
+        if (typeof valA === 'string' && typeof valB === 'string') {
+            return direction === 'asc'
+                ? valA.localeCompare(valB, 'tr', { sensitivity: 'base' })
+                : valB.localeCompare(valA, 'tr', { sensitivity: 'base' });
+        }
+
+        // Sayısal Karşılaştırma
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    this.processedData = data;
+    return this.processedData;
+}
+
 
     /**
      * Edit Modal'ı açarken Task detayının taze olduğundan emin olur.
