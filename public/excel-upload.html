@@ -307,11 +307,22 @@
         }
 
         function mapStatus(statusText) {
-            if (!statusText) return 'filed';
+            if (!statusText) return 'filed'; // Boşsa Başvuru (filed) kabul et
+            
             const s = String(statusText).trim().toLowerCase();
-            if (s.startsWith('valid')) return 'registered';
-            if (s.startsWith('expired')) return 'expired';
-            if (s.startsWith('invalid')) return 'invalidated'; 
+
+            // 1. TESCİLLİ (Registered) - Sadece "valid" geçenler
+            if (s.includes('valid') && !s.includes('invalid')) { 
+                // "invalid" kelimesi de "valid" içerdiği için hariç tutuyoruz
+                return 'registered';
+            }
+
+            // 2. GEÇERSİZ (Invalidated) - "expired" veya "invalid" geçenler
+            if (s.includes('expired') || s.includes('invalid')) {
+                return 'invalidated';
+            }
+
+            // 3. BAŞVURU (Filed) - Diğer her şey
             return 'filed'; 
         }
 
