@@ -5,6 +5,7 @@ import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstati
 import './simple-loading.js';
 import Pagination from './pagination.js';
 import { collection, query, where, getDocs, getDocsFromServer, getDocsFromCache, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { RecordMatcher } from './indexing/record-matcher.js';
 
 // EKLENECEK KISIM (import'ların hemen altına):
 // Storage referansını initialize et
@@ -700,15 +701,39 @@ updateTabBadge() {
     }
   };
 
-  // DB okuma: server zorla + fallback
+  // DB okuma: UserId filtresi OLMADAN tüm pending evrakları çeker
   const fetchDbRecords = async () => {
-    // 1) Servis "server" opsiyonu destekliyorsa kullan
-    try {
-      return await etebsService.getRecentUnindexedDocuments(50, { source: "server" });
-    } catch (_) {
-      // 2) Servis opsiyon desteklemiyorsa eski imza ile dene
-      return await etebsService.getRecentUnindexedDocuments(50);
-    }
+      try {
+          // 1. Sorgu Hazırla: Sadece 'pending' olanları getir (User ID ayrımı yok)
+          const q = query(
+              collection(firebaseServices.db, 'unindexed_pdfs'),
+              where('status', '==', 'pending')
+          );
+          
+          // 2. Verileri Çek
+          const snapshot = await getDocs(q);
+          
+          // 3. İşle ve Sırala
+          const docs = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                  id: doc.id,
+                  ...data,
+                  // Sıralama için tarihi JS objesine çevir
+                  uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || 0),
+                  belgeTarihi: data.belgeTarihi?.toDate ? data.belgeTarihi.toDate() : (data.belgeTarihi || null)
+              };
+          });
+
+          // 4. Yeniden Eskiye Sırala ve İlk 50'yi Dön
+          // (Firestore indeks hatası riskini önlemek için sıralamayı burada yapıyoruz)
+          return docs.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, 50);
+
+      } catch (error) {
+          console.warn("Manuel sorgu başarısız, servise dönülüyor:", error);
+          // Fallback olarak eski yöntemi dene
+          return await etebsService.getRecentUnindexedDocuments(50);
+      }
   };
 
   try {
@@ -788,46 +813,65 @@ updateTabBadge() {
 
 
     async matchWithIPRecords() {
-    console.log("🔍 ETEBS Eşleştirme Motoru Başlatılıyor...");
-    
-    // 1. Portföy verilerinin yüklü olduğundan emin ol
-    // Eğer PortfolioDataManager yüklü değilse yükle veya bulk-upload-manager'dan al
-    const allRecords = await ipRecordsService.getAllRecords({ source: 'server' });
-    const records = allRecords.success ? allRecords.data : [];
+        console.log("🔍 ETEBS Eşleştirme Motoru Başlatılıyor...");
+        
+        // 1. Portföy verilerini çek
+        const allRecordsRes = await ipRecordsService.getAllRecords({ source: 'server' });
+        const records = allRecordsRes.success ? allRecordsRes.data : [];
 
-    if (records.length === 0) {
-        console.warn("⚠️ Eşleştirme için portföy kaydı bulunamadı.");
-        return;
-    }
-
-    // 2. Mevcut bildirimleri tara ve eşleştir
-    this.notifications = this.notifications.map(notification => {
-        // Zaten eşleşmişse atla
-        if (notification.matched) return notification;
-
-        // dosyaNo veya applicationNo üzerinden ara
-        const searchKey = notification.dosyaNo || notification.evrakNo;
-        if (!searchKey) return notification;
-
-        // RecordMatcher'ı kullan (Sınıfın global veya import edildiğini varsayıyoruz)
-        const matcher = new RecordMatcher();
-        const matchResult = matcher.findMatch(searchKey, records);
-
-        if (matchResult) {
-            console.log(`✅ ETEBS Anlık Eşleşme: ${searchKey} -> ${matchResult.record.title}`);
-            return {
-                ...notification,
-                matched: true,
-                matchedRecordId: matchResult.record.id,
-                matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record)
-            };
+        if (records.length === 0) {
+            console.warn("⚠️ Eşleştirme için portföy kaydı bulunamadı.");
+            return;
         }
 
-        return notification;
-    });
+        // Matcher sınıfını başlat
+        let matcher;
+        try {
+            matcher = new RecordMatcher();
+        } catch (e) {
+            console.error("❌ RecordMatcher başlatılamadı. Import edildiğinden emin olun.", e);
+            return;
+        }
 
-    console.log("✅ Eşleştirme işlemi tamamlandı.");
-}
+        // 2. Mevcut bildirimleri tara ve eşleştir
+        this.notifications = this.notifications.map(notification => {
+            // Zaten eşleşmişse atla
+            if (notification.matched) return notification;
+
+            // Arama anahtarını belirle: dosyaNo > applicationNo > extractedAppNumber > evrakNo
+            // ETEBS'ten gelenlerde genellikle 'dosyaNo' olur.
+            // Bulk upload'dan gelenlerde 'extractedAppNumber' olabilir.
+            const searchKey = notification.dosyaNo || 
+                              notification.applicationNo || 
+                              notification.extractedAppNumber || 
+                              notification.evrakNo;
+            
+            if (!searchKey) return notification;
+
+            // Eşleşme Ara
+            const matchResult = matcher.findMatch(searchKey, records);
+
+            if (matchResult) {
+                console.log(`✅ ETEBS Anlık Eşleşme: ${searchKey} -> ${matchResult.record.title}`);
+                return {
+                    ...notification,
+                    matched: true,
+                    matchedRecordId: matchResult.record.id,
+                    matchedRecordDisplay: matcher.getDisplayLabel(matchResult.record),
+                    // Eğer recordOwnerType varsa ekle (Müvekkil/Rakip ayrımı için)
+                    recordOwnerType: matchResult.record.recordOwnerType || 'self' 
+                };
+            }
+
+            return notification;
+        });
+
+        console.log("✅ Eşleştirme işlemi tamamlandı.");
+        
+        // Listeyi güncellemek için istatistikleri ve görünümü yenile
+        this.updateStatistics();
+        this.displayNotifications();
+    }
 
     async refreshNotifications() {
         const tokenInput = document.getElementById('etebsTokenInput');
