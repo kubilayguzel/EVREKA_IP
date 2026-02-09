@@ -256,6 +256,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    /**
+ * Aktif filtre sayısını badge'de gösterir
+ */
+        updateFilterBadge() {
+            const badge = document.getElementById('activeFilterBadge');
+            const count = Object.keys(this.state.columnFilters).length;
+            
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
         /**
          * Olay Dinleyicileri (Event Listeners)
          */
@@ -321,6 +338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         delete this.state.columnFilters[column];
                     }
                     
+                    this.updateFilterBadge(); // EKLE
                     this.renderPage();
                 });
             });
@@ -630,6 +648,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btnExportAll.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.exportToExcel('all');
+                });
+            }
+            // --- 9. FİLTRELERİ TEMİZLE ---
+            const btnClearFilters = document.getElementById('btnClearFilters');
+            if (btnClearFilters) {
+                btnClearFilters.addEventListener('click', () => {
+                    this.state.columnFilters = {};
+                    document.querySelectorAll('.column-filter').forEach(input => {
+                        input.value = '';
+                    });
+                    this.updateFilterBadge();
+                    this.renderPage();
                 });
             }
         }
