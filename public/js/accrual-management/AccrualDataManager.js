@@ -263,7 +263,7 @@ export class AccrualDataManager {
         }
 
         // 4. Sıralama
-        return this.sortData(data, sort.column, sort.direction);
+       return data;
     }
 
     /**
