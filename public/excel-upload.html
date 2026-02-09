@@ -586,7 +586,7 @@
                         // --- TEKİL KAYIT İŞLEME VE FALLBACK MANTIĞI ---
                         
                         // 1. Önce Jurisdiction hücresini al (Varsa)
-                        let countryInput = rawJurisdiction.split(',')[0].trim();
+                        let countryInput = rawJurisdictions.split(',')[0].trim();
                         
                         // 2. Eğer Jurisdiction boşsa, Registry'ye bak
                         if (!countryInput && rowData.Registry) {
@@ -599,8 +599,6 @@
                         }
 
                         // 3. Elde edilen veriyi getCountryCode'a gönder
-                        // getCountryCode 2 harfli kodları (BR) direkt tanıyacak şekilde güncellendi.
-                        // Bulamazsa "TR" dönecek.
                         const countryCode = getCountryCode(countryInput);
                         
                         const isDuplicate = await checkDuplicate(baseData.applicationNumber, baseData.registrationNumber, countryCode);
