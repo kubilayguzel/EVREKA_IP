@@ -172,117 +172,162 @@ class PortfolioController {
     }
 
     setupEventListeners() {
+        // --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                // Sınıf temizliği (Aktif sınıfını diğerlerinden kaldır)
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
                 
-                this.state.activeTab = e.target.dataset.type;
+                // Tıklanan butonu aktif yap
+                const targetBtn = e.target.closest('.tab-button'); // closest ile varsa içindeki span/icon yerine butonu seç
+                if(targetBtn) {
+                   targetBtn.classList.add('active');
+                   this.state.activeTab = targetBtn.dataset.type;
+                }
+
+                // MARKALAR sekmesi için ALT MENÜ YÖNETİMİ
+                const subMenu = document.getElementById('trademarkSubMenu');
+                if (subMenu) {
+                    if (this.state.activeTab === 'trademark') {
+                        subMenu.style.display = 'flex'; // Marka sekmesindeysek göster
+                        this.state.subTab = 'turkpatent'; // Varsayılan olarak TÜRKPATENT seç
+                        this.updateSubTabUI(); // UI butonlarını güncelle
+                    } else {
+                        subMenu.style.display = 'none'; // Diğer sekmelerde gizle
+                        this.state.subTab = null; // Alt sekme filtresini temizle
+                    }
+                }
+
+                // Durumları Sıfırla
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
-                this.state.selectedRecords.clear();
-                this.updateBulkActionButtons();
+                this.state.selectedRecords.clear(); // Seçimleri temizle
                 
-                document.getElementById('searchBar').value = '';
-
-                this.renderer.showLoading(true);
-                try {
-                    if (this.state.activeTab === 'litigation') await this.dataManager.loadLitigationData();
-                    else if (this.state.activeTab === 'objections') await this.dataManager.loadObjectionRows();
-                } finally {
-                    this.renderer.showLoading(false);
-                }
+                // UI Elemanlarını Temizle
+                const searchInput = document.getElementById('searchInput');
+                if(searchInput) searchInput.value = '';
+                
+                // Tabloyu Yenile
+                this.renderer.clearTable();
                 this.render();
             });
         });
 
-        document.getElementById('searchBar').addEventListener('input', (e) => {
-            this.state.searchQuery = e.target.value;
-            this.state.currentPage = 1;
-            this.render();
-        });
+        // --- 2. ALT SEKME (SUB-TAB) DEĞİŞİMİ (TÜRKPATENT / YURTDIŞI) ---
+        // Bu butonlar HTML'de trademarkSubMenu içinde yer almalı
+        const subTabButtons = document.querySelectorAll('#trademarkSubMenu button');
+        if (subTabButtons) {
+            subTabButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // UI Güncelle (Diğer butonların aktifliğini kaldır)
+                    subTabButtons.forEach(b => b.classList.remove('active'));
+                    
+                    const clickedBtn = e.target.closest('button');
+                    clickedBtn.classList.add('active'); // Tıklananı aktif yap
 
-        document.getElementById('portfolioTableHeaderRow').addEventListener('click', (e) => {
-            const th = e.target.closest('.sortable-header');
-            if (th) {
-                const col = th.dataset.column;
-                if (this.state.sort.column === col) {
-                    this.state.sort.direction = this.state.sort.direction === 'asc' ? 'desc' : 'asc';
-                } else {
-                    this.state.sort.column = col;
-                    this.state.sort.direction = 'asc';
-                }
-                document.querySelectorAll('.sortable-header').forEach(h => {
-                    h.classList.remove('asc', 'desc');
-                    if(h.dataset.column === col) h.classList.add(this.state.sort.direction);
-                });
-                this.render();
-            }
-        });
+                    // State Güncelle
+                    this.state.subTab = clickedBtn.dataset.sub; // 'turkpatent' veya 'foreign'
+                    this.state.currentPage = 1; // İlk sayfaya dön
+                    this.state.selectedRecords.clear(); // Seçimleri temizle
 
-        const selectAllCb = document.getElementById('selectAllCheckbox');
-        if (selectAllCb) {
-            selectAllCb.addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                const currentRecords = this.getCurrentPageRecords();
-                currentRecords.forEach(r => {
-                    if (isChecked) this.state.selectedRecords.add(r.id);
-                    else this.state.selectedRecords.delete(r.id);
+                    // Tabloyu Yenile
+                    this.render();
                 });
-                this.render();
-                this.updateBulkActionButtons();
             });
         }
 
-        document.getElementById('portfolioTableBody').addEventListener('change', (e) => {
-            if (e.target.classList.contains('record-checkbox')) {
-                const id = e.target.dataset.id;
-                if (e.target.checked) this.state.selectedRecords.add(id);
-                else this.state.selectedRecords.delete(id);
-                this.updateBulkActionButtons();
-            }
-        });
+        // --- 3. ARAMA KUTUSU ---
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                // Debounce mekanizması (Hızlı yazarken sürekli sorgu atmamak için)
+                if (this.searchTimeout) clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    this.state.searchQuery = e.target.value.trim();
+                    this.state.currentPage = 1;
+                    this.render();
+                }, 300); // 300ms bekle
+            });
+        }
 
-        document.getElementById('toggleRecordStatusBtn')?.addEventListener('click', () => this.handleBulkStatusChange());
-        document.getElementById('addToMonitoringBtn')?.addEventListener('click', () => this.handleBulkMonitoring());
+        // --- 4. SAYFALAMA (PAGINATION) ---
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
 
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                if (this.state.currentPage > 1) {
+                    this.state.currentPage--;
+                    this.render();
+                }
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                const totalPages = Math.ceil(this.state.filteredData.length / this.ITEMS_PER_PAGE);
+                if (this.state.currentPage < totalPages) {
+                    this.state.currentPage++;
+                    this.render();
+                }
+            });
+        }
+
+        // --- 5. FİLTRELERİ TEMİZLE BUTONU ---
+        const clearFiltersBtn = document.getElementById('clearFilters');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => {
+                this.state.searchQuery = '';
+                this.state.columnFilters = {};
+                if(searchInput) searchInput.value = '';
+                
+                // Kolon filtre inputlarını da temizle (TableManager içinde varsa)
+                document.querySelectorAll('.column-filter-input').forEach(input => input.value = '');
+
+                this.render();
+            });
+        }
+
+        // --- 6. EXCEL'E AKTAR (EXPORT) ---
         const btnExportSelected = document.getElementById('btnExportSelected');
+        const btnExportAll = document.getElementById('btnExportAll');
+
         if (btnExportSelected) {
             btnExportSelected.addEventListener('click', (e) => {
-                e.preventDefault();
+                e.preventDefault(); // Link olduğu için sayfa yenilenmesin
                 this.exportToExcel('selected');
             });
         }
 
-        const btnExportAll = document.getElementById('btnExportAll');
         if (btnExportAll) {
             btnExportAll.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.exportToExcel('all');
             });
         }
-        document.getElementById('exportPdfBtn')?.addEventListener('click', () => this.handleExport('pdf'));
 
-        document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
-            const caret = e.target.closest('.row-caret') || (e.target.closest('tr.group-header') && !e.target.closest('button, a, input'));
-            if (caret) this.toggleAccordion(caret);
+        // --- 7. EXCEL İLE VERİ YÜKLEME (IMPORT) ---
+        const btnExcelUpload = document.getElementById('btnExcelUpload');
+        const fileInput = document.getElementById('fileInput');
 
-            const btn = e.target.closest('.action-btn');
-            if (btn) {
-                const id = btn.dataset.id;
-                if (btn.classList.contains('view-btn')) {
-                    if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
-                    else window.open(`portfolio-detail.html?id=${id}`, '_blank', 'noopener');
-                } else if (btn.classList.contains('delete-btn')) {
-                    this.handleDelete(id);
-                } else if (btn.classList.contains('edit-btn')) {
-                    sessionStorage.setItem('lastPageNumber', this.state.currentPage);
-                    if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
-                    else window.location.href = `data-entry.html?id=${id}`;
+        if (btnExcelUpload && fileInput) {
+            btnExcelUpload.addEventListener('click', () => {
+                fileInput.click(); // Gizli input'u tetikle
+            });
+
+            fileInput.addEventListener('change', async (e) => {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    // Dosya yükleme mantığını burada çağırabilirsiniz
+                    // Örn: await this.handleFileUpload(file);
+                    console.log("Dosya seçildi:", file.name);
+                    
+                    // İşlem bitince inputu sıfırla ki aynı dosyayı tekrar seçebilsin
+                    fileInput.value = ''; 
                 }
-            }
-        });
+            });
+        }
     }
 
     getCurrentPageRecords() {
