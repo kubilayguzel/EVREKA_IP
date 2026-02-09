@@ -18,11 +18,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.dataManager = new AccrualDataManager();
             this.uiManager = new AccrualUIManager();
             
-            // Durum (State) Yönetimi - YENİ FİLTRE YAPISI
+            // Durum (State) Yönetimi
             this.state = {
                 activeTab: 'main',       // 'main' | 'foreign'
                 
-                // Filtre Kriterleri
+                // YENİ FİLTRELER
                 filters: {
                     startDate: '',
                     endDate: '',
@@ -36,12 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 sort: { column: 'createdAt', direction: 'desc' },
                 selectedIds: new Set(),
-                itemsPerPage: 50 // Varsayılan 50 yapıldı
+                itemsPerPage: 50 
             };
 
             this.pagination = null;
             this.uploadedPaymentReceipts = []; 
-            this.filterDebounceTimer = null; // Debounce için
+            this.filterDebounceTimer = null; 
         }
 
         async init() {
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const lookups = {
                 tasks: this.dataManager.allTasks,
                 transactionTypes: this.dataManager.allTransactionTypes,
-                ipRecords: this.dataManager.allIpRecords, // Artık array değil map olabilir, kontrol edilecek
+                ipRecords: this.dataManager.allIpRecords,
                 ipRecordsMap: this.dataManager.ipRecordsMap,
                 selectedIds: this.state.selectedIds
             };
@@ -107,10 +107,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         /**
-         * Excel'e Aktar
+         * Excel'e Aktar (EKSİK OLAN KISIM GERİ EKLENDİ)
          */
         async exportToExcel(type) {
-            // Mevcut filtre kriterlerini kullan
+            // 1. Veriyi Hazırla
             const criteria = { 
                 tab: this.state.activeTab, 
                 filters: this.state.filters 
@@ -137,15 +137,118 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.uiManager.toggleLoading(true);
 
             try {
-                // ... (Excel kodunun geri kalanı aynı, sadece UI helper metodlarını çağırıyor)
-                // Kod kısalığı için Excel mantığını burada tekrar yazmıyorum, mevcut metod çalışacaktır.
-                // Sadece dataToExport doğru hazırlanmalıydı, onu da yukarıda hallettik.
+                // 2. Kütüphaneleri Dinamik Yükle
+                const loadScript = (src) => {
+                    return new Promise((resolve, reject) => {
+                        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                        const script = document.createElement('script');
+                        script.src = src;
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                };
+
+                if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
+                if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
+
+                // 3. Excel Oluştur
+                const ExcelJS = window.ExcelJS;
+                const workbook = new ExcelJS.Workbook();
+                const worksheet = workbook.addWorksheet('Tahakkuklar');
+
+                // 4. Kolon Tanımları
+                const isMainTab = this.state.activeTab === 'main';
                 
-                // NOT: Excel export mantığı main.js'deki orijinal kodun aynısı kalabilir.
-                // Sadece filtreleme mantığı yukarıdaki gibi güncellenmeli.
-                
-                await this.dataManager.exportToExcelManual(dataToExport, this.state.activeTab); // Helper metod varsayıldı
-                
+                if (isMainTab) {
+                    worksheet.columns = [
+                        { header: 'ID', key: 'id', width: 10 },
+                        { header: 'Durum', key: 'status', width: 15 },
+                        { header: 'İş Tipi', key: 'taskType', width: 25 },
+                        { header: 'Dosya No', key: 'fileNo', width: 20 },
+                        { header: 'Konu', key: 'subject', width: 30 },
+                        { header: 'Alan', key: 'field', width: 15 },
+                        { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
+                        { header: 'Hizmet Ücreti', key: 'serviceFee', width: 15 },
+                        { header: 'Toplam Tutar', key: 'totalAmount', width: 15 },
+                        { header: 'Kalan', key: 'remaining', width: 15 },
+                        { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
+                    ];
+                } else {
+                    worksheet.columns = [
+                        { header: 'ID', key: 'id', width: 10 },
+                        { header: 'Durum', key: 'status', width: 15 },
+                        { header: 'İş Tipi', key: 'taskType', width: 25 },
+                        { header: 'Ödeme Yapan', key: 'paymentParty', width: 25 },
+                        { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
+                        { header: 'Kalan', key: 'remaining', width: 15 },
+                        { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
+                    ];
+                }
+
+                // 5. Header Stili
+                worksheet.getRow(1).eachCell((cell) => {
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FF1E3C72' }
+                    };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                });
+
+                // 6. Veri Satırları
+                dataToExport.forEach(acc => {
+                    const task = this.dataManager.allTasks[String(acc.taskId)];
+                    const typeObj = task ? this.dataManager.allTransactionTypes.find(t => t.id === task.taskType) : null;
+                    const taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (acc.taskTitle || '-');
+
+                    let statusText = 'Bilinmiyor';
+                    if (acc.status === 'paid') statusText = 'Ödendi';
+                    else if (acc.status === 'unpaid') statusText = 'Ödenmedi';
+                    else if (acc.status === 'partially_paid') statusText = 'K.Ödendi';
+
+                    const formatMoney = (val, curr) => {
+                        if (Array.isArray(val)) return val.map(item => `${parseFloat(item.amount) || 0} ${item.currency}`).join(' + ');
+                        return `${parseFloat(val) || 0} ${curr || 'TRY'}`;
+                    };
+
+                    const row = {
+                        id: acc.id,
+                        status: statusText,
+                        taskType: taskDisplay,
+                        createdAt: acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-'
+                    };
+
+                    if (isMainTab) {
+                        const ipRec = task?.relatedIpRecordId ? this.dataManager.ipRecordsMap[task.relatedIpRecordId] : null;
+                        
+                        row.fileNo = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '-') : '-';
+                        row.subject = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '-') : '-';
+                        row.field = typeObj?.ipType ? ({ 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' }[typeObj.ipType] || typeObj.ipType) : '-';
+                        row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
+                        row.serviceFee = acc.serviceFee ? formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
+                        row.totalAmount = acc.totalAmount ? formatMoney(acc.totalAmount, acc.totalAmountCurrency) : '-';
+                        row.remaining = acc.remainingAmount !== undefined ? formatMoney(acc.remainingAmount, acc.totalAmountCurrency) : '-';
+                    } else {
+                        row.paymentParty = acc.paymentParty || '-';
+                        row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
+                        const rem = acc.foreignRemainingAmount !== undefined ? acc.foreignRemainingAmount : acc.officialFee?.amount;
+                        row.remaining = rem ? formatMoney(rem, acc.officialFee?.currency || 'EUR') : '-';
+                    }
+
+                    worksheet.addRow(row);
+                });
+
+                // 7. Dosyayı Kaydet
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const fileName = `tahakkuklar_${this.state.activeTab}_${new Date().toISOString().slice(0,10)}.xlsx`;
+                window.saveAs(blob, fileName);
+
+                showNotification(`${dataToExport.length} kayıt başarıyla aktarıldı!`, 'success');
+
             } catch (error) {
                 console.error('Excel export hatası:', error);
                 showNotification('Excel oluşturulurken hata oluştu: ' + error.message, 'error');
@@ -154,11 +257,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-
         setupEventListeners() {
-            // --- YENİ FİLTRE DİNLEYİCİLERİ ---
-            
-            // Tüm filtre inputlarını seç
+            // --- 1. FİLTRELER ---
             const filterInputs = [
                 'filterStartDate', 'filterEndDate', 'filterStatus', 'filterField',
                 'filterParty', 'filterFileNo', 'filterSubject', 'filterTask'
@@ -177,7 +277,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.renderPage();
             };
 
-            // Debounce fonksiyonu
             const debouncedFilter = () => {
                 clearTimeout(this.filterDebounceTimer);
                 this.filterDebounceTimer = setTimeout(handleFilterChange, 300);
@@ -186,13 +285,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             filterInputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
-                    // Tarih ve Select için 'change', Text için 'input'
                     const eventType = (el.type === 'date' || el.tagName === 'SELECT') ? 'change' : 'input';
                     el.addEventListener(eventType, debouncedFilter);
                 }
             });
 
-            // Filtreleri Temizle
             const btnClear = document.getElementById('btnClearFilters');
             if (btnClear) {
                 btnClear.addEventListener('click', () => {
@@ -203,7 +300,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             else el.value = '';
                         }
                     });
-                    // State'i sıfırla
                     this.state.filters = {
                         startDate: '', endDate: '', status: 'all', field: '',
                         party: '', fileNo: '', subject: '', task: ''
@@ -212,14 +308,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // --- TAB DEĞİŞİMİ ---
+            // --- 2. TAB DEĞİŞİMİ ---
             $('a[data-toggle="tab"]').on('shown.bs.tab', (e) => {
                 const target = $(e.target).attr("href");
                 this.state.activeTab = target === '#content-foreign' ? 'foreign' : 'main';
                 this.renderPage();
             });
 
-            // --- SIRALAMA ---
+            // --- 3. SIRALAMA ---
             document.querySelectorAll('th[data-sort]').forEach(th => {
                 th.style.cursor = 'pointer';
                 th.addEventListener('click', () => {
@@ -238,7 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // --- SEÇİM İŞLEMLERİ ---
+            // --- 4. SEÇİM İŞLEMLERİ ---
             const toggleSelection = (checked, id) => {
                  if(checked) this.state.selectedIds.add(id); else this.state.selectedIds.delete(id);
                  this.uiManager.updateBulkActionsVisibility(this.state.selectedIds.size > 0);
@@ -257,7 +353,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cbForeign = document.getElementById('selectAllCheckboxForeign');
             if(cbForeign) cbForeign.addEventListener('change', e => selectAll(e.target.checked));
 
-            // Event Delegation
             [this.uiManager.tableBody, this.uiManager.foreignTableBody].forEach(body => {
                 if(!body) return;
                 body.addEventListener('change', e => {
@@ -267,7 +362,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-             // --- AKSİYON BUTONLARI (Tablo İçi) ---
+            // --- 5. ÖDEME MODALI UI ETKİLEŞİMLERİ (EKSİK OLAN KISIM) ---
+            const payFullOfficial = document.getElementById('payFullOfficial');
+            const officialInputContainer = document.getElementById('officialAmountInputContainer');
+            if (payFullOfficial && officialInputContainer) {
+                payFullOfficial.addEventListener('change', (e) => {
+                    officialInputContainer.style.display = e.target.checked ? 'none' : 'block';
+                });
+            }
+
+            const payFullService = document.getElementById('payFullService');
+            const serviceInputContainer = document.getElementById('serviceAmountInputContainer');
+            if (payFullService && serviceInputContainer) {
+                payFullService.addEventListener('change', (e) => {
+                    serviceInputContainer.style.display = e.target.checked ? 'none' : 'block';
+                });
+            }
+
+            const payFullForeign = document.getElementById('payFullForeign');
+            const foreignSplitInputs = document.getElementById('foreignSplitInputs');
+            if (payFullForeign && foreignSplitInputs) {
+                payFullForeign.addEventListener('change', (e) => {
+                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'block'; 
+                });
+            }
+
+            // --- 6. AKSİYON BUTONLARI ---
             const handleActionClick = async (e) => {
                 const btn = e.target.closest('.action-btn');
                 const link = e.target.closest('.task-detail-link');
@@ -309,13 +429,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(this.uiManager.tableBody) this.uiManager.tableBody.addEventListener('click', handleActionClick);
             if(this.uiManager.foreignTableBody) this.uiManager.foreignTableBody.addEventListener('click', handleActionClick);
 
-
-             // --- MODAL VE DİĞER BUTONLAR ---
-             // (Mevcut kodun geri kalanı aynı şekilde korunabilir...)
-             this._setupModalListeners();
-        }
-
-        _setupModalListeners() {
+            // --- 7. MODAL VE DİĞER BUTONLAR ---
+            
             // Toplu İşlemler
             document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => {
                 const selected = Array.from(this.state.selectedIds).map(id => this.dataManager.allAccruals.find(a => a.id === id)).filter(Boolean);
@@ -341,11 +456,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const date = document.getElementById('paymentDate').value;
                 if(!date) { showNotification('Tarih seçiniz', 'error'); return; }
 
-                // Tekil ödeme detayları mantığı (main.js orijinalindeki gibi)
                 let singleDetails = null;
                 if (this.state.selectedIds.size === 1) {
-                     // ... (Orijinal koddaki detay toplama mantığı)
-                     // Kısa tutmak için burayı özetliyorum, orijinal dosyadaki mantık aynen kullanılabilir.
                      if (this.state.activeTab === 'foreign') {
                         const isFull = document.getElementById('payFullForeign').checked;
                         singleDetails = { isForeignMode: true, payFullOfficial: isFull, payFullService: isFull, 
@@ -401,7 +513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = await this.dataManager.getFreshTaskDetail(taskId);
                 if(!task) throw new Error("İş bulunamadı");
                 
-                const ipRecord = task.relatedIpRecordId ? this.dataManager.allIpRecords.find(r => r.id === task.relatedIpRecordId) : null;
+                const ipRecord = task.relatedIpRecordId ? this.dataManager.ipRecordsMap[task.relatedIpRecordId] : null;
                 const transactionType = this.dataManager.allTransactionTypes.find(t => t.id === task.taskType);
                 const assignedUser = this.dataManager.allUsers.find(u => u.id === task.assignedTo_uid);
                 const relatedAccruals = this.dataManager.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
