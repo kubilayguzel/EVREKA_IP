@@ -190,7 +190,44 @@ class PortfolioController {
         });
     }
 
+    updateSortIcons() {
+        document.querySelectorAll('.portfolio-table thead th.sortable-header').forEach(th => {
+            th.classList.remove('asc', 'desc', 'inactive');
+            
+            if (th.dataset.column === this.state.sort.column) {
+                th.classList.add(this.state.sort.direction);
+            } else {
+                th.classList.add('inactive');
+            }
+        });
+    }
+
     setupEventListeners() {
+    // --- 0. SIRALAMA (SORTING) ---
+            const thead = document.querySelector('.portfolio-table thead');
+            if (thead) {
+                thead.addEventListener('click', (e) => {
+                    const th = e.target.closest('th.sortable-header');
+                    if (!th) return;
+                    
+                    const column = th.dataset.column;
+                    if (!column) return;
+                    
+                    // Sıralama yönünü değiştir
+                    if (this.state.sort.column === column) {
+                        this.state.sort.direction = this.state.sort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.state.sort.column = column;
+                        this.state.sort.direction = 'asc';
+                    }
+                    
+                    // Header ikonlarını güncelle
+                    this.updateSortIcons();
+                    
+                    // Sayfayı yeniden render et
+                    this.render();
+                });
+            }
         // --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
