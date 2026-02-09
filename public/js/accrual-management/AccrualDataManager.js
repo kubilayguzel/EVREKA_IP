@@ -198,7 +198,7 @@ export class AccrualDataManager {
     }
 
     /**
-     * Verileri filtreler ve sıralar.
+     * Verileri filtreler ve sıralar (GÜNCELLENMİŞ VERSİYON)
      */
     filterAndSort(criteria, sort) {
         let data = [...this.allAccruals];
@@ -221,27 +221,96 @@ export class AccrualDataManager {
 
         // 4. Sıralama
         const { column, direction } = sort;
-        const dir = direction === 'asc' ? 1 : -1;
-
+        
         data.sort((a, b) => {
             let valA, valB;
+
+            // --- Yardımcı: Taraf İsmini Bul ---
+            const getPartyName = (item) => {
+                return item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
+            };
+
+            // --- Yardımcı: Kalan Tutarı Bul ---
+            const getRemainingTotal = (item) => {
+                 if (Array.isArray(item.remainingAmount)) {
+                     return item.remainingAmount.reduce((sum, curr) => sum + (Number(curr.amount) || 0), 0);
+                 }
+                 return 0;
+            };
+
+            // --- ÖZEL DURUM: ID Sıralaması (Sayısal) ---
+            if (column === 'id') {
+                // Eğer ID'ler sayıya çevrilebiliyorsa sayısal karşılaştır
+                const numA = parseFloat(a.id);
+                const numB = parseFloat(b.id);
+                
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return direction === 'asc' ? numA - numB : numB - numA;
+                }
+                // Değilse 'numeric: true' ile akıllı string sıralaması yap (1, 2, 10...)
+                valA = (a.id || '').toString();
+                valB = (b.id || '').toString();
+                return direction === 'asc' 
+                    ? valA.localeCompare(valB, 'tr', { numeric: true }) 
+                    : valB.localeCompare(valA, 'tr', { numeric: true });
+            }
+
+            // --- DİĞER ALANLAR ---
             switch (column) {
-                case 'id': valA = (a.id || '').toLowerCase(); valB = (b.id || '').toLowerCase(); break;
-                case 'status': valA = (a.status || '').toLowerCase(); valB = (b.status || '').toLowerCase(); break;
+                case 'status': 
+                    valA = (a.status || '').toLowerCase(); 
+                    valB = (b.status || '').toLowerCase(); 
+                    break;
                 case 'taskTitle':
                     const tA = this.allTasks[String(a.taskId)];
                     const tB = this.allTasks[String(b.taskId)];
                     valA = (tA ? tA.title : (a.taskTitle || '')).toLowerCase();
                     valB = (tB ? tB.title : (b.taskTitle || '')).toLowerCase();
                     break;
-                case 'officialFee': valA = Number(a.officialFee?.amount) || 0; valB = Number(b.officialFee?.amount) || 0; break;
-                case 'serviceFee': valA = Number(a.serviceFee?.amount) || 0; valB = Number(b.serviceFee?.amount) || 0; break;
-                case 'totalAmount': valA = Number(a.totalAmount) || 0; valB = Number(b.totalAmount) || 0; break;
-                case 'createdAt': valA = a.createdAt; valB = b.createdAt; break;
-                default: valA = 0; valB = 0;
+                case 'subject': // Konu
+                    valA = (a.subject || a.description || '').toLowerCase();
+                    valB = (b.subject || b.description || '').toLowerCase();
+                    break;
+                case 'party': // Taraf
+                    valA = getPartyName(a).toLowerCase();
+                    valB = getPartyName(b).toLowerCase();
+                    break;
+                case 'officialFee': 
+                    valA = Number(a.officialFee?.amount) || 0; 
+                    valB = Number(b.officialFee?.amount) || 0; 
+                    break;
+                case 'serviceFee': 
+                    valA = Number(a.serviceFee?.amount) || 0; 
+                    valB = Number(b.serviceFee?.amount) || 0; 
+                    break;
+                case 'totalAmount': 
+                    valA = Number(a.totalAmount) || 0; 
+                    valB = Number(b.totalAmount) || 0; 
+                    break;
+                case 'remainingAmount': // Kalan Tutar
+                    valA = getRemainingTotal(a);
+                    valB = getRemainingTotal(b);
+                    break;
+                case 'createdAt': 
+                    valA = new Date(a.createdAt).getTime(); 
+                    valB = new Date(b.createdAt).getTime(); 
+                    return direction === 'asc' ? valA - valB : valB - valA;
+                default:
+                    // Bilinmeyen kolonlar için metin olarak sırala
+                    valA = (a[column] || '').toString().toLowerCase();
+                    valB = (b[column] || '').toString().toLowerCase();
             }
-            if (valA < valB) return -1 * dir;
-            if (valA > valB) return 1 * dir;
+
+            // String Karşılaştırma (Türkçe Uyumlu)
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return direction === 'asc' 
+                    ? valA.localeCompare(valB, 'tr', { sensitivity: 'base' }) 
+                    : valB.localeCompare(valA, 'tr', { sensitivity: 'base' });
+            }
+
+            // Sayısal Karşılaştırma
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
             return 0;
         });
 
