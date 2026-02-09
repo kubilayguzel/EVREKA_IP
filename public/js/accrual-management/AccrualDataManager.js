@@ -198,149 +198,73 @@ export class AccrualDataManager {
     }
 
     filterAndSort(criteria, sort) {
-    let data = [...this.allAccruals];
+        const { tab, status, search, columnFilters = {} } = criteria;
+        let data = tab === 'foreign' ? this.foreignAccruals : this.mainAccruals;
 
-    // 1. Tab Filtresi
-    if (criteria.tab === 'foreign') {
-        data = data.filter(a => a.isForeignTransaction === true);
-    }
-
-    // 2. Durum Filtresi
-    if (criteria.status && criteria.status !== 'all') {
-        data = data.filter(a => a.status === criteria.status);
-    }
-
-    // 3. Arama Filtresi
-    if (criteria.search) {
-        const query = criteria.search.toLocaleLowerCase('tr');
-        data = data.filter(item => item.searchString.includes(query));
-    }
-
-    // 4. Sıralama
-    const { column, direction } = sort;
-
-    data.sort((a, b) => {
-        let valA, valB;
-
-        // --- Yardımcı Fonksiyonlar ---
-        const getPartyName = (item) =>
-            item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
-
-        const getRemainingTotal = (item) => {
-            if (Array.isArray(item.remainingAmount)) {
-                return item.remainingAmount.reduce(
-                    (sum, curr) => sum + (Number(curr.amount) || 0),
-                    0
-                );
-            }
-            return 0;
-        };
-
-        // UI'daki "Konu" sütunu ipRecords'tan geliyor; sıralama da aynı kaynağı kullanmalı.
-        const getSubjectText = (item) => {
-            const task = this.allTasks[String(item.taskId)];
-            const recId = task?.relatedIpRecordId ? String(task.relatedIpRecordId) : null;
-            const ipRec = recId ? this.ipRecordsMap[recId] : null;
-
-            return (
-                ipRec?.markName ||
-                ipRec?.title ||
-                ipRec?.name ||
-                ipRec?.applicationNumber ||
-                ipRec?.applicationNo ||
-                item.subject ||
-                item.description ||
-                ''
-            ).toString();
-        };
-
-        // --- ID Sıralaması (Sayısal Öncelikli) ---
-        if (column === 'id') {
-            const numA = parseFloat(a.id);
-            const numB = parseFloat(b.id);
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return direction === 'asc' ? numA - numB : numB - numA;
-            }
-            // Sayı değilse metin olarak sırala
-            valA = (a.id || '').toString();
-            valB = (b.id || '').toString();
-            return direction === 'asc'
-                ? valA.localeCompare(valB, 'tr', { numeric: true })
-                : valB.localeCompare(valA, 'tr', { numeric: true });
+        // 1. Durum Filtresi
+        if (status && status !== 'all') {
+            data = data.filter(item => item.status === status);
         }
 
-        // --- Diğer Kolonlar ---
-        switch (column) {
-            case 'status':
-                valA = (a.status || '').toLowerCase();
-                valB = (b.status || '').toLowerCase();
-                break;
-
-            case 'subject': // ✅ GÜNCELLENDİ: Konu sıralaması artık UI ile aynı kaynaktan
-                valA = getSubjectText(a).toLocaleLowerCase('tr');
-                valB = getSubjectText(b).toLocaleLowerCase('tr');
-                break;
-
-            case 'party':
-                valA = getPartyName(a).toLocaleLowerCase('tr');
-                valB = getPartyName(b).toLocaleLowerCase('tr');
-                break;
-
-            case 'taskTitle': {
-                const tA = this.allTasks[String(a.taskId)];
-                const tB = this.allTasks[String(b.taskId)];
-                valA = (tA ? tA.title : (a.taskTitle || '')).toLocaleLowerCase('tr');
-                valB = (tB ? tB.title : (b.taskTitle || '')).toLocaleLowerCase('tr');
-                break;
-            }
-
-            case 'officialFee':
-                valA = Number(a.officialFee?.amount) || 0;
-                valB = Number(b.officialFee?.amount) || 0;
-                break;
-
-            case 'serviceFee':
-                valA = Number(a.serviceFee?.amount) || 0;
-                valB = Number(b.serviceFee?.amount) || 0;
-                break;
-
-            case 'totalAmount':
-                valA = Number(a.totalAmount) || 0;
-                valB = Number(b.totalAmount) || 0;
-                break;
-
-            case 'remainingAmount':
-                valA = getRemainingTotal(a);
-                valB = getRemainingTotal(b);
-                break;
-
-            case 'createdAt':
-                valA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
-                valB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
-                return direction === 'asc' ? valA - valB : valB - valA;
-
-            default:
-                valA = (a[column] || '').toString().toLocaleLowerCase('tr');
-                valB = (b[column] || '').toString().toLocaleLowerCase('tr');
+        // 2. Genel Arama
+        if (search) {
+            const s = search.toLowerCase();
+            data = data.filter(item => {
+                const searchStr = Object.values(item).join(' ').toLowerCase();
+                return searchStr.includes(s);
+            });
         }
 
-        // --- Karşılaştırma (Türkçe Karakter Uyumlu) ---
-        if (typeof valA === 'string' && typeof valB === 'string') {
-            return direction === 'asc'
-                ? valA.localeCompare(valB, 'tr', { sensitivity: 'base' })
-                : valB.localeCompare(valA, 'tr', { sensitivity: 'base' });
+        // 3. KOLON FİLTRELERİ (YENİ)
+        for (const [column, filterValue] of Object.entries(columnFilters)) {
+            if (!filterValue) continue;
+            
+            data = data.filter(item => {
+                let cellValue = '';
+                
+                // Her kolona özel değer çıkarma
+                if (column === 'id') {
+                    cellValue = String(item.id || '');
+                } else if (column === 'createdAt') {
+                    cellValue = item.createdAt ? new Date(item.createdAt).toLocaleDateString('tr-TR') : '';
+                } else if (column === 'field') {
+                    const task = this.allTasks[String(item.taskId)];
+                    const typeObj = task ? this.allTransactionTypes.find(t => t.id === task.taskType) : null;
+                    if (typeObj && typeObj.ipType) {
+                        const ipTypeMap = { 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' };
+                        cellValue = ipTypeMap[typeObj.ipType] || typeObj.ipType;
+                    }
+                } else if (column === 'status') {
+                    cellValue = item.status || '';
+                } else if (column === 'fileNo') {
+                    const task = this.allTasks[String(item.taskId)];
+                    if (task && task.relatedIpRecordId) {
+                        const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                        cellValue = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '') : '';
+                    }
+                } else if (column === 'subject') {
+                    const task = this.allTasks[String(item.taskId)];
+                    if (task && task.relatedIpRecordId) {
+                        const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                        cellValue = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '') : '';
+                    }
+                } else if (column === 'taskTitle') {
+                    const task = this.allTasks[String(item.taskId)];
+                    const typeObj = task ? this.allTransactionTypes.find(t => t.id === task.taskType) : null;
+                    cellValue = typeObj ? (typeObj.alias || typeObj.name) : (item.taskTitle || '');
+                } else if (column === 'party') {
+                    cellValue = item.paymentParty || '';
+                } else if (column === 'paymentParty') {
+                    cellValue = item.paymentParty || '';
+                }
+                
+                return cellValue.toLowerCase().includes(filterValue);
+            });
         }
 
-        // Sayısal Karşılaştırma
-        if (valA < valB) return direction === 'asc' ? -1 : 1;
-        if (valA > valB) return direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-
-    this.processedData = data;
-    return this.processedData;
-}
-
+        // 4. Sıralama
+        return this.sortData(data, sort.column, sort.direction);
+    }
 
     /**
      * Edit Modal'ı açarken Task detayının taze olduğundan emin olur.
