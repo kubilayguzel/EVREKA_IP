@@ -288,12 +288,13 @@
         }
 
         function getCountryCode(countryName) {
-            if (!countryName) return "TR"; 
+            if (!countryName) return null; // DEĞİŞİKLİK: Bulunamadığında TR yerine null dönüyor
             const search = String(countryName).trim();
+            if (!search) return null;
+
             const searchLower = search.toLowerCase();
             
-            // YENİ KURAL: Eğer gelen veri 2 karakter uzunluğundaysa (örn: "BR", "US") 
-            // bunun zaten bir kod olduğunu varsayıp büyük harfle döndür.
+            // 2 harfli kod kuralı
             if (search.length === 2) {
                 return search.toUpperCase();
             }
@@ -303,9 +304,17 @@
             if (searchLower.includes('african intellectual')) return 'OAPI'; 
             if (searchLower.includes('wipo')) return 'WO'; 
             if (searchLower.includes('aripo')) return 'AP';
-            const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
-            if (found) return found.code;
-            return "TR";
+            
+            // Firestore verisinden kontrol
+            if (Array.isArray(ALL_COUNTRIES)) {
+                const found = ALL_COUNTRIES.find(c => c.name.toLowerCase() === searchLower);
+                if (found) return found.code;
+            }
+            
+            // Eğer "Turkey" veya varyasyonları ise manuel TR döndür
+            if (searchLower === 'turkey' || searchLower === 'türkiye' || searchLower === 'turkiye') return 'TR';
+
+            return null; // Hiçbir eşleşme yoksa null
         }
 
         function parseGoodsAndServicesStructured(text) {
@@ -547,7 +556,7 @@
                         const countryCodes = rawJurisdictions.split(',')
                             .map(c => c.trim())
                             .filter(c => c.length > 0)
-                            .map(cName => getCountryCode(cName));
+                            .map(cName => getCountryCode(cName) || 'TR'); // DEĞİŞİKLİK: Bulunamazsa varsayılan TR
 
                         if (countryCodes.length === 0) throw new Error("WIPO ülke listesi boş.");
 
@@ -569,7 +578,7 @@
                         const countryNames = rawJurisdictions.split(',').map(c => c.trim()).filter(c => c.length > 0);
                         
                         for (const countryName of countryNames) {
-                            const childCode = getCountryCode(countryName);
+                            const childCode = getCountryCode(countryName) || 'TR'; // DEĞİŞİKLİK
                             const childRes = await ipRecordsService.addRecord({
                                 ...baseData,
                                 country: childCode,
@@ -587,19 +596,23 @@
                         
                         // 1. Önce Jurisdiction hücresini al (Varsa)
                         let countryInput = rawJurisdictions.split(',')[0].trim();
+                        let countryCode = getCountryCode(countryInput);
                         
-                        // 2. Eğer Jurisdiction boşsa, Registry'ye bak
-                        if (!countryInput && rowData.Registry) {
+                        // 2. Eğer Jurisdiction boşsa VEYA tanımsızsa (null), Registry'ye bak
+                        if (!countryCode && rowData.Registry) {
                             // "BR INPI" -> "BR" olarak ilk kelimeyi al
-                            // Boşluk, virgül veya tireye göre böl
                             const registryParts = rowData.Registry.trim().split(/[\s,-]+/);
                             if (registryParts.length > 0) {
-                                countryInput = registryParts[0].trim(); 
+                                const registryInput = registryParts[0].trim(); 
+                                const registryCode = getCountryCode(registryInput);
+                                if (registryCode) {
+                                    countryCode = registryCode;
+                                }
                             }
                         }
 
-                        // 3. Elde edilen veriyi getCountryCode'a gönder
-                        const countryCode = getCountryCode(countryInput);
+                        // 3. Hiçbiri yoksa TR
+                        if (!countryCode) countryCode = "TR";
                         
                         const isDuplicate = await checkDuplicate(baseData.applicationNumber, baseData.registrationNumber, countryCode);
                         if (isDuplicate) {
