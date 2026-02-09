@@ -63,7 +63,11 @@ class PortfolioController {
             }
 
             // DÜZELTME BURADA: Pagination'ı render'dan ÖNCE kurmalıyız
-            this.setupPagination(); 
+            this.setupPagination();
+
+            // Header'ları render et
+            const columns = this.getColumns(this.state.activeTab);
+            this.renderer.renderHeaders(columns, this.state.columnFilters);
 
             // 1. EĞER HAFIZADA KAYITLI SAYFA VARSA ONU YÜKLE
             const savedPage = sessionStorage.getItem('lastPageNumber');
@@ -217,10 +221,14 @@ class PortfolioController {
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
-                
+
                 const searchInput = document.getElementById('searchInput');
                 if(searchInput) searchInput.value = '';
-                
+
+                // Header'ları güncelle
+                const columns = this.getColumns(this.state.activeTab);
+                this.renderer.renderHeaders(columns, this.state.columnFilters);
+
                 this.renderer.clearTable();
                 this.render();
             });
