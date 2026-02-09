@@ -238,9 +238,13 @@
 
             <div class="accruals-container">
                 <div class="accruals-header">
-                    <div class="filter-group" id="bulkActions" style="display: none;">
-                        <button id="bulkMarkPaidBtn" class="action-btn">Seçilenleri Ödendi İşaretle</button>
-                        <button id="bulkMarkUnpaidBtn" class="action-btn action-btn.unpaid" style="margin-left:5px; background-color: #dc3545;">Seçilenleri Ödenmedi Yap</button>
+                    <div id="bulkActions" class="d-flex align-items-center ml-auto" style="display: none !important; gap: 10px;">
+                        <button id="bulkMarkPaidBtn" class="action-btn">
+                            <i class="fas fa-check mr-1"></i> Seçilenleri Ödendi İşaretle
+                        </button>
+                        <button id="bulkMarkUnpaidBtn" class="action-btn" style="background-color: #dc3545;">
+                            <i class="fas fa-times mr-1"></i> Seçilenleri Ödenmedi Yap
+                        </button>
                     </div>
                 </div>
 
