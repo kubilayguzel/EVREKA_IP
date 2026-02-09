@@ -90,6 +90,30 @@
         .shadow-sm { box-shadow: 0 .125rem .25rem rgba(0,0,0,.075) !important; }
         
         .hover-primary:hover { color: #007bff !important; transform: scale(1.1); transition: all 0.2s; }
+
+        /* Kolon Filtreleri */
+        #filterRow th,
+        #filterRowForeign th {
+            padding: 5px;
+            background-color: #f8f9fa;
+        }
+
+        .column-filter,
+        .column-filter-foreign {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            box-sizing: border-box;
+        }
+
+        .column-filter:focus,
+        .column-filter-foreign:focus {
+            outline: none;
+            border-color: #1e3c72;
+            box-shadow: 0 0 0 0.2rem rgba(30, 60, 114, 0.25);
+        }
     </style>
 </head>
 <body>
@@ -166,15 +190,10 @@
                                         <th class="sortable" data-sort="createdAt">Tarih <i class="fas fa-sort sort-icon"></i></th>
                                         <th>Alan</th>
                                         <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
-                                        
                                         <th>İlgili Dosya</th>
-                                        
                                         <th class="sortable" data-sort="subject">Konu <i class="fas fa-sort sort-icon"></i></th>
-                                        
                                         <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
-                                        
                                         <th class="sortable" data-sort="party">Taraf <i class="fas fa-sort sort-icon"></i></th>
-                                        
                                         <th>TFN</th>
                                         <th>EFN</th>
                                         <th class="sortable" data-sort="officialFee">Resmi Ü.<i class="fas fa-sort sort-icon"></i></th>
@@ -182,6 +201,31 @@
                                         <th class="sortable" data-sort="totalAmount">Toplam <i class="fas fa-sort sort-icon"></i></th>
                                         <th class="sortable" data-sort="remainingAmount">Kalan <i class="fas fa-sort sort-icon"></i></th>
                                         <th>İşlemler</th>
+                                    </tr>
+                                    <tr id="filterRow">
+                                        <th></th>
+                                        <th><input type="text" class="column-filter" data-column="id" placeholder="🔍 Ara..."></th>
+                                        <th><input type="date" class="column-filter" data-column="createdAt"></th>
+                                        <th><input type="text" class="column-filter" data-column="field" placeholder="🔍 Ara..."></th>
+                                        <th>
+                                            <select class="column-filter" data-column="status">
+                                                <option value="">Tümü</option>
+                                                <option value="paid">Ödendi</option>
+                                                <option value="unpaid">Ödenmedi</option>
+                                                <option value="partially_paid">K.Ödendi</option>
+                                            </select>
+                                        </th>
+                                        <th><input type="text" class="column-filter" data-column="fileNo" placeholder="🔍 Ara..."></th>
+                                        <th><input type="text" class="column-filter" data-column="subject" placeholder="🔍 Ara..."></th>
+                                        <th><input type="text" class="column-filter" data-column="taskTitle" placeholder="🔍 Ara..."></th>
+                                        <th><input type="text" class="column-filter" data-column="party" placeholder="🔍 Ara..."></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody id="accrualsTableBody"></tbody>
@@ -191,21 +235,35 @@
 
                     <div class="tab-pane fade" id="content-foreign" role="tabpanel">
                         <div class="table-container">
-                            <table class="accruals-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 40px;"><input type="checkbox" id="selectAllCheckboxForeign"></th>
-                                        <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
-                                        <th>Ödeme Yapılacak Taraf</th>
-                                        <th class="sortable" data-sort="officialFee">Toplam Tutar <i class="fas fa-sort sort-icon"></i></th>
-                                        <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
-                                        <th>Ödeme Belgesi</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="foreignTableBody"></tbody>
-                            </table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"><input type="checkbox" id="selectAllCheckboxForeign"></th>
+                                    <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
+                                    <th>Ödeme Yapılacak Taraf</th>
+                                    <th class="sortable" data-sort="officialFee">Toplam Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                    <th>Ödeme Belgesi</th>
+                                </tr>
+                                <tr id="filterRowForeign">
+                                    <th></th>
+                                    <th><input type="text" class="column-filter-foreign" data-column="id" placeholder="🔍 Ara..."></th>
+                                    <th>
+                                        <select class="column-filter-foreign" data-column="status">
+                                            <option value="">Tümü</option>
+                                            <option value="paid">Ödendi</option>
+                                            <option value="unpaid">Ödenmedi</option>
+                                            <option value="partially_paid">K.Ödendi</option>
+                                        </select>
+                                    </th>
+                                    <th><input type="text" class="column-filter-foreign" data-column="taskTitle" placeholder="🔍 Ara..."></th>
+                                    <th><input type="text" class="column-filter-foreign" data-column="paymentParty" placeholder="🔍 Ara..."></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
                         </div>
                     </div>
 
