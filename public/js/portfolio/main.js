@@ -514,48 +514,47 @@ class PortfolioController {
         }
     }
     
-    render() {
-        const cols = this.getColumnsForTab(this.state.activeTab);
-        this.renderer.renderHeaders(cols, this.state.columnFilters);
+    /**
+     * Tabloyu ekrana çizer
+     */
+    async render() {
+        this.renderer.showLoading(true);
+        this.renderer.clearTable();
 
-        // 1. Filtreleme ve Sıralama
+        // 1. Verileri Filtrele ve Sırala
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
             this.state.columnFilters,
             this.state.subTab 
         );
-        
+
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         this.state.filteredData = filtered;
 
-        // 2. Pagination Güncellemesi
-        if (!this.pagination) {
-            this.setupPagination(); // Pagination yoksa kur
-        }
-        if (this.pagination) {
-            this.pagination.update(filtered.length);
-        }
-
-        // 3. Tabloyu Temizle
-        if (typeof this.renderer.clearTable === 'function') {
-            this.renderer.clearTable();
+        // 2. Sayfalama Hesapla
+        const totalItems = filtered.length;
+        const totalPages = Math.ceil(totalItems / this.ITEMS_PER_PAGE);
+        
+        // Pagination arayüzünü güncelle
+        if (typeof this.updatePaginationUI === 'function') {
+            this.updatePaginationUI(totalItems, totalPages);
         }
 
-        // 4. Veri Yoksa Göster ve Çık
-        if (filtered.length === 0) {
+        if (totalItems === 0) {
             this.renderer.renderEmptyState();
-            this.updateSelectAllCheckbox();
-            this.updateBulkActionButtons();
-            return; // Veri yoksa devam etme
+            this.renderer.showLoading(false);
+            return;
         }
 
-        // 5. Sayfa Verilerini Al
-        const pageData = this.pagination ? this.pagination.getCurrentPageData(filtered) : filtered;
+        // 3. Mevcut Sayfanın Verilerini Al
+        const startIndex = (this.state.currentPage - 1) * this.ITEMS_PER_PAGE;
+        const endIndex = startIndex + this.ITEMS_PER_PAGE;
+        const pageData = filtered.slice(startIndex, endIndex);
 
         const frag = document.createDocumentFragment();
 
-        // 6. Satırları Oluştur
+        // 4. Satırları Oluştur
         pageData.forEach((item, index) => {
             const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
@@ -563,8 +562,9 @@ class PortfolioController {
                 const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
                 if (item.isChild) tr.style.display = 'none';
                 frag.appendChild(tr);
+
             } else if (this.state.activeTab === 'litigation') {
-                 if(this.renderer.renderLitigationRow) {
+                 if (this.renderer.renderLitigationRow) {
                     frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
                  }
             } else {
@@ -572,6 +572,7 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
+                // Child Kayıtlar (WIPO/ARIPO)
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     if(irNo) {
@@ -595,16 +596,27 @@ class PortfolioController {
             }
         });
 
-        // 7. GÜVENLİ EKLEME (Sorunun Çözümü)
-        // Renderer'daki getter sayesinde o anki tbody'i çeker
+        // --- HATA DÜZELTME BURADA ---
+        // Eski Hatalı Kod: document.querySelector('#portfolioTable tbody').appendChild(frag);
+        // Yeni Doğru Kod:
         if (this.renderer.tbody) {
             this.renderer.tbody.appendChild(frag);
         } else {
-            console.warn('Tablo gövdesi (tbody) bulunamadı, tablo çizilemedi.');
+            // Eğer hala bulunamazsa manuel olarak doğru ID ile dene
+            const fallbackBody = document.getElementById('portfolioTableBody');
+            if (fallbackBody) {
+                fallbackBody.appendChild(frag);
+            } else {
+                console.error('HATA: Tablo gövdesi (tbody) bulunamadı.');
+            }
         }
         
-        this.updateSelectAllCheckbox();
-        this.updateBulkActionButtons();
+        // Tooltip'leri etkinleştir
+        if(typeof $ !== 'undefined' && $.fn.tooltip) {
+            $('[data-toggle="tooltip"]').tooltip();
+        }
+
+        this.renderer.showLoading(false);
     }
 
     // Bu fonksiyonu PortfolioController sınıfının içine ekleyin
