@@ -3,9 +3,9 @@
 import { authService } from '../../firebase-config.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import Pagination from '../pagination.js'; 
-import { readFileAsDataURL, showNotification } from '../../utils.js';
+import { showNotification } from '../../utils.js';
 
-// Yeni Modüller
+// Modüller
 import { AccrualDataManager } from './AccrualDataManager.js';
 import { AccrualUIManager } from './AccrualUIManager.js';
 
@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.state = {
                 activeTab: 'main',       // 'main' | 'foreign'
                 
-                // YENİ FİLTRELER
                 filters: {
                     startDate: '',
                     endDate: '',
@@ -45,8 +44,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async init() {
-            const currentUser = authService.getCurrentUser();
-            
             this.initPagination();
             this.setupEventListeners();
 
@@ -107,7 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         /**
-         * Excel'e Aktar (EKSİK OLAN KISIM GERİ EKLENDİ)
+         * Excel'e Aktar (GELİŞTİRİLMİŞ VERSİYON)
          */
         async exportToExcel(type) {
             // 1. Veriyi Hazırla
@@ -115,7 +112,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tab: this.state.activeTab, 
                 filters: this.state.filters 
             };
-            let allFilteredData = this.dataManager.filterAndSort(criteria, this.state.sort);
+            
+            // Excel için veriyi her zaman TARİHE GÖRE (Eskiden Yeniye) sıralıyoruz ki aylık gruplama düzgün çalışsın
+            let allFilteredData = this.dataManager.filterAndSort(criteria, { column: 'createdAt', direction: 'asc' });
 
             let dataToExport = [];
 
@@ -157,37 +156,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const workbook = new ExcelJS.Workbook();
                 const worksheet = workbook.addWorksheet('Tahakkuklar');
 
-                // 4. Kolon Tanımları
-                const isMainTab = this.state.activeTab === 'main';
+                // 4. Kolon Tanımları (İSTENEN SIRALAMA VE DETAYLAR)
+                // ID, Tarih, Durum, Alan, Dosya, Konu, İş, Taraf, TFN, EFN, Resmi, ResmiPB, Hizmet, HizmetPB, KDV%, KDV, KDVPB, Toplam, ToplamPB, Kalan, KalanPB
                 
-                if (isMainTab) {
-                    worksheet.columns = [
-                        { header: 'ID', key: 'id', width: 10 },
-                        { header: 'Durum', key: 'status', width: 15 },
-                        { header: 'İş Tipi', key: 'taskType', width: 25 },
-                        { header: 'Dosya No', key: 'fileNo', width: 20 },
-                        { header: 'Konu', key: 'subject', width: 30 },
-                        { header: 'Alan', key: 'field', width: 15 },
-                        { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
-                        { header: 'Hizmet Ücreti', key: 'serviceFee', width: 15 },
-                        { header: 'Toplam Tutar', key: 'totalAmount', width: 15 },
-                        { header: 'Kalan', key: 'remaining', width: 15 },
-                        { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
-                    ];
-                } else {
-                    worksheet.columns = [
-                        { header: 'ID', key: 'id', width: 10 },
-                        { header: 'Durum', key: 'status', width: 15 },
-                        { header: 'İş Tipi', key: 'taskType', width: 25 },
-                        { header: 'Ödeme Yapan', key: 'paymentParty', width: 25 },
-                        { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
-                        { header: 'Kalan', key: 'remaining', width: 15 },
-                        { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }
-                    ];
-                }
+                worksheet.columns = [
+                    { header: 'ID', key: 'id', width: 10 },
+                    { header: 'Oluşturma Tarihi', key: 'createdAt', width: 15 }, // ID'den hemen sonra
+                    { header: 'Durum', key: 'status', width: 15 },
+                    { header: 'Alan', key: 'field', width: 15 },
+                    { header: 'İlgili Dosya', key: 'fileNo', width: 20 },
+                    { header: 'Konu', key: 'subject', width: 30 },
+                    { header: 'İlgili İş', key: 'taskTitle', width: 30 },
+                    { header: 'Taraf', key: 'party', width: 25 },
+                    { header: 'TPE Fatura No', key: 'tpeInvoiceNo', width: 15 }, // TFN
+                    { header: 'Evreka Fatura No', key: 'evrekaInvoiceNo', width: 15 }, // EFN
+                    
+                    // Ücret Detayları ve Para Birimleri
+                    { header: 'Resmi Ücret', key: 'officialFee', width: 15 },
+                    { header: 'R.Ü. PB', key: 'officialFeeCurr', width: 8 },
+                    
+                    { header: 'Hizmet Ücreti', key: 'serviceFee', width: 15 },
+                    { header: 'H.Ü. PB', key: 'serviceFeeCurr', width: 8 },
+                    
+                    { header: 'KDV Oranı (%)', key: 'vatRate', width: 12 },
+                    { header: 'KDV Tutarı', key: 'vatAmount', width: 15 },
+                    { header: 'KDV PB', key: 'vatCurr', width: 8 },
+                    
+                    { header: 'Toplam Tutar', key: 'totalAmount', width: 15 },
+                    { header: 'Toplam PB', key: 'totalAmountCurr', width: 8 },
+                    
+                    { header: 'Kalan Tutar', key: 'remainingAmount', width: 15 },
+                    { header: 'Kalan PB', key: 'remainingAmountCurr', width: 8 }
+                ];
 
                 // 5. Header Stili
-                worksheet.getRow(1).eachCell((cell) => {
+                const headerRow = worksheet.getRow(1);
+                headerRow.eachCell((cell) => {
                     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
                     cell.fill = {
                         type: 'pattern',
@@ -198,53 +202,140 @@ document.addEventListener('DOMContentLoaded', async () => {
                     cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
                 });
 
-                // 6. Veri Satırları
-                dataToExport.forEach(acc => {
+                // --- TOPLAM HESAPLAMA YARDIMCILARI ---
+                // Farklı para birimlerini ayrı ayrı toplamak için yapı
+                const createAccumulator = () => ({}); // { "TRY": { official: 0, service: 0, vat: 0, total: 0, remaining: 0 }, "USD": ... }
+                
+                const addToAccumulator = (acc, currency, type, amount) => {
+                    const curr = currency || 'TRY';
+                    if (!acc[curr]) acc[curr] = { official: 0, service: 0, vat: 0, total: 0, remaining: 0 };
+                    acc[curr][type] += (parseFloat(amount) || 0);
+                };
+
+                let monthlyAccumulator = createAccumulator();
+                let grandAccumulator = createAccumulator();
+                
+                let currentMonthKey = null; // YYYY-MM formatında
+
+                // 6. Veri Satırlarını İşle
+                for (let i = 0; i < dataToExport.length; i++) {
+                    const acc = dataToExport[i];
+                    
+                    // Tarih ve Ay Kontrolü
+                    const dateObj = acc.createdAt instanceof Date ? acc.createdAt : new Date(acc.createdAt || 0);
+                    const rowMonthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+                    const formattedDate = dateObj.toLocaleDateString('tr-TR');
+
+                    // AY DEĞİŞİMİNDE ARA TOPLAM EKLE
+                    if (currentMonthKey && currentMonthKey !== rowMonthKey) {
+                        this.addTotalRow(worksheet, `Ara Toplam (${currentMonthKey})`, monthlyAccumulator);
+                        monthlyAccumulator = createAccumulator(); // Sıfırla
+                    }
+                    currentMonthKey = rowMonthKey;
+
+                    // İlişkili Verileri Çek
                     const task = this.dataManager.allTasks[String(acc.taskId)];
                     const typeObj = task ? this.dataManager.allTransactionTypes.find(t => t.id === task.taskType) : null;
-                    const taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (acc.taskTitle || '-');
+                    const ipRec = task?.relatedIpRecordId ? this.dataManager.ipRecordsMap[task.relatedIpRecordId] : null;
 
-                    let statusText = 'Bilinmiyor';
-                    if (acc.status === 'paid') statusText = 'Ödendi';
-                    else if (acc.status === 'unpaid') statusText = 'Ödenmedi';
-                    else if (acc.status === 'partially_paid') statusText = 'K.Ödendi';
+                    // Alan Hesapla
+                    let fieldText = '-';
+                    if (typeObj?.ipType) fieldText = { 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' }[typeObj.ipType] || typeObj.ipType;
 
-                    const formatMoney = (val, curr) => {
-                        if (Array.isArray(val)) return val.map(item => `${parseFloat(item.amount) || 0} ${item.currency}`).join(' + ');
-                        return `${parseFloat(val) || 0} ${curr || 'TRY'}`;
-                    };
+                    // Taraf Bul
+                    const partyName = acc.paymentParty || (acc.tpInvoiceParty?.name) || (acc.serviceInvoiceParty?.name) || '-';
 
-                    const row = {
-                        id: acc.id,
-                        status: statusText,
-                        taskType: taskDisplay,
-                        createdAt: acc.createdAt ? new Date(acc.createdAt).toLocaleDateString('tr-TR') : '-'
-                    };
+                    // Ücretleri Hazırla
+                    const officialAmt = acc.officialFee?.amount || 0;
+                    const officialCurr = acc.officialFee?.currency || 'TRY';
+                    
+                    const serviceAmt = acc.serviceFee?.amount || 0;
+                    const serviceCurr = acc.serviceFee?.currency || 'TRY';
+                    
+                    const vatRate = acc.vatRate || 0;
+                    
+                    // KDV Hesabı: (Hizmet + (Eğer seçiliyse Resmi)) * Oran
+                    const baseForVat = serviceAmt + (acc.applyVatToOfficialFee ? officialAmt : 0);
+                    const vatAmt = baseForVat * (vatRate / 100);
+                    const vatCurr = serviceCurr; // KDV genellikle hizmet faturası ile aynıdır
 
-                    if (isMainTab) {
-                        const ipRec = task?.relatedIpRecordId ? this.dataManager.ipRecordsMap[task.relatedIpRecordId] : null;
-                        
-                        row.fileNo = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '-') : '-';
-                        row.subject = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '-') : '-';
-                        row.field = typeObj?.ipType ? ({ 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' }[typeObj.ipType] || typeObj.ipType) : '-';
-                        row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
-                        row.serviceFee = acc.serviceFee ? formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
-                        row.totalAmount = acc.totalAmount ? formatMoney(acc.totalAmount, acc.totalAmountCurrency) : '-';
-                        row.remaining = acc.remainingAmount !== undefined ? formatMoney(acc.remainingAmount, acc.totalAmountCurrency) : '-';
+                    // Toplam Tutar (Veritabanından veya hesapla)
+                    let totalAmt = 0;
+                    let totalCurr = 'TRY';
+                    if (Array.isArray(acc.totalAmount) && acc.totalAmount.length > 0) {
+                        totalAmt = acc.totalAmount[0].amount;
+                        totalCurr = acc.totalAmount[0].currency;
                     } else {
-                        row.paymentParty = acc.paymentParty || '-';
-                        row.officialFee = acc.officialFee ? formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
-                        const rem = acc.foreignRemainingAmount !== undefined ? acc.foreignRemainingAmount : acc.officialFee?.amount;
-                        row.remaining = rem ? formatMoney(rem, acc.officialFee?.currency || 'EUR') : '-';
+                        totalAmt = officialAmt + serviceAmt + vatAmt;
+                        totalCurr = officialCurr; // Basitleştirme
                     }
 
-                    worksheet.addRow(row);
-                });
+                    // Kalan Tutar
+                    let remAmt = 0;
+                    let remCurr = totalCurr;
+                    if (Array.isArray(acc.remainingAmount) && acc.remainingAmount.length > 0) {
+                        remAmt = acc.remainingAmount[0].amount;
+                        remCurr = acc.remainingAmount[0].currency;
+                    } else {
+                        // Eğer array boşsa ama status unpaid ise toplam tutardır
+                        if (acc.status === 'unpaid') remAmt = totalAmt;
+                    }
+
+                    // Satırı Ekle
+                    const row = worksheet.addRow({
+                        id: acc.id,
+                        createdAt: formattedDate,
+                        status: acc.status === 'paid' ? 'Ödendi' : (acc.status === 'unpaid' ? 'Ödenmedi' : 'Kısmen'),
+                        field: fieldText,
+                        fileNo: ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '-') : '-',
+                        subject: ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '-') : '-',
+                        taskTitle: typeObj ? (typeObj.alias || typeObj.name) : (acc.taskTitle || '-'),
+                        party: partyName,
+                        tpeInvoiceNo: acc.tpeInvoiceNo || '',
+                        evrekaInvoiceNo: acc.evrekaInvoiceNo || '',
+                        
+                        officialFee: officialAmt,
+                        officialFeeCurr: officialCurr,
+                        serviceFee: serviceAmt,
+                        serviceFeeCurr: serviceCurr,
+                        vatRate: vatRate,
+                        vatAmount: vatAmt,
+                        vatCurr: vatCurr,
+                        totalAmount: totalAmt,
+                        totalAmountCurr: totalCurr,
+                        remainingAmount: remAmt,
+                        remainingAmountCurr: remCurr
+                    });
+
+                    // Toplamlara Ekle (Her para birimi için ayrı)
+                    addToAccumulator(monthlyAccumulator, officialCurr, 'official', officialAmt);
+                    addToAccumulator(monthlyAccumulator, serviceCurr, 'service', serviceAmt);
+                    addToAccumulator(monthlyAccumulator, vatCurr, 'vat', vatAmt);
+                    addToAccumulator(monthlyAccumulator, totalCurr, 'total', totalAmt);
+                    addToAccumulator(monthlyAccumulator, remCurr, 'remaining', remAmt);
+                    
+                    addToAccumulator(grandAccumulator, officialCurr, 'official', officialAmt);
+                    addToAccumulator(grandAccumulator, serviceCurr, 'service', serviceAmt);
+                    addToAccumulator(grandAccumulator, vatCurr, 'vat', vatAmt);
+                    addToAccumulator(grandAccumulator, totalCurr, 'total', totalAmt);
+                    addToAccumulator(grandAccumulator, remCurr, 'remaining', remAmt);
+                }
+
+                // SON ARA TOPLAM VE GENEL TOPLAM
+                if (currentMonthKey) {
+                    this.addTotalRow(worksheet, `Ara Toplam (${currentMonthKey})`, monthlyAccumulator);
+                }
+                
+                // Boş satır
+                worksheet.addRow([]);
+                
+                // Genel Toplam
+                this.addTotalRow(worksheet, 'GENEL TOPLAM', grandAccumulator, true);
 
                 // 7. Dosyayı Kaydet
                 const buffer = await workbook.xlsx.writeBuffer();
                 const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                const fileName = `tahakkuklar_${this.state.activeTab}_${new Date().toISOString().slice(0,10)}.xlsx`;
+                const fileName = `Tahakkuk_Listesi_${new Date().toISOString().slice(0,10)}.xlsx`;
                 window.saveAs(blob, fileName);
 
                 showNotification(`${dataToExport.length} kayıt başarıyla aktarıldı!`, 'success');
@@ -256,6 +347,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.uiManager.toggleLoading(false);
             }
         }
+
+        /**
+         * Toplam Satırı Ekleyen Yardımcı Fonksiyon
+         */
+        addTotalRow(worksheet, label, accumulator, isGrandTotal = false) {
+            // Her para birimi için bir satır oluşturabiliriz veya tek satırda birleştirebiliriz.
+            // Okunabilirlik için her para birimini ayrı satırda yazalım (Varsa).
+            const currencies = Object.keys(accumulator);
+            
+            if (currencies.length === 0) return;
+
+            currencies.forEach(curr => {
+                const data = accumulator[curr];
+                const row = worksheet.addRow({
+                    taskTitle: `${label} (${curr})`, // Etiketi 'İlgili İş' kolonuna yazıyoruz ki ortada görünsün
+                    
+                    officialFee: data.official,
+                    officialFeeCurr: curr,
+                    serviceFee: data.service,
+                    serviceFeeCurr: curr,
+                    vatAmount: data.vat,
+                    vatCurr: curr,
+                    totalAmount: data.total,
+                    totalAmountCurr: curr,
+                    remainingAmount: data.remaining,
+                    remainingAmountCurr: curr
+                });
+
+                // Stil
+                row.font = { bold: true, color: isGrandTotal ? { argb: 'FFFF0000' } : undefined }; // Genel toplam kırmızı
+                row.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: isGrandTotal ? 'FFFFE0E0' : 'FFEEEEEE' } // Arkaplan
+                };
+            });
+        }
+
 
         setupEventListeners() {
             // --- 1. FİLTRELER ---
@@ -362,7 +491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // --- 5. ÖDEME MODALI UI ETKİLEŞİMLERİ (EKSİK OLAN KISIM) ---
+            // --- 5. ÖDEME MODALI UI ETKİLEŞİMLERİ ---
             const payFullOfficial = document.getElementById('payFullOfficial');
             const officialInputContainer = document.getElementById('officialAmountInputContainer');
             if (payFullOfficial && officialInputContainer) {
@@ -431,13 +560,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // --- 7. MODAL VE DİĞER BUTONLAR ---
             
-            // Toplu İşlemler
+            // Toplu İşlemler - Ödendi İşaretle
             document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => {
                 const selected = Array.from(this.state.selectedIds).map(id => this.dataManager.allAccruals.find(a => a.id === id)).filter(Boolean);
                 this.uploadedPaymentReceipts = []; 
                 this.uiManager.showPaymentModal(selected, this.state.activeTab); 
             });
 
+            // Toplu İşlemler - Ödenmedi Yap
             const btnUnpaid = document.getElementById('bulkMarkUnpaidBtn');
             if (btnUnpaid) {
                 btnUnpaid.addEventListener('click', async () => {
@@ -446,11 +576,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (confirm(`${this.state.selectedIds.size} adet kaydı "Ödenmedi" durumuna getirmek istiyor musunuz? Mevcut ödeme bilgileri silinecektir.`)) {
                         this.uiManager.toggleLoading(true);
                         try {
-                            // DataManager'da batchUpdateStatus metodunu çağırıyoruz
                             await this.dataManager.batchUpdateStatus(this.state.selectedIds, 'unpaid');
-                            
-                            this.state.selectedIds.clear(); // Seçimleri temizle
-                            this.renderPage(); // Sayfayı yenile
+                            this.state.selectedIds.clear(); 
+                            this.renderPage(); 
                             showNotification('Kayıtlar "Ödenmedi" olarak güncellendi.', 'success');
                         } catch (e) {
                             console.error(e);
