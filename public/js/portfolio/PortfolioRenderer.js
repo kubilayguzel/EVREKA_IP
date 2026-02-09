@@ -4,21 +4,26 @@ import '../simple-loading.js';
 
 export class PortfolioRenderer {
     constructor(containerId, dataManager) {
-        this.tbody = document.getElementById(containerId);
+        this.containerId = containerId; // ID'yi sakla
         this.dataManager = dataManager;
         
-        // SimpleLoading örneğini hazırla
         this.simpleLoader = null;
         if (window.SimpleLoading) {
             this.simpleLoader = new window.SimpleLoading();
         }
     }
 
+    // GÜNCELLEME: tbody'i ihtiyaç anında (lazy) getir
+    get tbody() {
+        return document.getElementById(this.containerId);
+    }
+
     // --- TEMEL METODLAR ---
 
-    // DÜZELTME 1: Metod ismini main.js ile uyumlu hale getirdik (clear -> clearTable)
     clearTable() {
-        if (this.tbody) this.tbody.innerHTML = '';
+        if (this.tbody) {
+            this.tbody.innerHTML = '';
+        }
     }
 
     showLoading(show) {
@@ -26,7 +31,6 @@ export class PortfolioRenderer {
         
         if (show) {
             if (defaultSpinner) defaultSpinner.style.display = 'none';
-            
             if (this.simpleLoader) {
                 this.simpleLoader.show({
                     text: 'Veriler Yükleniyor',
@@ -41,7 +45,6 @@ export class PortfolioRenderer {
         }
     }
 
-    // DÜZELTME 2: Eksik olan renderEmptyState metodunu ekledik
     renderEmptyState() {
         if (this.tbody) {
             this.tbody.innerHTML = `
@@ -64,7 +67,6 @@ export class PortfolioRenderer {
 
         headerRow.innerHTML = '';
 
-        // Filtre satırını kontrol et veya oluştur
         let filterRow = document.getElementById('portfolioTableFilterRow');
         if (!filterRow) {
             filterRow = document.createElement('tr');
@@ -75,7 +77,6 @@ export class PortfolioRenderer {
         filterRow.innerHTML = '';
 
         columns.forEach(col => {
-            // 1. Üst Başlık
             const th = document.createElement('th');
             if (col.width) th.style.width = col.width;
             th.className = col.sortable ? 'sortable-header inactive' : '';
@@ -84,7 +85,6 @@ export class PortfolioRenderer {
             if (col.isCheckbox) th.innerHTML = '<input type="checkbox" id="selectAllCheckbox">';
             headerRow.appendChild(th);
 
-            // 2. Filtre Inputu
             const filterTh = document.createElement('th');
             filterTh.style.padding = '5px';
             if (col.filterable) {
@@ -98,9 +98,7 @@ export class PortfolioRenderer {
                 input.style.border = '1px solid #ced4da';
                 input.style.height = '38px';
 
-                if (input.type === 'text') {
-                    input.placeholder = '🔍 Ara...';
-                }
+                if (input.type === 'text') input.placeholder = '🔍 Ara...';
 
                 input.dataset.key = col.key;
                 input.value = activeFilters[col.key] || '';
@@ -119,7 +117,6 @@ export class PortfolioRenderer {
         const isChild = record.transactionHierarchy === 'child'; 
         const irNo = record.wipoIR || record.aripoIR;
         
-        // Parent Renklendirme ve Grup ID Kontrolü
         if (isWipoParent) {
             if (irNo) {
                 tr.dataset.groupId = irNo;
@@ -143,9 +140,8 @@ export class PortfolioRenderer {
         `;
 
         const caret = (isWipoParent && irNo) ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
-
         const titleText = record.title || record.brandText || '-';
-        const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-');
+        const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-'); 
         const applicantText = record.formattedApplicantName || '-';
 
         let html = `
@@ -153,9 +149,7 @@ export class PortfolioRenderer {
             <td class="toggle-cell text-center" style="vertical-align: middle;">${caret}</td>
         `;
 
-        if (!isTrademarkTab) {
-            html += `<td>${record.type || '-'}</td>`;
-        }
+        if (!isTrademarkTab) html += `<td>${record.type || '-'}</td>`;
 
         html += `<td title="${titleText}"><strong>${titleText}</strong></td>`;
 
@@ -181,7 +175,6 @@ export class PortfolioRenderer {
     renderLitigationRow(row, index) {
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
-        
         const suitTypeStr = String(row.suitType || '');
         if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#ffebee';
         else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff3e0';
@@ -191,7 +184,6 @@ export class PortfolioRenderer {
                 <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
                 <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}" title="Düzenle"><i class="fas fa-edit"></i></button>
             </div>`;
-            
         const statusBadge = this.getStatusBadge(row);
 
         tr.innerHTML = `
@@ -205,7 +197,6 @@ export class PortfolioRenderer {
             <td>${row.openedDate || '-'}</td>
             <td>${statusBadge}</td>
             <td>${actions}</td>`;
-            
         return tr;
     }
 
@@ -222,7 +213,6 @@ export class PortfolioRenderer {
 
         const caret = hasChildren ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
         const indentation = isChild ? 'style="padding-left: 30px; border-left: 3px solid #f39c12;"' : '';
-
         const statusDisplay = isChild ? '' : (row.statusText || '-');
 
         tr.innerHTML = `
@@ -243,7 +233,6 @@ export class PortfolioRenderer {
         
         if (hasChildren) tr.dataset.groupId = row.id;
         if (isChild) tr.dataset.parentId = row.parentId;
-
         return tr;
     }
 
@@ -256,7 +245,6 @@ export class PortfolioRenderer {
         const rawStatus = record.status;
         let displayStatus = rawStatus || '-';
         let color = 'secondary';
-        
         if (record.type && STATUSES[record.type]) {
             const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
             if (statusObj) {
@@ -273,14 +261,12 @@ export class PortfolioRenderer {
                 }
             }
         }
-
         if (color === 'secondary') {
              const s = String(rawStatus).toLowerCase();
              if (['registered', 'approved', 'active', 'tescilli', 'finalized', 'kesinleşti'].includes(s)) color = 'success';
              else if (['filed', 'application', 'pending', 'published', 'decision_pending', 'karar bekleniyor'].includes(s)) color = 'warning';
              else if (['rejected', 'refused', 'cancelled', 'reddedildi'].includes(s)) color = 'danger';
         }
-
         return `<span class="badge badge-${color} border">${displayStatus}</span>`;
     }
 }
