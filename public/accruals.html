@@ -124,21 +124,69 @@
         <main class="main-container">
             <section class="page-header">
                 <h1 class="page-title">Tahakkuk Yönetimi</h1>
-                <div class="d-flex justify-content-end mb-3">
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown">
-                            <i class="fas fa-file-excel mr-2"></i>Excel'e Aktar
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-right">
-                            <a class="dropdown-item" href="#" id="btnExportSelectedAccruals">
-                                <i class="fas fa-check-square mr-2"></i>Seçilileri Aktar
-                            </a>
-                            <a class="dropdown-item" href="#" id="btnExportAllAccruals">
-                                <i class="fas fa-list mr-2"></i>Tüm Listeyi Aktar
-                            </a>
+                <div class="d-flex justify-content-end mb-3" style="gap: 10px;">
+                <!-- Filtreler -->
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-toggle="dropdown">
+                        <i class="fas fa-filter mr-2"></i>Filtreler
+                        <span id="activeFilterBadge" class="badge badge-primary ml-1" style="display: none;">0</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right p-3" style="min-width: 350px;" onclick="event.stopPropagation()">
+                        <h6 class="dropdown-header">Kolon Filtreleri</h6>
+                        
+                        <div class="form-group">
+                            <label class="small font-weight-bold">ID</label>
+                            <input type="text" class="form-control form-control-sm column-filter" data-column="id" placeholder="Ara...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="small font-weight-bold">Durum</label>
+                            <select class="form-control form-control-sm column-filter" data-column="status">
+                                <option value="">Tümü</option>
+                                <option value="paid">Ödendi</option>
+                                <option value="unpaid">Ödenmedi</option>
+                                <option value="partially_paid">K.Ödendi</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="small font-weight-bold">İlgili İş</label>
+                            <input type="text" class="form-control form-control-sm column-filter" data-column="taskTitle" placeholder="Ara...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="small font-weight-bold">Dosya No</label>
+                            <input type="text" class="form-control form-control-sm column-filter" data-column="fileNo" placeholder="Ara...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="small font-weight-bold">Konu</label>
+                            <input type="text" class="form-control form-control-sm column-filter" data-column="subject" placeholder="Ara...">
+                        </div>
+                        
+                        <div class="form-group mb-0">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnClearFilters">
+                                <i class="fas fa-times mr-1"></i>Filtreleri Temizle
+                            </button>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Excel Export -->
+                <div class="btn-group">
+                    <button type="button" class="btn btn-secondary dropdown-toggle" data-toggle="dropdown">
+                        <i class="fas fa-file-excel mr-2"></i>Excel'e Aktar
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a class="dropdown-item" href="#" id="btnExportSelectedAccruals">
+                            <i class="fas fa-check-square mr-2"></i>Seçilileri Aktar
+                        </a>
+                        <a class="dropdown-item" href="#" id="btnExportAllAccruals">
+                            <i class="fas fa-list mr-2"></i>Tüm Listeyi Aktar
+                        </a>
+                    </div>
+                </div>
+            </div>
                 <p class="page-subtitle">Sistemdeki tüm tahakkuk kayıtlarını görüntüleyin ve yönetin.</p>
             </section>
 
@@ -202,7 +250,6 @@
                                         <th class="sortable" data-sort="remainingAmount">Kalan <i class="fas fa-sort sort-icon"></i></th>
                                         <th>İşlemler</th>
                                     </tr>
-                                    <tr id="filterRow">
                                         <th></th>
                                         <th><input type="text" class="column-filter" data-column="id" placeholder="🔍 Ara..."></th>
                                         <th><input type="date" class="column-filter" data-column="createdAt"></th>
@@ -246,7 +293,6 @@
                                     <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
                                     <th>Ödeme Belgesi</th>
                                 </tr>
-                                <tr id="filterRowForeign">
                                     <th></th>
                                     <th><input type="text" class="column-filter-foreign" data-column="id" placeholder="🔍 Ara..."></th>
                                     <th>
