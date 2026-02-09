@@ -225,12 +225,8 @@ export class AccrualDataManager {
         data.sort((a, b) => {
             let valA, valB;
 
-            // --- Yardımcı: Taraf İsmini Bul ---
-            const getPartyName = (item) => {
-                return item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
-            };
-
-            // --- Yardımcı: Kalan Tutarı Bul ---
+            // --- Yardımcı Fonksiyonlar ---
+            const getPartyName = (item) => item.tpInvoiceParty?.name || item.serviceInvoiceParty?.name || '';
             const getRemainingTotal = (item) => {
                  if (Array.isArray(item.remainingAmount)) {
                      return item.remainingAmount.reduce((sum, curr) => sum + (Number(curr.amount) || 0), 0);
@@ -238,16 +234,14 @@ export class AccrualDataManager {
                  return 0;
             };
 
-            // --- ÖZEL DURUM: ID Sıralaması (Sayısal) ---
+            // --- ID Sıralaması (Sayısal Öncelikli) ---
             if (column === 'id') {
-                // Eğer ID'ler sayıya çevrilebiliyorsa sayısal karşılaştır
                 const numA = parseFloat(a.id);
                 const numB = parseFloat(b.id);
-                
                 if (!isNaN(numA) && !isNaN(numB)) {
                     return direction === 'asc' ? numA - numB : numB - numA;
                 }
-                // Değilse 'numeric: true' ile akıllı string sıralaması yap (1, 2, 10...)
+                // Sayı değilse metin olarak sırala
                 valA = (a.id || '').toString();
                 valB = (b.id || '').toString();
                 return direction === 'asc' 
@@ -255,53 +249,63 @@ export class AccrualDataManager {
                     : valB.localeCompare(valA, 'tr', { numeric: true });
             }
 
-            // --- DİĞER ALANLAR ---
+            // --- Diğer Kolonlar ---
             switch (column) {
                 case 'status': 
                     valA = (a.status || '').toLowerCase(); 
                     valB = (b.status || '').toLowerCase(); 
                     break;
+                
+                case 'subject': // EKLENEN KISIM: Konu Sıralaması
+                    valA = (a.subject || a.description || '').toLowerCase();
+                    valB = (b.subject || b.description || '').toLowerCase();
+                    break;
+
+                case 'party': // EKLENEN KISIM: Taraf Sıralaması
+                    valA = getPartyName(a).toLowerCase();
+                    valB = getPartyName(b).toLowerCase();
+                    break;
+
                 case 'taskTitle':
                     const tA = this.allTasks[String(a.taskId)];
                     const tB = this.allTasks[String(b.taskId)];
                     valA = (tA ? tA.title : (a.taskTitle || '')).toLowerCase();
                     valB = (tB ? tB.title : (b.taskTitle || '')).toLowerCase();
                     break;
-                case 'subject': // Konu
-                    valA = (a.subject || a.description || '').toLowerCase();
-                    valB = (b.subject || b.description || '').toLowerCase();
-                    break;
-                case 'party': // Taraf
-                    valA = getPartyName(a).toLowerCase();
-                    valB = getPartyName(b).toLowerCase();
-                    break;
+
                 case 'officialFee': 
                     valA = Number(a.officialFee?.amount) || 0; 
                     valB = Number(b.officialFee?.amount) || 0; 
                     break;
+
                 case 'serviceFee': 
                     valA = Number(a.serviceFee?.amount) || 0; 
                     valB = Number(b.serviceFee?.amount) || 0; 
                     break;
+
                 case 'totalAmount': 
                     valA = Number(a.totalAmount) || 0; 
                     valB = Number(b.totalAmount) || 0; 
                     break;
-                case 'remainingAmount': // Kalan Tutar
+
+                case 'remainingAmount': // EKLENEN KISIM: Kalan Tutar
                     valA = getRemainingTotal(a);
                     valB = getRemainingTotal(b);
                     break;
+
                 case 'createdAt': 
-                    valA = new Date(a.createdAt).getTime(); 
-                    valB = new Date(b.createdAt).getTime(); 
+                    // Date objesi kontrolü (null safety)
+                    valA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+                    valB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
                     return direction === 'asc' ? valA - valB : valB - valA;
+
                 default:
-                    // Bilinmeyen kolonlar için metin olarak sırala
+                    // Bilinmeyen kolonlar için güvenli varsayılan
                     valA = (a[column] || '').toString().toLowerCase();
                     valB = (b[column] || '').toString().toLowerCase();
             }
 
-            // String Karşılaştırma (Türkçe Uyumlu)
+            // --- Karşılaştırma (Türkçe Karakter Uyumlu) ---
             if (typeof valA === 'string' && typeof valB === 'string') {
                 return direction === 'asc' 
                     ? valA.localeCompare(valB, 'tr', { sensitivity: 'base' }) 
