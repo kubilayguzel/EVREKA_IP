@@ -104,10 +104,11 @@ export class PortfolioDataManager {
             // Veriyi işlerken optimize edilmiş (Map kullanan) metodları kullanıyoruz
             this.allRecords = rawData.map(record => ({
                 ...record,
-                formattedApplicantName: this._resolveApplicantName(record), // Artık çok hızlı
+                formattedApplicantName: this._resolveApplicantName(record),
                 formattedApplicationDate: this._fmtDate(record.applicationDate),
                 formattedNiceClasses: this._formatNiceClasses(record),
-                statusText: this._resolveStatusText(record) // Artık çok hızlı
+                statusText: this._resolveStatusText(record),
+                formattedCountryName: this.getCountryName(record.country) // ÜLKEYİ EKLE
             }));
             
             this._buildWipoGroups();
@@ -123,7 +124,8 @@ export class PortfolioDataManager {
                     formattedApplicantName: this._resolveApplicantName(record),
                     formattedApplicationDate: this._fmtDate(record.applicationDate),
                     formattedNiceClasses: this._formatNiceClasses(record),
-                    statusText: this._resolveStatusText(record)
+                    statusText: this._resolveStatusText(record),
+                    formattedCountryName: this.getCountryName(record.country) // ÜLKEYİ EKLE
                 }));
                 this._buildWipoGroups();
                 onDataReceived(this.allRecords);
