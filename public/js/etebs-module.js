@@ -32,10 +32,10 @@ export class ETEBSManager {
     }
 
     async init() {
-        // 1. Badge'i güncelle (Sayfa açılışında)
+        // 1. Badge'i güncelle
         await this.updateMainBadgeCount();
         
-        // 2. Token yükle (Varsa inputa doldur)
+        // 2. Token yükle
         this.loadSavedToken();
 
         // 3. Event Listener'ları kur
@@ -43,6 +43,24 @@ export class ETEBSManager {
 
         // 4. Upload modunu hazırla
         this.setupUploadMode();
+    }
+
+    // ============================================================
+    // 0. GERİYE DÖNÜK UYUMLULUK (HTML ile Uyum)
+    // ============================================================
+    
+    /**
+     * HTML dosyasındaki eski çağrıları karşılamak için köprü fonksiyon.
+     * fetchNotifications(true, false) şeklindeki çağrıları yeni yapıya yönlendirir.
+     */
+    async fetchNotifications(isSilent = false, triggerServerSync = false) {
+        // Eğer sunucu tetiklenmesi isteniyorsa (eski butona basıldıysa)
+        if (triggerServerSync) {
+            await this.triggerServerSync();
+        }
+        
+        // Yeni veri yükleme fonksiyonunu çağır (isSilent -> isBackgroundRefresh)
+        await this.loadAndProcessDocuments(isSilent);
     }
 
     // ============================================================
@@ -90,11 +108,9 @@ export class ETEBSManager {
 
         if (!token || !user) return;
 
-        // Token'ı kaydet
         localStorage.setItem('etebs_token', token);
 
         try {
-            // Ortam Belirleme
             const hostname = window.location.hostname;
             const isTestEnv = (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("ip-manager-production-aab4b"));
             const projectId = isTestEnv ? "ip-manager-production-aab4b" : "ipgate-31bd2";
@@ -103,7 +119,6 @@ export class ETEBSManager {
 
             console.log(`🚀 Sync Başlatılıyor... (${isTestEnv ? 'TEST' : 'PROD'})`);
 
-            // Fire-and-forget (Cevabı beklemeden devam et)
             fetch(functionUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -124,13 +139,8 @@ export class ETEBSManager {
     // ============================================================
 
     async handleFetchButton() {
-        // 1. Önce Sunucuyu Tetikle (Yeni evrak varsa çeksin)
         await this.triggerServerSync();
-
-        // 2. Hemen Mevcut Veriyi Göster
         await this.loadAndProcessDocuments();
-
-        // 3. (Opsiyonel) 2 saniye sonra tekrar çek (Sunucudan yeni gelenler düşmüş olabilir)
         setTimeout(() => this.loadAndProcessDocuments(true), 2500);
     }
 
@@ -143,17 +153,13 @@ export class ETEBSManager {
         }
 
         try {
-            // A. Portföy Kayıtlarını Getir (Eşleştirme Referansı)
+            // A. Portföy Kayıtlarını Getir
             const recordsResult = await ipRecordsService.getAllRecords({ source: 'server' });
             const portfolioRecords = recordsResult.success ? recordsResult.data : [];
 
             // B. Veritabanı Sorguları
             const colRef = collection(firebaseServices.db, 'unindexed_pdfs');
-            
-            // Bekleyenler (Hepsi)
             const qPending = query(colRef, where('status', '==', 'pending'));
-            
-            // İndekslenenler (Son 50)
             const qIndexed = query(colRef, where('status', '==', 'indexed'), orderBy('uploadedAt', 'desc'), limit(50));
 
             const [snapPending, snapIndexed] = await Promise.all([
@@ -170,8 +176,6 @@ export class ETEBSManager {
             snapPending.forEach(doc => {
                 const data = doc.data();
                 const docObj = this._normalizeDocData(doc.id, data);
-
-                // Eşleştirme Yap
                 this._processMatching(docObj, portfolioRecords);
             });
 
@@ -183,8 +187,6 @@ export class ETEBSManager {
 
             // F. Ekrana Bas
             this.renderAllTabs();
-            
-            // Badge'i tazele
             this.updateMainBadgeCount(); 
 
             if (!isBackgroundRefresh) {
@@ -200,7 +202,7 @@ export class ETEBSManager {
     }
 
     _processMatching(doc, portfolioRecords) {
-        // Arama Anahtarı Önceliği: Dosya No -> App No -> Extracted -> Evrak No
+        // Arama Anahtarı Önceliği
         const searchKey = doc.dosyaNo || doc.applicationNo || doc.extractedAppNumber || doc.evrakNo;
 
         if (searchKey && portfolioRecords.length > 0) {
@@ -245,20 +247,16 @@ export class ETEBSManager {
     // ============================================================
 
     renderAllTabs() {
-        // Tab Rozetleri
         this._updateTabBadge('matchedTabBadge', this.matchedDocs.length);
         this._updateTabBadge('unmatchedTabBadge', this.unmatchedDocs.length);
         this._updateTabBadge('indexedTabBadge', this.indexedDocs.length);
 
-        // Sıralama (Yeniden Eskiye)
         const sortFn = (a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0);
 
-        // Pagination Kurulumu
         this.setupPagination('matched', this.matchedDocs.sort(sortFn), 'matchedNotificationsList');
         this.setupPagination('unmatched', this.unmatchedDocs.sort(sortFn), 'unmatchedNotificationsList');
         this.setupPagination('indexed', this.indexedDocs.sort(sortFn), 'indexedNotificationsList');
 
-        // Otomatik Tab Geçişi
         this._autoSwitchTab();
     }
 
@@ -273,12 +271,9 @@ export class ETEBSManager {
 
         const currentTarget = activeBtn.getAttribute('data-target');
         
-        // Matched boşsa Unmatched'e geç
         if (currentTarget === 'matched-notifications-tab' && this.matchedDocs.length === 0 && this.unmatchedDocs.length > 0) {
             this.switchNotificationsTab('unmatched-notifications-tab');
-        } 
-        // Unmatched boşsa Matched'e geç
-        else if (currentTarget === 'unmatched-notifications-tab' && this.unmatchedDocs.length === 0 && this.matchedDocs.length > 0) {
+        } else if (currentTarget === 'unmatched-notifications-tab' && this.unmatchedDocs.length === 0 && this.matchedDocs.length > 0) {
             this.switchNotificationsTab('matched-notifications-tab');
         }
     }
@@ -286,10 +281,7 @@ export class ETEBSManager {
     setupPagination(type, dataList, containerId) {
         const paginationId = `${type}Pagination`;
         
-        // Pagination instance yönetimi
-        if (this.paginations[type]) {
-             // Gerekirse destroy edilebilir
-        }
+        if (this.paginations[type]) { /* Opsiyonel temizlik */ }
 
         this.paginations[type] = new Pagination({
             containerId: paginationId,
@@ -303,7 +295,6 @@ export class ETEBSManager {
         });
 
         this.paginations[type].update(dataList.length);
-        // İlk sayfa render
         this.renderListItems(containerId, dataList.slice(0, 10), type);
     }
 
@@ -320,7 +311,6 @@ export class ETEBSManager {
 
         container.innerHTML = items.map(item => this._createItemHTML(item, type)).join('');
 
-        // Buton Eventlerini Bağla
         container.querySelectorAll('.notification-action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this._handleItemAction(e, items));
         });
@@ -409,16 +399,14 @@ export class ETEBSManager {
     // ============================================================
 
     bindEvents() {
-        // "Listele" Butonu
         const fetchBtn = document.getElementById('fetchNotificationsBtn');
         if (fetchBtn) {
             fetchBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.handleFetchButton(); // Sync + Load
+                this.handleFetchButton();
             });
         }
 
-        // Tab Değişimi
         document.querySelectorAll('.notification-tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -426,7 +414,6 @@ export class ETEBSManager {
             });
         });
 
-        // Mod Değişimi (ETEBS / Upload)
         document.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -468,7 +455,6 @@ export class ETEBSManager {
 
         if (btn) {
             btn.addEventListener('click', () => input.click());
-            // Drag & Drop
             btn.addEventListener('dragover', (e) => { e.preventDefault(); btn.style.backgroundColor = '#f0f7ff'; });
             btn.addEventListener('dragleave', (e) => { e.preventDefault(); btn.style.backgroundColor = ''; });
             btn.addEventListener('drop', (e) => {
