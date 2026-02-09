@@ -11,6 +11,7 @@ class PortfolioController {
         this.dataManager = new PortfolioDataManager();
         this.renderer = new PortfolioRenderer('portfolioTableBody', this.dataManager);
         this.pagination = null;
+        this.ITEMS_PER_PAGE = 50; // EKLENEN SATIR
         
         this.state = {
             activeTab: 'trademark',
@@ -571,8 +572,11 @@ class PortfolioController {
         }
 
         // 3. Mevcut Sayfanın Verilerini Al
+        console.log('🔢 currentPage:', this.state.currentPage);
+        console.log('🔢 ITEMS_PER_PAGE:', this.ITEMS_PER_PAGE);
         const startIndex = (this.state.currentPage - 1) * this.ITEMS_PER_PAGE;
         const endIndex = startIndex + this.ITEMS_PER_PAGE;
+        console.log('🔢 startIndex:', startIndex, 'endIndex:', endIndex);
         const pageData = filtered.slice(startIndex, endIndex);
 
         console.log('📊 RENDER - pageData count:', pageData.length);
