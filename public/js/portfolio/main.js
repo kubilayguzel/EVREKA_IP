@@ -510,10 +510,16 @@ class PortfolioController {
      */
     async render() {
         this.renderer.showLoading(true);
-        this.renderer.clearTable();
+        
+        // Tabloyu temizle
+        if (typeof this.renderer.clearTable === 'function') {
+            this.renderer.clearTable();
+        } else {
+            const tbody = document.getElementById('portfolioTableBody');
+            if(tbody) tbody.innerHTML = '';
+        }
 
         // 1. Verileri Filtrele ve Sırala
-        // subTab (TÜRKPATENT/YURTDIŞI) parametresini de gönderiyoruz
         let filtered = this.dataManager.filterRecords(
             this.state.activeTab, 
             this.state.searchQuery, 
@@ -527,7 +533,11 @@ class PortfolioController {
         // 2. Sayfalama Hesapla
         const totalItems = filtered.length;
         const totalPages = Math.ceil(totalItems / this.ITEMS_PER_PAGE);
-        this.updatePaginationUI(totalItems, totalPages);
+        
+        // Eğer updatePaginationUI fonksiyonu tanımlıysa çağır
+        if (typeof this.updatePaginationUI === 'function') {
+            this.updatePaginationUI(totalItems, totalPages);
+        }
 
         if (totalItems === 0) {
             this.renderer.renderEmptyState();
@@ -543,35 +553,45 @@ class PortfolioController {
         const frag = document.createDocumentFragment();
 
         // 4. Satırları Oluştur
-        pageData.forEach(item => {
-            const isSelected = this.state.selectedRecords.has(String(item.id));
-            
-            // Parent Satırı Çiz (Mavi arka plan Renderer içinde halledilecek)
-            const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
-            frag.appendChild(tr);
+        pageData.forEach((item, index) => {
+            const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
-            // Eğer WIPO/ARIPO Parent ise ve akordeon yapısı gerekiyorsa CHILD'ları hazırla
-            if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
-                const irNo = item.wipoIR || item.aripoIR;
-                if (irNo) {
-                    const children = this.dataManager.getWipoChildren(irNo);
-                    
-                    if (children && children.length > 0) {
+            // --- TAB KONTROLLERİ ---
+            if (this.state.activeTab === 'objections') {
+                // İtirazlar Sekmesi
+                const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
+                if (item.isChild) tr.style.display = 'none';
+                frag.appendChild(tr);
+
+            } else if (this.state.activeTab === 'litigation') {
+                 // Davalar Sekmesi
+                 if (this.renderer.renderLitigationRow) {
+                    frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
+                 }
+
+            } else {
+                // Standart (Marka/Patent/Tasarım)
+                const isSelected = this.state.selectedRecords.has(String(item.id));
+                const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
+                frag.appendChild(tr);
+
+                // Child Kayıtlar (Parent WIPO/ARIPO ise)
+                if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
+                    const irNo = item.wipoIR || item.aripoIR;
+                    if(irNo) {
+                        const children = this.dataManager.getWipoChildren(irNo);
                         children.forEach(child => {
-                            // Child satırı çiz
                             const childIsSelected = this.state.selectedRecords.has(String(child.id));
                             const childTr = this.renderer.renderStandardRow(child, this.state.activeTab === 'trademark', childIsSelected);
                             
-                            // Child satırına özel ayarlar
                             childTr.classList.add('child-row');
                             childTr.dataset.parentId = irNo;
-                            childTr.style.display = 'none'; // Başlangıçta gizli
-                            childTr.style.backgroundColor = '#ffffff'; // RENK DÜZELTME: Child'lar BEYAZ
+                            childTr.style.display = 'none'; 
+                            childTr.style.backgroundColor = '#ffffff'; 
                             
-                            // Child satırında ok işareti (caret) olmamalı, temizle
                             const toggleCell = childTr.querySelector('.toggle-cell');
                             if(toggleCell) toggleCell.innerHTML = ''; 
-
+                            
                             frag.appendChild(childTr);
                         });
                     }
@@ -579,9 +599,15 @@ class PortfolioController {
             }
         });
 
-        document.querySelector('#portfolioTable tbody').appendChild(frag);
+        // --- HATA DÜZELTME BURADA ---
+        // document.querySelector('#portfolioTable tbody') YERİNE this.renderer.tbody KULLANIYORUZ
+        if (this.renderer.tbody) {
+            this.renderer.tbody.appendChild(frag);
+        } else {
+            console.error('HATA: Tablo gövdesi (tbody) bulunamadı. HTML ID kontrol ediniz.');
+        }
         
-        // Tooltip'leri etkinleştir (Bootstrap varsa)
+        // Tooltip'leri etkinleştir
         if(typeof $ !== 'undefined' && $.fn.tooltip) {
             $('[data-toggle="tooltip"]').tooltip();
         }
