@@ -508,7 +508,10 @@
                         }
                     }
 
-                    const rawJurisdictions = rowData.Jurisdictions || "";
+                    let rawJurisdictions = rowData.Jurisdictions || "";
+                    if (rawJurisdictions.includes("Benelux (Belgium, Netherlands, Luxembourg)")) {
+                        rawJurisdictions = rawJurisdictions.replace("Benelux (Belgium, Netherlands, Luxembourg)", "BX");
+                    }
                     const isWipo = rowData.Registry === "INT WIPO" && rawJurisdictions.includes(",");
                     const mappedStatus = mapStatus(rowData.Status);
                     const appDateStr = formatDateForDataEntry(rowData["App. date"]);
