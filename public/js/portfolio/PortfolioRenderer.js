@@ -1,5 +1,5 @@
 // public/js/portfolio/PortfolioRenderer.js
-import { STATUSES } from '../../utils.js'; // Utils'den durumları al
+import { STATUSES } from '../../utils.js';
 import '../simple-loading.js';
 
 export class PortfolioRenderer {
@@ -14,7 +14,10 @@ export class PortfolioRenderer {
         }
     }
 
-    clear() {
+    // --- TEMEL METODLAR ---
+
+    // DÜZELTME 1: Metod ismini main.js ile uyumlu hale getirdik (clear -> clearTable)
+    clearTable() {
         if (this.tbody) this.tbody.innerHTML = '';
     }
 
@@ -35,6 +38,21 @@ export class PortfolioRenderer {
         } else {
             if (this.simpleLoader) this.simpleLoader.hide();
             if (defaultSpinner) defaultSpinner.style.display = 'none';
+        }
+    }
+
+    // DÜZELTME 2: Eksik olan renderEmptyState metodunu ekledik
+    renderEmptyState() {
+        if (this.tbody) {
+            this.tbody.innerHTML = `
+                <tr>
+                    <td colspan="100%" class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="fas fa-search fa-3x mb-3"></i>
+                            <p>Kayıt bulunamadı.</p>
+                        </div>
+                    </td>
+                </tr>`;
         }
     }
 
@@ -71,19 +89,15 @@ export class PortfolioRenderer {
             filterTh.style.padding = '5px';
             if (col.filterable) {
                 const input = document.createElement('input');
-                // Tip belirleme (Varsayılan text)
                 input.type = col.inputType || 'text';
-                
                 input.className = 'form-control column-filter';
-                // STİL İYİLEŞTİRMELERİ:
                 input.style.width = '100%';
-                input.style.fontSize = '14px';      // Yazı biraz daha büyük
-                input.style.padding = '8px 12px';   // İç boşluk arttırıldı
-                input.style.borderRadius = '8px';   // Köşeler yumuşatıldı
+                input.style.fontSize = '14px';
+                input.style.padding = '8px 12px';
+                input.style.borderRadius = '8px';
                 input.style.border = '1px solid #ced4da';
-                input.style.height = '38px';        // Tıklama alanı büyütüldü
+                input.style.height = '38px';
 
-                // Sadece text ise placeholder ekle
                 if (input.type === 'text') {
                     input.placeholder = '🔍 Ara...';
                 }
@@ -97,26 +111,22 @@ export class PortfolioRenderer {
     }
 
     // --- STANDART ROW ---
-    // --- STANDART ROW ---
     renderStandardRow(record, isTrademarkTab, isSelected) {
         const tr = document.createElement('tr');
         tr.dataset.id = record.id;
         
         const isWipoParent = (record.origin === 'WIPO' || record.origin === 'ARIPO') && record.transactionHierarchy === 'parent';
         const isChild = record.transactionHierarchy === 'child'; 
-        const irNo = record.wipoIR || record.aripoIR; // WIPO veya ARIPO No
+        const irNo = record.wipoIR || record.aripoIR;
         
-        // DÜZELTME 2 & 3: Parent Renklendirme ve Grup ID Kontrolü
+        // Parent Renklendirme ve Grup ID Kontrolü
         if (isWipoParent) {
-            // Eğer IR numarası varsa grup başlığı yap
             if (irNo) {
                 tr.dataset.groupId = irNo;
                 tr.className = 'group-header';
             }
-            // Parent satırları AÇIK MAVİ olsun
             tr.style.backgroundColor = '#e3f2fd'; 
         } else if (isChild) {
-             // Child satırlar BEYAZ (veya varsayılan)
              tr.style.backgroundColor = '#ffffff';
         }
 
@@ -132,17 +142,15 @@ export class PortfolioRenderer {
             </div>
         `;
 
-        // DÜZELTME: Caret (Ok işareti) sadece IR Numarası varsa gösterilsin
         const caret = (isWipoParent && irNo) ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
 
-        // Güvenli Veri Erişimi
         const titleText = record.title || record.brandText || '-';
         const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-');
         const applicantText = record.formattedApplicantName || '-';
 
         let html = `
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
-            <td class="toggle-cell text-center">${caret}</td>
+            <td class="toggle-cell text-center" style="vertical-align: middle;">${caret}</td>
         `;
 
         if (!isTrademarkTab) {
@@ -174,27 +182,18 @@ export class PortfolioRenderer {
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
         
-        // Dava türüne göre arka plan rengi (Mevcut mantık)
         const suitTypeStr = String(row.suitType || '');
         if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#ffebee';
         else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff3e0';
         
-        // İşlem butonları
         const actions = `
             <div class="d-flex gap-1 justify-content-end">
                 <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
                 <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}" title="Düzenle"><i class="fas fa-edit"></i></button>
             </div>`;
             
-        // Durum Rozeti (utils.js entegrasyonu)
-        // Not: DataManager'da row.type = 'litigation' ataması yaptığınızdan emin olun.
         const statusBadge = this.getStatusBadge(row);
 
-        // HTML Yapısı:
-        // 1. Sıra No (index)
-        // 2-8. Standart Veriler
-        // 9. Durum (Status) - İşlemlerden hemen önce
-        // 10. İşlemler (Actions)
         tr.innerHTML = `
             <td><strong>${index}</strong></td>
             <td title="${row.title || ''}">${row.title || '-'}</td>
@@ -224,7 +223,6 @@ export class PortfolioRenderer {
         const caret = hasChildren ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
         const indentation = isChild ? 'style="padding-left: 30px; border-left: 3px solid #f39c12;"' : '';
 
-        // Child ise durum metni BOŞ olsun
         const statusDisplay = isChild ? '' : (row.statusText || '-');
 
         tr.innerHTML = `
@@ -257,18 +255,15 @@ export class PortfolioRenderer {
     getStatusBadge(record) {
         const rawStatus = record.status;
         let displayStatus = rawStatus || '-';
-        let color = 'secondary'; // Varsayılan renk (Gri)
+        let color = 'secondary';
         
-        // 1. Kayıt tipine göre utils.js'ten doğru listeyi bul (litigation, trademark vb.)
         if (record.type && STATUSES[record.type]) {
             const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
-            
             if (statusObj) {
-                displayStatus = statusObj.text; // Türkçe metni al
-                if (statusObj.color) color = statusObj.color; // Utils'deki rengi (danger, warning vb.) al
+                displayStatus = statusObj.text;
+                if (statusObj.color) color = statusObj.color;
             }
         } else {
-            // Tipi bilinmiyorsa veya listede yoksa genel arama yap (Fallback)
             for (const type in STATUSES) {
                 const found = STATUSES[type].find(s => s.value === rawStatus);
                 if (found) {
@@ -279,7 +274,6 @@ export class PortfolioRenderer {
             }
         }
 
-        // Eğer hala renk atanmadıysa eski manuel kontrolü yap (Geriye dönük uyumluluk için)
         if (color === 'secondary') {
              const s = String(rawStatus).toLowerCase();
              if (['registered', 'approved', 'active', 'tescilli', 'finalized', 'kesinleşti'].includes(s)) color = 'success';
