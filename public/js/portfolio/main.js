@@ -661,6 +661,68 @@ class PortfolioController {
         console.log('🏁 RENDER tamamlandı');
     }
 
+    /**
+ * Sekmeye göre kolon tanımlarını döndürür
+ */
+    getColumns(tab) {
+        if (tab === 'objections') {
+            return [
+                { key: 'toggle', width: '40px' },
+                { key: 'title', label: 'Başlık', sortable: true, width: '250px' },
+                { key: 'transactionType', label: 'İşlem Tipi', sortable: true, width: '150px' },
+                { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
+                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
+                { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, width: '110px' },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '80px' },
+                { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
+                { key: 'statusText', label: 'Durum', sortable: true, width: '190px' },
+                { key: 'documents', label: 'Evraklar', width: '80px' }
+            ];
+        } 
+        if (tab === 'litigation') {
+            return [
+                { key: 'index', label: '#', width: '50px' },
+                { key: 'title', label: 'Konu Varlık', sortable: true, width: '250px' },
+                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
+                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '120px' },
+                { key: 'court', label: 'Mahkeme', sortable: true, width: '180px' },
+                { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
+                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
+                { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '110px' },
+                { key: 'status', label: 'Durum', sortable: true, width: '120px' }, 
+                { key: 'actions', label: 'İşlemler', width: '140px' }
+            ];
+        }
+
+        const columns = [
+            { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'toggle', width: '40px' }
+        ];
+
+        if (tab !== 'trademark') {
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '130px' });
+        }
+
+        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px', filterable: true });
+
+        if (tab === 'trademark') {
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '140px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '130px' });
+        }
+
+        columns.push(
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
+            { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '140px', filterable: true, inputType: 'date' },
+            { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true, width: '200px' }, 
+            { key: 'formattedNiceClasses', label: 'Nice', sortable: true, width: '140px', filterable: true },
+            { key: 'actions', label: 'İşlemler', width: '280px' }
+        );
+
+        return columns;
+    }
+
     // Bu fonksiyonu PortfolioController sınıfının içine ekleyin
     updatePaginationUI(totalItems, totalPages) {
         const container = document.getElementById('paginationContainer');
