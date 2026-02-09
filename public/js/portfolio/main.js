@@ -73,6 +73,11 @@ class PortfolioController {
                 sessionStorage.removeItem('lastPageNumber'); // Tek kullanımlık olsun
             }
 
+            // Alt menüyü göster (Marka sekmesi aktifse)
+            const subMenu = document.getElementById('trademarkSubMenu');
+            if (subMenu && this.state.activeTab === 'trademark') {
+                subMenu.style.display = 'flex';
+            }
             // Şimdi tabloyu çizebiliriz
             this.render();
 
@@ -532,7 +537,7 @@ class PortfolioController {
      */
     async render() {
         this.renderer.showLoading(true);
-        this.renderer.clearTable();
+        this.renderer.clearTable(); // Tabloyu temizle
 
         // 1. Verileri Filtrele ve Sırala
         let filtered = this.dataManager.filterRecords(
@@ -565,9 +570,10 @@ class PortfolioController {
         const endIndex = startIndex + this.ITEMS_PER_PAGE;
         const pageData = filtered.slice(startIndex, endIndex);
 
+        // DocumentFragment oluştur
         const frag = document.createDocumentFragment();
 
-        // 4. Satırları Oluştur
+        // 4. Satırları Oluştur (DÖNGÜ BURADA)
         pageData.forEach((item, index) => {
             const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
@@ -607,20 +613,21 @@ class PortfolioController {
                     }
                 }
             }
-        });
+        }); 
 
-        // --- HATA DÜZELTME BURADA ---
-        // Eski Hatalı Kod: document.querySelector('#portfolioTable tbody').appendChild(frag);
-        // Yeni Doğru Kod:
+        // --- KRİTİK DÜZELTME BURASI ---
+        // Döngü bitti, şimdi oluşturduğumuz parçayı (frag) tabloya ekliyoruz.
+        // Bu kısım pageData.forEach bloğunun DIŞINDA olmalı.
+        
         if (this.renderer.tbody) {
             this.renderer.tbody.appendChild(frag);
         } else {
-            // Eğer hala bulunamazsa manuel olarak doğru ID ile dene
+            // Yedek plan: ID ile bulmaya çalış
             const fallbackBody = document.getElementById('portfolioTableBody');
             if (fallbackBody) {
                 fallbackBody.appendChild(frag);
             } else {
-                console.error('HATA: Tablo gövdesi (tbody) bulunamadı.');
+                console.error('HATA: Tablo gövdesi (tbody) bulunamadı, veriler eklenemiyor.');
             }
         }
         
