@@ -73,29 +73,11 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
             total: progressData.totalMarks || monitoredMarks.length,
             currentResults: progressData.currentResults || 0,
             status: progressData.status,
-            message: progressData.status === 'paused' ? 'Zaman aşımı önleniyor, işlem devam ettiriliyor...' : null
+            message:
+              progressData.status === 'queued' && progressData.queueReason === 'timeout_protection'
+                ? 'Zaman aşımı koruması: işlem otomatik olarak kuyruğa alındı ve devam ettirilecek...'
+                : null
           });
-        }
-
-        // --- YENİ: PAUSED DURUMU (OTO-DEVAM) ---
-        if (progressData.status === 'paused') {
-            console.warn(`⚠️ Backend mola verdi (Timeout Koruması). Kaldığı yerden (${progressData.nextIndex}. kayıt) tekrar tetikleniyor...`);
-            
-            // Backend'i tekrar çağır (Resume)
-            try {
-                await performSearchCallable({
-                    jobId: jobId, // AYNI JOB ID İLE DEVAM ET
-                    monitoredMarks, // Veriyi tekrar gönderiyoruz (Backend state tutmuyorsa)
-                    selectedBulletinId,
-                    startIndex: progressData.nextIndex, // Kaldığı yer
-                    async: true
-                });
-                console.log("🔄 Tetikleme başarılı, işlem devam ediyor...");
-            } catch (retryError) {
-                console.error("❌ Tekrar tetikleme başarısız:", retryError);
-                // Burada reject etmiyoruz, belki bir sonraki snapshot'ta düzelir veya manuel müdahale gerekir.
-            }
-            return; // Loop'tan çıkma, dinlemeye devam et
         }
       
         // Tamamlandı Durumu
