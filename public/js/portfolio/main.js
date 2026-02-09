@@ -567,10 +567,10 @@ class PortfolioController {
         // 2. Sayfalama Hesapla
         const totalItems = filtered.length;
         const totalPages = Math.ceil(totalItems / this.ITEMS_PER_PAGE);
-        
-        // Pagination arayüzünü güncelle
-        if (typeof this.updatePaginationUI === 'function') {
-            this.updatePaginationUI(totalItems, totalPages);
+
+        // Pagination'ı güncelle
+        if (this.pagination) {
+            this.pagination.update(totalItems);
         }
 
         if (totalItems === 0) {
