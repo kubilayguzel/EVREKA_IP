@@ -201,7 +201,7 @@ export class AccrualDataManager {
      * Gelişmiş Filtreleme ve Sıralama
      */
     filterAndSort(criteria, sort) {
-        // Parametrelerden değerleri al (main.js'den gelen yapı)
+        // main.js'den gelen yapı: criteria = { tab, filters }
         const { tab, filters } = criteria;
         
         // Veri yoksa boş dön
@@ -209,125 +209,129 @@ export class AccrualDataManager {
             return [];
         }
 
-        // Ana veri kaynağı (Gerekirse foreign/main ayrımı yapılabilir ama şimdilik hepsi)
+        // Veri kaynağını belirle
         let data = this.allAccruals;
 
-        // --- KÜMÜLATİF FİLTRELEME MANTIĞI ---
-
-        // 1. TARİH FİLTRESİ (Başlangıç ve Bitiş)
-        if (filters.startDate) {
-            const start = new Date(filters.startDate).getTime();
-            data = data.filter(item => {
-                const itemDate = item.createdAt ? new Date(item.createdAt).getTime() : 0;
-                return itemDate >= start;
-            });
-        }
-        if (filters.endDate) {
-            // Bitiş tarihinin gün sonunu (23:59:59) kapsamasını sağla
-            const end = new Date(filters.endDate);
-            end.setHours(23, 59, 59, 999);
-            const endTime = end.getTime();
-            
-            data = data.filter(item => {
-                const itemDate = item.createdAt ? new Date(item.createdAt).getTime() : 0;
-                return itemDate <= endTime;
-            });
+        // --- 1. SEKME (TAB) AYRIMI ---
+        if (tab === 'foreign') {
+            // YURT DIŞI TABI: Sadece "isForeignTransaction" alanı TRUE olanlar
+            data = data.filter(item => item.isForeignTransaction === true);
+        } else {
+            // ANA TAB: Tümü (veya isterseniz sadece yurt içi olanlar için alt satırı açabilirsiniz)
+            // data = data.filter(item => item.isForeignTransaction !== true); 
         }
 
-        // 2. DURUM (Status)
-        if (filters.status && filters.status !== 'all') {
-            if (tab === 'foreign') {
-                // Yurt dışı tabında foreignStatus'e bak (varsayılan 'unpaid')
-                data = data.filter(item => (item.foreignStatus || 'unpaid') === filters.status);
-            } else {
-                data = data.filter(item => item.status === filters.status);
+        // --- 2. KÜMÜLATİF FİLTRELER ---
+        if (filters) {
+            // A. TARİH FİLTRESİ
+            if (filters.startDate) {
+                const start = new Date(filters.startDate).getTime();
+                data = data.filter(item => {
+                    const itemDate = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+                    return itemDate >= start;
+                });
+            }
+            if (filters.endDate) {
+                const end = new Date(filters.endDate);
+                end.setHours(23, 59, 59, 999); // Günün sonuna kadar
+                const endTime = end.getTime();
+                data = data.filter(item => {
+                    const itemDate = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+                    return itemDate <= endTime;
+                });
+            }
+
+            // B. DURUM (Status)
+            if (filters.status && filters.status !== 'all') {
+                if (tab === 'foreign') {
+                    // Yurt dışı için foreignStatus kontrolü
+                    data = data.filter(item => (item.foreignStatus || 'unpaid') === filters.status);
+                } else {
+                    data = data.filter(item => item.status === filters.status);
+                }
+            }
+
+            // C. ALAN (Field - Marka, Patent vb.)
+            if (filters.field) {
+                const searchVal = filters.field.toLowerCase();
+                data = data.filter(item => {
+                    const task = this.allTasks[String(item.taskId)];
+                    const typeObj = task ? this.allTransactionTypes.find(t => t.id === task.taskType) : null;
+                    
+                    let itemField = '';
+                    if (typeObj && typeObj.ipType) {
+                        const ipTypeMap = { 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' };
+                        itemField = ipTypeMap[typeObj.ipType] || typeObj.ipType;
+                    }
+                    return itemField.toLowerCase().includes(searchVal);
+                });
+            }
+
+            // D. TARAF (Party)
+            if (filters.party) {
+                const searchVal = filters.party.toLowerCase();
+                data = data.filter(item => {
+                    const p1 = (item.paymentParty || '').toLowerCase();
+                    const p2 = (item.tpInvoiceParty?.name || '').toLowerCase();
+                    const p3 = (item.serviceInvoiceParty?.name || '').toLowerCase();
+                    return p1.includes(searchVal) || p2.includes(searchVal) || p3.includes(searchVal);
+                });
+            }
+
+            // E. İLGİLİ DOSYA NO
+            if (filters.fileNo) {
+                const searchVal = filters.fileNo.toLowerCase();
+                data = data.filter(item => {
+                    const task = this.allTasks[String(item.taskId)];
+                    if (task && task.relatedIpRecordId) {
+                        const ipRec = this.ipRecordsMap[task.relatedIpRecordId];
+                        const appNo = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '') : '';
+                        return appNo.toLowerCase().includes(searchVal);
+                    }
+                    return false;
+                });
+            }
+
+            // F. KONU
+            if (filters.subject) {
+                const searchVal = filters.subject.toLowerCase();
+                data = data.filter(item => {
+                    const task = this.allTasks[String(item.taskId)];
+                    if (task && task.relatedIpRecordId) {
+                        const ipRec = this.ipRecordsMap[task.relatedIpRecordId];
+                        const subject = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '') : '';
+                        return subject.toLowerCase().includes(searchVal);
+                    }
+                    return false;
+                });
+            }
+
+            // G. İLGİLİ İŞ
+            if (filters.task) {
+                const searchVal = filters.task.toLowerCase();
+                data = data.filter(item => {
+                    const task = this.allTasks[String(item.taskId)];
+                    if (task) {
+                        const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                        const taskName = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '');
+                        return taskName.toLowerCase().includes(searchVal);
+                    }
+                    return (item.taskTitle || '').toLowerCase().includes(searchVal);
+                });
             }
         }
 
-        // 3. ALAN (Field - Marka, Patent vb.)
-        if (filters.field) {
-            const searchVal = filters.field.toLowerCase();
-            data = data.filter(item => {
-                const task = this.allTasks[String(item.taskId)];
-                const typeObj = task ? this.allTransactionTypes.find(t => t.id === task.taskType) : null;
-                
-                let itemField = '';
-                if (typeObj && typeObj.ipType) {
-                    const ipTypeMap = { 'trademark': 'Marka', 'patent': 'Patent', 'design': 'Tasarım', 'suit': 'Dava' };
-                    itemField = ipTypeMap[typeObj.ipType] || typeObj.ipType;
-                }
-                return itemField.toLowerCase().includes(searchVal);
-            });
-        }
-
-        // 4. TARAF (Party)
-        if (filters.party) {
-            const searchVal = filters.party.toLowerCase();
-            data = data.filter(item => {
-                // Hem TPE hem Hizmet faturasındaki taraflara bak
-                const p1 = (item.paymentParty || '').toLowerCase();
-                const p2 = (item.tpInvoiceParty?.name || '').toLowerCase();
-                const p3 = (item.serviceInvoiceParty?.name || '').toLowerCase();
-                return p1.includes(searchVal) || p2.includes(searchVal) || p3.includes(searchVal);
-            });
-        }
-
-        // 5. İLGİLİ DOSYA NO (File No)
-        if (filters.fileNo) {
-            const searchVal = filters.fileNo.toLowerCase();
-            data = data.filter(item => {
-                const task = this.allTasks[String(item.taskId)];
-                if (task && task.relatedIpRecordId) {
-                    const ipRec = this.ipRecordsMap[task.relatedIpRecordId]; // Map'ten hızlı çekim
-                    const appNo = ipRec ? (ipRec.applicationNumber || ipRec.applicationNo || '') : '';
-                    return appNo.toLowerCase().includes(searchVal);
-                }
-                return false;
-            });
-        }
-
-        // 6. KONU (Subject - Marka Adı vb.)
-        if (filters.subject) {
-            const searchVal = filters.subject.toLowerCase();
-            data = data.filter(item => {
-                const task = this.allTasks[String(item.taskId)];
-                if (task && task.relatedIpRecordId) {
-                    const ipRec = this.ipRecordsMap[task.relatedIpRecordId];
-                    const subject = ipRec ? (ipRec.markName || ipRec.title || ipRec.name || '') : '';
-                    return subject.toLowerCase().includes(searchVal);
-                }
-                return false;
-            });
-        }
-
-        // 7. İLGİLİ İŞ (Task)
-        if (filters.task) {
-            const searchVal = filters.task.toLowerCase();
-            data = data.filter(item => {
-                const task = this.allTasks[String(item.taskId)];
-                if (task) {
-                    const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-                    const taskName = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '');
-                    return taskName.toLowerCase().includes(searchVal);
-                }
-                return (item.taskTitle || '').toLowerCase().includes(searchVal);
-            });
-        }
-
-        // --- SIRALAMA ---
+        // --- 3. SIRALAMA ---
         if (sort && sort.column) {
             data.sort((a, b) => {
                 let valA = a[sort.column];
                 let valB = b[sort.column];
 
-                // Özel Kolonlar için Değer Atama
                 if (sort.column === 'taskTitle') {
                     valA = a.taskTitle || ''; valB = b.taskTitle || '';
                 } 
                 else if (sort.column === 'subject') {
-                    // Bu sıralama DataManager'da önbelleklenmediği için burada anlık çekmek maliyetli olabilir
-                    // Basit string karşılaştırması yapıyoruz, gelişmiş sıralama için map kullanılabilir.
-                    valA = String(valA || ''); valB = String(valB || '');
+                     valA = String(valA || ''); valB = String(valB || '');
                 }
 
                 if (valA < valB) return sort.direction === 'asc' ? -1 : 1;
@@ -336,9 +340,6 @@ export class AccrualDataManager {
             });
         }
 
-        // --- EXCEL HELPER ---
-        // (Bu metodun sınıf içinde tanımlı olduğundan emin olun, yoksa ayrıca eklenmeli)
-        this.lastFilteredData = data; // Export için son filtreli veriyi sakla
         return data;
     }
 
