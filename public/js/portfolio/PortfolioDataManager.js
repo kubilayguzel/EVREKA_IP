@@ -480,15 +480,42 @@ export class PortfolioDataManager {
     }
 
     // --- FILTERS ---
-    filterRecords(typeFilter, searchTerm, columnFilters = {}) {
+    filterRecords(typeFilter, searchTerm, columnFilters = {}, subTab = null) {
         let sourceData = [];
-        if (typeFilter === 'litigation') sourceData = this.litigationRows;
-        else if (typeFilter === 'objections') sourceData = this.objectionRows;
-        else {
+
+        if (typeFilter === 'litigation') {
+            sourceData = this.litigationRows;
+        } else if (typeFilter === 'objections') {
+            sourceData = this.objectionRows;
+        } else {
+            // ANA LİSTE FİLTRESİ
             sourceData = this.allRecords.filter(r => {
+                // 1. Temel Kontroller (Child kayıtları ve 3. şahıs kayıtlarını gizle)
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
-                if (typeFilter === 'all') return r.recordOwnerType !== 'third_party';
-                if (typeFilter === 'trademark') return r.type === 'trademark' && r.recordOwnerType !== 'third_party';
+                
+                // 2. Sekme Kontrolü
+                if (typeFilter === 'all') {
+                    return r.recordOwnerType !== 'third_party';
+                }
+                
+                // 3. MARKA SEKMESİ ÖZEL FİLTRESİ (TÜRKPATENT vs YURTDIŞI)
+                if (typeFilter === 'trademark') {
+                    if (r.type !== 'trademark' || r.recordOwnerType === 'third_party') return false;
+
+                    // YENİ: Alt Sekme (SubTab) Kontrolü
+                    if (subTab === 'turkpatent') {
+                        // Menşei TÜRKPATENT olanlar VEYA (Boşsa ve TR ise)
+                        return r.origin === 'TÜRKPATENT' || r.origin === 'TR' || (!r.origin && r.country === 'TR');
+                    } 
+                    if (subTab === 'foreign') {
+                        // Menşei TÜRKPATENT OLMAYANLAR
+                        const isTP = r.origin === 'TÜRKPATENT' || r.origin === 'TR' || (!r.origin && r.country === 'TR');
+                        return !isTP;
+                    }
+                    return true;
+                }
+
+                // Diğer türler (Patent, Tasarım vb.)
                 return r.type === typeFilter;
             });
         }
