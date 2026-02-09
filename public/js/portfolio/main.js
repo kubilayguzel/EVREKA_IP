@@ -589,6 +589,65 @@ class PortfolioController {
         this.renderer.showLoading(false);
     }
 
+    // Bu fonksiyonu PortfolioController sınıfının içine ekleyin
+    updatePaginationUI(totalItems, totalPages) {
+        const container = document.getElementById('paginationContainer');
+        if (!container) return;
+
+        // 1. Sayfalama HTML'ini Oluştur
+        // Not: Butonlara 'prevPage' ve 'nextPage' ID'lerini veriyoruz
+        const prevDisabled = this.state.currentPage <= 1 ? 'disabled' : '';
+        const nextDisabled = this.state.currentPage >= totalPages ? 'disabled' : '';
+
+        let html = `
+            <nav aria-label="Sayfalama">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item ${prevDisabled}">
+                        <button class="page-link" id="prevPage" ${prevDisabled}>&laquo; Önceki</button>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link" style="background-color: #f8f9fa; color: #333;">
+                            Sayfa ${this.state.currentPage} / ${totalPages} (Top. ${totalItems})
+                        </span>
+                    </li>
+                    <li class="page-item ${nextDisabled}">
+                        <button class="page-link" id="nextPage" ${nextDisabled}>Sonraki &raquo;</button>
+                    </li>
+                </ul>
+            </nav>
+        `;
+        
+        container.innerHTML = html;
+
+        // 2. Tıklama Olaylarını Tanımla (Event Listeners)
+        // Butonlar yeni oluşturulduğu için olayları burada bağlamalıyız
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
+
+        if (prevBtn) {
+            prevBtn.onclick = (e) => {
+                e.preventDefault();
+                if (this.state.currentPage > 1) {
+                    this.state.currentPage--;
+                    this.render(); // Tabloyu yenile
+                    // Sayfanın en üstüne veya tablo başına kaydır
+                    document.querySelector('.portfolio-table-container')?.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+        }
+
+        if (nextBtn) {
+            nextBtn.onclick = (e) => {
+                e.preventDefault();
+                if (this.state.currentPage < totalPages) {
+                    this.state.currentPage++;
+                    this.render(); // Tabloyu yenile
+                    document.querySelector('.portfolio-table-container')?.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+        }
+    }
+
     /**
      * Excel'e Aktar (Seçili veya Tümü)
      */
