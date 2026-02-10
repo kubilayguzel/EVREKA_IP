@@ -365,140 +365,97 @@ const refreshTriggeredStatus = async (bulletinNo) => {
 
 // --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
 const renderMonitoringList = async () => {
-    const tbody = document.getElementById('monitoringListBody');
-    
-    // Veri yoksa hemen göster
+    const container = document.getElementById('monitoringAccordion');
+    if (!container) return;
+
+    // Veri yoksa
     if (!filteredMonitoringTrademarks.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
+        container.innerHTML = '<div class="alert alert-warning text-center">İzlenen marka bulunamadı.</div>';
         return;
     }
 
-    // --- OPTİMİZASYON 1: Cache Kontrolü ---
-    // Eğer veriyi daha önce grupladıysak ve filtre değişmediyse, tekrar hesaplama!
+    // 1. Gruplama (Eğer cache yoksa yap)
     if (!cachedGroupedData) {
-        // Yükleniyor mesajı göster (İlk hesaplama biraz sürebilir)
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Veriler işleniyor...</td></tr>';
-        
-        // --- OPTİMİZASYON 2: Paralel İşleme (Promise.all) ---
-        // for döngüsü yerine map kullanarak tüm işlemleri aynı anda başlatıyoruz
-        const processPromises = filteredMonitoringTrademarks.map(async (tm) => {
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-            const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-            const nices = _uniqNice(ip || tm);
-            
-            return {
-                tm,
-                ip,
-                ownerInfo,
-                nices
-            };
-        });
-
-        // Tüm verilerin hazırlanmasını bekle (Paralel olduğu için çok daha hızlı biter)
-        const processedItems = await Promise.all(processPromises);
-
-        // Şimdi gruplama yap (Senkron işlem, çok hızlıdır)
         const grouped = {};
-        for (const item of processedItems) {
-            const { tm, ip, ownerInfo, nices } = item;
-            const ownerKey = ownerInfo.key;
+        
+        // Hızlı Gruplama (Sadece yerel veriyi kullan, DB'ye gitme)
+        filteredMonitoringTrademarks.forEach(tm => {
+            // Sahip ismini bulmaya çalış
+            let ownerName = tm.ownerName || tm.owner || 'Diğer / Belirsiz';
+            
+            // Eğer owners array ise stringe çevir
+            if (Array.isArray(tm.owners)) {
+                ownerName = tm.owners.map(o => o.name || o).join(', ');
+            } else if (Array.isArray(tm.applicants)) {
+                ownerName = tm.applicants.map(a => a.name || a).join(', ');
+            }
 
+            const ownerKey = ownerName.trim() || 'Bilinmeyen Sahip';
+            
             if (!grouped[ownerKey]) {
                 grouped[ownerKey] = {
-                    ownerName: ownerInfo.name,
-                    ownerId: ownerInfo.id,
-                    trademarks: [],
-                    allNiceClasses: new Set()
+                    ownerName: ownerKey,
+                    ownerId: tm.ipRecordId || tm.id, // Geçici ID
+                    trademarks: []
                 };
             }
-            
-            // Nice sınıflarını ekle
-            if(nices) nices.split(', ').forEach(n => grouped[ownerKey].allNiceClasses.add(n));
-            
-            // Markayı gruba ekle
-            grouped[ownerKey].trademarks.push({ tm, ip, ownerInfo });
-        }
-
-        // Cache'e kaydet
+            grouped[ownerKey].trademarks.push(tm);
+        });
         cachedGroupedData = grouped;
     }
 
-    // --- SIRALAMA VE SAYFALAMA ---
-    // Artık elimizde hazır veri var, sadece sayfalamayı yapıyoruz.
-    const groupedByOwner = cachedGroupedData;
-    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
-        groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
-    );
-
-    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
+    // 2. Sayfalama ve Render
+    const sortedOwnerKeys = Object.keys(cachedGroupedData).sort((a, b) => a.localeCompare(b, 'tr'));
+    
+    if (monitoringPagination) monitoringPagination.update(sortedOwnerKeys.length);
+    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 10;
     const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedOwnerKeys = sortedOwnerKeys.slice(startIndex, endIndex);
+    
+    const paginatedKeys = sortedOwnerKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    let allRowsHtml = [];
+    let htmlContent = '';
 
-    // Sadece ekranda görülecek 5 kişi için döngüye gir
-    for (const ownerKey of paginatedOwnerKeys) {
-        const group = groupedByOwner[ownerKey];
-        const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
+    paginatedKeys.forEach((key, index) => {
+        const group = cachedGroupedData[key];
+        const collapseId = `collapseOwner_${index}`;
+        const headerId = `headingOwner_${index}`;
+        
         const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
-        const statusText = isTriggered ? 'Evet' : 'Hazır';
-        const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
+        const badgeHtml = isTriggered 
+            ? `<span class="badge badge-success ml-2">İşlem Yapıldı</span>` 
+            : `<span class="badge badge-secondary ml-2">Hazır</span>`;
 
-        // 1. BAŞLIK SATIRI
-        const headerRow = `
-        <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
-            <td><i class="fas fa-chevron-down toggle-icon"></i></td>
-            <td>${group.ownerName}</td>
-            <td>${group.trademarks.length}</td>
-            <td><span class="task-triggered-status trigger-status-badge ${statusClass}" data-owner-id="${group.ownerId}">${statusText}</span></td>
-            <td><span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" data-owner-id="${group.ownerId}">${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}</span></td>
-            <td>
-                <div class="action-btn-group">
-                    <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor + Bildir"><i class="fas fa-paper-plane"></i></button>
-                    <button class="action-btn btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor İndir"><i class="fas fa-file-pdf"></i></button>
+        htmlContent += `
+            <div class="card mb-2 border shadow-sm">
+                <div class="card-header bg-white p-0" id="${headerId}">
+                    <h2 class="mb-0">
+                        <button class="btn btn-block text-left d-flex justify-content-between align-items-center p-3" type="button" data-toggle="collapse" data-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-folder text-primary mr-3" style="font-size: 1.2rem;"></i>
+                                <span class="font-weight-bold text-dark" style="font-size: 1rem;">${group.ownerName}</span>
+                                <span class="badge badge-light border ml-2">${group.trademarks.length} Marka</span>
+                                ${badgeHtml}
+                            </div>
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                    </h2>
                 </div>
-            </td>
-        </tr>`;
-        allRowsHtml.push(headerRow);
 
-        // 2. İÇERİK SATIRI (Lazy Load Placeholder)
-        // Veriyi data attribute'a eklemiyoruz, groupedByOwner üzerinden ID ile erişeceğiz.
-        const contentRow = `
-            <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="6">
-                    <div class="nested-content-container" data-loaded="false" data-owner-key="${ownerKey}">
-                        <div class="p-3 text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>
+                <div id="${collapseId}" class="collapse" aria-labelledby="${headerId}" data-parent="#monitoringAccordion">
+                    <div class="card-body p-0">
+                        <div class="lazy-load-placeholder text-center p-4" data-owner-key="${key}">
+                            <i class="fas fa-spinner fa-spin text-muted"></i> Markalar yükleniyor...
+                        </div>
                     </div>
-                </td>
-            </tr>`;
-        allRowsHtml.push(contentRow);
-    }
-    
-    tbody.innerHTML = allRowsHtml.join('');
+                </div>
+            </div>
+        `;
+    });
 
-    attachGenerateReportListener();
-    attachTrademarkClickListener();
-    
-    // Cachelenmiş veriyi lazy load fonksiyonuna gönder
-    attachLazyLoadListeners(groupedByOwner);
+    container.innerHTML = htmlContent;
 
-    // Badge güncellemeleri
-    setTimeout(() => {
-        document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
-            const btn = row.querySelector('.generate-report-and-notify-btn');
-            if (!btn) return;
-            const ownerId = btn.dataset.ownerId;
-            const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
-            if (badge) {
-                const hasTriggered = taskTriggeredStatus.get(ownerId) === 'Evet';
-                badge.textContent = hasTriggered ? 'Evet' : 'Hazır';
-                badge.classList.remove('trigger-yes', 'trigger-no', 'trigger-ready');
-                badge.classList.add(hasTriggered ? 'trigger-yes' : 'trigger-ready');
-            }
-        });
-    }, 50);
+    // Rapor butonları için event listener'ları buraya ekleyebilirsiniz (Gerekirse)
+    attachAccordionEvents();
 };
 
 // --- YENİ HELPER FONKSİYON ---
@@ -816,41 +773,32 @@ const applyMonitoringListFilters = async () => {
 };
 
 const loadInitialData = async () => {
-    await loadSharedLayout({
-        activeMenuLink: 'trademark-similarity-search.html'
-    });
+    await loadSharedLayout({ activeMenuLink: 'trademark-similarity-search.html' });
+    
+    // Kişileri çek (Cache'li servisten)
     const personsResult = await personService.getPersons();
     if (personsResult.success) allPersons = personsResult.data;
+    
     await loadBulletinOptions();
+
+    // Sadece ana listeyi çek, detayları (ipRecord) burada ÇEKME! (Hız için kritik)
     const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
-    monitoringTrademarks = await Promise.all(snapshot.docs.map(async (docSnap) => {
-        const tmData = {
-            id: docSnap.id,
-            ...docSnap.data()
-        };
-        if (tmData.ipRecordId || tmData.sourceRecordId) {
-            try {
-                const ipDoc = await getDoc(doc(db, 'ipRecords', tmData.ipRecordId || tmData.sourceRecordId));
-                if (ipDoc.exists()) {
-                    tmData.ipRecord = ipDoc.data();
-                    tmData.goodsAndServicesByClass = ipDoc.data().goodsAndServicesByClass || [];
-                }
-            } catch (e) {}
-        }
-        return tmData;
+    monitoringTrademarks = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
     }));
+
     filteredMonitoringTrademarks = [...monitoringTrademarks];
+    
     initializeMonitoringPagination();
-    renderMonitoringList();
+    renderMonitoringList(); // Yeni render fonksiyonu çağrılacak
     updateMonitoringCount();
-    monitoringPagination.update(filteredMonitoringTrademarks.length);
+    
+    // Varsa bülten tetikleme durumunu kontrol et
     const bs = document.getElementById('bulletinSelect');
     if (bs?.value) {
         const bNo = String(bs.value).split('_')[0];
-        if (bNo) {
-            await refreshTriggeredStatus(bNo);
-            renderMonitoringList();
-        }
+        if (bNo) refreshTriggeredStatus(bNo);
     }
 };
 
@@ -1965,6 +1913,103 @@ function populateList(listElement, items, permanentItems = []) {
         listElement.appendChild(emptyItem);
     }
 }
+
+const attachAccordionEvents = () => {
+    // Bootstrap Collapse olayını dinle
+    $('#monitoringAccordion').on('show.bs.collapse', function (e) {
+        const collapseElement = e.target;
+        const placeholder = collapseElement.querySelector('.lazy-load-placeholder');
+        
+        // Eğer placeholder hala varsa, veri yüklenmemiş demektir.
+        if (placeholder) {
+            const ownerKey = placeholder.dataset.ownerKey;
+            loadGroupDetails(ownerKey, collapseElement.querySelector('.card-body'));
+        }
+    });
+};
+
+const loadGroupDetails = async (ownerKey, container) => {
+    const group = cachedGroupedData[ownerKey];
+    if (!group) return;
+
+    try {
+        // Detaylı tabloyu oluştur
+        let tableHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th style="width: 60px;">Görsel</th>
+                            <th>Marka Adı</th>
+                            <th>Başvuru No</th>
+                            <th>Nice</th>
+                            <th>Tarih</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        // Her bir markayı dön ve gerekirse IP verisini çek
+        // Not: Burada Promise.all ile paralel çekim yaparak hızlandırıyoruz
+        const rowPromises = group.trademarks.map(async (tm) => {
+            // IP Kaydını Çek (Cache mekanizması _getIp içinde var)
+            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+            
+            const name = tm.title || tm.markName || ip?.title || '-';
+            const appNo = tm.applicationNumber || tm.applicationNo || ip?.applicationNumber || '-';
+            const nice = _uniqNice(ip || tm);
+            const date = _pickAppDate(ip, tm);
+            
+            // Görsel URL
+            let imgUrl = _pickImg(ip, tm);
+            let imgTag = '<div class="tm-placeholder sm">-</div>';
+            
+            if (imgUrl) {
+                // Storage URL kontrolü
+                if (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:')) {
+                    try {
+                        imgUrl = await getDownloadURL(ref(getStorage(), imgUrl));
+                    } catch (e) { imgUrl = null; }
+                }
+                if (imgUrl) imgTag = `<img src="${imgUrl}" class="trademark-image-thumbnail" style="width:40px; height:40px; object-fit:contain;">`;
+            }
+
+            return `
+                <tr>
+                    <td>${imgTag}</td>
+                    <td><strong>${name}</strong></td>
+                    <td>${appNo}</td>
+                    <td><small>${nice}</small></td>
+                    <td><small>${date}</small></td>
+                </tr>
+            `;
+        });
+
+        const rows = await Promise.all(rowPromises);
+        tableHtml += rows.join('');
+        tableHtml += `</tbody></table></div>`;
+        
+        // İçeriği güncelle (Butonları da ekleyebilirsiniz)
+        container.innerHTML = `
+            <div class="p-2 text-right bg-light border-bottom">
+               <button class="btn btn-sm btn-outline-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}">
+                   <i class="fas fa-file-pdf"></i> Rapor İndir
+               </button>
+            </div>
+            ${tableHtml}
+        `;
+        
+        // Buton dinleyicilerini yeniden bağla
+        container.querySelectorAll('.generate-report-btn').forEach(btn => {
+            btn.addEventListener('click', handleOwnerReportGeneration);
+        });
+
+    } catch (error) {
+        console.error("Detay yükleme hatası:", error);
+        container.innerHTML = '<div class="text-danger p-3">Veriler yüklenirken hata oluştu.</div>';
+    }
+};
+
 window.queryApplicationNumberWithExtension = (applicationNo) => {
     const appNo = (applicationNo || '').toString().trim();
     if (!appNo) {
