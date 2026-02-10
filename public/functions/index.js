@@ -4951,18 +4951,23 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   
   // Sonuçları biriktirip toplu yazmak için tampon
   let pendingResults = [];
-  const WRITE_BATCH_SIZE = 500; // 500 sonuçta bir DB'ye yaz
+  const WRITE_BATCH_SIZE = 100; // 100 sonuçta bir DB'ye yaz
 
   try {
-    // 1. Durum Bildirimi
     if (startIndex === 0) {
         await workerProgressRef.set({ 
             status: 'processing', 
             progress: 0, 
-            processed: 0, // Burada processed = Taranan Bülten Satır Sayısı
-            total: 0,     // Toplam satır sayısını başta bilmiyoruz, akışta güncellenecek
+            processed: 0,
+            total: 0,
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        }, { merge: true }).catch(err => {
+            console.error(`❌ Worker ${workerId} başlangıç yazma hatası:`, err);
+            throw err; // İlk yazma başarısızsa durdur
+        });
+        
+        // ✅ İlk yazmayı doğrula
+        console.log(`✅ Worker ${workerId} Firestore'a başarıyla yazıldı`);
     } else {
         await workerProgressRef.update({ status: 'processing_continued' });
         console.log(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
@@ -5095,7 +5100,15 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 batchWrite.set(newDocRef, res);
             });
             
-            await batchWrite.commit();
+            // ✅ Timeout ayarı ekle
+              await Promise.race([
+                  batchWrite.commit(),
+                  new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Batch commit timeout')), 30000) // 30 saniye
+                  )
+              ]);
+              
+              console.log(`✅ Worker ${workerId}: ${pendingResults.length} sonuç kaydedildi`);
             await mainJobRef.update({ currentResults: admin.firestore.FieldValue.increment(pendingResults.length) }).catch(()=>{});
             
             pendingResults = []; // Tamponu boşalt
