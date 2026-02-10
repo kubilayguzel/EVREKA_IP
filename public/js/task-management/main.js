@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-async loadAllData() {
+	async loadAllData() {
   let loader = null;
   if (window.showSimpleLoading) {
     loader = window.showSimpleLoading('Veriler Yükleniyor', 'Lütfen bekleyiniz...');
@@ -109,43 +109,47 @@ async loadAllData() {
     if (oldLoader) oldLoader.style.display = 'block';
   }
 
-  try {
-    // Hepsini paralel çek (tek seferde)
-    const [
-      tasksResult,
-      ipRecordsResult,
-      personsResult,
-      usersResult,
-      accrualsResult,
-      transactionTypesResult
-    ] = await Promise.all([
-      taskService.getAllTasks(),
+	  try {
+	    // 1) Önce işleri (tasks) + küçük sözlükleri paralel çek.
+	    //    Not: ipRecords koleksiyonu büyük olabildiği için tümünü çekmek yerine
+	    //    yalnızca görevlerin kullandığı kayıtları ID bazlı getiriyoruz.
+	    const [
+	      tasksResult,
+	      personsResult,
+	      usersResult,
+	      accrualsResult,
+	      transactionTypesResult
+	    ] = await Promise.all([
+	      taskService.getAllTasks(),
+	      personService.getPersons(),
+	      taskService.getAllUsers(),
+	      accrualService.getAccruals(),
+	      transactionTypeService.getTransactionTypes()
+	    ]);
 
-      // ✅ ÖNEMLİ: ipRecords tek seferde SERVER’dan çek (cache eksikliği → N/A sorunu biter)
-      (async () => {
-        try {
-          // destekliyorsa:
-          return await ipRecordsService.getRecords({ source: 'server' });
-        } catch (e) {
-          // desteklemiyorsa:
-          return await ipRecordsService.getRecords();
-        }
-      })(),
-
-      personService.getPersons(),
-      taskService.getAllUsers(),
-      accrualService.getAccruals(),
-      transactionTypeService.getTransactionTypes()
-    ]);
-
-    this.allTasks = tasksResult.success ? tasksResult.data : [];
-    this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
+	    this.allTasks = tasksResult.success ? tasksResult.data : [];
     this.allPersons = personsResult.success ? personsResult.data : [];
     this.allUsers = usersResult.success ? usersResult.data : [];
     this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
     this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-    // Map oluştur (String normalize önemli)
+	    // 2) Görevlerin işaret ettiği ipRecord'ları ID bazlı çek.
+	    //    getRecordsByIds zaten cache-first + eksik/stale olanları server'dan tamamlama mantığı içeriyor.
+	    const relatedIds = [...new Set(
+	      (this.allTasks || [])
+	        .map(t => t.relatedIpRecordId)
+	        .filter(Boolean)
+	        .map(id => String(id).trim())
+	    )];
+	
+	    let ipRecords = [];
+	    if (relatedIds.length) {
+	      const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
+	      ipRecords = ipRes.success ? ipRes.data : [];
+	    }
+	    this.allIpRecords = ipRecords;
+
+	    // Map oluştur (String normalize önemli)
     this.buildMaps();
 
     this.initForms();
@@ -172,19 +176,24 @@ async loadAllData() {
             // IP Kayıtlarını Haritala
             this.ipRecordsMap.clear();
             this.allIpRecords.forEach(r => {
-                if(r.id) this.ipRecordsMap.set(r.id, r);
+				// ID bazen number/string karışık veya boşluklu gelebiliyor.
+				// Map anahtarını normalize edersek Map.get() asla "kaçırmaz".
+				const key = r?.id ? String(r.id).trim() : null;
+				if (key) this.ipRecordsMap.set(key, r);
             });
 
             // Kullanıcıları Haritala
-            this.usersMap.clear();
+			this.usersMap.clear();
             this.allUsers.forEach(u => {
-                if(u.id) this.usersMap.set(u.id, u);
+				const key = u?.id ? String(u.id).trim() : null;
+				if (key) this.usersMap.set(key, u);
             });
 
             // İşlem Tiplerini Haritala
-            this.transactionTypesMap.clear();
+			this.transactionTypesMap.clear();
             this.allTransactionTypes.forEach(t => {
-                if(t.id) this.transactionTypesMap.set(t.id, t);
+				const key = t?.id ? String(t.id).trim() : null;
+				if (key) this.transactionTypesMap.set(key, t);
             });
         }
 
@@ -222,16 +231,20 @@ async loadAllData() {
                 // --- OPTİMİZE EDİLMİŞ VERİ ÇEKME ---
                 // .find() yerine Map.get() kullanarak O(1) hızında erişim
                 
-                // 1. İlişkili Kayıt
-                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
-                const relatedRecord = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
+				// 1. İlişkili Kayıt
+				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : null;
+				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+				// Not: applicationNumber bazı kayıtlarda applicationNo olarak tutulabiliyor.
+				const relatedRecord = ipRecord
+					? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title || 'Kayıt Bulunamadı')
+					: (relatedId ? 'Yükleniyor…' : '—');
 
                 // 2. İşlem Tipi
-                const transactionTypeObj = this.transactionTypesMap.get(task.taskType);
+				const transactionTypeObj = this.transactionTypesMap.get(task?.taskType ? String(task.taskType).trim() : '');
                 const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
                 // 3. Atanan Kişi
-                const assignedUser = this.usersMap.get(task.assignedTo_uid);
+				const assignedUser = this.usersMap.get(task?.assignedTo_uid ? String(task.assignedTo_uid).trim() : '');
                 const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
                 // Tarih İşlemleri
@@ -587,10 +600,11 @@ async loadAllData() {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 modalTitle.textContent = `İş Detayı (${task.id})`;
 
-                // --- OPTİMİZASYON: Detay modalında da Map kullanımı ---
-                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
-                const transactionType = this.transactionTypesMap.get(task.taskType);
-                const assignedUser = this.usersMap.get(task.assignedTo_uid);
+				// --- OPTİMİZASYON: Detay modalında da Map kullanımı (ID normalize) ---
+				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+				const transactionType = this.transactionTypesMap.get(task?.taskType ? String(task.taskType).trim() : '');
+				const assignedUser = this.usersMap.get(task?.assignedTo_uid ? String(task.assignedTo_uid).trim() : '');
                 
                 // Accruals için Map yok (array içinde arama mecbur)
                 const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
