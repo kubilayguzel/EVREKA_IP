@@ -327,10 +327,8 @@ export class PortfolioDataManager {
         };
     }
 
-    /**
-     * İzleme modülü (Monitoring) için veriyi hazırlar.
-     * @param {Object} record - Seçili kayıt objesi
-     */
+    // public/js/portfolio/PortfolioDataManager.js dosyasındaki fonksiyonu bununla değiştirin:
+
     prepareMonitoringData(record) {
         if (!record) return null;
 
@@ -345,7 +343,7 @@ export class PortfolioDataManager {
             }
         }
 
-        // 2. Sınıf Mantığını Kur (1-34 varsa 35 ekle)
+        // 2. Sınıf Mantığını Kur
         let originalClasses = [];
         if (record.niceClasses && Array.isArray(record.niceClasses)) {
             originalClasses = [...record.niceClasses];
@@ -366,13 +364,21 @@ export class PortfolioDataManager {
             searchClasses.sort((a, b) => a - b);
         }
 
-        // 3. İzleme servisine gönderilecek standart obje yapısı
+        // 3. İzleme servisine gönderilecek GÜNCELLENMİŞ obje
         return {
             id: record.id,                   
             relatedRecordId: record.id,      
             markName: record.title || record.brandText,
+            
+            // Hem applicationNumber hem applicationNo gönderelim (Uyumluluk için)
             applicationNumber: record.applicationNumber,
-            status: record.status,              // <--- [EKLENDİ] Filtreleme için gerekli
+            applicationNo: record.applicationNumber,
+            
+            // EKLENDİ: Başvuru Tarihi
+            applicationDate: record.applicationDate ? new Date(record.applicationDate).toISOString() : null,
+
+            // GÜNCELLENDİ: İzleme statüsü 'active' olarak başlar
+            status: 'active',              
             
             niceClasses: distinctClasses,       
             niceClassSearch: searchClasses,     
