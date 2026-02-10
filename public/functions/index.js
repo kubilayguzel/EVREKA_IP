@@ -29,6 +29,7 @@ import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLID
 import { ImageRun } from 'docx';
 import { v4 as uuidv4 } from "uuid";
 import { PDFDocument } from 'pdf-lib';
+import readline from 'readline';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -4942,9 +4943,6 @@ export const performTrademarkSimilaritySearch = onCall(
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
-  // Node.js yerleşik modülleri
-  const readline = require('readline');
-
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
