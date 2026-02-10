@@ -4,8 +4,7 @@ import { authService, taskService, ipRecordsService, accrualService, personServi
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
+import { doc, getDoc, collection, query, where, getDocs, documentId } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 // Modüller
 import Pagination from '../pagination.js'; 
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
@@ -100,101 +99,122 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-	async loadAllData() {
-  let loader = null;
-  if (window.showSimpleLoading) {
-    loader = window.showSimpleLoading('Veriler Yükleniyor', 'Lütfen bekleyiniz...');
-  } else {
-    const oldLoader = document.getElementById('loadingIndicator');
-    if (oldLoader) oldLoader.style.display = 'block';
-  }
+        async loadAllData() {
+            let loader = null;
+            if (window.showSimpleLoading) {
+                loader = window.showSimpleLoading('İş Listesi Yükleniyor', 'Lütfen bekleyiniz...');
+            } else {
+                const oldLoader = document.getElementById('loadingIndicator');
+                if(oldLoader) oldLoader.style.display = 'block';
+            }
 
-	  try {
-	    // 1) Önce işleri (tasks) + küçük sözlükleri paralel çek.
-	    //    Not: ipRecords koleksiyonu büyük olabildiği için tümünü çekmek yerine
-	    //    yalnızca görevlerin kullandığı kayıtları ID bazlı getiriyoruz.
-	    const [
-	      tasksResult,
-	      personsResult,
-	      usersResult,
-	      accrualsResult,
-	      transactionTypesResult
-	    ] = await Promise.all([
-	      taskService.getAllTasks(),
-	      personService.getPersons(),
-	      taskService.getAllUsers(),
-	      accrualService.getAccruals(),
-	      transactionTypeService.getTransactionTypes()
-	    ]);
+            try {
+                // SADECE Gerekli Verileri Çekiyoruz (Ağır IP ve Accrual listelerini kaldırdık)
+                const [tasksResult, personsResult, usersResult, transactionTypesResult] = await Promise.all([
+                    taskService.getAllTasks(),
+                    personService.getPersons(),
+                    taskService.getAllUsers(),
+                    transactionTypeService.getTransactionTypes()
+                ]);
 
-	    this.allTasks = tasksResult.success ? tasksResult.data : [];
-    this.allPersons = personsResult.success ? personsResult.data : [];
-    this.allUsers = usersResult.success ? usersResult.data : [];
-    this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
-    this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
+                this.allTasks = tasksResult.success ? tasksResult.data : [];
+                this.allPersons = personsResult.success ? personsResult.data : [];
+                this.allUsers = usersResult.success ? usersResult.data : [];
+                this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-	    // 2) Görevlerin işaret ettiği ipRecord'ları ID bazlı çek.
-	    //    getRecordsByIds zaten cache-first + eksik/stale olanları server'dan tamamlama mantığı içeriyor.
-	    const relatedIds = [...new Set(
-	      (this.allTasks || [])
-	        .map(t => t.relatedIpRecordId)
-	        .filter(Boolean)
-	        .map(id => String(id).trim())
-	    )];
-	
-	    let ipRecords = [];
-	    if (relatedIds.length) {
-	      const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
-	      ipRecords = ipRes.success ? ipRes.data : [];
-	    }
-	    this.allIpRecords = ipRecords;
+                // Haritaları Oluştur
+                this.buildMaps();
 
-	    // Map oluştur (String normalize önemli)
-    this.buildMaps();
+                // Formları Başlat
+                this.initForms();
 
-    this.initForms();
-    this.processData();
+                // Tabloyu hemen göster (IP verileri "Yükleniyor..." olarak görünecek)
+                this.processData();
+                if (this.pagination) {
+                    this.pagination.update(this.filteredData.length);
+                }
+                this.renderTable();
 
-    if (this.pagination) {
-      this.pagination.update(this.filteredData.length);
-    }
-    this.renderTable();
+                // ARKA PLAN: IP Kayıtlarını Parça Parça Getir (UI donmadan)
+                this.fetchRelatedIpRecordsInChunks();
 
-  } catch (error) {
-    console.error(error);
-    showNotification('Veriler yüklenirken bir hata oluştu: ' + error.message, 'error');
-  } finally {
-    if (loader) loader.hide();
-    const oldLoader = document.getElementById('loadingIndicator');
-    if (oldLoader) oldLoader.style.display = 'none';
-  }
-}
+            } catch (error) {
+                console.error(error);
+                if (loader) loader.hide(); 
+                showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+            } finally {
+                if (loader) loader.hide();
+                const oldLoader = document.getElementById('loadingIndicator');
+                if(oldLoader) oldLoader.style.display = 'none';
+            }
+        }
 
-
-        // --- YENİ: Haritalama Fonksiyonu (Performansın Kalbi) ---
         buildMaps() {
-            // IP Kayıtlarını Haritala
             this.ipRecordsMap.clear();
-            this.allIpRecords.forEach(r => {
-				// ID bazen number/string karışık veya boşluklu gelebiliyor.
-				// Map anahtarını normalize edersek Map.get() asla "kaçırmaz".
-				const key = r?.id ? String(r.id).trim() : null;
-				if (key) this.ipRecordsMap.set(key, r);
-            });
+            // IP haritası başlangıçta boş, fetchRelatedIpRecordsInChunks ile dolacak.
 
-            // Kullanıcıları Haritala
-			this.usersMap.clear();
+            this.usersMap.clear();
             this.allUsers.forEach(u => {
-				const key = u?.id ? String(u.id).trim() : null;
-				if (key) this.usersMap.set(key, u);
+                if(u.id) this.usersMap.set(u.id, u);
             });
 
-            // İşlem Tiplerini Haritala
-			this.transactionTypesMap.clear();
+            this.transactionTypesMap.clear();
             this.allTransactionTypes.forEach(t => {
-				const key = t?.id ? String(t.id).trim() : null;
-				if (key) this.transactionTypesMap.set(key, t);
+                if(t.id) this.transactionTypesMap.set(t.id, t);
             });
+        }
+
+        // --- YENİ: Akıllı IP Çekme Fonksiyonu ---
+        async fetchRelatedIpRecordsInChunks() {
+            // 1. İşlerde geçen benzersiz IP ID'lerini topla
+            const uniqueIpIds = new Set();
+            this.allTasks.forEach(t => {
+                if (t.relatedIpRecordId) uniqueIpIds.add(t.relatedIpRecordId);
+            });
+
+            const idsToFetch = Array.from(uniqueIpIds);
+            if (idsToFetch.length === 0) return;
+
+            // 2. ID'leri 30'arlı gruplara böl (Firestore limiti)
+            const chunkSize = 30;
+            const chunks = [];
+            for (let i = 0; i < idsToFetch.length; i += chunkSize) {
+                chunks.push(idsToFetch.slice(i, i + chunkSize));
+            }
+
+            const fetchChunk = async (chunk) => {
+                try {
+                    const q = query(collection(db, 'ipRecords'), where(documentId(), 'in', chunk));
+                    const snapshot = await getDocs(q);
+                    snapshot.forEach(doc => {
+                        this.ipRecordsMap.set(doc.id, { id: doc.id, ...doc.data() });
+                    });
+                } catch (e) {
+                    console.warn("IP chunk fetch hatası:", e);
+                }
+            };
+
+            // İlk 2 grubu hemen çekip tabloyu güncelle
+            const initialChunks = chunks.slice(0, 2);
+            const remainingChunks = chunks.slice(2);
+
+            await Promise.all(initialChunks.map(chunk => fetchChunk(chunk)));
+            
+            // UI Güncelle
+            this.processData();
+            this.renderTable();
+
+            // Kalanları 5'li paraleller halinde çek
+            if (remainingChunks.length > 0) {
+                const parallelLimit = 5;
+                for (let i = 0; i < remainingChunks.length; i += parallelLimit) {
+                    const batch = remainingChunks.slice(i, i + parallelLimit);
+                    await Promise.all(batch.map(chunk => fetchChunk(chunk)));
+                }
+                // Son güncelleme
+                this.processData();
+                this.renderTable();
+            }
         }
 
         initForms() {
@@ -229,22 +249,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.processedData = this.allTasks.map(task => {
                 // --- OPTİMİZE EDİLMİŞ VERİ ÇEKME ---
-                // .find() yerine Map.get() kullanarak O(1) hızında erişim
                 
-				// 1. İlişkili Kayıt
-				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : null;
-				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-				// Not: applicationNumber bazı kayıtlarda applicationNo olarak tutulabiliyor.
-				const relatedRecord = ipRecord
-					? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title || 'Kayıt Bulunamadı')
-					: (relatedId ? 'Yükleniyor…' : '—');
+                // 1. İlişkili Kayıt (IP Record)
+                // Map üzerinden çekiyoruz. Veri henüz yüklenmediyse (undefined ise) ve ID varsa 'Yükleniyor...' gösteriyoruz.
+                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
+                
+                const relatedRecord = ipRecord 
+                    ? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title || 'Kayıt Bulunamadı') 
+                    : (task.relatedIpRecordId ? 'Yükleniyor...' : '—');
 
                 // 2. İşlem Tipi
-				const transactionTypeObj = this.transactionTypesMap.get(task?.taskType ? String(task.taskType).trim() : '');
+                const transactionTypeObj = this.transactionTypesMap.get(task.taskType);
                 const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
                 // 3. Atanan Kişi
-				const assignedUser = this.usersMap.get(task?.assignedTo_uid ? String(task.assignedTo_uid).trim() : '');
+                const assignedUser = this.usersMap.get(task.assignedTo_uid);
                 const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
                 // Tarih İşlemleri
@@ -588,7 +607,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.taskDetailManager.showLoading();
 
             try {
-                // Taze veri çek
+                // Taze Task Verisi
                 const taskRef = doc(db, 'tasks', String(taskId));
                 const taskSnap = await getDoc(taskRef);
 
@@ -600,14 +619,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 modalTitle.textContent = `İş Detayı (${task.id})`;
 
-				// --- OPTİMİZASYON: Detay modalında da Map kullanımı (ID normalize) ---
-				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-				const transactionType = this.transactionTypesMap.get(task?.taskType ? String(task.taskType).trim() : '');
-				const assignedUser = this.usersMap.get(task?.assignedTo_uid ? String(task.assignedTo_uid).trim() : '');
+                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
+                const transactionType = this.transactionTypesMap.get(task.taskType);
+                const assignedUser = this.usersMap.get(task.assignedTo_uid);
                 
-                // Accruals için Map yok (array içinde arama mecbur)
-                const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
+                // --- DEĞİŞİKLİK: Tahakkukları sadece bu iş için veritabanından çek ---
+                const qAccruals = query(collection(db, 'accruals'), where('taskId', '==', String(task.id)));
+                const accSnap = await getDocs(qAccruals);
+                const relatedAccruals = accSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 this.taskDetailManager.render(task, {
                     ipRecord: ipRecord,
