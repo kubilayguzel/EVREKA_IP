@@ -109,10 +109,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ) : [];
 
                 // Görevlerin bağlı olduğu ipRecord'ları çek (cache-first) ve eksik kalanları server'dan tamamla.
-                const relatedIds = [...new Set(this.allTasks.map(t => t.relatedIpRecordId).filter(Boolean).map(id => String(id)))];
+                const relatedIds = [...new Set(
+                    this.allTasks
+                        .map(t => t.relatedIpRecordId)
+                        .filter(Boolean)
+                        .map(id => String(id).trim())
+                )];
                 let ipRecords = [];
                 if (relatedIds.length) {
-                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'server' });
+                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
                     ipRecords = ipRes.success ? ipRes.data : [];
                 }
 				this.allIpRecords = ipRecords;
