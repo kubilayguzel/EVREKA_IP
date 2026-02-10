@@ -4919,74 +4919,72 @@ export const performTrademarkSimilaritySearch = onCall(
 );
 
 
-// public/functions/index.js
+// GLOBAL DEĞİŞKENLER (Instance Cache için)
+// Bu değişkenler fonksiyon tekrar çalıştığında (warm start) hafızada kalır.
+let cachedBulletinId = null;
+let cachedBulletinRecords = null;
 
-// startIndex parametresi eklendi (Varsayılan 0)
-async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0) {
-  const progressRef = adminDb.collection('searchProgress').doc(jobId);
-  const TIMEOUT_LIMIT = 480 * 1000; // 480 Saniye (8 Dakika) - Güvenli sınır
-  const startTime = Date.now();
-  const TOPIC_NAME = 'similarity-search-jobs';
-  const MIN_SEARCH_LENGTH = 3;
-
-  // Not: Bunlar algoritmayı DEĞİŞTİRMEZ; sadece aynı işi daha hızlı/az overhead ile yapar.
-  // - Batch büyüdükçe Firestore progress/write overhead azalır.
-  // - Delay'i düşürmek yapay beklemeyi kaldırır.
-  const BATCH_SIZE = Number(process.env.SIM_SEARCH_BATCH_SIZE || 1);
-  const PROCESS_DELAY = Number(process.env.SIM_SEARCH_PROCESS_DELAY_MS || 0);
-
-  try {
-    // 1. BAŞLANGIÇ DURUMU AYARLAMA
-    if (startIndex === 0) {
-        // İlk kez başlıyorsa temiz bir sayfa aç
-        await progressRef.set({ 
-            status: 'processing', 
-            progress: 0, 
-            results: [], // Sonuç dizisi boş başlar
-            totalMarks: monitoredMarks.length,
-            processedCount: 0,
-            currentResults: 0,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-    } else {
-        // Devam eden job ise durumu güncelle
-        await progressRef.update({ status: 'processing_continued' });
+// Gerekli alanları seçerek yükleme yapan optimize edilmiş fonksiyon
+async function loadBulletinRecordsOptimized(selectedBulletinId) {
+    // 1. Cache Kontrolü: Eğer aynı bülten zaten hafızadaysa tekrar çekme
+    if (cachedBulletinId === selectedBulletinId && cachedBulletinRecords && cachedBulletinRecords.length > 0) {
+        console.log(`✨ Cache hit: Bülten ${selectedBulletinId} hafızadan kullanılıyor (${cachedBulletinRecords.length} kayıt).`);
+        return cachedBulletinRecords;
     }
 
-    // 2. BÜLTEN VERİSİNİ ÇEKME
-    logger.log(`📥 Bülten verisi çekiliyor: ${selectedBulletinId}`);
+    console.log(`📥 Bülten verisi veritabanından çekiliyor (SELECT mode): ${selectedBulletinId}`);
+
+    // Bülten ID'si bazen "469_27052025" gibi gelebilir, temizleyelim
+    let targetBulletinId = selectedBulletinId;
     
-    let bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-      .where('bulletinId', '==', selectedBulletinId)
-      .get();
+    // Önce ID ile direkt deneyelim
+    let query = adminDb.collection('trademarkBulletinRecords')
+        .where('bulletinId', '==', targetBulletinId);
 
-    // ID ile bulunamazsa No ile dene (Fallback)
-    if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
-      let selectedBulletinNo = selectedBulletinId;
-      if (selectedBulletinId.includes('_')) {
-        selectedBulletinNo = selectedBulletinId.split('_')[0];
-      }
-      const bulletinDoc = await adminDb.collection('trademarkBulletins')
-        .where('bulletinNo', '==', selectedBulletinNo)
-        .limit(1)
-        .get();
+    // .select() İLE SADECE GEREKLİ ALANLARI ALIYORUZ (Hafıza Tasarrufu)
+    query = query.select(
+        'markName', 
+        'applicationNo', 
+        'applicationDate', 
+        'niceClasses', 
+        'holders', 
+        'imagePath', 
+        'bulletinId'
+    );
 
-      if (!bulletinDoc.empty) {
-        const bulletinIdFromNo = bulletinDoc.docs[0].id;
-        bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-          .where('bulletinId', '==', bulletinIdFromNo)
-          .get();
-      }
+    let snapshot = await query.get();
+
+    // ID ile bulamazsa BulletinNo ile dene (Fallback)
+    if (snapshot.empty) {
+        let selectedBulletinNo = selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId;
+        
+        const bulletinDoc = await adminDb.collection('trademarkBulletins')
+            .where('bulletinNo', '==', selectedBulletinNo)
+            .limit(1)
+            .get();
+
+        if (!bulletinDoc.empty) {
+            targetBulletinId = bulletinDoc.docs[0].id;
+            console.log(`🔄 Bulletin No (${selectedBulletinNo}) üzerinden ID bulundu: ${targetBulletinId}`);
+            
+            snapshot = await adminDb.collection('trademarkBulletinRecords')
+                .where('bulletinId', '==', targetBulletinId)
+                .select('markName', 'applicationNo', 'applicationDate', 'niceClasses', 'holders', 'imagePath', 'bulletinId')
+                .get();
+        }
     }
 
-    // Sadece gerekli alanları alarak belleği rahatlat (Memory Optimization)
-    const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => {
+    if (snapshot.empty) {
+        console.warn(`⚠️ Bülten kaydı bulunamadı: ${selectedBulletinId}`);
+        return [];
+    }
+
+    // Veriyi işle ve Cache'e at
+    const records = snapshot.docs.map(doc => {
         const d = doc.data();
         const rawMarkName = (d.markName || '').toString();
         const isMultiWord = rawMarkName.trim().split(/\s+/).length > 1;
-        // Aynı temizleme işlemini her "hit" için tekrar tekrar yapmak çok pahalı.
-        // Burada bir kez hesaplayıp döngü içinde kullanıyoruz (sonucu değiştirmez).
-        const cleanedMarkName = cleanMarkName(rawMarkName, isMultiWord);
+        
         return { 
             id: doc.id, 
             markName: d.markName,
@@ -4996,69 +4994,93 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             holders: d.holders,
             imagePath: d.imagePath,
             bulletinId: d.bulletinId,
-            cleanedMarkName
+            // Temizlenmiş ismi burada hesaplayıp saklıyoruz (CPU Tasarrufu)
+            cleanedMarkName: cleanMarkName(rawMarkName, isMultiWord) 
         };
     });
-    
-    // Snapshot'ı bellekten düşür (Garbage Collection'a yardım et)
-    bulletinRecordsSnapshot = null; 
 
-    logger.log(`✅ ${bulletinRecords.length} bülten kaydı hafızaya alındı. İşlem ${startIndex}. indexten başlıyor.`);
+    // Cache'i güncelle
+    cachedBulletinId = selectedBulletinId;
+    cachedBulletinRecords = records;
+    
+    // Snapshot'ı temizle
+    snapshot = null;
+    
+    // Mümkünse Garbage Collection'ı tetikle
+    if (global.gc) { global.gc(); }
+
+    console.log(`✅ ${records.length} bülten kaydı başarıyla yüklendi ve cache'lendi.`);
+    return records;
+}
+
+async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0) {
+  const progressRef = adminDb.collection('searchProgress').doc(jobId);
+  // Timeout süresini biraz daha güvenli marjla belirleyelim (Cloud Function 540s ise 450s'de keselim)
+  const TIMEOUT_LIMIT = 450 * 1000; 
+  const startTime = Date.now();
+  const TOPIC_NAME = 'similarity-search-jobs';
+  const MIN_SEARCH_LENGTH = 3;
+
+  // BATCH SIZE'ı artırabiliriz çünkü artık hafıza sorunumuz yok
+  const BATCH_SIZE = 50; // Önceden 1 yapmanıza gerek yok, 50-100 idealdir.
+  const PROCESS_DELAY = 50; // CPU'yu biraz rahatlatmak için minik gecikme
+
+  try {
+    // 1. BAŞLANGIÇ DURUMU
+    if (startIndex === 0) {
+        await progressRef.set({ 
+            status: 'processing', 
+            progress: 0, 
+            totalMarks: monitoredMarks.length,
+            processedCount: 0,
+            currentResults: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } else {
+        await progressRef.update({ status: 'processing_continued' });
+    }
+
+    // 2. BÜLTEN VERİSİNİ ÇEKME (Optimize Edilmiş)
+    const bulletinRecords = await loadBulletinRecordsOptimized(selectedBulletinId);
 
     // 3. BATCH AYARLARI
-    // Tüm markaları batch'lere bölüyoruz
     const markBatches = [];
     for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
       markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
     }
 
-    // Başlangıç batch indexini bul (Kaldığımız yer)
     let startBatchIndex = Math.floor(startIndex / BATCH_SIZE);
     let processedCount = startIndex;
-    let totalResultsFound = 0; // Bu sessionda bulunan sonuç sayısı
+    let totalResultsFound = 0;
+
+    console.log(`🚀 İşlem başlıyor: Toplam Marka: ${monitoredMarks.length}, Başlangıç: ${startIndex}, Batch Size: ${BATCH_SIZE}`);
 
     // 4. ANA DÖNGÜ
     for (let batchIndex = startBatchIndex; batchIndex < markBatches.length; batchIndex++) {
       
-      // --- A) ZAMAN KONTROLÜ (KRİTİK) ---
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime > TIMEOUT_LIMIT) {
-          logger.warn(`⚠️ Zaman aşımı sınırına yaklaşıldı (${elapsedTime/1000}sn). İşlem duraklatılıyor.`);
-
-          // ✅ En net çözüm: Resume'u frontend yerine backend yönetsin.
-          // Burada "kaldığımız yeri" kaydedip aynı job için Pub/Sub'a yeni mesaj yayınlıyoruz.
-          // Böylece tarayıcıdan tekrar tekrar çağrı atmaya gerek kalmaz.
-          const nextIndex = processedCount;
+      // --- ZAMAN KONTROLÜ ---
+      if ((Date.now() - startTime) > TIMEOUT_LIMIT) {
+          console.log(`⚠️ Zaman aşımı (${TIMEOUT_LIMIT/1000}s) yaklaştı. İşlem ${processedCount}. kayıtta duraklatılıyor.`);
+          
           await progressRef.update({
               status: 'queued',
               queueReason: 'timeout_protection',
-              nextIndex,
-              progress: Math.floor((nextIndex / monitoredMarks.length) * 100),
-              lastQueuedAt: admin.firestore.FieldValue.serverTimestamp(),
-              resumeAttempts: admin.firestore.FieldValue.increment(1)
+              nextIndex: processedCount,
+              progress: Math.floor((processedCount / monitoredMarks.length) * 100),
+              lastQueuedAt: admin.firestore.FieldValue.serverTimestamp()
           });
 
-          try {
-            await ensureTopic(TOPIC_NAME);
-            await pubsubClient.topic(TOPIC_NAME).publishMessage({
-              json: { jobId, monitoredMarks, selectedBulletinId, startIndex: nextIndex }
-            });
-            logger.info(`🔁 Job yeniden kuyruğa atıldı: ${jobId} (startIndex=${nextIndex})`);
-          } catch (e) {
-            // Kuyruğa atma başarısız olursa job'u error'a çekelim ki UI net görsün.
-            logger.error('❌ Resume publish başarısız:', e);
-            await progressRef.update({
-              status: 'error',
-              error: `Resume publish failed: ${e?.message || String(e)}`
-            });
-          }
-
-          return; // Bu worker instance'ı nazikçe bitsin.
+          // Kendini tekrar kuyruğa at
+          await ensureTopic(TOPIC_NAME);
+          await pubsubClient.topic(TOPIC_NAME).publishMessage({
+            json: { jobId, monitoredMarks, selectedBulletinId, startIndex: processedCount }
+          });
+          
+          return; // Fonksiyondan çık
       }
-      // -------------------------------------
 
       const batch = markBatches[batchIndex];
-      const batchResults = []; // Sadece bu batch'in sonuçlarını tutacağız (RAM Dostu)
+      const batchResults = [];
 
       // Batch içindeki markaları işle
       for (const monitoredMark of batch) {
@@ -5067,33 +5089,39 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         const overrideName = (monitoredMark.searchMarkName || '').trim();
         const primaryName = (overrideName || originalName).trim();
         let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+        
         const normText = (s) => (s || '').toString().trim().toLowerCase();
         if (overrideName && originalName) {
             const originalNorm = normText(originalName);
             alternatives = alternatives.filter(t => normText(t) !== originalNorm);
         }
+        
         const searchTerms = [primaryName, ...alternatives].filter(t => t && t.trim().length > 0);
         const uniqueResultsMap = new Map();
 
-        // Döngü içindeki tekrarları azalt (sonucu değiştirmez)
         const monitoredApplicationDate = monitoredMark.applicationDate || null;
         const monitoredNiceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
         const SIMILARITY_THRESHOLD = 0.5;
 
         for (const term of searchTerms) {
+            // Aranacak kelimeyi temizle
             const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
             const searchWords = cleanedSearchName.split(' ').filter(w => w.length >= MIN_SEARCH_LENGTH);
 
+            // BÜLTEN TARAMASI
             for (const hit of bulletinRecords) {
+                // Tarih Filtresi
                 if (!isValidBasedOnDate(hit.applicationDate, monitoredApplicationDate)) continue;
 
-                // Loglar kaldırıldı (Performans artışı)
+                // Benzerlik Hesapla
                 const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
                   hit.markName, term, hit.applicationDate, monitoredApplicationDate, hit.niceClasses, monitoredNiceClasses
                 );
 
-                const cleanedHitName = hit.cleanedMarkName || cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+                // Önceden hesaplanmış temiz ismi kullan (CPU tasarrufu)
+                const cleanedHitName = hit.cleanedMarkName;
 
+                // Kelime Bazlı Tam Eşleşme Kontrolü (Prefix/Suffix)
                 let isPrefixSuffixExactMatch = false;
                 if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
                     if (cleanedHitName.includes(cleanedSearchName)) {
@@ -5103,10 +5131,12 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                     }
                 }
 
+                // Eşik Değer Kontrolü
                 if (similarityScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) {
                   continue;
                 }
 
+                // Sonuç Nesnesi
                 const resultObj = {
                   objectID: hit.id,
                   markName: hit.markName,
@@ -5125,6 +5155,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   isEarlier: false 
                 };
 
+                // Tekilleştirme (Aynı başvuru numarası için en yüksek skoru tut)
                 if (uniqueResultsMap.has(hit.applicationNo)) {
                     if (resultObj.similarityScore > uniqueResultsMap.get(hit.applicationNo).similarityScore) {
                         uniqueResultsMap.set(hit.applicationNo, resultObj);
@@ -5133,35 +5164,30 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                     uniqueResultsMap.set(hit.applicationNo, resultObj);
                 }
             }
-        } // Term döngüsü
+        } 
 
         batchResults.push(...Array.from(uniqueResultsMap.values()));
-        processedCount++; // Sayaç her markada artar
-      } // Batch item döngüsü
+        processedCount++;
+      } // Batch içindeki marka döngüsü sonu
 
-      // --- B) PARÇALI KAYIT (INCREMENTAL SAVE) ---
-      // Batch sonuçlarını hemen DB'ye yaz ve RAM'den sil.
+      // --- SONUÇLARI KAYDET (INCREMENTAL) ---
       if (batchResults.length > 0) {
-          const resultsCollection = progressRef.collection('foundResults'); // Alt koleksiyon (Çekmece)
-
-          // Firestore batch limit: 500 write. Güvenli olmak için daha düşük chunk kullanıyoruz.
-          const CHUNK_SIZE = 450;
+          const resultsCollection = progressRef.collection('foundResults');
+          const CHUNK_SIZE = 450; // Firestore batch limiti için güvenli sınır
           let written = 0;
 
           for (let i = 0; i < batchResults.length; i += CHUNK_SIZE) {
               const slice = batchResults.slice(i, i + CHUNK_SIZE);
               const batchWrite = adminDb.batch();
               slice.forEach(result => {
-                  const newDocRef = resultsCollection.doc();
+                  const newDocRef = resultsCollection.doc(); // Auto-ID
                   batchWrite.set(newDocRef, result);
               });
               await batchWrite.commit();
               written += slice.length;
           }
-
           totalResultsFound += written;
-
-          // Ana dökümanda SADECE SAYIYI güncelle (Veriyi değil, sadece sayacı)
+          
           await progressRef.update({
               currentResults: admin.firestore.FieldValue.increment(written)
           });
@@ -5173,18 +5199,14 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         progress, 
         processed: processedCount
       });
-      
-      // Batch Logu (Detaysız)
-      logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. (Toplam Bulunan: ${totalResultsFound})`);
 
-      // Gecikme (Soğutma)
+      // Soğutma
       if (batchIndex < markBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
       }
     }
 
     // 5. BİTİŞ
-    // Döngü başarıyla tamamlandıysa
     await progressRef.update({
       status: 'completed',
       progress: 100,
@@ -5192,10 +5214,10 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    logger.log(`✅ Arama TAMAMLANDI.`);
+    console.log(`✅ Arama başarıyla tamamlandı. Toplam bulunan: ${totalResultsFound}`);
 
   } catch (error) {
-      logger.error('❌ Background search error:', error);
+      console.error('❌ Background search error:', error);
       await progressRef.update({
           status: 'error',
           error: error.message
