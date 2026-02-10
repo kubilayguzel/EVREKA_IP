@@ -5122,8 +5122,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   applicationNo: hit.applicationNo,
                   applicationDate: hit.applicationDate,
                   niceClasses: hit.niceClasses,
-                  holders: hit.holders,
-                  imagePath: hit.imagePath,
+                  
+                  // 🔥 DÜZELTME BURADA: Undefined gelirse boş değer ata
+                  holders: hit.holders || [],      // Eğer yoksa boş dizi gönder
+                  imagePath: hit.imagePath || null, // Eğer yoksa null gönder
+                  
                   bulletinId: hit.bulletinId,
                   similarityScore,
                   positionalExactMatchScore,
