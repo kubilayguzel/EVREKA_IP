@@ -3266,6 +3266,35 @@ export const processTrademarkBulletinUploadV3 = onObjectFinalized(
       // Firestore kayıtları (imagePath eşleştirilmiş)
       await writeBatchesToFirestore(records, bulletinId, bulletinNo,imagePathMap);
 
+      // 1. ADIM: Arama Performansı İçin Hafif JSON İndeksi Oluşturma (RAM DOSTU)
+      try {
+        console.log("⚡ Arama indeksi (JSON) oluşturuluyor...");
+
+        // writeBatchesToFirestore fonksiyonunda record.id ataması yapıldığı için burada ID'ler mevcuttur.
+        const searchIndex = records.map(item => ({
+          id: item.id,                        // Firestore Belge ID'si
+          n: (item.markName || "").toLowerCase().replace(/[^a-z0-9ğüşöçı\s]/g, '').trim(), // Arama için temizlenmiş isim (Hız)
+          o: item.markName || "",             // Orijinal isim
+          c: item.niceClasses || [],          // Sınıflar
+          an: item.applicationNo || "",       // Başvuru No
+          d: item.applicationDate || ""       // Tarih
+        }));
+
+        const jsonString = JSON.stringify(searchIndex);
+        const indexPath = `bulletins/${bulletinNo}_index.json`;
+        
+        await bucket.file(indexPath).save(jsonString, {
+          contentType: "application/json",
+          resumable: false,
+          validation: false
+        });
+
+        console.log(`✅ JSON İndeks başarıyla kaydedildi: ${indexPath} (${searchIndex.length} kayıt)`);
+
+      } catch (error) {
+        console.error("❌ JSON İndeks oluşturulurken hata:", error);
+      }
+
       console.log(
         `🎉 ZIP işleme tamamlandı: ${bulletinNo} → ${records.length} kayıt, ${imagesDir.length} görsel bulundu.`
       );
@@ -3749,7 +3778,9 @@ async function writeBatchesToFirestore(records, bulletinId, bulletinNo, imagePat
       const matchingImages = imagePathMap[record.applicationNo] || [];
       record.imagePath = matchingImages.length > 0 ? matchingImages[0] : null;
       record.imageUploaded = false;
-      batch.set(db.collection("trademarkBulletinRecords").doc(), {
+      const docRef = db.collection("trademarkBulletinRecords").doc();
+      record.id = docRef.id; // <--- ÖNEMLİ: ID'yi hafızadaki nesneye de yazıyoruz
+      batch.set(docRef, {
         ...record,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
@@ -4588,10 +4619,11 @@ export const performTrademarkSimilaritySearch = onCall(
     const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
 
     // =========================
-    // ASYNC MODE: Kuyruğa at ve dön
+    // ASYNC MODE: İşi Parçala ve Workerlara Dağıt
     // =========================
     if (async && !jobId) {
       const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const WORKER_COUNT = 10; // 10 Paralel Worker
 
       // Başlangıç progress kaydı
       await adminDb.collection('searchProgress').doc(newJobId).set({
@@ -4601,18 +4633,45 @@ export const performTrademarkSimilaritySearch = onCall(
         processed: 0,
         results: [],
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        bulletinId: selectedBulletinId
+        bulletinId: selectedBulletinId,
+        totalChunks: WORKER_COUNT
       });
 
-      // 🔁 Artık aynı proseste "fire-and-forget" çağrı YAPMIYORUZ.
-      // ✅ Pub/Sub üzerinden bağımsız worker'a delege ediyoruz.
+      // Markaları parçalara böl
+      const batchSize = Math.ceil(monitoredMarks.length / WORKER_COUNT);
+      const promises = [];
       const TOPIC_NAME = 'similarity-search-jobs';
-      await ensureTopic(TOPIC_NAME); // projende zaten varsa kullan; yoksa aşağıdaki helper'ı ekle
-      await pubsubClient.topic(TOPIC_NAME).publishMessage({
-        json: { jobId: newJobId, monitoredMarks, selectedBulletinId }
-      });
+      await ensureTopic(TOPIC_NAME);
 
-      return { success: true, jobId: newJobId, async: true };
+      console.log(`🚀 Arama işi ${WORKER_COUNT} parçaya bölünüyor. Toplam Marka: ${monitoredMarks.length}`);
+
+      for (let i = 0; i < WORKER_COUNT; i++) {
+        const start = i * batchSize;
+        const end = start + batchSize;
+        const markChunk = monitoredMarks.slice(start, end);
+
+        if (markChunk.length === 0) continue;
+
+        // Her parça için bir Pub/Sub mesajı gönder
+        const messagePayload = {
+          jobId: newJobId,
+          workerId: i + 1,
+          monitoredMarks: markChunk,
+          selectedBulletinId: selectedBulletinId,
+          // BulletinNo'yu ID'den çıkarıyoruz (örn: 469_27052025 -> 469)
+          bulletinNo: selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId
+        };
+
+        const p = pubsubClient.topic(TOPIC_NAME).publishMessage({
+          json: messagePayload
+        });
+        promises.push(p);
+      }
+
+      await Promise.all(promises);
+      console.log(`✅ ${promises.length} adet Worker tetiklendi.`);
+
+      return { success: true, jobId: newJobId, async: true, workerCount: promises.length };
     }
 
     // =========================
@@ -4907,51 +4966,74 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         await progressRef.update({ status: 'processing_continued' });
     }
 
-    // 2. BÜLTEN VERİSİNİ ÇEKME
     logger.log(`📥 Bülten verisi çekiliyor: ${selectedBulletinId}`);
     
-    let bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-      .where('bulletinId', '==', selectedBulletinId)
-      .get();
+    // 2. BÜLTEN VERİSİNİ ÇEKME (JSON İNDİRME - HIZLI YÖNTEM)
+        let bulletinRecords = [];
+        const bucket = admin.storage().bucket();
+        
+        // ID'den Bülten Numarasını bul (örn: "469_..." -> "469")
+        let bulletinNo = selectedBulletinId;
+        if (selectedBulletinId.includes('_')) {
+            bulletinNo = selectedBulletinId.split('_')[0];
+        }
+        
+        const indexFilePath = `bulletins/${bulletinNo}_index.json`;
+        const indexFile = bucket.file(indexFilePath);
 
-    // ID ile bulunamazsa No ile dene (Fallback)
-    if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
-      let selectedBulletinNo = selectedBulletinId;
-      if (selectedBulletinId.includes('_')) {
-        selectedBulletinNo = selectedBulletinId.split('_')[0];
-      }
-      const bulletinDoc = await adminDb.collection('trademarkBulletins')
-        .where('bulletinNo', '==', selectedBulletinNo)
-        .limit(1)
-        .get();
-
-      if (!bulletinDoc.empty) {
-        const bulletinIdFromNo = bulletinDoc.docs[0].id;
-        bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-          .where('bulletinId', '==', bulletinIdFromNo)
-          .get();
-      }
-    }
-
-    // Sadece gerekli alanları alarak belleği rahatlat (Memory Optimization)
-    const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => {
-        const d = doc.data();
-        return { 
-            id: doc.id, 
-            markName: d.markName,
-            applicationNo: d.applicationNo,
-            applicationDate: d.applicationDate,
-            niceClasses: d.niceClasses,
-            holders: d.holders,
-            imagePath: d.imagePath,
-            bulletinId: d.bulletinId
-        };
-    });
-    
-    // Snapshot'ı bellekten düşür (Garbage Collection'a yardım et)
-    bulletinRecordsSnapshot = null; 
-
-    logger.log(`✅ ${bulletinRecords.length} bülten kaydı hafızaya alındı. İşlem ${startIndex}. indexten başlıyor.`);
+        try {
+            const [exists] = await indexFile.exists();
+            
+            if (exists) {
+                logger.log(`📥 JSON İndeks indiriliyor: ${indexFilePath}`);
+                const [fileContent] = await indexFile.download();
+                const rawRecords = JSON.parse(fileContent.toString());
+                
+                // JSON verisini worker'ın beklediği formata map'le
+                bulletinRecords = rawRecords.map(r => ({
+                    id: r.id,
+                    markName: r.o,          // Orijinal isim
+                    cleanName: r.n,         // Temiz isim (Hız için)
+                    applicationNo: r.an,
+                    applicationDate: r.d,
+                    niceClasses: r.c,
+                    bulletinId: selectedBulletinId // Uyumluluk için
+                    // holder/imagePath JSON'da yoksa boş gelebilir, kritik değil
+                }));
+                
+                logger.log(`✅ JSON İndeks yüklendi: ${bulletinRecords.length} kayıt (RAM Dostu)`);
+            } else {
+                logger.warn(`⚠️ JSON indeks bulunamadı (${indexFilePath}), Firestore fallback kullanılıyor...`);
+                
+                // --- ESKİ FIRESTORE KODU (Yedek Olarak Buraya Taşıdık) ---
+                let snapshot = await adminDb.collection('trademarkBulletinRecords')
+                    .where('bulletinId', '==', selectedBulletinId)
+                    .get();
+                    
+                if (snapshot.empty) {
+                    // Fallback: No ile ara
+                    const bRef = await adminDb.collection('trademarkBulletins').where('bulletinNo', '==', bulletinNo).limit(1).get();
+                    if(!bRef.empty) {
+                        snapshot = await adminDb.collection('trademarkBulletinRecords').where('bulletinId', '==', bRef.docs[0].id).get();
+                    }
+                }
+                
+                bulletinRecords = snapshot.docs.map(doc => {
+                    const d = doc.data();
+                    return { 
+                        id: doc.id, 
+                        markName: d.markName,
+                        applicationNo: d.applicationNo,
+                        applicationDate: d.applicationDate,
+                        niceClasses: d.niceClasses,
+                        bulletinId: d.bulletinId
+                    };
+                });
+            }
+        } catch (err) {
+            logger.error("🔥 Veri çekme hatası:", err);
+            throw err;
+        }
 
     // 3. BATCH AYARLARI
     // Tüm markaları batch'lere bölüyoruz
