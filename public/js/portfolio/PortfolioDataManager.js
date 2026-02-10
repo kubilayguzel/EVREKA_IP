@@ -327,8 +327,10 @@ export class PortfolioDataManager {
         };
     }
 
-    // public/js/portfolio/PortfolioDataManager.js dosyasındaki fonksiyonu bununla değiştirin:
-
+    /**
+     * İzleme modülü (Monitoring) için veriyi hazırlar.
+     * @param {Object} record - Seçili kayıt objesi
+     */
     prepareMonitoringData(record) {
         if (!record) return null;
 
@@ -343,7 +345,7 @@ export class PortfolioDataManager {
             }
         }
 
-        // 2. Sınıf Mantığını Kur
+        // 2. Sınıf Mantığını Kur (1-34 varsa 35 ekle mantığı)
         let originalClasses = [];
         if (record.niceClasses && Array.isArray(record.niceClasses)) {
             originalClasses = [...record.niceClasses];
@@ -354,9 +356,11 @@ export class PortfolioDataManager {
             });
         }
         
+        // Tekrar edenleri temizle ve sırala
         let distinctClasses = [...new Set(originalClasses.map(c => parseInt(c)).filter(n => !isNaN(n)))];
         distinctClasses.sort((a, b) => a - b);
 
+        // Arama için 35. sınıf mantığı (Varsa ekle)
         let searchClasses = [...distinctClasses];
         const hasGoodsClass = searchClasses.some(c => c >= 1 && c <= 34);
         if (hasGoodsClass && !searchClasses.includes(35)) {
@@ -364,29 +368,42 @@ export class PortfolioDataManager {
             searchClasses.sort((a, b) => a - b);
         }
 
-        // 3. İzleme servisine gönderilecek GÜNCELLENMİŞ obje
+        // Görsel URL'sini belirle
+        // Not: Firebase Storage URL'i veya dış kaynak URL'i olabilir.
+        const imgUrl = record.brandImageUrl || record.trademarkImage || null;
+
+        const now = new Date().toISOString();
+
+        // 3. Veritabanı şemasına (Schema) tam uygun obje
         return {
             id: record.id,                   
             relatedRecordId: record.id,      
-            markName: record.title || record.brandText,
             
-            // Hem applicationNumber hem applicationNo gönderelim (Uyumluluk için)
-            applicationNumber: record.applicationNumber,
-            applicationNo: record.applicationNumber,
+            // İstenen Alan: markName
+            markName: record.title || record.brandText || '',
             
-            // EKLENDİ: Başvuru Tarihi
-            applicationDate: record.applicationDate ? new Date(record.applicationDate).toISOString() : null,
-
-            // GÜNCELLENDİ: İzleme statüsü 'active' olarak başlar
-            status: 'active',              
+            // İstenen Alan: applicationNumber
+            applicationNumber: record.applicationNumber || '',
             
-            niceClasses: distinctClasses,       
-            niceClassSearch: searchClasses,     
+            // İstenen Alan: status (Kaydın gerçek durumu: registered, application vb.)
+            status: record.status || 'unknown',
             
+            // İstenen Alan: image (URL String)
+            image: imgUrl, 
+            
+            // İstenen Alan: ownerName
             ownerName: ownerName,
-            image: record.brandImageUrl || record.trademarkImage || null,
+            
+            // İstenen Alan: source
             source: 'portfolio',
-            createdAt: new Date().toISOString()
+            
+            // Ekstra gerekli alanlar (Sorgulama ve Arayüz için)
+            niceClasses: distinctClasses,       
+            niceClassSearch: searchClasses,
+            
+            // Zaman damgaları
+            createdAt: now,
+            updatedAt: now
         };
     }
 
