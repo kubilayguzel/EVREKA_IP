@@ -100,58 +100,85 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        async loadAllData() {
-            let loader = null;
-            if (window.showSimpleLoading) {
-                loader = window.showSimpleLoading('Veriler Yükleniyor', 'Lütfen bekleyiniz...');
-            } else {
-                const oldLoader = document.getElementById('loadingIndicator');
-                if(oldLoader) oldLoader.style.display = 'block';
-            }
+async loadAllData() {
+    let loader = null;
+    if (window.showSimpleLoading) {
+        loader = window.showSimpleLoading('Veriler Yükleniyor', 'Lütfen bekleyiniz...');
+    } else {
+        const oldLoader = document.getElementById('loadingIndicator');
+        if (oldLoader) oldLoader.style.display = 'block';
+    }
 
-            try {
-                // Tüm verileri paralel çek
-                const [tasksResult, ipRecordsResult, personsResult, usersResult, accrualsResult, transactionTypesResult] = await Promise.all([
-                    taskService.getAllTasks(),
-                    ipRecordsService.getRecords(),
-                    personService.getPersons(),
-                    taskService.getAllUsers(),
-                    accrualService.getAccruals(),
-                    transactionTypeService.getTransactionTypes()
-                ]);
+    try {
+        // Task dışındaki çağrıları hemen başlat (task beklerken bunlar paralel aksın)
+        const personsPromise = personService.getPersons();
+        const usersPromise = taskService.getAllUsers();
+        const accrualsPromise = accrualService.getAccruals();
+        const transactionTypesPromise = transactionTypeService.getTransactionTypes();
 
-                this.allTasks = tasksResult.success ? tasksResult.data : [];
-                this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
-                this.allPersons = personsResult.success ? personsResult.data : [];
-                this.allUsers = usersResult.success ? usersResult.data : [];
-                this.allAccruals = accrualsResult.success ? accrualsResult.data : []; 
-                this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
+        // 1) Önce task'ları çek
+        const tasksResult = await taskService.getAllTasks();
+        this.allTasks = tasksResult.success ? tasksResult.data : [];
 
-                // --- OPTİMİZASYON: Haritaları Oluştur ---
-                this.buildMaps();
+        // 2) Task'lardan gerekli ipRecordId'leri çıkar (String normalize!)
+        const relatedIds = [...new Set(
+        this.allTasks
+            .map(t => t.relatedIpRecordId)
+            .filter(id => id !== null && id !== undefined && id !== '')
+            .map(id => String(id))
+        )];
 
-                // Veriler geldikten sonra form yöneticilerini başlat
-                this.initForms();
-
-                // Verileri işleme ve tabloya hazırlama
-                this.processData();
-                
-                // Pagination güncelle ve tabloyu çiz
-                if (this.pagination) {
-                    this.pagination.update(this.filteredData.length);
-                }
-                this.renderTable();
-
-            } catch (error) {
-                console.error(error);
-                if (loader) loader.hide(); 
-                showNotification('Veriler yüklenirken bir hata oluştu: ' + error.message, 'error');
-            } finally {
-                if (loader) loader.hide();
-                const oldLoader = document.getElementById('loadingIndicator');
-                if(oldLoader) oldLoader.style.display = 'none';
-            }
+        // 3) Sadece gereken ipRecords'ları çek
+        // Not: getRecordsByIds yoksa, alttaki fallback'i kullanabilirsiniz.
+        let ipRecordsResult;
+        if (ipRecordsService.getRecordsByIds) {
+        ipRecordsResult = await ipRecordsService.getRecordsByIds(relatedIds);
+        } else {
+        // Fallback: en azından cache-first yerine server'dan çekmek daha tutarlı olur
+        ipRecordsResult = await ipRecordsService.getRecords?.({ source: 'server' }) 
+            || await ipRecordsService.getRecords();
         }
+
+        // 4) Diğer servis sonuçlarını al
+        const [personsResult, usersResult, accrualsResult, transactionTypesResult] = await Promise.all([
+        personsPromise,
+        usersPromise,
+        accrualsPromise,
+        transactionTypesPromise
+        ]);
+
+        // State'leri bas
+        this.allIpRecords = ipRecordsResult?.success ? ipRecordsResult.data : [];
+        this.allPersons = personsResult.success ? personsResult.data : [];
+        this.allUsers = usersResult.success ? usersResult.data : [];
+        this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
+        this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
+
+        // --- OPTİMİZASYON: Haritaları Oluştur ---
+        this.buildMaps();
+
+        // Veriler geldikten sonra form yöneticilerini başlat
+        this.initForms();
+
+        // Verileri işleme ve tabloya hazırlama
+        this.processData();
+
+        // Pagination güncelle ve tabloyu çiz
+        if (this.pagination) {
+        this.pagination.update(this.filteredData.length);
+        }
+        this.renderTable();
+
+    } catch (error) {
+        console.error(error);
+        showNotification('Veriler yüklenirken bir hata oluştu: ' + error.message, 'error');
+    } finally {
+        if (loader) loader.hide();
+        const oldLoader = document.getElementById('loadingIndicator');
+        if (oldLoader) oldLoader.style.display = 'none';
+    }
+    }
+
 
         // --- YENİ: Haritalama Fonksiyonu (Performansın Kalbi) ---
         buildMaps() {
