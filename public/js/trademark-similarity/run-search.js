@@ -21,7 +21,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     const response = await performSearchCallable({
       monitoredMarks,
       selectedBulletinId,
-      startIndex: 0, // Başlangıç noktası
+      startIndex: 0, 
       async: true
     });
 
@@ -37,7 +37,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     // Progress tracking
     return new Promise((resolve, reject) => {
       const progressRef = doc(db, 'searchProgress', jobId);
-      // --- EKLENEN KISIM: Workerları Dinleme ---
+      // --- ÖNEMLİ EKLENTİ: Workerları Dinleme ---
       const workersRef = collection(db, 'searchProgress', jobId, 'workers'); 
       
       let safetyTimeout;
@@ -141,17 +141,19 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
 
           // Ana toplam sayı
           const totalMarks = mainState.totalMarks || monitoredMarks.length;
-          // Ana yüzde hesabı (Workerların toplamından hesapla)
-          const globalProgress = totalMarks > 0 ? Math.floor((totalProcessed / totalMarks) * 100) : 0;
+          
+          // Ana yüzde hesabı (Bültenin toplam satır sayısı başta bilinmediği için tahmini hesaplanır veya işlenen satır sayısı gösterilir)
+          // Burada işlenen satır sayısını baz alarak sembolik bir progress gösterebiliriz veya sadece sayacı güncelleriz.
+          const globalProgress = totalMarks > 0 ? Math.min(100, Math.floor((totalProcessed / 5000) * 100)) : 0; // 5000 tahmini satır sayısı
 
           if (onProgress) {
               onProgress({
                   status: mainState.status,
-                  progress: globalProgress,        // Hesaplanan genel yüzde
-                  processed: totalProcessed,       // Hesaplanan toplam işlenen
+                  progress: globalProgress,
+                  processed: totalProcessed, // <--- İşte ekranda "0" yerine sayının artmasını sağlayacak değer
                   total: totalMarks,
                   currentResults: mainState.currentResults || 0,
-                  workers: activeWorkersList,      // <--- EKSİK OLAN KISIM ARTIK BURADA
+                  workers: activeWorkersList,
                   message: mainState.status === 'resuming' ? 'İşlem devrediliyor...' : null
               });
           }
