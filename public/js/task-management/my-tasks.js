@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.allTasks = [];
             this.allIpRecords = [];
+			// Hızlı join için Map (id -> ipRecord)
+			this.ipRecordsMap = new Map();
             this.allPersons = [];
             this.allUsers = []; // Kullanıcı listesi eklendi (Atamalar için)
             this.allAccruals = [];
@@ -113,7 +115,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'server' });
                     ipRecords = ipRes.success ? ipRes.data : [];
                 }
-                this.allIpRecords = ipRecords;
+				this.allIpRecords = ipRecords;
+				this.buildMaps();
 
                 this.allIpRecords = ipRecords;
                 this.allPersons = personsResult.success ? personsResult.data : [];
@@ -140,6 +143,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+		buildMaps() {
+			this.ipRecordsMap.clear();
+			(this.allIpRecords || []).forEach(r => {
+				const key = r?.id ? String(r.id).trim() : null;
+				if (key) this.ipRecordsMap.set(key, r);
+			});
+		}
+
         // public/js/task-management/my-tasks.js dosyasındaki processData metodu
 
         processData() {
@@ -156,11 +167,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.processedData = this.allTasks.map(task => {
                 // [GÜNCELLEME BURADA] ID'leri String'e çevirerek karşılaştır
                 // Bu sayede "123" (string) ile 123 (number) gelirse de eşleşir.
-                const ipRecord = this.allIpRecords.find(r => String(r.id) === String(task.relatedIpRecordId));
+				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
                 
-                const relatedRecordDisplay = ipRecord
-                    ? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title)
-                    : 'N/A';
+				const relatedRecordDisplay = ipRecord
+					? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title)
+					: (relatedId ? (task.relatedIpRecordTitle || 'Yükleniyor…') : '—');
                 
                 const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
                 const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmiyor';
@@ -468,8 +480,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             title.textContent = 'Yükleniyor...';
             this.taskDetailManager.showLoading();
 
-            const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-            const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+			const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+			const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+			const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
             const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
             const assignedUser = { email: task.assignedTo_email, displayName: task.assignedTo_email };
 
