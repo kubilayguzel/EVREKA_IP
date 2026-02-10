@@ -921,6 +921,7 @@ const loadDataFromCache = async (bulletinKey) => {
         allSimilarResults = cachedResults;
         infoMessageContainer.innerHTML = cachedResults.length > 0 ? `<div class="info-message success">Önbellekten ${cachedResults.length} benzer sonuç yüklendi.</div>` : '';
         noRecordsMessage.style.display = cachedResults.length > 0 ? 'none' : 'block';
+        groupAndSortResults();
         if (pagination) pagination.update(allSimilarResults.length);
         renderCurrentPageOfResults();
     } catch (error) {
