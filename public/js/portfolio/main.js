@@ -151,22 +151,37 @@ class PortfolioController {
     }
     
     setupFilterListeners() {
-        const thead = document.querySelector('.portfolio-table thead');
-        if (thead) {
-            thead.addEventListener('input', (e) => {
-                if (e.target.classList.contains('column-filter')) {
-                    const key = e.target.dataset.key;
-                    const value = e.target.value;
-                    clearTimeout(this.filterDebounceTimer);
-                    this.filterDebounceTimer = setTimeout(() => {
-                        this.state.columnFilters[key] = value;
-                        this.state.currentPage = 1;
-                        this.render();
-                    }, 300);
-                }
-            });
-        }
+    const thead = document.querySelector('.portfolio-table thead');
+    if (thead) {
+        thead.addEventListener('input', (e) => {
+            if (e.target.classList.contains('column-filter')) {
+                const key = e.target.dataset.key;
+                const value = e.target.value;
+                clearTimeout(this.filterDebounceTimer);
+                this.filterDebounceTimer = setTimeout(() => {
+                    this.state.columnFilters[key] = value;
+                    this.state.currentPage = 1;
+                    this.render();
+                }, 300);
+            }
+        });
     }
+
+    // --- BURADAN SONRASINI EKLEYİN ---
+    const globalSearchInput = document.getElementById('searchInput'); 
+    if (globalSearchInput) {
+        globalSearchInput.addEventListener('input', (e) => {
+            const value = e.target.value;
+            clearTimeout(this.filterDebounceTimer);
+            this.filterDebounceTimer = setTimeout(() => {
+                this.state.searchQuery = value.toLowerCase(); // Global arama state'ini günceller
+                this.state.currentPage = 1;
+                this.render();
+            }, 300);
+        });
+    }
+    // --- EKLEME BİTTİ ---
+}
 
     setupPagination() {
         const container = document.getElementById('paginationContainer');
@@ -735,7 +750,9 @@ class PortfolioController {
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
+            // Bu satıra 'filterable: true' eklendi:
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, filterable: true, width: '140px' },
+            
             { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '140px', filterable: true, inputType: 'date' },
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true, width: '200px' }, 
@@ -1058,7 +1075,9 @@ class PortfolioController {
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
+            // Bu satıra 'filterable: true' eklendi:
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, filterable: true, width: '140px' },
+            
             { key: 'formattedApplicationDate', label: 'Başvuru Tar.', sortable: true, width: '140px', filterable: true, inputType: 'date' },
             { key: 'statusText', label: 'Başvuru Durumu', sortable: true, width: '130px', filterable: true },
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, filterable: true, width: '200px' }, 
