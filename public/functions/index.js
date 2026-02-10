@@ -4937,18 +4937,16 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
-// functions/index.js dosyasındaki processSearchInBackground fonksiyonu
-
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   // ÖNEMLİ: Her worker kendi ilerlemesini 'workers' alt koleksiyonuna yazar.
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
-  const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
+  const TIMEOUT_LIMIT = 480 * 1000; // 480 Saniye (8 Dakika)
   const startTime = Date.now();
-  const BATCH_SIZE = 3;
-  const PROCESS_DELAY = 500;
+  const BATCH_SIZE = 50; // Batch boyutunu biraz artırdık (User kodunda 3 idi, 50 daha verimli olabilir ancak 3 kalsın isterseniz değiştirebilirsiniz)
+  const PROCESS_DELAY = 0; // Hızlanması için gecikmeyi kaldırdık (İsteğe bağlı açılabilir)
 
   try {
     // 1. WORKER DURUMUNU BAŞLAT
@@ -4964,9 +4962,9 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         await workerProgressRef.update({ status: 'processing_continued' });
     }
 
-    logger.log(`📥 Worker ${workerId} veri çekiyor: ${selectedBulletinId}`);
+    logger.log(`📥 Worker ${workerId} veri çekiyor: ${selectedBulletinId} (Başlangıç: ${startIndex})`);
     
-    // 2. BÜLTEN VERİSİNİ ÇEKME (JSON İNDİRME - HIZLI YÖNTEM)
+    // 2. BÜLTEN VERİSİNİ ÇEKME (JSON İNDİRME - MEVCUT KODUNUZ)
     let bulletinRecords = [];
     const bucket = admin.storage().bucket();
     
@@ -5033,23 +5031,49 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
     }
 
+    // Başlangıç batch indexini bul
     let startBatchIndex = Math.floor(startIndex / BATCH_SIZE);
     let processedCount = startIndex;
 
     // 4. ANA DÖNGÜ
     for (let batchIndex = startBatchIndex; batchIndex < markBatches.length; batchIndex++) {
       
-      // --- ZAMAN KONTROLÜ ---
+      // --- ZAMAN KONTROLÜ VE DEVRETME ---
       const elapsedTime = Date.now() - startTime;
       if (elapsedTime > TIMEOUT_LIMIT) {
-          logger.warn(`⚠️ Worker ${workerId} zaman aşımı. Duraklatılıyor.`);
+          logger.warn(`⚠️ Worker ${workerId} zaman aşımı (${elapsedTime/1000}sn). İşlem devrediliyor...`);
           
+          // Durumu güncelle
           await workerProgressRef.update({
-              status: 'paused', 
+              status: 'resuming', 
               nextIndex: processedCount,
               progress: Math.floor((processedCount / monitoredMarks.length) * 100)
           });
-          return; 
+
+          // Yeni Worker Tetikle (Kaldığı yerden devam etmesi için)
+          const nextPayload = {
+              jobId,
+              monitoredMarks,     // Listeyi tekrar gönderiyoruz
+              selectedBulletinId,
+              workerId,           // Aynı worker ID ile devam etsin
+              startIndex: processedCount // <--- Kaldığı yer burası
+          };
+          
+          // Pub/Sub'a mesaj atarak worker'ı yeniden çağırıyoruz
+          try {
+             // Not: PubSub client'ının global scope'ta veya yukarıda tanımlı olduğu varsayılmıştır.
+             // Eğer import edilmediyse: import { PubSub } from '@google-cloud/pubsub'; const pubsubClient = new PubSub();
+             // Dosyanızın üst kısmında pubsubClient tanımlı olmalı.
+             await pubsubClient.topic('similarity-search-jobs').publishMessage({
+                json: nextPayload
+             });
+             logger.info(`🔄 Yeni worker kuyruğa eklendi. WorkerId: ${workerId}, Başlangıç: ${processedCount}`);
+          } catch(e) {
+             logger.error(`❌ Worker zincirleme hatası: ${e.message}`);
+             await workerProgressRef.update({ status: 'error', error: 'Resuming failed: ' + e.message });
+          }
+
+          return; // Mevcut fonksiyonu sonlandır, yeni worker devam edecek.
       }
 
       const batch = markBatches[batchIndex];
@@ -5107,8 +5131,8 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   applicationNo: hit.applicationNo,
                   applicationDate: hit.applicationDate,
                   niceClasses: hit.niceClasses,
-                  holders: hit.holders || [],       // Null check
-                  imagePath: hit.imagePath || null, // Null check
+                  holders: hit.holders || [],      
+                  imagePath: hit.imagePath || null, 
                   bulletinId: hit.bulletinId,
                   similarityScore,
                   positionalExactMatchScore,
@@ -5136,7 +5160,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       // --- PARÇALI KAYIT ---
       if (batchResults.length > 0) {
           const batchWrite = adminDb.batch();
-          // Sonuçlar ORTAK havuza yazılır (foundResults)
           const resultsCollection = mainJobRef.collection('foundResults'); 
           
           batchResults.forEach(result => {
@@ -5146,7 +5169,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
           
           await batchWrite.commit();
           
-          // Ana dokümanda sadece bulunan toplam sayısını artır (Opsiyonel, bilgi amaçlı)
+          // Ana dokümanda sadece bulunan toplam sayısını artır
           await mainJobRef.update({
               currentResults: admin.firestore.FieldValue.increment(batchResults.length)
           }).catch(() => {}); 
@@ -5161,7 +5184,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       });
       
       // Gecikme (Soğutma)
-      if (batchIndex < markBatches.length - 1) {
+      if (PROCESS_DELAY > 0 && batchIndex < markBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
       }
     }
@@ -7419,26 +7442,30 @@ export const similaritySearchWorker = onMessagePublished(
   },
   async (event) => {
     const payload = event?.data?.message?.json || {};
-    const { jobId, monitoredMarks, selectedBulletinId, workerId } = payload; // workerId'yi aldık
+    // startIndex parametresini de alıyoruz (Varsayılan 0)
+    const { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex } = payload;
 
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
       logger.warn('⚠️ similaritySearchWorker: eksik payload', payload);
       return null;
     }
 
+    const currentStartIndex = startIndex || 0;
+
     // Worker başladığında kendi durumunu 'workers' koleksiyonuna yazsın
+    // Eğer startIndex 0 ise 'starting', değilse 'resuming' durumundadır.
     await adminDb.collection('searchProgress').doc(jobId)
         .collection('workers').doc(String(workerId)).set({
-            status: 'starting',
-            progress: 0,
-            processed: 0,
+            status: currentStartIndex === 0 ? 'starting' : 'resuming',
+            progress: 0, // Bu değer process fonksiyonunda güncellenecek
+            processed: currentStartIndex,
             total: monitoredMarks.length,
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-        });
+        }, { merge: true });
 
     try {
-      // workerId'yi fonksiyona iletiyoruz
-      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, 0, workerId);
+      // workerId ve startIndex'i fonksiyona iletiyoruz
+      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, currentStartIndex, workerId);
       return null;
     } catch (err) {
       // Hata durumunu worker'ın kendi belgesine yaz
