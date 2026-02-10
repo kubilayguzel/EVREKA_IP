@@ -1205,9 +1205,9 @@ const buildReportData = async (results) => {
         const ownerInfo = _getOwnerKey(ipData, monitoredTm, allPersons);
         const monitoredClientId = ownerInfo.id; // UUID burada yer alır
 
-        // 4. Diğer Bilgiler
+        // 4. Diğer Bilgiler (GÜNCELLENMİŞ KISIM)
         const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
-        const monitoredImg = ipData?.brandImageUrl || monitoredTm?.brandImageUrl || monitoredTm?.imagePath || null;
+        const monitoredImg = monitoredTm?.image || monitoredTm?.brandImageUrl || ipData?.brandImageUrl || monitoredTm?.imagePath || null;
         const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
         
         let monitoredAppDate = "-";
