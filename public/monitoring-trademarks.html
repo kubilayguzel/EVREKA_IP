@@ -967,22 +967,28 @@ tr.selected-row:hover {
                         <th class="sortable" data-sort="status" style="cursor:pointer">Durum ${getSortIcon('status')}</th>
                     </tr></thead><tbody>`;
 
-        currentPageDataEnriched.forEach(r => {
+            currentPageDataEnriched.forEach(r => {
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
             
-            // --- GÖRSEL ---
+            // --- GÖRSEL (GÜNCELLENMİŞ KOD) ---
             const trademarkImageHtml = (() => {
-                if (r.brandImageUrl && r.brandImageUrl.trim() !== '') {
-                    let imageUrl = r.brandImageUrl;
+                // ÖNCELİKLE 'image' alanını kontrol et (Sizin veritabanı yapınıza uygun)
+                // Yedek olarak 'brandImageUrl' alanına bak (Eski kayıtlar için)
+                let imageUrl = r.image || r.brandImageUrl;
+
+                if (imageUrl && imageUrl.trim() !== '') {
+                    // Eğer tam bir URL değilse (http veya data ile başlamıyorsa), Firebase Storage URL'ine çevir
                     if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
                         imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
                     }
+                    
                     return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail"
                             loading="lazy" 
                             style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                     <span style="display:none; color:#999; font-size:12px;">🖼️ Görsel yok</span>`;
                 }
+                // Görsel yoksa ikon göster
                 return '<span style="color:#999; font-size:12px;">🖼️ Görsel yok</span>';
             })();
 
