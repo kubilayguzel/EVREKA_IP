@@ -7168,57 +7168,47 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   }
 );
 
-// ===== similaritySearchWorker (Pub/Sub subscriber) - GÜNCELLENMİŞ VERSİYON =====
+// index.js
+
 export const similaritySearchWorker = onMessagePublished(
   {
     topic: 'similarity-search-jobs',
     region: 'europe-west1',
-    memory: '2GiB',      // 🚨 KRİTİK: Bellek 2GB yapıldı (Signal 6 hatasını çözer)
+    memory: '4GiB',      // 🚨 KRİTİK GÜNCELLEME: 2GB yetmedi, 4GB yapıldı.
     timeoutSeconds: 540,
-    concurrency: 1       // 🚨 KRİTİK: Her instance sadece 1 iş yapsın (Belleği korur)
+    concurrency: 1       // Her sunucu aynı anda sadece 1 iş yapsın (RAM'i korumak için şart)
   },
   async (event) => {
-    // Mesaj içeriğini güvenli şekilde al
+    // Mesaj içeriğini güvenli al
     const payload = event.data.message.json;
     const { jobId, monitoredMarks, selectedBulletinId, startIndex = 0 } = payload;
 
-    // Payload kontrolü
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
-      console.warn('⚠️ similaritySearchWorker: Eksik veya hatalı payload', payload);
+      console.warn('⚠️ Eksik payload, worker durdu.', payload);
       return;
     }
 
     const progressRef = adminDb.collection('searchProgress').doc(jobId);
 
-    // Durumu güncelle (Başladığını bildir)
-    // Not: Dağıtık mimaride 'set' yerine 'update' kullanıyoruz ki diğer worker'ların verisini ezmesin.
+    // İşleme başladığını bildir
     try {
-      await progressRef.update({
-        lastWorkerActivityAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    } catch (e) {
-      // Eğer doküman henüz yoksa (çok nadir) oluşturmayı dene
-      console.warn("Progress doc bulunamadı, oluşturuluyor...");
-      await progressRef.set({ 
-          status: 'processing',
-          createdAt: admin.firestore.FieldValue.serverTimestamp() 
-      }, { merge: true });
-    }
+        await progressRef.update({
+            lastWorkerActivityAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) { /* Doküman yoksa yut, sonraki adımda oluşur */ }
 
     try {
-      // Asıl işi yapan fonksiyonu çağır
-      // (Not: processSearchInBackground fonksiyonunu da önceki cevaptaki optimize edilmiş haliyle güncellemiş olmalısınız)
+      // İşlem Fonksiyonunu Çağır
       await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex);
       
-      console.log(`✅ Worker görevi tamamladı. (Job: ${jobId}, Parça Boyutu: ${monitoredMarks.length})`);
+      console.log(`✅ Worker Başarılı. (Job: ${jobId}, İşlenen: ${monitoredMarks.length} marka)`);
 
     } catch (err) {
-      console.error('💥 Worker Kritik Hata:', err);
-      
-      // Hatayı veritabanına yaz
+      console.error('💥 Worker Çökme Hatası:', err);
+      // Hatayı kaydet
       await progressRef.set({ 
           status: 'error', 
-          error: `Worker hatası: ${err.message}` 
+          error: `Memory/Process Error: ${err.message}` 
       }, { merge: true });
     }
   }
