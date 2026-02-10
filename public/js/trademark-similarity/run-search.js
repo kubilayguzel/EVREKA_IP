@@ -123,11 +123,6 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           const workerKeys = Object.keys(workersState);
           let totalProcessed = 0;
           let activeWorkersList = [];
-              // ✅ DEBUG LOG EKLE
-    console.log('🔍 [DEBUG] updateGlobalProgress çağrıldı');
-    console.log('📊 [DEBUG] workersState:', workersState);
-    console.log('🔑 [DEBUG] workerKeys:', workerKeys);
-
           workerKeys.forEach(key => {
               const w = workersState[key];
               totalProcessed += (w.processed || 0);
