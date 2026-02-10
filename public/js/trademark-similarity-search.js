@@ -2,7 +2,7 @@
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices, monitoringService } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { collection, doc, getDoc, getDocs, limit, query, setDoc, where, getFirestore, updateDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc, where, getFirestore, updateDoc, arrayUnion, onSnapshot, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
@@ -1006,6 +1006,10 @@ const performSearch = async () => {
             SimpleLoading.update(`Arama devam ediyor... %${pd.progress || 0}`, `İşlenen: ${pd.processed || 0}/${pd.total || monitoredMarksPayload.length} - Bulunan: ${pd.currentResults || 0}`);
         };
         const resultsFromCF = await runTrademarkSearch(monitoredMarksPayload, bulletinKey, onProgress);
+        // Eğer arama asenkron başladıysa (worker'lar devreye girdiyse) listener'ı başlat
+        if (resultsFromCF && resultsFromCF.jobId) {
+            startWorkerListeners(resultsFromCF.jobId);
+        }
         if (resultsFromCF?.length > 0) {
             allSimilarResults = resultsFromCF.map(hit => ({ ...hit,
                 source: 'new',
@@ -2094,3 +2098,102 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     setTimeout(addGlobalOptionToBulletinSelect, 1000);
 });
+// --- WORKER LISTENER FONKSİYONU ---
+let workersUnsubscribe = null;
+
+function startWorkerListeners(jobId) {
+    const container = document.getElementById('workersGridContainer');
+    const gridEl = document.getElementById('workersGrid');
+    
+    // Konteyneri göster
+    if (container) container.style.display = 'block';
+    if (gridEl) gridEl.innerHTML = ''; 
+
+    // Firestore referansı
+    const workersRef = collection(db, 'searchProgress', jobId, 'workers');
+    const q = query(workersRef, orderBy('__name__')); // Worker ID'ye göre sırala
+
+    // Önceki dinleyiciyi temizle
+    if (workersUnsubscribe) {
+        workersUnsubscribe();
+        workersUnsubscribe = null;
+    }
+
+    // Dinlemeye başla
+    workersUnsubscribe = onSnapshot(q, (snapshot) => {
+        let totalProgress = 0;
+        let totalWorkers = snapshot.size;
+        let completedWorkers = 0;
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            const workerId = doc.id;
+            
+            // Kart DOM elementi var mı?
+            let card = document.getElementById(`worker-card-${workerId}`);
+            
+            // Yoksa oluştur
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `worker-card-${workerId}`;
+                card.className = 'worker-card';
+                card.style.cssText = `
+                    background: #fff; 
+                    border: 1px solid #e0e0e0; 
+                    border-radius: 8px; 
+                    padding: 10px; 
+                    text-align: center; 
+                    font-size: 11px; 
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    transition: all 0.3s ease;
+                `;
+                gridEl.appendChild(card);
+            }
+
+            // Duruma göre stil
+            let statusColor = '#f59e0b'; // Sarı (İşleniyor)
+            let iconHtml = '<i class="fas fa-cog fa-spin"></i>';
+            
+            if (data.status === 'completed') {
+                statusColor = '#10b981'; // Yeşil
+                iconHtml = '<i class="fas fa-check-circle"></i>';
+                completedWorkers++;
+            } else if (data.status === 'error') {
+                statusColor = '#ef4444'; // Kırmızı
+                iconHtml = '<i class="fas fa-exclamation-circle"></i>';
+            } else if (data.status === 'paused') {
+                statusColor = '#6366f1'; // Mor
+                iconHtml = '<i class="fas fa-pause-circle"></i>';
+            }
+
+            const percent = data.progress || 0;
+
+            // Kart içeriğini güncelle
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <strong style="color:#333;">Worker #${workerId}</strong>
+                    <span style="color:${statusColor}; font-size:14px;">${iconHtml}</span>
+                </div>
+                <div class="progress" style="height: 6px; background-color: #f1f5f9; border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
+                    <div class="progress-bar" style="width: ${percent}%; background-color: ${statusColor}; transition: width 0.5s;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:#64748b;">
+                    <span>${data.processed || 0} / ${data.total || '?'}</span>
+                    <strong>%${percent}</strong>
+                </div>
+            `;
+        });
+
+        // Hepsi bittiyse kapat
+        if (totalWorkers > 0 && completedWorkers === totalWorkers) {
+            console.log("Tüm workerlar tamamlandı!");
+            // İsterseniz burada 2 saniye sonra gridi gizleyebilirsiniz
+            // setTimeout(() => { if(container) container.style.display = 'none'; }, 3000);
+            
+            if (workersUnsubscribe) {
+                workersUnsubscribe();
+                workersUnsubscribe = null;
+            }
+        }
+    });
+}
