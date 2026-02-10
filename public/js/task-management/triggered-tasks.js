@@ -145,6 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } finally {
                 if (loader) loader.style.display = 'none';
             }
+        }
 
 		buildMaps() {
 			this.ipRecordsMap.clear();
