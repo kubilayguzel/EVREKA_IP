@@ -360,64 +360,103 @@ class PortfolioController {
         }
 
         // --- 7. TABLO İÇİ İŞLEMLER (AKORDEON, BUTONLAR, CHECKBOX) ---
-        // (EKSİK OLAN VE SORUNU ÇÖZEN KISIM BURASI)
-        const tableBody = document.getElementById('portfolioTableBody');
-        if (tableBody) {
-            tableBody.addEventListener('click', (e) => {
-                
+        const portfolioTableBody = document.getElementById('portfolioTableBody'); // İsim çakışmasını önlemek için ismi değiştirdik
+        if (portfolioTableBody) {
+            portfolioTableBody.addEventListener('change', (e) => { // Tıklama yerine 'change' daha sağlıklıdır
                 // A. CHECKBOX SEÇİMİ (Event Delegation)
                 if (e.target.classList.contains('record-checkbox')) {
                     const id = e.target.dataset.id;
                     if (e.target.checked) {
-                        this.state.selectedRecords.add(String(id)); // ID'yi string olarak sakla
+                        this.state.selectedRecords.add(String(id));
                     } else {
                         this.state.selectedRecords.delete(String(id));
                     }
-                    return; // İşlem tamam, diğer kontrollere gerek yok
+                    this.updateActionButtons(); // KRİTİK: Butonları kontrol et
                 }
+            });
 
-                // B. AKORDEON AÇMA/KAPAMA (Caret veya Grup Başlığına Tıklama)
-                // Butonlara veya checkbox'a tıklanmadığından emin ol
+            portfolioTableBody.addEventListener('click', (e) => {
+                // B. AKORDEON AÇMA/KAPAMA
                 const caret = e.target.closest('.row-caret') || 
-                              (e.target.closest('tr.group-header') && !e.target.closest('button, a, input, .action-btn'));
+                            (e.target.closest('tr.group-header') && !e.target.closest('button, a, input, .action-btn'));
                 
                 if (caret) {
                     this.toggleAccordion(e.target.closest('tr') || caret);
                     return;
                 }
 
-                // C. AKSİYON BUTONLARI (Görüntüle, Düzenle, Sil)
+                // C. AKSİYON BUTONLARI
                 const btn = e.target.closest('.action-btn');
                 if (btn) {
-                    e.stopPropagation(); // Satır tıklamasını engelle
-                    
+                    e.stopPropagation();
                     const id = btn.dataset.id;
                     if (!id) return;
 
                     if (btn.classList.contains('view-btn')) {
-                        // GÖRÜNTÜLE
                         if (this.state.activeTab === 'litigation') {
                             window.location.href = `suit-detail.html?id=${id}`;
                         } else {
                             window.open(`portfolio-detail.html?id=${id}`, '_blank', 'noopener');
                         }
-                    } 
-                    else if (btn.classList.contains('edit-btn')) {
-                        // DÜZENLE
+                    } else if (btn.classList.contains('edit-btn')) {
                         sessionStorage.setItem('lastPageNumber', this.state.currentPage);
                         if (this.state.activeTab === 'litigation') {
                             window.location.href = `suit-detail.html?id=${id}`;
                         } else {
                             window.location.href = `data-entry.html?id=${id}`;
                         }
-                    } 
-                    else if (btn.classList.contains('delete-btn')) {
-                        // SİL
+                    } else if (btn.classList.contains('delete-btn')) {
                         this.handleDelete(id);
                     }
                 }
             });
         }
+        // --- 8. TÜMÜNÜ SEÇ (HEADER) ---
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                const checkboxes = document.querySelectorAll('.record-checkbox');
+                
+                checkboxes.forEach(cb => {
+                    cb.checked = isChecked;
+                    const id = cb.dataset.id;
+                    if (isChecked) {
+                        this.state.selectedRecords.add(String(id));
+                    } else {
+                        this.state.selectedRecords.delete(String(id));
+                    }
+                });
+                this.updateActionButtons(); // Butonları aktif/pasif yap
+            });
+        }
+        
+    }
+
+    updateActionButtons() {
+        const hasSelection = this.state.selectedRecords.size > 0;
+
+        // HTML dosyanızdaki buton ID'leri (portfolio.html'deki id'lerle uyumlu olmalıdır)
+        const buttonIds = [
+            'activateSelectedBtn', 
+            'deactivateSelectedBtn', 
+            'addToMonitoringBtn'
+        ];
+
+        buttonIds.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.disabled = !hasSelection;
+                // Görsel olarak aktifleştiğini belli etmek için class ekleyip çıkarabilirsiniz
+                if (hasSelection) {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-primary');
+                } else {
+                    btn.classList.add('btn-secondary');
+                    btn.classList.remove('btn-primary');
+                }
+            }
+        });
     }
 
     getCurrentPageRecords() {
