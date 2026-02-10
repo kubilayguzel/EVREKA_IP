@@ -35,12 +35,6 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// functions/index.js dosyasının en üstüne (importlardan hemen sonraya) ekleyin:
-
-// --- GLOBAL MEMORY CACHE ---
-let cachedBulletinId = null;
-let cachedBulletinRecords = null;
-
 const adminAuth = admin.auth();
 const adminDb = admin.firestore();
 const db        = adminDb;
@@ -4583,128 +4577,365 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
 }
 
 
+// ======== Sunucu Tarafında Marka Benzerliği Araması (GÜNCEL) ========
 export const performTrademarkSimilaritySearch = onCall(
   {
     region: 'europe-west1',
     timeoutSeconds: 540,
-    memory: '1GiB' // Dağıtıcı için 1GB yeterli
+    memory: '2GiB'
   },
   async (request) => {
     const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
 
-    // Sadece ASYNC modda bu dağıtık yapı çalışır
-    if (async) {
-      const newJobId = jobId || `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const TOPIC_NAME = 'similarity-search-jobs';
-      
-      // 1. Job Dokümanını OLUŞTUR (Worker'lar oluşturmayacak, sadece okuyacak/yazacak)
-      // 'isDistributed: true' bayrağı ekliyoruz.
+    // =========================
+    // ASYNC MODE: Kuyruğa at ve dön
+    // =========================
+    if (async && !jobId) {
+      const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Başlangıç progress kaydı
       await adminDb.collection('searchProgress').doc(newJobId).set({
-        status: 'processing',
+        status: 'queued',
         progress: 0,
-        totalMarks: monitoredMarks.length,
-        processedCount: 0,
-        currentResults: 0,
+        total: Array.isArray(monitoredMarks) ? monitoredMarks.length : 0,
+        processed: 0,
+        results: [],
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        bulletinId: selectedBulletinId,
-        isDistributed: true 
-      }, { merge: true });
-
-      // 2. Markaları Paketlere Böl (Chunking)
-      // 20-50 arası idealdir. 100 marka için 20 yaparsak 5 worker aynı anda çalışır.
-      const CHUNK_SIZE = 20; 
-      const chunks = [];
-      for (let i = 0; i < monitoredMarks.length; i += CHUNK_SIZE) {
-        chunks.push(monitoredMarks.slice(i, i + CHUNK_SIZE));
-      }
-
-      await ensureTopic(TOPIC_NAME);
-
-      // 3. Her Paket İçin Ayrı Bir Worker Tetikle (Fan-Out)
-      const publishPromises = chunks.map((chunkMarks, index) => {
-        return pubsubClient.topic(TOPIC_NAME).publishMessage({
-          json: { 
-            jobId: newJobId, 
-            monitoredMarks: chunkMarks, // Sadece bu paketteki markalar gider
-            selectedBulletinId,
-            isPartialBatch: true,
-            chunkIndex: index
-          }
-        });
+        bulletinId: selectedBulletinId
       });
 
-      await Promise.all(publishPromises);
-      console.log(`🚀 Paralel İşlem Başlatıldı: ${monitoredMarks.length} marka, ${chunks.length} worker'a dağıtıldı. Job ID: ${newJobId}`);
+      // 🔁 Artık aynı proseste "fire-and-forget" çağrı YAPMIYORUZ.
+      // ✅ Pub/Sub üzerinden bağımsız worker'a delege ediyoruz.
+      const TOPIC_NAME = 'similarity-search-jobs';
+      await ensureTopic(TOPIC_NAME); // projende zaten varsa kullan; yoksa aşağıdaki helper'ı ekle
+      await pubsubClient.topic(TOPIC_NAME).publishMessage({
+        json: { jobId: newJobId, monitoredMarks, selectedBulletinId }
+      });
 
       return { success: true, jobId: newJobId, async: true };
     }
 
-    // Sync mod için hata (Genelde kullanılmaz)
-    return { success: false, error: "Lütfen bu işlem için async: true kullanın." };
+    // =========================
+    // SYNC MODE: (mevcut mantığın korunuyor)
+    // =========================
+    if (!Array.isArray(monitoredMarks) || monitoredMarks.length === 0 || !selectedBulletinId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Missing required parameters: monitoredMarks (array) or selectedBulletinId'
+      );
+    }
+
+    // BATCH PROCESSING PARAMETRELERİ
+    const BATCH_SIZE = 3;   // Her batch'te 3 marka
+    const PROCESS_DELAY = 500; // Batch'ler arası 500ms bekleme
+
+    logger.log('🚀 Cloud Function: performTrademarkSimilaritySearch BAŞLATILDI', {
+      numMonitoredMarks: monitoredMarks.length,
+      selectedBulletinId,
+      batchSize: BATCH_SIZE,
+      estimatedBatches: Math.ceil(monitoredMarks.length / BATCH_SIZE)
+    });
+
+    try {
+      let bulletinRecordsSnapshot;
+
+      // Önce bulletinId olarak direkt ara
+      bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+        .where('bulletinId', '==', selectedBulletinId)
+        .get();
+
+      // Eğer sonuç yoksa veya gönderilen değer "469_27052025" gibi ise → bulletinNo ile ara
+      if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
+        let selectedBulletinNo = selectedBulletinId;
+        if (selectedBulletinId.includes('_')) {
+          selectedBulletinNo = selectedBulletinId.split('_')[0];
+        }
+
+        const bulletinDoc = await adminDb.collection('trademarkBulletins')
+          .where('bulletinNo', '==', selectedBulletinNo)
+          .limit(1)
+          .get();
+
+        if (!bulletinDoc.empty) {
+          const bulletinIdFromNo = bulletinDoc.docs[0].id;
+          bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+            .where('bulletinId', '==', bulletinIdFromNo)
+            .get();
+        }
+      }
+
+      const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      logger.log(`✅ ${bulletinRecords.length} kayıt bulundu.`);
+
+      const allResults = [];
+
+      // BATCH PROCESSING: Markaları gruplara böl
+      const markBatches = [];
+      for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
+        markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
+      }
+      logger.log(`📦 ${markBatches.length} batch oluşturuldu (her biri max ${BATCH_SIZE} marka)`);
+
+      // Her batch'i sırayla işle
+      for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
+        const batch = markBatches[batchIndex];
+        const progress = Math.round(((batchIndex + 1) / markBatches.length) * 100);
+        logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor... (${progress}%)`);
+
+        // Batch içindeki her markayı işle
+        for (const monitoredMark of batch) {
+          
+          // LOG 1: Gelen veriyi kontrol et
+          logger.log(`🔍 [DEBUG] İşlenen Marka ID: ${monitoredMark.id}`, {
+             anaMarka: monitoredMark.markName,
+             brandTextSearch: monitoredMark.brandTextSearch, // Burası dolu mu?
+             niceClasses: monitoredMark.niceClasses
+          });
+
+          // 1. Aranacak TÜM terimleri belirle (Ana Marka + Alternatifler)
+          const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
+          const overrideName = (monitoredMark.searchMarkName || '').trim();
+          const primaryName = (overrideName || originalName).trim();
+          
+          // brandTextSearch dizisini güvenli bir şekilde al
+          let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+          
+          // Override varsa, orijinal marka adını alternatiflerden çıkar (arama dışı bırak)
+          const normText = (s) => (s || '').toString().trim().toLowerCase();
+          if (overrideName && originalName) {
+              const originalNorm = normText(originalName);
+              alternatives = alternatives.filter(t => normText(t) !== originalNorm);
+          }
+          
+          const searchTerms = [
+              primaryName, 
+              ...alternatives
+          ].filter(t => t && t.trim().length > 0); // Boş olanları temizle
+
+          // LOG 2: Oluşturulan arama listesini gör
+          logger.log(`📝 [DEBUG] Arama Listesi (SearchTerms):`, searchTerms);
+
+          // Tekilleştirme Havuzu
+          const uniqueResultsMap = new Map();
+
+          // 2. Her bir terim için arama yap
+          for (const term of searchTerms) {
+              const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
+              
+              // LOG 3: Şu an hangi kelime aranıyor?
+              logger.log(`🔄 [DEBUG] Döngü: '${term}' için taranıyor...`);
+
+              // Bülten kayıtlarını tara
+              for (const hit of bulletinRecords) {
+                  
+                  // DEBUG ÖZEL: Eğer bültendeki marka aranan kelimeyi içeriyorsa detaylı log bas
+                  // (Böylece neden elendiğini anlarız)
+                  const isSuspicious = hit.markName.toLowerCase().includes(term.toLowerCase());
+
+                  // Tarih filtresi
+                  const applicationDate = monitoredMark.applicationDate || null;
+                  const isDateValid = isValidBasedOnDate(hit.applicationDate, applicationDate);
+                  
+                  if (!isDateValid) {
+                      if (isSuspicious) logger.log(`⚠️ [ATLANDI - TARİH] Marka: ${hit.markName} vs Term: ${term} | HitDate: ${hit.applicationDate} < MonitoredDate: ${applicationDate}`);
+                      continue;
+                  }
+
+                  // Nice sınıf filtresi
+                  const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
+
+                  // 3. Benzerlik Skoru Hesapla
+                  const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
+                  
+                  const { finalScore: similarityScore, positionalExactMatchScore } =
+                    calculateSimilarityScoreInternal(
+                      hit.markName,
+                      term, // DİKKAT: 'term' kullanılıyor
+                      hit.applicationDate,
+                      applicationDate,
+                      hit.niceClasses,
+                      niceClasses
+                    );
+
+                  // Eşik Değer Kontrolü
+                  const SIMILARITY_THRESHOLD = 0.5;
+                  const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+                  let isPrefixSuffixExactMatch = false;
+                  const MIN_SEARCH_LENGTH = 3;
+
+                  if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
+                    const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
+                    for (const w of searchWords) {
+                      if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
+                    }
+                    if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
+                      isPrefixSuffixExactMatch = true;
+                    }
+                  }
+
+                  // LOG 4: Kritik Eşik Kontrolü (Sadece şüpheli kayıtlar için)
+                  if (isSuspicious) {
+                      logger.log(`🧐 [ANALİZ] Marka: ${hit.markName} vs Term: ${term}`, {
+                          similarityScore,
+                          positionalExactMatchScore,
+                          isPrefixSuffixExactMatch,
+                          threshold: SIMILARITY_THRESHOLD,
+                          pass: (similarityScore >= SIMILARITY_THRESHOLD || positionalExactMatchScore >= SIMILARITY_THRESHOLD || isPrefixSuffixExactMatch)
+                      });
+                  }
+
+                  if (
+                    similarityScore < SIMILARITY_THRESHOLD &&
+                    positionalExactMatchScore < SIMILARITY_THRESHOLD &&
+                    !isPrefixSuffixExactMatch
+                  ) {
+                    continue;
+                  }
+
+                  // 4. Sonuç Hazırla
+                  let isEarlier = false;
+                  try {
+                    const searchDate = applicationDate ? new Date(applicationDate) : null;
+                    const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
+                    if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
+                  } catch (_) { isEarlier = false; }
+
+                  const resultObj = {
+                    objectID: hit.id,
+                    markName: hit.markName,
+                    applicationNo: hit.applicationNo,
+                    applicationDate: hit.applicationDate,
+                    niceClasses: hit.niceClasses,
+                    holders: hit.holders,
+                    imagePath: hit.imagePath,
+                    bulletinId: hit.bulletinId,
+                    similarityScore,
+                    positionalExactMatchScore,
+                    sameClass: hasNiceClassOverlap,
+
+                    // Frontend alanları
+                    monitoredTrademark: primaryName, 
+                    matchedTerm: term, // Hangi kelimeyle bulundu
+                    monitoredNiceClasses: monitoredMark.niceClassSearch || [],
+                    monitoredTrademarkId: monitoredMark.id,
+                    monitoredMarkId: monitoredMark.id,
+                    isEarlier
+                  };
+
+                  // 5. AKILLI TEKİLLEŞTİRME
+                  if (uniqueResultsMap.has(hit.applicationNo)) {
+                      const existingResult = uniqueResultsMap.get(hit.applicationNo);
+                      if (resultObj.similarityScore > existingResult.similarityScore) {
+                          uniqueResultsMap.set(hit.applicationNo, resultObj);
+                          if(isSuspicious) logger.log(`🆙 [GÜNCELLEME] ${hit.markName} için daha yüksek skor bulundu (${resultObj.similarityScore})`);
+                      }
+                  } else {
+                      uniqueResultsMap.set(hit.applicationNo, resultObj);
+                      if(isSuspicious) logger.log(`✅ [EKLENDİ] ${hit.markName} sonuçlara eklendi.`);
+                  }
+              }
+          } // Term döngüsü sonu
+
+          const bestResultsForMark = Array.from(uniqueResultsMap.values());
+          allResults.push(...bestResultsForMark);
+
+          logger.log(`📊 '${primaryName}' (ID: ${monitoredMark.id}) için toplam ${bestResultsForMark.length} tekil eşleşme bulundu.`);
+        }
+
+        // Batch arası bekleme (rate limiting)
+        if (batchIndex < markBatches.length - 1) {
+          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
+        }
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
+
+        // Batch arası bekleme (rate limiting)
+        if (batchIndex < markBatches.length - 1) {
+          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
+        }
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
+      }
+
+      allResults.sort((a, b) => b.similarityScore - a.similarityScore);
+
+      logger.log(`✅ Toplam ${allResults.length} sonuç döndürülüyor`, {
+        sampleResult: allResults[0] ? {
+          markName: allResults[0].markName,
+          monitoredTrademark: allResults[0].monitoredTrademark,
+          monitoredMarkId: allResults[0].monitoredMarkId,
+          monitoredTrademarkId: allResults[0].monitoredTrademarkId
+        } : 'No results'
+      });
+
+      return { success: true, results: allResults };
+    } catch (error) {
+      logger.error('❌ Cloud Function hata:', error);
+      throw new HttpsError('internal', 'Marka benzerliği araması sırasında hata oluştu.', error.message);
+    }
   }
 );
 
-// Gerekli alanları seçerek yükleme yapan optimize edilmiş fonksiyon
-async function loadBulletinRecordsOptimized(selectedBulletinId) {
-    // 1. Cache Kontrolü: Eğer aynı bülten zaten hafızadaysa tekrar çekme
-    if (cachedBulletinId === selectedBulletinId && cachedBulletinRecords && cachedBulletinRecords.length > 0) {
-        console.log(`✨ Cache hit: Bülten ${selectedBulletinId} hafızadan kullanılıyor (${cachedBulletinRecords.length} kayıt).`);
-        return cachedBulletinRecords;
+
+// public/functions/index.js
+
+// startIndex parametresi eklendi (Varsayılan 0)
+async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0) {
+  const progressRef = adminDb.collection('searchProgress').doc(jobId);
+  const TIMEOUT_LIMIT = 480 * 1000; // 480 Saniye (8 Dakika) - Güvenli sınır
+  const startTime = Date.now();
+  const BATCH_SIZE = 3;
+  const PROCESS_DELAY = 500; // İsteğiniz üzerine kaldı
+
+  try {
+    // 1. BAŞLANGIÇ DURUMU AYARLAMA
+    if (startIndex === 0) {
+        // İlk kez başlıyorsa temiz bir sayfa aç
+        await progressRef.set({ 
+            status: 'processing', 
+            progress: 0, 
+            results: [], // Sonuç dizisi boş başlar
+            totalMarks: monitoredMarks.length,
+            processedCount: 0,
+            currentResults: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    } else {
+        // Devam eden job ise durumu güncelle
+        await progressRef.update({ status: 'processing_continued' });
     }
 
-    console.log(`📥 Bülten verisi veritabanından çekiliyor (SELECT mode): ${selectedBulletinId}`);
-
-    // Bülten ID'si bazen "469_27052025" gibi gelebilir, temizleyelim
-    let targetBulletinId = selectedBulletinId;
+    // 2. BÜLTEN VERİSİNİ ÇEKME
+    logger.log(`📥 Bülten verisi çekiliyor: ${selectedBulletinId}`);
     
-    // Önce ID ile direkt deneyelim
-    let query = adminDb.collection('trademarkBulletinRecords')
-        .where('bulletinId', '==', targetBulletinId);
+    let bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+      .where('bulletinId', '==', selectedBulletinId)
+      .get();
 
-    // .select() İLE SADECE GEREKLİ ALANLARI ALIYORUZ (Hafıza Tasarrufu)
-    query = query.select(
-        'markName', 
-        'applicationNo', 
-        'applicationDate', 
-        'niceClasses', 
-        'holders', 
-        'imagePath', 
-        'bulletinId'
-    );
+    // ID ile bulunamazsa No ile dene (Fallback)
+    if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
+      let selectedBulletinNo = selectedBulletinId;
+      if (selectedBulletinId.includes('_')) {
+        selectedBulletinNo = selectedBulletinId.split('_')[0];
+      }
+      const bulletinDoc = await adminDb.collection('trademarkBulletins')
+        .where('bulletinNo', '==', selectedBulletinNo)
+        .limit(1)
+        .get();
 
-    let snapshot = await query.get();
-
-    // ID ile bulamazsa BulletinNo ile dene (Fallback)
-    if (snapshot.empty) {
-        let selectedBulletinNo = selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId;
-        
-        const bulletinDoc = await adminDb.collection('trademarkBulletins')
-            .where('bulletinNo', '==', selectedBulletinNo)
-            .limit(1)
-            .get();
-
-        if (!bulletinDoc.empty) {
-            targetBulletinId = bulletinDoc.docs[0].id;
-            console.log(`🔄 Bulletin No (${selectedBulletinNo}) üzerinden ID bulundu: ${targetBulletinId}`);
-            
-            snapshot = await adminDb.collection('trademarkBulletinRecords')
-                .where('bulletinId', '==', targetBulletinId)
-                .select('markName', 'applicationNo', 'applicationDate', 'niceClasses', 'holders', 'imagePath', 'bulletinId')
-                .get();
-        }
+      if (!bulletinDoc.empty) {
+        const bulletinIdFromNo = bulletinDoc.docs[0].id;
+        bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+          .where('bulletinId', '==', bulletinIdFromNo)
+          .get();
+      }
     }
 
-    if (snapshot.empty) {
-        console.warn(`⚠️ Bülten kaydı bulunamadı: ${selectedBulletinId}`);
-        return [];
-    }
-
-    // Veriyi işle ve Cache'e at
-    const records = snapshot.docs.map(doc => {
+    // Sadece gerekli alanları alarak belleği rahatlat (Memory Optimization)
+    const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => {
         const d = doc.data();
-        const rawMarkName = (d.markName || '').toString();
-        const isMultiWord = rawMarkName.trim().split(/\s+/).length > 1;
-        
         return { 
             id: doc.id, 
             markName: d.markName,
@@ -4713,136 +4944,90 @@ async function loadBulletinRecordsOptimized(selectedBulletinId) {
             niceClasses: d.niceClasses,
             holders: d.holders,
             imagePath: d.imagePath,
-            bulletinId: d.bulletinId,
-            // Temizlenmiş ismi burada hesaplayıp saklıyoruz (CPU Tasarrufu)
-            cleanedMarkName: cleanMarkName(rawMarkName, isMultiWord) 
+            bulletinId: d.bulletinId
         };
     });
-
-    // Cache'i güncelle
-    cachedBulletinId = selectedBulletinId;
-    cachedBulletinRecords = records;
     
-    // Snapshot'ı temizle
-    snapshot = null;
-    
-    // Mümkünse Garbage Collection'ı tetikle
-    if (global.gc) { global.gc(); }
+    // Snapshot'ı bellekten düşür (Garbage Collection'a yardım et)
+    bulletinRecordsSnapshot = null; 
 
-    console.log(`✅ ${records.length} bülten kaydı başarıyla yüklendi ve cache'lendi.`);
-    return records;
-}
+    logger.log(`✅ ${bulletinRecords.length} bülten kaydı hafızaya alındı. İşlem ${startIndex}. indexten başlıyor.`);
 
-async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0) {
-  const progressRef = adminDb.collection('searchProgress').doc(jobId);
-  const MIN_SEARCH_LENGTH = 3;
-  
-  // Worker sadece kendine verilen küçük paketi (örn: 20 marka) işleyeceği için
-  // batch size'ı paketin tamamı kadar yapabiliriz.
-  const BATCH_SIZE = 50; 
-
-  try {
-    // --- 1. VERİ ÇEKME VE CACHE (RAM OPTİMİZASYONU) ---
-    let bulletinRecords = [];
-
-    // Cache Kontrolü: Aynı instance tekrar kullanılıyorsa DB'ye gitme
-    if (cachedBulletinId === selectedBulletinId && cachedBulletinRecords && cachedBulletinRecords.length > 0) {
-        console.log(`✨ Cache hit: Bülten verisi RAM'den kullanılıyor.`);
-        bulletinRecords = cachedBulletinRecords;
-    } else {
-        console.log(`📥 Bülten verisi DB'den çekiliyor (Optimize Mod): ${selectedBulletinId}`);
-        
-        let query = adminDb.collection('trademarkBulletinRecords')
-            .where('bulletinId', '==', selectedBulletinId);
-
-        // RAM Tasarrufu için .select()
-        query = query.select('markName', 'applicationNo', 'applicationDate', 'niceClasses', 'holders', 'imagePath', 'bulletinId');
-
-        let snapshot = await query.get();
-
-        // Fallback: ID ile yoksa No ile ara
-        if (snapshot.empty) {
-            let selectedBulletinNo = selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId;
-            const bulletinDoc = await adminDb.collection('trademarkBulletins').where('bulletinNo', '==', selectedBulletinNo).limit(1).get();
-            if (!bulletinDoc.empty) {
-                const realId = bulletinDoc.docs[0].id;
-                snapshot = await adminDb.collection('trademarkBulletinRecords').where('bulletinId', '==', realId)
-                    .select('markName', 'applicationNo', 'applicationDate', 'niceClasses', 'holders', 'imagePath', 'bulletinId').get();
-            }
-        }
-
-        if (snapshot.empty) {
-            console.error("Bülten verisi bulunamadı.");
-            return; 
-        }
-
-        bulletinRecords = snapshot.docs.map(doc => {
-            const d = doc.data();
-            const rawMarkName = (d.markName || '').toString();
-            return { 
-                id: doc.id, 
-                markName: d.markName,
-                applicationNo: d.applicationNo,
-                applicationDate: d.applicationDate,
-                niceClasses: d.niceClasses,
-                holders: d.holders,
-                imagePath: d.imagePath,
-                bulletinId: d.bulletinId,
-                cleanedMarkName: cleanMarkName(rawMarkName, rawMarkName.trim().split(/\s+/).length > 1) 
-            };
-        });
-
-        // Cache'e at
-        cachedBulletinId = selectedBulletinId;
-        cachedBulletinRecords = bulletinRecords;
-        
-        if (global.gc) global.gc();
+    // 3. BATCH AYARLARI
+    // Tüm markaları batch'lere bölüyoruz
+    const markBatches = [];
+    for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
+      markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
     }
 
-    // --- 2. TARAMA DÖNGÜSÜ (YEREL) ---
-    // Bu worker'a sadece bir paket (chunk) geldiği için, hepsini işliyoruz.
-    // Chunking'i zaten performTrademarkSimilaritySearch yaptı.
-    
-    let localResultsBuffer = [];
-    let processedLocalCount = 0;
+    // Başlangıç batch indexini bul (Kaldığımız yer)
+    let startBatchIndex = Math.floor(startIndex / BATCH_SIZE);
+    let processedCount = startIndex;
+    let totalResultsFound = 0; // Bu sessionda bulunan sonuç sayısı
 
-    for (const monitoredMark of monitoredMarks) {
+    // 4. ANA DÖNGÜ
+    for (let batchIndex = startBatchIndex; batchIndex < markBatches.length; batchIndex++) {
+      
+      // --- A) ZAMAN KONTROLÜ (KRİTİK) ---
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime > TIMEOUT_LIMIT) {
+          logger.warn(`⚠️ Zaman aşımı sınırına yaklaşıldı (${elapsedTime/1000}sn). İşlem duraklatılıyor.`);
+          
+          // Durumu 'paused' yapıyoruz ve nerede kaldığımızı (nextIndex) kaydediyoruz.
+          // Frontend veya Scheduler bunu görüp tekrar tetikleyecek.
+          await progressRef.update({
+              status: 'paused', 
+              nextIndex: processedCount,
+              progress: Math.floor((processedCount / monitoredMarks.length) * 100)
+          });
+          
+          return; // Fonksiyonu burada NAZİKÇE bitiriyoruz.
+      }
+      // -------------------------------------
+
+      const batch = markBatches[batchIndex];
+      const batchResults = []; // Sadece bu batch'in sonuçlarını tutacağız (RAM Dostu)
+
+      // Batch içindeki markaları işle
+      for (const monitoredMark of batch) {
         
         const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
         const overrideName = (monitoredMark.searchMarkName || '').trim();
         const primaryName = (overrideName || originalName).trim();
         let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
-        
         const normText = (s) => (s || '').toString().trim().toLowerCase();
         if (overrideName && originalName) {
             const originalNorm = normText(originalName);
             alternatives = alternatives.filter(t => normText(t) !== originalNorm);
         }
-        
         const searchTerms = [primaryName, ...alternatives].filter(t => t && t.trim().length > 0);
         const uniqueResultsMap = new Map();
-        
-        const monitoredApplicationDate = monitoredMark.applicationDate || null;
-        const monitoredNiceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
-        const SIMILARITY_THRESHOLD = 0.5;
 
         for (const term of searchTerms) {
             const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
-            const searchWords = cleanedSearchName.split(' ').filter(w => w.length >= MIN_SEARCH_LENGTH);
-
+            
             for (const hit of bulletinRecords) {
-                if (!isValidBasedOnDate(hit.applicationDate, monitoredApplicationDate)) continue;
+                const applicationDate = monitoredMark.applicationDate || null;
+                if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) continue;
 
-                // --- BENZERLİK HESAPLAMA (DEĞİŞMEDİ) ---
+                const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
+                // Loglar kaldırıldı (Performans artışı)
                 const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
-                  hit.markName, term, hit.applicationDate, monitoredApplicationDate, hit.niceClasses, monitoredNiceClasses
+                  hit.markName, term, hit.applicationDate, applicationDate, hit.niceClasses, niceClasses
                 );
 
-                const cleanedHitName = hit.cleanedMarkName;
+                const SIMILARITY_THRESHOLD = 0.5;
+                const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+                
                 let isPrefixSuffixExactMatch = false;
+                const MIN_SEARCH_LENGTH = 3;
                 if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
-                    if (cleanedHitName.includes(cleanedSearchName)) isPrefixSuffixExactMatch = true;
-                    else if (searchWords.some(w => cleanedHitName.includes(w))) isPrefixSuffixExactMatch = true;
+                    if (cleanedHitName.includes(cleanedSearchName)) {
+                        isPrefixSuffixExactMatch = true;
+                    } else {
+                        const searchWords = cleanedSearchName.split(' ').filter(w => w.length >= MIN_SEARCH_LENGTH);
+                        if(searchWords.some(w => cleanedHitName.includes(w))) isPrefixSuffixExactMatch = true;
+                    }
                 }
 
                 if (similarityScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) {
@@ -4875,68 +5060,64 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                     uniqueResultsMap.set(hit.applicationNo, resultObj);
                 }
             }
-        }
-        
-        localResultsBuffer.push(...Array.from(uniqueResultsMap.values()));
-        processedLocalCount++;
+        } // Term döngüsü
+
+        batchResults.push(...Array.from(uniqueResultsMap.values()));
+        processedCount++; // Sayaç her markada artar
+      } // Batch item döngüsü
+
+      // --- B) PARÇALI KAYIT (INCREMENTAL SAVE) ---
+      // Batch sonuçlarını hemen DB'ye yaz ve RAM'den sil.
+if (batchResults.length > 0) {
+          const batchWrite = adminDb.batch();
+          const resultsCollection = progressRef.collection('foundResults'); // Alt koleksiyon (Çekmece)
+          
+          batchResults.forEach(result => {
+              // Her sonucu ayrı bir belge olarak ekle
+              const newDocRef = resultsCollection.doc(); 
+              batchWrite.set(newDocRef, result);
+          });
+          
+          // Toplu yazma işlemi (Hızlı ve Güvenli)
+          await batchWrite.commit();
+          
+          totalResultsFound += batchResults.length;
+          
+          // Ana dökümanda SADECE SAYIYI güncelle (Veriyi değil, sadece sayacı)
+          await progressRef.update({
+              currentResults: admin.firestore.FieldValue.increment(batchResults.length)
+          });
+      }
+
+      // Progress Güncelle
+      const progress = Math.floor((processedCount / monitoredMarks.length) * 100);
+      await progressRef.update({ 
+        progress, 
+        processed: processedCount
+      });
+      
+      // Batch Logu (Detaysız)
+      logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. (Toplam Bulunan: ${totalResultsFound})`);
+
+      // Gecikme (Soğutma)
+      if (batchIndex < markBatches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
+      }
     }
 
-    // --- 3. SONUÇLARI KAYDET VE İLERLEMEYİ GÜNCELLE ---
-    
-    // A) Sonuçları Alt Koleksiyona Yaz
-    if (localResultsBuffer.length > 0) {
-        const resultsCollection = progressRef.collection('foundResults');
-        const batchWrite = adminDb.batch();
-        
-        // Batch limitine dikkat (max 500)
-        // Eğer bir markadan 500+ sonuç çıkarsa parçalamak gerekir ama genelde çıkmaz.
-        localResultsBuffer.forEach(res => {
-            const newDocRef = resultsCollection.doc();
-            batchWrite.set(newDocRef, res);
-        });
-        
-        await batchWrite.commit();
-        
-        // Toplam sonuç sayısını ATOMIC olarak artır (Increment)
-        await progressRef.update({
-            currentResults: admin.firestore.FieldValue.increment(localResultsBuffer.length)
-        });
-    }
-
-    // B) İşlenen Sayısını Artır (Atomic Increment)
+    // 5. BİTİŞ
+    // Döngü başarıyla tamamlandıysa
     await progressRef.update({
-        processedCount: admin.firestore.FieldValue.increment(processedLocalCount)
+      status: 'completed',
+      progress: 100,
+      processed: monitoredMarks.length,
+      completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-
-    // --- 4. BİTİŞ KONTROLÜ (TRANSACTION) ---
-    // Hangi worker'ın sonuncu olduğunu anlamak için transaction kullanıyoruz.
-    await adminDb.runTransaction(async (t) => {
-        const doc = await t.get(progressRef);
-        if (!doc.exists) return;
-        
-        const data = doc.data();
-        const currentProcessed = data.processedCount || 0;
-        const total = data.totalMarks || 0;
-
-        // Progress yüzdesini güncelle
-        const newProgress = total > 0 ? Math.floor((currentProcessed / total) * 100) : 0;
-        
-        if (currentProcessed >= total && data.status !== 'completed') {
-            // Eğer tüm markalar işlendiyse durumu Completed yap
-            t.update(progressRef, {
-                status: 'completed',
-                progress: 100,
-                completedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            console.log(`🏁 TÜM İŞLEMLER TAMAMLANDI. (${currentProcessed}/${total})`);
-        } else {
-            // Sadece yüzdeyi güncelle
-            t.update(progressRef, { progress: newProgress });
-        }
-    });
+    
+    logger.log(`✅ Arama TAMAMLANDI.`);
 
   } catch (error) {
-      console.error('❌ Worker error:', error);
+      logger.error('❌ Background search error:', error);
       await progressRef.update({
           status: 'error',
           error: error.message
@@ -7168,51 +7349,47 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   }
 );
 
-// index.js
-
+// ===== similaritySearchWorker (Pub/Sub subscriber) =====
 export const similaritySearchWorker = onMessagePublished(
   {
     topic: 'similarity-search-jobs',
     region: 'europe-west1',
-    memory: '4GiB',      // 🚨 KRİTİK GÜNCELLEME: 2GB yetmedi, 4GB yapıldı.
+    memory: '2GiB',
     timeoutSeconds: 540,
-    concurrency: 1       // Her sunucu aynı anda sadece 1 iş yapsın (RAM'i korumak için şart)
   },
   async (event) => {
-    // Mesaj içeriğini güvenli al
-    const payload = event.data.message.json;
-    const { jobId, monitoredMarks, selectedBulletinId, startIndex = 0 } = payload;
+    const payload = event?.data?.message?.json || {};
+    const { jobId, monitoredMarks, selectedBulletinId } = payload;
 
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
-      console.warn('⚠️ Eksik payload, worker durdu.', payload);
-      return;
+      logger.warn('⚠️ similaritySearchWorker: eksik payload', payload);
+      return null;
     }
 
     const progressRef = adminDb.collection('searchProgress').doc(jobId);
 
-    // İşleme başladığını bildir
-    try {
-        await progressRef.update({
-            lastWorkerActivityAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-    } catch(e) { /* Doküman yoksa yut, sonraki adımda oluşur */ }
+    // Başlat/progress
+    await progressRef.set({ status: 'processing', progress: 5 }, { merge: true });
 
     try {
-      // İşlem Fonksiyonunu Çağır
-      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex);
-      
-      console.log(`✅ Worker Başarılı. (Job: ${jobId}, İşlenen: ${monitoredMarks.length} marka)`);
+      // Mevcut arka plan fonksiyonunuzu kullanıyoruz:
+      //  - Dosyanızda zaten tanımlı: async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId)
+      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId);
+
+      // processSearchInBackground tamamlandığında, orada status/progress 'completed' yapılmalı.
+      // (Sizde zaten progress güncellemeleri ve completed set ediliyor.)
+      logger.info(`✅ similaritySearchWorker tamamlandı: ${jobId}`);
+      return null;
 
     } catch (err) {
-      console.error('💥 Worker Çökme Hatası:', err);
-      // Hatayı kaydet
-      await progressRef.set({ 
-          status: 'error', 
-          error: `Memory/Process Error: ${err.message}` 
-      }, { merge: true });
+      logger.error('❌ similaritySearchWorker hata:', err);
+      await progressRef.set({ status: 'error', error: err?.message || String(err) }, { merge: true });
+      return null;
     }
   }
 );
+
+// index.js (Yeni Yardımcı Fonksiyon: Client/IP Bilgisi Bulma)
 
 /**
  * Monitored Marka ID'si üzerinden en ilişkili IP Kaydını ve Client ID'sini bulur.
