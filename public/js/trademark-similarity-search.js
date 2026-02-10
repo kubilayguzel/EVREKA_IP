@@ -364,26 +364,26 @@ const refreshTriggeredStatus = async (bulletinNo) => {
 };
 
 // --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
-const renderMonitoringList = async () => {
-    const container = document.getElementById('monitoringAccordion');
-    if (!container) return;
+// public/js/trademark-similarity-search.js
 
-    // Veri yoksa
+const renderMonitoringList = async () => {
+    const tbody = document.getElementById('monitoringListBody');
+    
     if (!filteredMonitoringTrademarks.length) {
-        container.innerHTML = '<div class="alert alert-warning text-center">İzlenen marka bulunamadı.</div>';
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
         return;
     }
 
-    // 1. Gruplama (Eğer cache yoksa yap)
+    // 1. Hızlı Gruplama (Eğer cache yoksa)
     if (!cachedGroupedData) {
         const grouped = {};
         
-        // Hızlı Gruplama (Sadece yerel veriyi kullan, DB'ye gitme)
+        // Veriyi senkron (anlık) olarak grupla
         filteredMonitoringTrademarks.forEach(tm => {
-            // Sahip ismini bulmaya çalış
+            // Sahip adını mevcut veriden bul (DB'ye gitmeden)
             let ownerName = tm.ownerName || tm.owner || 'Diğer / Belirsiz';
             
-            // Eğer owners array ise stringe çevir
+            // Array kontrolü
             if (Array.isArray(tm.owners)) {
                 ownerName = tm.owners.map(o => o.name || o).join(', ');
             } else if (Array.isArray(tm.applicants)) {
@@ -395,88 +395,106 @@ const renderMonitoringList = async () => {
             if (!grouped[ownerKey]) {
                 grouped[ownerKey] = {
                     ownerName: ownerKey,
-                    ownerId: tm.ipRecordId || tm.id, // Geçici ID
+                    // Geçici ID, gerçek ID'yi render sırasında bulacağız
+                    ownerId: tm.ipRecordId || tm.id, 
                     trademarks: []
                 };
             }
-            grouped[ownerKey].trademarks.push(tm);
+            // Sadece ham datayı ekle
+            grouped[ownerKey].trademarks.push({ tm }); 
         });
+        
         cachedGroupedData = grouped;
     }
 
-    // 2. Sayfalama ve Render
+    // 2. Sayfalama
     const sortedOwnerKeys = Object.keys(cachedGroupedData).sort((a, b) => a.localeCompare(b, 'tr'));
     
     if (monitoringPagination) monitoringPagination.update(sortedOwnerKeys.length);
-    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 10;
+    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
     const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
     
     const paginatedKeys = sortedOwnerKeys.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    let htmlContent = '';
+    // 3. Ekrana Basma (Sadece 5 satır için işlem yap)
+    let allRowsHtml = [];
 
-    paginatedKeys.forEach((key, index) => {
-        const group = cachedGroupedData[key];
-        const collapseId = `collapseOwner_${index}`;
-        const headerId = `headingOwner_${index}`;
+    // Görünen 5 satır için gerekirse detay verisi çek (Async Map)
+    const rowPromises = paginatedKeys.map(async (ownerKey, index) => {
+        const group = cachedGroupedData[ownerKey];
+        const groupUid = `owner-group-${index}`;
         
-        const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
-        const badgeHtml = isTriggered 
-            ? `<span class="badge badge-success ml-2">İşlem Yapıldı</span>` 
-            : `<span class="badge badge-secondary ml-2">Hazır</span>`;
+        // Sahibin gerçek ID'sini bulmak için ilk markanın detayına bak
+        // Bu işlem sadece 5 defa yapılır, performans etkilenmez.
+        let realOwnerId = group.ownerId;
+        try {
+            const firstTm = group.trademarks[0].tm;
+            const ipId = firstTm.ipRecordId || firstTm.sourceRecordId;
+            if(ipId) {
+                const ipData = await _getIp(ipId); // Cache'li fetch
+                const ownerInfo = _getOwnerKey(ipData, firstTm, allPersons);
+                if(ownerInfo?.id) realOwnerId = ownerInfo.id;
+            }
+        } catch(e) { console.log('Owner ID fetch error', e); }
 
-        htmlContent += `
-            <div class="card mb-2 border shadow-sm">
-                <div class="card-header bg-white p-0" id="${headerId}">
-                    <h2 class="mb-0">
-                        <button class="btn btn-block text-left d-flex justify-content-between align-items-center p-3" type="button" data-toggle="collapse" data-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-folder text-primary mr-3" style="font-size: 1.2rem;"></i>
-                                <span class="font-weight-bold text-dark" style="font-size: 1rem;">${group.ownerName}</span>
-                                <span class="badge badge-light border ml-2">${group.trademarks.length} Marka</span>
-                                ${badgeHtml}
-                            </div>
-                            <i class="fas fa-chevron-down text-muted"></i>
-                        </button>
-                    </h2>
+        // Statüleri al
+        const isTriggered = taskTriggeredStatus.get(realOwnerId) === 'Evet';
+        const statusText = isTriggered ? 'Evet' : 'Hazır';
+        const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
+        const notifStatus = notificationStatus.get(realOwnerId) || 'Gönderilmedi';
+        const notifClass = notifStatus === 'Gönderildi' ? 'sent-status' : 'initial-status';
+
+        return `
+        <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
+            <td><i class="fas fa-chevron-down toggle-icon"></i></td>
+            <td><strong>${group.ownerName}</strong></td>
+            <td><span class="badge badge-light border">${group.trademarks.length}</span></td>
+            <td><span class="task-triggered-status trigger-status-badge ${statusClass}">${statusText}</span></td>
+            <td><span class="notification-status-badge ${notifClass}">${notifStatus}</span></td>
+            <td>
+                <div class="action-btn-group">
+                    <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${realOwnerId}" data-owner-name="${group.ownerName}" title="Rapor + Bildir"><i class="fas fa-paper-plane"></i></button>
+                    <button class="action-btn btn-primary generate-report-btn" data-owner-id="${realOwnerId}" data-owner-name="${group.ownerName}" title="Rapor İndir"><i class="fas fa-file-pdf"></i></button>
                 </div>
-
-                <div id="${collapseId}" class="collapse" aria-labelledby="${headerId}" data-parent="#monitoringAccordion">
-                    <div class="card-body p-0">
-                        <div class="lazy-load-placeholder text-center p-4" data-owner-key="${key}">
-                            <i class="fas fa-spinner fa-spin text-muted"></i> Markalar yükleniyor...
-                        </div>
+            </td>
+        </tr>
+        <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
+            <td colspan="6" class="p-0">
+                <div class="nested-content-container bg-light" data-loaded="false" data-owner-key="${ownerKey}">
+                    <div class="p-4 text-center text-muted">
+                        <i class="fas fa-spinner fa-spin mr-2"></i> Markalar yükleniyor...
                     </div>
                 </div>
-            </div>
-        `;
+            </td>
+        </tr>`;
     });
 
-    container.innerHTML = htmlContent;
+    const rows = await Promise.all(rowPromises);
+    tbody.innerHTML = rows.join('');
 
-    // Rapor butonları için event listener'ları buraya ekleyebilirsiniz (Gerekirse)
-    attachAccordionEvents();
+    // Listener'ları bağla
+    attachGenerateReportListener();
+    attachTrademarkClickListener();
+    attachLazyLoadListeners(cachedGroupedData);
 };
 
 // --- YENİ HELPER FONKSİYON ---
+// public/js/trademark-similarity-search.js
+
 const attachLazyLoadListeners = (groupedData) => {
     const tbody = document.getElementById('monitoringListBody');
-    
-    // Eski listener'ları temizlemek için klonlama yapabiliriz veya
-    // jQuery kullanıyorsanız off() yapabilirsiniz. Vanilla JS'de üst üste binmemesi için kontrol:
     if (tbody._lazyLoadAttached) return;
     tbody._lazyLoadAttached = true;
 
-    tbody.addEventListener('click', (e) => {
-        // Butonlara tıklanırsa accordion'ı tetikleme
+    tbody.addEventListener('click', async (e) => {
+        // Butonlara tıklanırsa açma/kapama yapma
         if (e.target.closest('.action-btn, button, a')) return;
 
         const headerRow = e.target.closest('.owner-row');
         if (!headerRow) return;
 
-        const targetId = headerRow.dataset.target || '#' + headerRow.getAttribute('aria-controls');
+        const targetId = headerRow.dataset.target;
         const contentRow = document.querySelector(targetId);
-        
         if (!contentRow) return;
 
         const isExpanded = headerRow.getAttribute('aria-expanded') === 'true';
@@ -492,7 +510,8 @@ const attachLazyLoadListeners = (groupedData) => {
             icon.classList.toggle('fa-chevron-down', isExpanded);
         }
 
-        // Eğer açılıyorsa (isExpanded false -> true olacaksa) ve veri yüklenmemişse YÜKLE
+        // --- LAZY LOAD TETİKLEME ---
+        // Eğer açılıyorsa ve veri henüz yüklenmediyse
         if (!isExpanded) {
             const container = contentRow.querySelector('.nested-content-container');
             if (container && container.dataset.loaded === 'false') {
@@ -500,32 +519,65 @@ const attachLazyLoadListeners = (groupedData) => {
                 const group = groupedData[ownerKey];
                 
                 if (group && group.trademarks) {
-                    // HTML OLUŞTURMA (Burada yapılıyor)
-                    const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
-                        const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
-                        
-                        // loading="lazy" eklendi
-                        return `
-                            <tr class="trademark-detail-row">
-                                <td class="td-nested-toggle"></td>
-                                <td class="td-nested-img">
-                                    ${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}
-                                </td>
-                                <td class="td-nested-name"><strong>${markName}</strong></td>
-                                <td class="td-nested-appno">${appNo}</td>
-                                <td class="td-nested-nice">${nices || '-'}</td> 
-                                <td class="td-nested-date">${appDate}</td>
-                            </tr>`;
-                    }).join('');
+                    try {
+                        // DETAYLARI ŞİMDİ ÇEK (Lazy Fetch)
+                        const detailRowsPromises = group.trademarks.map(async ({ tm }) => {
+                            // IP Record verisini çek
+                            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+                            
+                            const markName = _pickName(ip, tm);
+                            const appNo = _pickAppNo(ip, tm);
+                            const nices = _uniqNice(ip || tm);
+                            const appDate = _pickAppDate(ip, tm);
+                            
+                            // Görsel URL
+                            let imgSrc = _pickImg(ip, tm);
+                            // Storage URL çevrimi gerekebilir
+                            if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('data:')) {
+                                try {
+                                    imgSrc = await getDownloadURL(ref(getStorage(), imgSrc));
+                                } catch(e) { imgSrc = null; }
+                            }
 
-                    const tableHtml = `
-                        <table class="table table-sm nested-table">
-                            <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
-                            <tbody>${detailRowsHtml}</tbody>
-                        </table>`;
+                            const imgHtml = imgSrc 
+                                ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy"></div>` 
+                                : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`;
 
-                    container.innerHTML = tableHtml;
-                    container.dataset.loaded = 'true'; // Tekrar yüklemeyi engelle
+                            return `
+                                <tr class="trademark-detail-row">
+                                    <td class="td-nested-toggle"></td>
+                                    <td class="td-nested-img">${imgHtml}</td>
+                                    <td class="td-nested-name"><strong>${markName}</strong></td>
+                                    <td class="td-nested-appno">${appNo}</td>
+                                    <td class="td-nested-nice">${nices || '-'}</td> 
+                                    <td class="td-nested-date">${appDate}</td>
+                                </tr>`;
+                        });
+
+                        const detailRows = await Promise.all(detailRowsPromises);
+
+                        const tableHtml = `
+                            <table class="table table-sm nested-table mb-0 bg-white">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th></th>
+                                        <th class="col-nest-img">Görsel</th>
+                                        <th class="col-nest-name">Marka Adı</th>
+                                        <th class="col-nest-appno">Başvuru No</th>
+                                        <th class="col-nest-nice">Nice Sınıfı</th>
+                                        <th class="col-nest-date">B. Tarihi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${detailRows.join('')}</tbody>
+                            </table>`;
+
+                        container.innerHTML = tableHtml;
+                        container.dataset.loaded = 'true'; // Bir daha yükleme yapma
+
+                    } catch (error) {
+                        console.error('Lazy load detay hatası:', error);
+                        container.innerHTML = '<div class="text-danger p-3 text-center">Veriler yüklenirken hata oluştu.</div>';
+                    }
                 }
             }
         }
@@ -772,16 +824,19 @@ const applyMonitoringListFilters = async () => {
     checkCacheAndToggleButtonStates();
 };
 
+// public/js/trademark-similarity-search.js
+
 const loadInitialData = async () => {
     await loadSharedLayout({ activeMenuLink: 'trademark-similarity-search.html' });
     
-    // Kişileri çek (Cache'li servisten)
+    // Kişileri çek (Cache'li)
     const personsResult = await personService.getPersons();
     if (personsResult.success) allPersons = personsResult.data;
     
     await loadBulletinOptions();
 
-    // Sadece ana listeyi çek, detayları (ipRecord) burada ÇEKME! (Hız için kritik)
+    // --- DEĞİŞİKLİK BURADA: ---
+    // Detayları (ipRecord) çekmeden SADECE ana listeyi alıyoruz. Bu çok hızlıdır.
     const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
     monitoringTrademarks = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
@@ -790,8 +845,9 @@ const loadInitialData = async () => {
 
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     
+    // Pagination ve Render başlat
     initializeMonitoringPagination();
-    renderMonitoringList(); // Yeni render fonksiyonu çağrılacak
+    renderMonitoringList(); 
     updateMonitoringCount();
     
     // Varsa bülten tetikleme durumunu kontrol et
@@ -1913,102 +1969,6 @@ function populateList(listElement, items, permanentItems = []) {
         listElement.appendChild(emptyItem);
     }
 }
-
-const attachAccordionEvents = () => {
-    // Bootstrap Collapse olayını dinle
-    $('#monitoringAccordion').on('show.bs.collapse', function (e) {
-        const collapseElement = e.target;
-        const placeholder = collapseElement.querySelector('.lazy-load-placeholder');
-        
-        // Eğer placeholder hala varsa, veri yüklenmemiş demektir.
-        if (placeholder) {
-            const ownerKey = placeholder.dataset.ownerKey;
-            loadGroupDetails(ownerKey, collapseElement.querySelector('.card-body'));
-        }
-    });
-};
-
-const loadGroupDetails = async (ownerKey, container) => {
-    const group = cachedGroupedData[ownerKey];
-    if (!group) return;
-
-    try {
-        // Detaylı tabloyu oluştur
-        let tableHtml = `
-            <div class="table-responsive">
-                <table class="table table-sm table-striped mb-0">
-                    <thead class="thead-light">
-                        <tr>
-                            <th style="width: 60px;">Görsel</th>
-                            <th>Marka Adı</th>
-                            <th>Başvuru No</th>
-                            <th>Nice</th>
-                            <th>Tarih</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        // Her bir markayı dön ve gerekirse IP verisini çek
-        // Not: Burada Promise.all ile paralel çekim yaparak hızlandırıyoruz
-        const rowPromises = group.trademarks.map(async (tm) => {
-            // IP Kaydını Çek (Cache mekanizması _getIp içinde var)
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-            
-            const name = tm.title || tm.markName || ip?.title || '-';
-            const appNo = tm.applicationNumber || tm.applicationNo || ip?.applicationNumber || '-';
-            const nice = _uniqNice(ip || tm);
-            const date = _pickAppDate(ip, tm);
-            
-            // Görsel URL
-            let imgUrl = _pickImg(ip, tm);
-            let imgTag = '<div class="tm-placeholder sm">-</div>';
-            
-            if (imgUrl) {
-                // Storage URL kontrolü
-                if (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:')) {
-                    try {
-                        imgUrl = await getDownloadURL(ref(getStorage(), imgUrl));
-                    } catch (e) { imgUrl = null; }
-                }
-                if (imgUrl) imgTag = `<img src="${imgUrl}" class="trademark-image-thumbnail" style="width:40px; height:40px; object-fit:contain;">`;
-            }
-
-            return `
-                <tr>
-                    <td>${imgTag}</td>
-                    <td><strong>${name}</strong></td>
-                    <td>${appNo}</td>
-                    <td><small>${nice}</small></td>
-                    <td><small>${date}</small></td>
-                </tr>
-            `;
-        });
-
-        const rows = await Promise.all(rowPromises);
-        tableHtml += rows.join('');
-        tableHtml += `</tbody></table></div>`;
-        
-        // İçeriği güncelle (Butonları da ekleyebilirsiniz)
-        container.innerHTML = `
-            <div class="p-2 text-right bg-light border-bottom">
-               <button class="btn btn-sm btn-outline-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}">
-                   <i class="fas fa-file-pdf"></i> Rapor İndir
-               </button>
-            </div>
-            ${tableHtml}
-        `;
-        
-        // Buton dinleyicilerini yeniden bağla
-        container.querySelectorAll('.generate-report-btn').forEach(btn => {
-            btn.addEventListener('click', handleOwnerReportGeneration);
-        });
-
-    } catch (error) {
-        console.error("Detay yükleme hatası:", error);
-        container.innerHTML = '<div class="text-danger p-3">Veriler yüklenirken hata oluştu.</div>';
-    }
-};
 
 window.queryApplicationNumberWithExtension = (applicationNo) => {
     const appNo = (applicationNo || '').toString().trim();
