@@ -2,9 +2,9 @@
 
 import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { getFirestore, doc, onSnapshot,collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, doc, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-console.log(">>> run-search.js modülü yüklendi ve Firebase servisleri kullanılıyor <<<");
+console.log(">>> run-search.js modülü yüklendi (Worker Destekli Versiyon) <<<");
 
 const functions = getFunctions(firebaseServices.app, "europe-west1");
 const db = getFirestore(firebaseServices.app);
@@ -17,7 +17,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
       selectedBulletinId
     });
 
-    // İlk başlatma: startIndex 0
+    // İlk başlatma
     const response = await performSearchCallable({
       monitoredMarks,
       selectedBulletinId,
@@ -37,93 +37,130 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     // Progress tracking
     return new Promise((resolve, reject) => {
       const progressRef = doc(db, 'searchProgress', jobId);
+      // --- EKLENEN KISIM: Workerları Dinleme ---
+      const workersRef = collection(db, 'searchProgress', jobId, 'workers'); 
       
-      // Güvenlik timeout'unu yönetmek için değişken
       let safetyTimeout;
+      // Durumları hafızada tutuyoruz
+      let mainState = { status: 'starting', totalMarks: monitoredMarks.length };
+      let workersState = {}; // { 'workerId': { progress: 50, status: 'processing', ... } }
+
+      let unsubscribeMain = null;
+      let unsubscribeWorkers = null;
+
+      const cleanup = () => {
+        if (safetyTimeout) clearTimeout(safetyTimeout);
+        if (unsubscribeMain) unsubscribeMain();
+        if (unsubscribeWorkers) unsubscribeWorkers();
+      };
+
       const resetSafetyTimeout = () => {
           if (safetyTimeout) clearTimeout(safetyTimeout);
           safetyTimeout = setTimeout(() => {
-              unsubscribe();
+              cleanup();
               reject(new Error('İşlem zaman aşımına uğradı (Uzun süre işlem yapılmadı)'));
-          }, 15 * 60 * 1000); // 15 dakika hareketsizlik süresi
+          }, 15 * 60 * 1000); // 15 dakika
       };
 
-      resetSafetyTimeout(); // İlk başlatma
+      resetSafetyTimeout();
 
-      const unsubscribe = onSnapshot(progressRef, async (snapshot) => {
-        // Her veri geldiğinde timeout süresini uzat (işlem canlı demek)
+      // --- 1. WORKERLARI DİNLEME (Detaylı İlerleme Çubukları İçin) ---
+      unsubscribeWorkers = onSnapshot(workersRef, (snapshot) => {
         resetSafetyTimeout();
+        
+        snapshot.forEach(doc => {
+            workersState[doc.id] = doc.data();
+        });
 
+        // Worker verileri her değiştiğinde genel durumu güncelle
+        updateGlobalProgress();
+      });
+
+      // --- 2. ANA DÖKÜMANI DİNLEME (Tamamlandı/Hata durumu için) ---
+      unsubscribeMain = onSnapshot(progressRef, async (snapshot) => {
         if (!snapshot.exists()) {
-          unsubscribe();
+          cleanup();
           reject(new Error('Job bulunamadı'));
           return;
         }
 
-        const progressData = snapshot.data();
-        
-        // Logu biraz temizledik, sadece değişimde basabiliriz ama şimdilik kalsın
-        console.log(`📊 Durum: ${progressData.status} | Progress: ${progressData.progress}% (${progressData.processed || 0}/${progressData.totalMarks || monitoredMarks.length})`);
-
-        // Progress callback
-        if (onProgress) {
-          onProgress({
-            progress: progressData.progress,
-            processed: progressData.processed,
-            total: progressData.totalMarks || monitoredMarks.length,
-            currentResults: progressData.currentResults || 0,
-            status: progressData.status,
-            message:
-              progressData.status === 'queued' && progressData.queueReason === 'timeout_protection'
-                ? 'Zaman aşımı koruması: işlem otomatik olarak kuyruğa alındı ve devam ettirilecek...'
-                : null
-          });
-        }
-      
-        // Tamamlandı Durumu
-        if (progressData.status === 'completed') {
-          if (safetyTimeout) clearTimeout(safetyTimeout);
-          unsubscribe(); // Dinlemeyi bırak
-          
-          console.log(`✅ İşlem tamamlandı. Veritabanından ${progressData.currentResults || 0} sonuç indiriliyor...`);
-
-          // 1MB Limiti Çözümü: Veriyi ana dökümandan değil, 'foundResults' alt koleksiyonundan çekiyoruz.
-          const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
-          
-          getDocs(resultsRef)
-            .then((snapshot) => {
-                const allResults = snapshot.docs.map(doc => doc.data());
-                console.log(`📥 ${allResults.length} adet sonuç başarıyla indirildi.`);
-                resolve(allResults); // Frontend'e veriyi teslim et
-            })
-            .catch((err) => {
-                console.error("Sonuçları indirirken hata oluştu:", err);
-                reject(new Error("Sonuçlar veritabanından çekilemedi."));
-            });
-        }
+        mainState = snapshot.data();
+        updateGlobalProgress(); // Durum değişirse tetikle
 
         // Hata Durumu
-        if (progressData.status === 'error') {
-          if (safetyTimeout) clearTimeout(safetyTimeout);
-          unsubscribe();
-          console.error('❌ Arama hatası:', progressData.error);
-          reject(new Error(progressData.error || 'Arama sırasında hata oluştu'));
+        if (mainState.status === 'error') {
+          cleanup();
+          console.error('❌ Arama hatası:', mainState.error);
+          reject(new Error(mainState.error || 'Arama sırasında hata oluştu'));
+        }
+
+        // Tamamlandı Durumu
+        if (mainState.status === 'completed') {
+          cleanup(); 
+          console.log(`✅ İşlem tamamlandı. Veritabanından sonuçlar indiriliyor...`);
+
+          const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
+          
+          try {
+            const snapshot = await getDocs(resultsRef);
+            const allResults = snapshot.docs.map(doc => doc.data());
+            console.log(`📥 ${allResults.length} adet sonuç başarıyla indirildi.`);
+            resolve(allResults);
+          } catch (err) {
+            console.error("Sonuçları indirirken hata oluştu:", err);
+            reject(new Error("Sonuçlar veritabanından çekilemedi."));
+          }
         }
       }, (error) => {
         console.error('❌ Snapshot hatası:', error);
-        if (safetyTimeout) clearTimeout(safetyTimeout);
+        cleanup();
         reject(error);
       });
+
+      // --- YARDIMCI FONKSİYON: İlerlemeyi Hesapla ve UI'a Gönder ---
+      function updateGlobalProgress() {
+          // Tüm workerların işlediği toplam sayıyı bul
+          const workerKeys = Object.keys(workersState);
+          let totalProcessed = 0;
+          let activeWorkersList = [];
+
+          workerKeys.forEach(key => {
+              const w = workersState[key];
+              totalProcessed += (w.processed || 0);
+              
+              // Frontend'e worker listesi gönder (UI'da ayrı barlar çizmek için)
+              activeWorkersList.push({
+                  id: key,
+                  status: w.status,
+                  progress: w.progress,
+                  processed: w.processed,
+                  total: w.total || 0,
+                  error: w.error
+              });
+          });
+
+          // Ana toplam sayı
+          const totalMarks = mainState.totalMarks || monitoredMarks.length;
+          // Ana yüzde hesabı (Workerların toplamından hesapla)
+          const globalProgress = totalMarks > 0 ? Math.floor((totalProcessed / totalMarks) * 100) : 0;
+
+          if (onProgress) {
+              onProgress({
+                  status: mainState.status,
+                  progress: globalProgress,        // Hesaplanan genel yüzde
+                  processed: totalProcessed,       // Hesaplanan toplam işlenen
+                  total: totalMarks,
+                  currentResults: mainState.currentResults || 0,
+                  workers: activeWorkersList,      // <--- EKSİK OLAN KISIM ARTIK BURADA
+                  message: mainState.status === 'resuming' ? 'İşlem devrediliyor...' : null
+              });
+          }
+      }
 
     });
 
   } catch (error) {
     console.error('❌ Cloud Function çağrılırken hata:', error);
-    console.error('Hata detayları:', {
-      code: error.code,
-      message: error.message,
-      details: error.details
-    });
     throw error;
   }
 }
