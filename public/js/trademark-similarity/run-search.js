@@ -123,6 +123,10 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           const workerKeys = Object.keys(workersState);
           let totalProcessed = 0;
           let activeWorkersList = [];
+              // ✅ DEBUG LOG EKLE
+    console.log('🔍 [DEBUG] updateGlobalProgress çağrıldı');
+    console.log('📊 [DEBUG] workersState:', workersState);
+    console.log('🔑 [DEBUG] workerKeys:', workerKeys);
 
           workerKeys.forEach(key => {
               const w = workersState[key];
@@ -147,6 +151,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           const globalProgress = totalMarks > 0 ? Math.min(100, Math.floor((totalProcessed / 5000) * 100)) : 0; // 5000 tahmini satır sayısı
 
           if (onProgress) {
+                console.log('📤 [DEBUG] onProgress çağrılıyor, workers:', activeWorkersList); // ✅ EKLE
               onProgress({
                   status: mainState.status,
                   progress: globalProgress,
