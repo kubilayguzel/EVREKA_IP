@@ -122,11 +122,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 let ipRecords = [];
                 if (relatedIds.length) {
-                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'server' });
-                    ipRecords = ipRes.success ? ipRes.data : [];
+                    // Büyük veri setleri için chunk'lara böl (her seferinde 500 ID)
+                    const CHUNK_SIZE = 500;
+                    const chunks = [];
+                    
+                    for (let i = 0; i < relatedIds.length; i += CHUNK_SIZE) {
+                        chunks.push(relatedIds.slice(i, i + CHUNK_SIZE));
+                    }
+                    
+                    // Paralel olarak tüm chunk'ları çek
+                    const results = await Promise.all(
+                        chunks.map(chunk => ipRecordsService.getRecordsByIds(chunk, { source: 'cache-first' }))
+                    );
+                    
+                    // Tüm sonuçları birleştir
+                    ipRecords = results.flatMap(res => res.success ? res.data : []);
                 }
                 this.allIpRecords = ipRecords;
-				this.buildMaps();
+                this.buildMaps();
 
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allTransactionTypes = transTypesResult.success ? transTypesResult.data : [];
