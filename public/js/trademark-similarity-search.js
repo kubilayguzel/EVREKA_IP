@@ -989,7 +989,36 @@ const performSearch = async () => {
 
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) return;
-    SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyiniz.');
+    SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyin...');
+
+    // ✅ Loading panelini sağ üst köşeye taşı - Modern UX
+    setTimeout(() => {
+        const loadingOverlay = document.querySelector('.simple-loading-overlay');
+        const loadingContent = document.querySelector('.simple-loading-content');
+        
+        if (loadingOverlay) {
+            // Overlay'i transparan yap, tıklamaları engelleme
+            loadingOverlay.style.background = 'transparent';
+            loadingOverlay.style.pointerEvents = 'none';
+            loadingOverlay.style.zIndex = '9998';
+        }
+        
+        if (loadingContent) {
+            // Loading panelini sağ üste taşı
+            loadingContent.style.position = 'fixed';
+            loadingContent.style.top = '80px';
+            loadingContent.style.right = '20px';
+            loadingContent.style.left = 'auto';
+            loadingContent.style.transform = 'none';
+            loadingContent.style.pointerEvents = 'auto';
+            loadingContent.style.zIndex = '10001';
+            loadingContent.style.maxWidth = '350px';
+            loadingContent.style.minWidth = '300px';
+            loadingContent.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
+            loadingContent.style.borderRadius = '12px';
+        }
+    }, 100);
+
     if (noRecordsMessage) noRecordsMessage.style.display = 'none';
     infoMessageContainer.innerHTML = '';
     resultsTableBody.innerHTML = '';
@@ -1013,7 +1042,6 @@ const performSearch = async () => {
             // 2. Worker Grid'ini güncelle (run-search.js'den gelen veriyi kullanıyoruz)
             console.log('🎨 [DEBUG] pd.workers:', pd.workers); // ✅ EKLE
             if (pd.workers && Array.isArray(pd.workers)) {
-                console.log('✅ [DEBUG] renderWorkersGrid çağrılıyor, worker sayısı:', pd.workers.length); // ✅ EKLE
                 renderWorkersGrid(pd.workers);
             } else {
                 console.warn('⚠️ [DEBUG] pd.workers yok veya array değil!'); // ✅ EKLE
@@ -2115,16 +2143,26 @@ function renderWorkersGrid(workers) {
     const container = document.getElementById('workersGridContainer');
     const gridEl = document.getElementById('workersGrid');
     
-    if (!container || !gridEl) return;
+    if (!container || !gridEl) {
+        console.error('❌ Worker container bulunamadı!', { container, gridEl });
+        return;
+    }
 
-    // Alanı görünür yap
     container.style.display = 'block';
+    container.style.position = 'relative';
+    container.style.zIndex = '10000';
+    container.style.marginTop = '15px';
+    container.style.marginBottom = '15px';
+    
+    console.log(`🎨 Worker container görünür yapıldı, ${workers.length} worker render ediliyor`);
 
     workers.forEach((worker) => {
-        const workerId = worker.id;
-        
-        // Kart DOM elementi var mı?
-        let card = document.getElementById(`worker-card-${workerId}`);
+    const workerId = worker.id;
+    
+    console.log(`🔨 Worker #${workerId} kartı oluşturuluyor/güncelleniyor`); // ✅ EKLE
+    
+    // Kart DOM elementi var mı?
+    let card = document.getElementById(`worker-card-${workerId}`);
         
         // Yoksa oluştur
         if (!card) {
