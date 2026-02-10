@@ -151,37 +151,22 @@ class PortfolioController {
     }
     
     setupFilterListeners() {
-    const thead = document.querySelector('.portfolio-table thead');
-    if (thead) {
-        thead.addEventListener('input', (e) => {
-            if (e.target.classList.contains('column-filter')) {
-                const key = e.target.dataset.key;
-                const value = e.target.value;
-                clearTimeout(this.filterDebounceTimer);
-                this.filterDebounceTimer = setTimeout(() => {
-                    this.state.columnFilters[key] = value;
-                    this.state.currentPage = 1;
-                    this.render();
-                }, 300);
-            }
-        });
+        const thead = document.querySelector('.portfolio-table thead');
+        if (thead) {
+            thead.addEventListener('input', (e) => {
+                if (e.target.classList.contains('column-filter')) {
+                    const key = e.target.dataset.key;
+                    const value = e.target.value;
+                    clearTimeout(this.filterDebounceTimer);
+                    this.filterDebounceTimer = setTimeout(() => {
+                        this.state.columnFilters[key] = value;
+                        this.state.currentPage = 1;
+                        this.render();
+                    }, 300);
+                }
+            });
+        }
     }
-
-    // --- BURADAN SONRASINI EKLEYİN ---
-    const globalSearchInput = document.getElementById('searchInput'); 
-    if (globalSearchInput) {
-        globalSearchInput.addEventListener('input', (e) => {
-            const value = e.target.value;
-            clearTimeout(this.filterDebounceTimer);
-            this.filterDebounceTimer = setTimeout(() => {
-                this.state.searchQuery = value.toLowerCase(); // Global arama state'ini günceller
-                this.state.currentPage = 1;
-                this.render();
-            }, 300);
-        });
-    }
-    // --- EKLEME BİTTİ ---
-}
 
     setupPagination() {
         const container = document.getElementById('paginationContainer');
