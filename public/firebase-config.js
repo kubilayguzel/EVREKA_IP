@@ -375,9 +375,13 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
-    async getRecords(opts = {}) {
+	async getRecords(opts = {}) {
         if (!isFirebaseAvailable) return { success: true, data: [] };
-        const { limitCount, source = 'cache-first' } = opts;
+		const { limitCount, source = 'cache-first', requireComplete = false } = opts;
+		// Firestore cache, özellikle "tüm koleksiyon" gibi büyük sorgularda
+		// eksik/parsiyel sonuç döndürebilir (cache sadece daha önce okunan doc'ları içerir).
+		// requireComplete=true verilirse cache dolu olsa bile server'a giderek
+		// eksik sonuç nedeniyle oluşan N/A/join problemlerini engeller.
         try {
         let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
         if (limitCount) q = query(q, limit(limitCount));
@@ -386,9 +390,9 @@ export const ipRecordsService = {
         // - 'cache-first' (default): cache doluysa onu döndürür, yoksa server
         // - 'server': cache'i atlayıp her zaman server'dan çeker
         // - 'cache-only': sadece cache'ten dener
-        if (source !== 'server') {
+		if (source !== 'server') {
             const snapCache = await getDocsFromCache(q).catch(() => null);
-            if (snapCache && !snapCache.empty) {
+			if (snapCache && !snapCache.empty && !requireComplete) {
                 return { success: true, data: snapCache.docs.map(d => ({ id: d.id, ...d.data() })), from: 'cache' };
             }
             if (source === 'cache-only') {
