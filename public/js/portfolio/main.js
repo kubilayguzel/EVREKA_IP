@@ -201,42 +201,45 @@ class PortfolioController {
         });
     }
 
+    // public/js/portfolio/main.js içinde setupEventListeners metodunu bulun ve tamamen bununla değiştirin:
+
     setupEventListeners() {
-    // --- 0. SIRALAMA (SORTING) ---
-            const thead = document.querySelector('.portfolio-table thead');
-            if (thead) {
-                thead.addEventListener('click', (e) => {
-                    const th = e.target.closest('th.sortable-header');
-                    if (!th) return;
-                    
-                    const column = th.dataset.column;
-                    if (!column) return;
-                    
-                    // Sıralama yönünü değiştir
-                    if (this.state.sort.column === column) {
-                        this.state.sort.direction = this.state.sort.direction === 'asc' ? 'desc' : 'asc';
-                    } else {
-                        this.state.sort.column = column;
-                        this.state.sort.direction = 'asc';
-                    }
-                    
-                    // Header ikonlarını güncelle
-                    this.updateSortIcons();
-                    
-                    // Sayfayı yeniden render et
-                    this.render();
-                });
-            }
+        // --- 0. SIRALAMA (SORTING) ---
+        const thead = document.querySelector('.portfolio-table thead');
+        if (thead) {
+            thead.addEventListener('click', (e) => {
+                const th = e.target.closest('th.sortable-header');
+                if (!th) return;
+
+                const column = th.dataset.column;
+                if (!column) return;
+
+                // Sıralama yönünü değiştir
+                if (this.state.sort.column === column) {
+                    this.state.sort.direction = this.state.sort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.state.sort.column = column;
+                    this.state.sort.direction = 'asc';
+                }
+
+                // Header ikonlarını güncelle
+                this.updateSortIcons();
+
+                // Sayfayı yeniden render et
+                this.render();
+            });
+        }
+
         // --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 // Sınıf temizliği
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                
+
                 const targetBtn = e.target.closest('.tab-button');
-                if(targetBtn) {
-                   targetBtn.classList.add('active');
-                   this.state.activeTab = targetBtn.dataset.type;
+                if (targetBtn) {
+                    targetBtn.classList.add('active');
+                    this.state.activeTab = targetBtn.dataset.type;
                 }
 
                 // Marka alt menü yönetimi
@@ -259,7 +262,7 @@ class PortfolioController {
                 this.state.selectedRecords.clear();
 
                 const searchInput = document.getElementById('searchInput');
-                if(searchInput) searchInput.value = '';
+                if (searchInput) searchInput.value = '';
 
                 // Header'ları güncelle
                 const columns = this.getColumns(this.state.activeTab);
@@ -330,7 +333,7 @@ class PortfolioController {
             clearFiltersBtn.addEventListener('click', () => {
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
-                if(searchInput) searchInput.value = '';
+                if (searchInput) searchInput.value = '';
                 document.querySelectorAll('.column-filter-input').forEach(input => input.value = '');
                 this.render();
             });
@@ -351,19 +354,19 @@ class PortfolioController {
         if (btnExcelUpload && fileInput) {
             btnExcelUpload.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', async (e) => {
-                 if (e.target.files.length > 0) {
-                     // Dosya yükleme işlemleri burada yapılır
-                     console.log("Dosya seçildi:", e.target.files[0].name);
-                     fileInput.value = ''; 
-                 }
+                if (e.target.files.length > 0) {
+                    console.log("Dosya seçildi:", e.target.files[0].name);
+                    fileInput.value = '';
+                }
             });
         }
 
         // --- 7. TABLO İÇİ İŞLEMLER (AKORDEON, BUTONLAR, CHECKBOX) ---
-        const portfolioTableBody = document.getElementById('portfolioTableBody'); // İsim çakışmasını önlemek için ismi değiştirdik
+        // Değişken ismini portfolioTableBody olarak kullanıyoruz
+        const portfolioTableBody = document.getElementById('portfolioTableBody');
         if (portfolioTableBody) {
-            portfolioTableBody.addEventListener('change', (e) => { // Tıklama yerine 'change' daha sağlıklıdır
-                // A. CHECKBOX SEÇİMİ (Event Delegation)
+            // A. CHECKBOX SEÇİMİ (Change eventi)
+            portfolioTableBody.addEventListener('change', (e) => {
                 if (e.target.classList.contains('record-checkbox')) {
                     const id = e.target.dataset.id;
                     if (e.target.checked) {
@@ -371,21 +374,23 @@ class PortfolioController {
                     } else {
                         this.state.selectedRecords.delete(String(id));
                     }
-                    this.updateActionButtons(); // KRİTİK: Butonları kontrol et
+                    // KRİTİK: Her seçimde buton durumunu güncelle
+                    this.updateActionButtons();
                 }
             });
 
+            // B. BUTONLAR VE AKORDEON (Click eventi)
             portfolioTableBody.addEventListener('click', (e) => {
-                // B. AKORDEON AÇMA/KAPAMA
-                const caret = e.target.closest('.row-caret') || 
-                            (e.target.closest('tr.group-header') && !e.target.closest('button, a, input, .action-btn'));
-                
+                // AKORDEON
+                const caret = e.target.closest('.row-caret') ||
+                    (e.target.closest('tr.group-header') && !e.target.closest('button, a, input, .action-btn'));
+
                 if (caret) {
                     this.toggleAccordion(e.target.closest('tr') || caret);
                     return;
                 }
 
-                // C. AKSİYON BUTONLARI
+                // AKSİYON BUTONLARI
                 const btn = e.target.closest('.action-btn');
                 if (btn) {
                     e.stopPropagation();
@@ -411,13 +416,14 @@ class PortfolioController {
                 }
             });
         }
+
         // --- 8. TÜMÜNÜ SEÇ (HEADER) ---
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', (e) => {
                 const isChecked = e.target.checked;
                 const checkboxes = document.querySelectorAll('.record-checkbox');
-                
+
                 checkboxes.forEach(cb => {
                     cb.checked = isChecked;
                     const id = cb.dataset.id;
@@ -430,33 +436,107 @@ class PortfolioController {
                 this.updateActionButtons(); // Butonları aktif/pasif yap
             });
         }
-        
+
+        // --- 9. DURUM DEĞİŞTİR (AKTİF/PASİF) ---
+        const toggleStatusBtn = document.getElementById('toggleRecordStatusBtn');
+        if (toggleStatusBtn) {
+            toggleStatusBtn.addEventListener('click', async () => {
+                if (this.state.selectedRecords.size === 0) return;
+
+                if (!confirm(`${this.state.selectedRecords.size} kaydın durumunu değiştirmek istiyor musunuz?`)) return;
+
+                try {
+                    this.renderer.showLoading(true);
+                    const ids = Array.from(this.state.selectedRecords);
+                    await this.dataManager.toggleRecordsStatus(ids);
+
+                    showNotification('Kayıtların durumu güncellendi.', 'success');
+                    this.state.selectedRecords.clear();
+                    const selectAll = document.getElementById('selectAllCheckbox');
+                    if (selectAll) selectAll.checked = false;
+
+                    await this.dataManager.loadRecords();
+                    this.render();
+                    this.updateActionButtons();
+                } catch (error) {
+                    console.error('Durum değiştirme hatası:', error);
+                    showNotification('Hata: ' + error.message, 'error');
+                } finally {
+                    this.renderer.showLoading(false);
+                }
+            });
+        }
+
+        // --- 10. İZLEMEYE EKLE ---
+        const addToMonitoringBtn = document.getElementById('addToMonitoringBtn');
+        if (addToMonitoringBtn) {
+            addToMonitoringBtn.addEventListener('click', async () => {
+                if (this.state.selectedRecords.size === 0) return;
+
+                if (!confirm(`${this.state.selectedRecords.size} kaydı izleme listesine eklemek istiyor musunuz?`)) return;
+
+                try {
+                    this.renderer.showLoading(true);
+                    let successCount = 0;
+                    const ids = Array.from(this.state.selectedRecords);
+
+                    for (const id of ids) {
+                        const record = this.dataManager.getRecordById(id);
+                        if (!record) continue;
+
+                        // DataManager içinde tanımladığımız yardımcı metodu kullan
+                        const monitoringData = this.dataManager.prepareMonitoringData(record);
+                        
+                        // Servise gönder
+                        const result = await monitoringService.addMonitoringItem(monitoringData);
+                        if (result.success) successCount++;
+                    }
+
+                    showNotification(`${successCount} kayıt izlemeye eklendi.`, 'success');
+                    this.state.selectedRecords.clear();
+                    const selectAll = document.getElementById('selectAllCheckbox');
+                    if (selectAll) selectAll.checked = false;
+
+                    this.render();
+                    this.updateActionButtons();
+                } catch (error) {
+                    console.error('İzleme ekleme hatası:', error);
+                    showNotification('Hata: ' + error.message, 'error');
+                } finally {
+                    this.renderer.showLoading(false);
+                }
+            });
+        }
     }
 
+    // public/js/portfolio/main.js içinde
+
     updateActionButtons() {
-        const hasSelection = this.state.selectedRecords.size > 0;
+        const count = this.state.selectedRecords.size;
+        const hasSelection = count > 0;
 
-        // HTML dosyanızdaki buton ID'leri (portfolio.html'deki id'lerle uyumlu olmalıdır)
-        const buttonIds = [
-            'activateSelectedBtn', 
-            'deactivateSelectedBtn', 
-            'addToMonitoringBtn'
-        ];
+        // 1. Aktif/Pasif Butonu (HTML ID: toggleRecordStatusBtn)
+        const statusBtn = document.getElementById('toggleRecordStatusBtn');
+        if (statusBtn) {
+            statusBtn.disabled = !hasSelection;
+            // Opsiyonel: Buton metnini güncelle
+            statusBtn.textContent = hasSelection ? `Durum Değiştir (${count})` : 'Aktif/Pasif';
+        }
 
-        buttonIds.forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) {
-                btn.disabled = !hasSelection;
-                // Görsel olarak aktifleştiğini belli etmek için class ekleyip çıkarabilirsiniz
-                if (hasSelection) {
-                    btn.classList.remove('btn-secondary');
-                    btn.classList.add('btn-primary');
-                } else {
-                    btn.classList.add('btn-secondary');
-                    btn.classList.remove('btn-primary');
-                }
-            }
-        });
+        // 2. İzlemeye Ekle Butonu (HTML ID: addToMonitoringBtn)
+        const monitorBtn = document.getElementById('addToMonitoringBtn');
+        if (monitorBtn) {
+            monitorBtn.disabled = !hasSelection;
+            monitorBtn.textContent = hasSelection ? `İzlemeye Ekle (${count})` : 'İzlemeye Ekle';
+        }
+        
+        // 3. Varsa diğer butonlar
+        const exportSelectedBtn = document.getElementById('btnExportSelected');
+        if (exportSelectedBtn) {
+            // Dropdown içindeki link olduğu için class ile disable görünümü verilebilir
+            if (!hasSelection) exportSelectedBtn.classList.add('disabled');
+            else exportSelectedBtn.classList.remove('disabled');
+        }
     }
 
     getCurrentPageRecords() {
