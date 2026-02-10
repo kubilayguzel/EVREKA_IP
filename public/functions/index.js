@@ -3294,16 +3294,6 @@ export const processTrademarkBulletinUploadV3 = onObjectFinalized(
       });
 
       console.log(`🚀 Arama indeksi (NDJSON) oluşturuldu: ${indexFileName}`);
-        const indexPath = `bulletins/${bulletinNo}_index.json`;
-        
-        await bucket.file(indexPath).save(jsonString, {
-          contentType: "application/json",
-          resumable: false,
-          validation: false
-        });
-
-        console.log(`✅ JSON İndeks başarıyla kaydedildi: ${indexPath} (${searchIndex.length} kayıt)`);
-
       } catch (error) {
         console.error("❌ JSON İndeks oluşturulurken hata:", error);
       }
