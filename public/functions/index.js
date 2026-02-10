@@ -4937,138 +4937,123 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
+// functions/index.js dosyasındaki processSearchInBackground fonksiyonu
 
-// public/functions/index.js
+async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
+  
+  const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
+  // ÖNEMLİ: Her worker kendi ilerlemesini 'workers' alt koleksiyonuna yazar.
+  const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
-// startIndex parametresi eklendi (Varsayılan 0)
-async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0) {
-  const progressRef = adminDb.collection('searchProgress').doc(jobId);
-  const TIMEOUT_LIMIT = 480 * 1000; // 480 Saniye (8 Dakika) - Güvenli sınır
+  const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
   const startTime = Date.now();
   const BATCH_SIZE = 3;
-  const PROCESS_DELAY = 500; // İsteğiniz üzerine kaldı
+  const PROCESS_DELAY = 500;
 
   try {
-    // 1. BAŞLANGIÇ DURUMU AYARLAMA
+    // 1. WORKER DURUMUNU BAŞLAT
     if (startIndex === 0) {
-        // İlk kez başlıyorsa temiz bir sayfa aç
-        await progressRef.set({ 
+        await workerProgressRef.set({ 
             status: 'processing', 
             progress: 0, 
-            results: [], // Sonuç dizisi boş başlar
-            totalMarks: monitoredMarks.length,
-            processedCount: 0,
-            currentResults: 0,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+            processed: 0,
+            total: monitoredMarks.length,
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
     } else {
-        // Devam eden job ise durumu güncelle
-        await progressRef.update({ status: 'processing_continued' });
+        await workerProgressRef.update({ status: 'processing_continued' });
     }
 
-    logger.log(`📥 Bülten verisi çekiliyor: ${selectedBulletinId}`);
+    logger.log(`📥 Worker ${workerId} veri çekiyor: ${selectedBulletinId}`);
     
     // 2. BÜLTEN VERİSİNİ ÇEKME (JSON İNDİRME - HIZLI YÖNTEM)
-        let bulletinRecords = [];
-        const bucket = admin.storage().bucket();
-        
-        // ID'den Bülten Numarasını bul (örn: "469_..." -> "469")
-        let bulletinNo = selectedBulletinId;
-        if (selectedBulletinId.includes('_')) {
-            bulletinNo = selectedBulletinId.split('_')[0];
-        }
-        
-        const indexFilePath = `bulletins/${bulletinNo}_index.json`;
-        const indexFile = bucket.file(indexFilePath);
+    let bulletinRecords = [];
+    const bucket = admin.storage().bucket();
+    
+    let bulletinNo = selectedBulletinId;
+    if (selectedBulletinId.includes('_')) {
+        bulletinNo = selectedBulletinId.split('_')[0];
+    }
+    
+    const indexFilePath = `bulletins/${bulletinNo}_index.json`;
+    const indexFile = bucket.file(indexFilePath);
 
-        try {
-            const [exists] = await indexFile.exists();
+    try {
+        const [exists] = await indexFile.exists();
+        
+        if (exists) {
+            const [fileContent] = await indexFile.download();
+            const rawRecords = JSON.parse(fileContent.toString());
             
-            if (exists) {
-                logger.log(`📥 JSON İndeks indiriliyor: ${indexFilePath}`);
-                const [fileContent] = await indexFile.download();
-                const rawRecords = JSON.parse(fileContent.toString());
+            bulletinRecords = rawRecords.map(r => ({
+                id: r.id,
+                markName: r.o,          // Orijinal isim
+                cleanName: r.n,         // Temiz isim
+                applicationNo: r.an,
+                applicationDate: r.d,
+                niceClasses: r.c,
+                bulletinId: selectedBulletinId
+            }));
+            
+            logger.log(`✅ Worker ${workerId}: JSON İndeks yüklendi (${bulletinRecords.length} kayıt)`);
+        } else {
+            logger.warn(`⚠️ Worker ${workerId}: JSON bulunamadı, Firestore fallback kullanılıyor...`);
+            
+            let snapshot = await adminDb.collection('trademarkBulletinRecords')
+                .where('bulletinId', '==', selectedBulletinId)
+                .get();
                 
-                // JSON verisini worker'ın beklediği formata map'le
-                bulletinRecords = rawRecords.map(r => ({
-                    id: r.id,
-                    markName: r.o,          // Orijinal isim
-                    cleanName: r.n,         // Temiz isim (Hız için)
-                    applicationNo: r.an,
-                    applicationDate: r.d,
-                    niceClasses: r.c,
-                    bulletinId: selectedBulletinId // Uyumluluk için
-                    // holder/imagePath JSON'da yoksa boş gelebilir, kritik değil
-                }));
-                
-                logger.log(`✅ JSON İndeks yüklendi: ${bulletinRecords.length} kayıt (RAM Dostu)`);
-            } else {
-                logger.warn(`⚠️ JSON indeks bulunamadı (${indexFilePath}), Firestore fallback kullanılıyor...`);
-                
-                // --- ESKİ FIRESTORE KODU (Yedek Olarak Buraya Taşıdık) ---
-                let snapshot = await adminDb.collection('trademarkBulletinRecords')
-                    .where('bulletinId', '==', selectedBulletinId)
-                    .get();
-                    
-                if (snapshot.empty) {
-                    // Fallback: No ile ara
-                    const bRef = await adminDb.collection('trademarkBulletins').where('bulletinNo', '==', bulletinNo).limit(1).get();
-                    if(!bRef.empty) {
-                        snapshot = await adminDb.collection('trademarkBulletinRecords').where('bulletinId', '==', bRef.docs[0].id).get();
-                    }
-                }
-                
-                bulletinRecords = snapshot.docs.map(doc => {
-                    const d = doc.data();
-                    return { 
-                        id: doc.id, 
-                        markName: d.markName,
-                        applicationNo: d.applicationNo,
-                        applicationDate: d.applicationDate,
-                        niceClasses: d.niceClasses,
-                        bulletinId: d.bulletinId
-                    };
-                });
+            if (snapshot.empty) {
+                 const bRef = await adminDb.collection('trademarkBulletins').where('bulletinNo', '==', bulletinNo).limit(1).get();
+                 if(!bRef.empty) {
+                     snapshot = await adminDb.collection('trademarkBulletinRecords').where('bulletinId', '==', bRef.docs[0].id).get();
+                 }
             }
-        } catch (err) {
-            logger.error("🔥 Veri çekme hatası:", err);
-            throw err;
+            
+            bulletinRecords = snapshot.docs.map(doc => {
+                const d = doc.data();
+                return { 
+                    id: doc.id, 
+                    markName: d.markName,
+                    applicationNo: d.applicationNo,
+                    applicationDate: d.applicationDate,
+                    niceClasses: d.niceClasses,
+                    bulletinId: d.bulletinId
+                };
+            });
         }
+    } catch (err) {
+        logger.error(`🔥 Worker ${workerId} veri hatası:`, err);
+        throw err;
+    }
 
     // 3. BATCH AYARLARI
-    // Tüm markaları batch'lere bölüyoruz
     const markBatches = [];
     for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
       markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
     }
 
-    // Başlangıç batch indexini bul (Kaldığımız yer)
     let startBatchIndex = Math.floor(startIndex / BATCH_SIZE);
     let processedCount = startIndex;
-    let totalResultsFound = 0; // Bu sessionda bulunan sonuç sayısı
 
     // 4. ANA DÖNGÜ
     for (let batchIndex = startBatchIndex; batchIndex < markBatches.length; batchIndex++) {
       
-      // --- A) ZAMAN KONTROLÜ (KRİTİK) ---
+      // --- ZAMAN KONTROLÜ ---
       const elapsedTime = Date.now() - startTime;
       if (elapsedTime > TIMEOUT_LIMIT) {
-          logger.warn(`⚠️ Zaman aşımı sınırına yaklaşıldı (${elapsedTime/1000}sn). İşlem duraklatılıyor.`);
+          logger.warn(`⚠️ Worker ${workerId} zaman aşımı. Duraklatılıyor.`);
           
-          // Durumu 'paused' yapıyoruz ve nerede kaldığımızı (nextIndex) kaydediyoruz.
-          // Frontend veya Scheduler bunu görüp tekrar tetikleyecek.
-          await progressRef.update({
+          await workerProgressRef.update({
               status: 'paused', 
               nextIndex: processedCount,
               progress: Math.floor((processedCount / monitoredMarks.length) * 100)
           });
-          
-          return; // Fonksiyonu burada NAZİKÇE bitiriyoruz.
+          return; 
       }
-      // -------------------------------------
 
       const batch = markBatches[batchIndex];
-      const batchResults = []; // Sadece bu batch'in sonuçlarını tutacağız (RAM Dostu)
+      const batchResults = []; 
 
       // Batch içindeki markaları işle
       for (const monitoredMark of batch) {
@@ -5093,7 +5078,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) continue;
 
                 const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
-                // Loglar kaldırıldı (Performans artışı)
+                
                 const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
                   hit.markName, term, hit.applicationDate, applicationDate, hit.niceClasses, niceClasses
                 );
@@ -5122,11 +5107,8 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   applicationNo: hit.applicationNo,
                   applicationDate: hit.applicationDate,
                   niceClasses: hit.niceClasses,
-                  
-                  // 🔥 DÜZELTME BURADA: Undefined gelirse boş değer ata
-                  holders: hit.holders || [],      // Eğer yoksa boş dizi gönder
-                  imagePath: hit.imagePath || null, // Eğer yoksa null gönder
-                  
+                  holders: hit.holders || [],       // Null check
+                  imagePath: hit.imagePath || null, // Null check
                   bulletinId: hit.bulletinId,
                   similarityScore,
                   positionalExactMatchScore,
@@ -5148,42 +5130,36 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         } // Term döngüsü
 
         batchResults.push(...Array.from(uniqueResultsMap.values()));
-        processedCount++; // Sayaç her markada artar
+        processedCount++; 
       } // Batch item döngüsü
 
-      // --- B) PARÇALI KAYIT (INCREMENTAL SAVE) ---
-      // Batch sonuçlarını hemen DB'ye yaz ve RAM'den sil.
-if (batchResults.length > 0) {
+      // --- PARÇALI KAYIT ---
+      if (batchResults.length > 0) {
           const batchWrite = adminDb.batch();
-          const resultsCollection = progressRef.collection('foundResults'); // Alt koleksiyon (Çekmece)
+          // Sonuçlar ORTAK havuza yazılır (foundResults)
+          const resultsCollection = mainJobRef.collection('foundResults'); 
           
           batchResults.forEach(result => {
-              // Her sonucu ayrı bir belge olarak ekle
               const newDocRef = resultsCollection.doc(); 
               batchWrite.set(newDocRef, result);
           });
           
-          // Toplu yazma işlemi (Hızlı ve Güvenli)
           await batchWrite.commit();
           
-          totalResultsFound += batchResults.length;
-          
-          // Ana dökümanda SADECE SAYIYI güncelle (Veriyi değil, sadece sayacı)
-          await progressRef.update({
+          // Ana dokümanda sadece bulunan toplam sayısını artır (Opsiyonel, bilgi amaçlı)
+          await mainJobRef.update({
               currentResults: admin.firestore.FieldValue.increment(batchResults.length)
-          });
+          }).catch(() => {}); 
       }
 
-      // Progress Güncelle
+      // --- WORKER İLERLEME GÜNCELLEMESİ ---
       const progress = Math.floor((processedCount / monitoredMarks.length) * 100);
-      await progressRef.update({ 
+      await workerProgressRef.update({ 
         progress, 
-        processed: processedCount
+        processed: processedCount,
+        lastUpdate: admin.firestore.FieldValue.serverTimestamp()
       });
       
-      // Batch Logu (Detaysız)
-      logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. (Toplam Bulunan: ${totalResultsFound})`);
-
       // Gecikme (Soğutma)
       if (batchIndex < markBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
@@ -5191,19 +5167,18 @@ if (batchResults.length > 0) {
     }
 
     // 5. BİTİŞ
-    // Döngü başarıyla tamamlandıysa
-    await progressRef.update({
+    await workerProgressRef.update({
       status: 'completed',
       progress: 100,
       processed: monitoredMarks.length,
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    logger.log(`✅ Arama TAMAMLANDI.`);
+    logger.log(`✅ Worker ${workerId} TAMAMLANDI.`);
 
   } catch (error) {
-      logger.error('❌ Background search error:', error);
-      await progressRef.update({
+      logger.error(`❌ Worker ${workerId} hatası:`, error);
+      await workerProgressRef.update({
           status: 'error',
           error: error.message
       });
@@ -7444,31 +7419,34 @@ export const similaritySearchWorker = onMessagePublished(
   },
   async (event) => {
     const payload = event?.data?.message?.json || {};
-    const { jobId, monitoredMarks, selectedBulletinId } = payload;
+    const { jobId, monitoredMarks, selectedBulletinId, workerId } = payload; // workerId'yi aldık
 
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
       logger.warn('⚠️ similaritySearchWorker: eksik payload', payload);
       return null;
     }
 
-    const progressRef = adminDb.collection('searchProgress').doc(jobId);
-
-    // Başlat/progress
-    await progressRef.set({ status: 'processing', progress: 5 }, { merge: true });
+    // Worker başladığında kendi durumunu 'workers' koleksiyonuna yazsın
+    await adminDb.collection('searchProgress').doc(jobId)
+        .collection('workers').doc(String(workerId)).set({
+            status: 'starting',
+            progress: 0,
+            processed: 0,
+            total: monitoredMarks.length,
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        });
 
     try {
-      // Mevcut arka plan fonksiyonunuzu kullanıyoruz:
-      //  - Dosyanızda zaten tanımlı: async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId)
-      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId);
-
-      // processSearchInBackground tamamlandığında, orada status/progress 'completed' yapılmalı.
-      // (Sizde zaten progress güncellemeleri ve completed set ediliyor.)
-      logger.info(`✅ similaritySearchWorker tamamlandı: ${jobId}`);
+      // workerId'yi fonksiyona iletiyoruz
+      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, 0, workerId);
       return null;
-
     } catch (err) {
-      logger.error('❌ similaritySearchWorker hata:', err);
-      await progressRef.set({ status: 'error', error: err?.message || String(err) }, { merge: true });
+      // Hata durumunu worker'ın kendi belgesine yaz
+      await adminDb.collection('searchProgress').doc(jobId)
+        .collection('workers').doc(String(workerId)).update({
+            status: 'error',
+            error: err.message
+        });
       return null;
     }
   }
