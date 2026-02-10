@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allAccruals = [];
             this.allTransactionTypes = [];
 
+			// Hızlı join için Map (id -> ipRecord)
+			this.ipRecordsMap = new Map();
+
             // Tablo Yönetimi
             this.processedData = [];
             this.filteredData = [];
@@ -123,6 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ipRecords = ipRes.success ? ipRes.data : [];
                 }
                 this.allIpRecords = ipRecords;
+				this.buildMaps();
 
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allTransactionTypes = transTypesResult.success ? transTypesResult.data : [];
@@ -141,18 +145,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             } finally {
                 if (loader) loader.style.display = 'none';
             }
-        }
 
-        processData() {
+		buildMaps() {
+			this.ipRecordsMap.clear();
+			(this.allIpRecords || []).forEach(r => {
+				const key = r?.id ? String(r.id).trim() : null;
+				if (key) this.ipRecordsMap.set(key, r);
+			});
+		}
+
+	        processData() {
             const relevantTasks = this.allTasks.filter(task => this.triggeredTaskStatuses.includes(task.status));
 
-            this.processedData = relevantTasks.map(task => {
-                const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId) || null;
-                const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+			this.processedData = relevantTasks.map(task => {
+				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+				const transactionTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
                 
                 const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
-                const applicationNumber = ipRecord?.applicationNumber || 'N/A';
-                const relatedRecordTitle = task.relatedIpRecordTitle || 'N/A';
+				const applicationNumber = ipRecord?.applicationNumber || ipRecord?.applicationNo || (relatedId ? 'Yükleniyor…' : '—');
+				const relatedRecordTitle = task.relatedIpRecordTitle || ipRecord?.title || '—';
 
                 // --- [BAŞLANGIÇ] SAHİP BİLGİSİ GÜNCELLEMESİ ---
                 
@@ -410,9 +422,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             title.textContent = 'Yükleniyor...';
             this.taskDetailManager.showLoading();
 
-            // İlişkili verileri bul
-            const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-            const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+			// İlişkili verileri bul (ID normalize)
+			const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+			const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+			const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
             const assignedUser = task.assignedTo_email ? { email: task.assignedTo_email } : null;
             const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
 
