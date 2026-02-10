@@ -4666,7 +4666,7 @@ export const performTrademarkSimilaritySearch = onCall(
     }
 
     // BATCH PROCESSING PARAMETRELERİ
-    const BATCH_SIZE = Number(process.env.SIM_SEARCH_BATCH_SIZE || 10);
+    const BATCH_SIZE = Number(process.env.SIM_SEARCH_BATCH_SIZE || 5);
     const PROCESS_DELAY = Number(process.env.SIM_SEARCH_PROCESS_DELAY_MS || 0);
 
     logger.log('🚀 Cloud Function: performTrademarkSimilaritySearch BAŞLATILDI', {
@@ -4932,7 +4932,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   // Not: Bunlar algoritmayı DEĞİŞTİRMEZ; sadece aynı işi daha hızlı/az overhead ile yapar.
   // - Batch büyüdükçe Firestore progress/write overhead azalır.
   // - Delay'i düşürmek yapay beklemeyi kaldırır.
-  const BATCH_SIZE = Number(process.env.SIM_SEARCH_BATCH_SIZE || 10);
+  const BATCH_SIZE = Number(process.env.SIM_SEARCH_BATCH_SIZE || 5);
   const PROCESS_DELAY = Number(process.env.SIM_SEARCH_PROCESS_DELAY_MS || 0);
 
   try {
