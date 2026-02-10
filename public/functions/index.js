@@ -5109,10 +5109,13 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         if (currentLineIndex % 1000 === 0) {
             const elapsedTime = Date.now() - startTime;
             
-            // Progress güncelle
-            // Not: Toplam satır sayısını tam bilmediğimiz için tahmini veya sadece işlenen sayıyı yazıyoruz
+            // Progress güncelle - PROGRESS YÜZDESINI EKLE
+            const estimatedTotal = 5000; // Tahmini bülten satır sayısı
+            const progressPercent = Math.min(100, Math.floor((processedCount / estimatedTotal) * 100));
+            
             await workerProgressRef.update({ 
                 processed: processedCount,
+                progress: progressPercent,  // ✅ YÜZDE HESABI EKLENDI
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             });
 
