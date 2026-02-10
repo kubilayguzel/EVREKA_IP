@@ -1011,8 +1011,12 @@ const performSearch = async () => {
             );
 
             // 2. Worker Grid'ini güncelle (run-search.js'den gelen veriyi kullanıyoruz)
+            console.log('🎨 [DEBUG] pd.workers:', pd.workers); // ✅ EKLE
             if (pd.workers && Array.isArray(pd.workers)) {
+                console.log('✅ [DEBUG] renderWorkersGrid çağrılıyor, worker sayısı:', pd.workers.length); // ✅ EKLE
                 renderWorkersGrid(pd.workers);
+            } else {
+                console.warn('⚠️ [DEBUG] pd.workers yok veya array değil!'); // ✅ EKLE
             }
         };
 
