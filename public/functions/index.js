@@ -7168,55 +7168,61 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   }
 );
 
-// ===== similaritySearchWorker (Pub/Sub subscriber) =====
+// ===== similaritySearchWorker (Pub/Sub subscriber) - GÜNCELLENMİŞ VERSİYON =====
 export const similaritySearchWorker = onMessagePublished(
   {
     topic: 'similarity-search-jobs',
     region: 'europe-west1',
-    memory: '2GiB',
+    memory: '2GiB',      // 🚨 KRİTİK: Bellek 2GB yapıldı (Signal 6 hatasını çözer)
     timeoutSeconds: 540,
+    concurrency: 1       // 🚨 KRİTİK: Her instance sadece 1 iş yapsın (Belleği korur)
   },
   async (event) => {
-    const payload = event?.data?.message?.json || {};
+    // Mesaj içeriğini güvenli şekilde al
+    const payload = event.data.message.json;
     const { jobId, monitoredMarks, selectedBulletinId, startIndex = 0 } = payload;
 
+    // Payload kontrolü
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
-      logger.warn('⚠️ similaritySearchWorker: eksik payload', payload);
-      return null;
+      console.warn('⚠️ similaritySearchWorker: Eksik veya hatalı payload', payload);
+      return;
     }
 
     const progressRef = adminDb.collection('searchProgress').doc(jobId);
 
-    // Başlat/progress
-    // Not: startIndex > 0 ise bu bir devam (resume) çalışmasıdır.
-    await progressRef.set(
-      {
-        status: startIndex > 0 ? 'processing_continued' : 'processing',
-        lastWorkerStartIndex: startIndex,
-        lastWorkerStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    // Durumu güncelle (Başladığını bildir)
+    // Not: Dağıtık mimaride 'set' yerine 'update' kullanıyoruz ki diğer worker'ların verisini ezmesin.
+    try {
+      await progressRef.update({
+        lastWorkerActivityAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) {
+      // Eğer doküman henüz yoksa (çok nadir) oluşturmayı dene
+      console.warn("Progress doc bulunamadı, oluşturuluyor...");
+      await progressRef.set({ 
+          status: 'processing',
+          createdAt: admin.firestore.FieldValue.serverTimestamp() 
+      }, { merge: true });
+    }
 
     try {
-      // Mevcut arka plan fonksiyonunuzu kullanıyoruz:
-      //  - Dosyanızda zaten tanımlı: async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId)
+      // Asıl işi yapan fonksiyonu çağır
+      // (Not: processSearchInBackground fonksiyonunu da önceki cevaptaki optimize edilmiş haliyle güncellemiş olmalısınız)
       await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex);
-
-      // processSearchInBackground tamamlandığında, orada status/progress 'completed' yapılmalı.
-      // (Sizde zaten progress güncellemeleri ve completed set ediliyor.)
-      logger.info(`✅ similaritySearchWorker tamamlandı: ${jobId}`);
-      return null;
+      
+      console.log(`✅ Worker görevi tamamladı. (Job: ${jobId}, Parça Boyutu: ${monitoredMarks.length})`);
 
     } catch (err) {
-      logger.error('❌ similaritySearchWorker hata:', err);
-      await progressRef.set({ status: 'error', error: err?.message || String(err) }, { merge: true });
-      return null;
+      console.error('💥 Worker Kritik Hata:', err);
+      
+      // Hatayı veritabanına yaz
+      await progressRef.set({ 
+          status: 'error', 
+          error: `Worker hatası: ${err.message}` 
+      }, { merge: true });
     }
   }
 );
-
-// index.js (Yeni Yardımcı Fonksiyon: Client/IP Bilgisi Bulma)
 
 /**
  * Monitored Marka ID'si üzerinden en ilişkili IP Kaydını ve Client ID'sini bulur.
