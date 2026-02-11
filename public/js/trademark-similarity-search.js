@@ -977,7 +977,7 @@ const checkCacheAndToggleButtonStates = async () => {
     }
 };
 
-// public/js/trademark-similarity-search.js içindeki performSearch fonksiyonunu bununla değiştirin:
+// public/js/trademark-similarity-search.js -> performSearch Fonksiyonu
 
 const performSearch = async () => {
     const bulletinSelect = document.getElementById('bulletinSelect');
@@ -993,7 +993,7 @@ const performSearch = async () => {
     
     SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyin...');
 
-    // Loading panelini sağ üst köşeye taşı
+    // Loading panelini konumlandır
     setTimeout(() => {
         const loadingContent = document.querySelector('.simple-loading-content');
         if (loadingContent) {
@@ -1020,13 +1020,11 @@ const performSearch = async () => {
     try {
         const onProgress = (pd) => {
             if (pd.status === 'downloading') {
-                 // İndirme aşaması
                  SimpleLoading.update(
                     `Sonuçlar İndiriliyor...`, 
                     `Alınan Kayıt: ${pd.message.split('...')[1] || ''}`
                 );
             } else {
-                // Arama aşaması
                 SimpleLoading.update(
                     `Bülten Taranıyor... %${pd.progress || 0}`, 
                     `Tespit Edilen Benzerlik: ${pd.currentResults || 0} adet`
@@ -1044,7 +1042,7 @@ const performSearch = async () => {
                 monitoredTrademark: filteredMonitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId)?.title || hit.markName
             }));
 
-            // Ham veriyi bellekten temizle (RAM tasarrufu)
+            // Bellek temizliği
             resultsFromCF.length = 0; 
 
             // Gruplama
@@ -1057,21 +1055,17 @@ const performSearch = async () => {
             // Global değişkene ata
             allSimilarResults = processedResults;
 
-            // 2. KAYDETME ADIMI (ULTRA GÜVENLİ MOD)
-            // "Write stream exhausted" hatasını önlemek için çok yavaş ve küçük paketlerle kaydediyoruz.
+            // 2. KAYDETME ADIMI (GÜVENLİ BATCH MODU)
+            // Tarayıcıyı kilitlememek için veriyi 25'erli paketler halinde, 1 saniye arayla kaydediyoruz.
             const entries = Object.entries(groupedResults);
+            const SAVE_BATCH_SIZE = 25; 
+            const DELAY_MS = 1000;
             
-            // --- AYARLAR ---
-            const SAVE_BATCH_SIZE = 10;   // Her seferde sadece 10 marka grubu kaydet
-            const DELAY_MS = 1500;        // Her paket arası 1.5 saniye bekle
-            // ----------------
-
             SimpleLoading.updateText('Sonuçlar Kaydediliyor...', `0 / ${entries.length} marka grubu`);
 
             for (let i = 0; i < entries.length; i += SAVE_BATCH_SIZE) {
                 const chunk = entries.slice(i, i + SAVE_BATCH_SIZE);
                 
-                // Chunk içindekileri paralel kaydet
                 await Promise.all(chunk.map(async ([monitoredTrademarkId, results]) => {
                      try {
                         await searchRecordService.saveRecord(bulletinKey, monitoredTrademarkId, {
@@ -1079,15 +1073,13 @@ const performSearch = async () => {
                             searchDate: new Date().toISOString()
                         });
                      } catch (saveErr) {
-                         console.warn(`Kayıt hatası (${monitoredTrademarkId}):`, saveErr);
-                         // Hata olsa bile devam et, döngüyü kırma
+                         console.warn(`Kayıt uyarısı (${monitoredTrademarkId}):`, saveErr);
                      }
                 }));
 
-                // Firestore'un "Write Stream"ini boşaltması için bekleme süresi
-                await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+                // Firestore'a nefes aldır
+                await new Promise(r => setTimeout(r, DELAY_MS));
 
-                // UI Güncelle
                 SimpleLoading.updateText(
                     'Sonuçlar Kaydediliyor...', 
                     `${Math.min(i + SAVE_BATCH_SIZE, entries.length)} / ${entries.length} marka grubu`
@@ -1095,8 +1087,8 @@ const performSearch = async () => {
             }
         }
     } catch (error) {
-        console.error("Arama süreci hatası:", error);
-        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama sırasında bir sorun oluştu: ${error.message}</div>`;
+        console.error("Arama hatası:", error);
+        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> ${error.message}</div>`;
     } finally {
         SimpleLoading.hide();
         groupAndSortResults();
