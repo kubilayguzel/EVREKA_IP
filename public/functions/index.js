@@ -4611,51 +4611,391 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     return { finalScore: finalScore, positionalExactMatchScore: positionalExactMatchScore }; 
 }
 
-// functions/index.js -> processSearchInBackground (AĞ TIKANIKLIĞI ÇÖZÜLMÜŞ VERSİYON)
+// ======== Sunucu Tarafında Marka Benzerliği Araması (GÜNCEL) ========
+export const performTrademarkSimilaritySearch = onCall(
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 540,
+    memory: '2GiB'
+  },
+  async (request) => {
+    const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
+
+    // =========================
+    // ASYNC MODE: İşi Parçala ve Workerlara Dağıt
+    // =========================
+    if (async && !jobId) {
+      const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const WORKER_COUNT = 10; // 10 Paralel Worker
+
+      // Başlangıç progress kaydı
+      await adminDb.collection('searchProgress').doc(newJobId).set({
+        status: 'queued',
+        progress: 0,
+        total: Array.isArray(monitoredMarks) ? monitoredMarks.length : 0,
+        processed: 0,
+        results: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        bulletinId: selectedBulletinId,
+        totalChunks: WORKER_COUNT
+      });
+
+      // Markaları parçalara böl
+      const batchSize = Math.ceil(monitoredMarks.length / WORKER_COUNT);
+      const promises = [];
+      const TOPIC_NAME = 'similarity-search-jobs';
+      await ensureTopic(TOPIC_NAME);
+
+      console.log(`🚀 Arama işi ${WORKER_COUNT} parçaya bölünüyor. Toplam Marka: ${monitoredMarks.length}`);
+
+      for (let i = 0; i < WORKER_COUNT; i++) {
+        const start = i * batchSize;
+        const end = start + batchSize;
+        const markChunk = monitoredMarks.slice(start, end);
+
+        if (markChunk.length === 0) continue;
+
+        // Her parça için bir Pub/Sub mesajı gönder
+        const messagePayload = {
+          jobId: newJobId,
+          workerId: i + 1,
+          monitoredMarks: markChunk,
+          selectedBulletinId: selectedBulletinId,
+          // BulletinNo'yu ID'den çıkarıyoruz (örn: 469_27052025 -> 469)
+          bulletinNo: selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId
+        };
+
+        const p = pubsubClient.topic(TOPIC_NAME).publishMessage({
+          json: messagePayload
+        });
+        promises.push(p);
+      }
+
+      await Promise.all(promises);
+      console.log(`✅ ${promises.length} adet Worker tetiklendi.`);
+
+      return { success: true, jobId: newJobId, async: true, workerCount: promises.length };
+    }
+
+    // =========================
+    // SYNC MODE: (mevcut mantığın korunuyor)
+    // =========================
+    if (!Array.isArray(monitoredMarks) || monitoredMarks.length === 0 || !selectedBulletinId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Missing required parameters: monitoredMarks (array) or selectedBulletinId'
+      );
+    }
+
+    // BATCH PROCESSING PARAMETRELERİ
+    const BATCH_SIZE = 3;   // Her batch'te 3 marka
+    const PROCESS_DELAY = 500; // Batch'ler arası 500ms bekleme
+
+    logger.log('🚀 Cloud Function: performTrademarkSimilaritySearch BAŞLATILDI', {
+      numMonitoredMarks: monitoredMarks.length,
+      selectedBulletinId,
+      batchSize: BATCH_SIZE,
+      estimatedBatches: Math.ceil(monitoredMarks.length / BATCH_SIZE)
+    });
+
+    try {
+      let bulletinRecordsSnapshot;
+
+      // Önce bulletinId olarak direkt ara
+      bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+        .where('bulletinId', '==', selectedBulletinId)
+        .get();
+
+      // Eğer sonuç yoksa veya gönderilen değer "469_27052025" gibi ise → bulletinNo ile ara
+      if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
+        let selectedBulletinNo = selectedBulletinId;
+        if (selectedBulletinId.includes('_')) {
+          selectedBulletinNo = selectedBulletinId.split('_')[0];
+        }
+
+        const bulletinDoc = await adminDb.collection('trademarkBulletins')
+          .where('bulletinNo', '==', selectedBulletinNo)
+          .limit(1)
+          .get();
+
+        if (!bulletinDoc.empty) {
+          const bulletinIdFromNo = bulletinDoc.docs[0].id;
+          bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+            .where('bulletinId', '==', bulletinIdFromNo)
+            .get();
+        }
+      }
+
+      const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      logger.log(`✅ ${bulletinRecords.length} kayıt bulundu.`);
+
+      const allResults = [];
+
+      // BATCH PROCESSING: Markaları gruplara böl
+      const markBatches = [];
+      for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
+        markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
+      }
+      logger.log(`📦 ${markBatches.length} batch oluşturuldu (her biri max ${BATCH_SIZE} marka)`);
+
+      // Her batch'i sırayla işle
+      for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
+        const batch = markBatches[batchIndex];
+        const progress = Math.round(((batchIndex + 1) / markBatches.length) * 100);
+        logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor... (${progress}%)`);
+
+        // Batch içindeki her markayı işle
+        for (const monitoredMark of batch) {
+          
+          // LOG 1: Gelen veriyi kontrol et
+          logger.log(`🔍 [DEBUG] İşlenen Marka ID: ${monitoredMark.id}`, {
+             anaMarka: monitoredMark.markName,
+             brandTextSearch: monitoredMark.brandTextSearch, // Burası dolu mu?
+             niceClasses: monitoredMark.niceClasses
+          });
+
+          // 1. Aranacak TÜM terimleri belirle (Ana Marka + Alternatifler)
+          const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
+          const overrideName = (monitoredMark.searchMarkName || '').trim();
+          const primaryName = (overrideName || originalName).trim();
+          
+          // brandTextSearch dizisini güvenli bir şekilde al
+          let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
+          
+          // Override varsa, orijinal marka adını alternatiflerden çıkar (arama dışı bırak)
+          const normText = (s) => (s || '').toString().trim().toLowerCase();
+          if (overrideName && originalName) {
+              const originalNorm = normText(originalName);
+              alternatives = alternatives.filter(t => normText(t) !== originalNorm);
+          }
+          
+          const searchTerms = [
+              primaryName, 
+              ...alternatives
+          ].filter(t => t && t.trim().length > 0); // Boş olanları temizle
+
+          // LOG 2: Oluşturulan arama listesini gör
+          logger.log(`📝 [DEBUG] Arama Listesi (SearchTerms):`, searchTerms);
+
+          // Tekilleştirme Havuzu
+          const uniqueResultsMap = new Map();
+
+          // 2. Her bir terim için arama yap
+          for (const term of searchTerms) {
+              const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
+              
+              // LOG 3: Şu an hangi kelime aranıyor?
+              logger.log(`🔄 [DEBUG] Döngü: '${term}' için taranıyor...`);
+
+              // Bülten kayıtlarını tara
+              for (const hit of bulletinRecords) {
+                  
+                  // DEBUG ÖZEL: Eğer bültendeki marka aranan kelimeyi içeriyorsa detaylı log bas
+                  // (Böylece neden elendiğini anlarız)
+                  const isSuspicious = hit.markName.toLowerCase().includes(term.toLowerCase());
+
+                  // Tarih filtresi
+                  const applicationDate = monitoredMark.applicationDate || null;
+                  const isDateValid = isValidBasedOnDate(hit.applicationDate, applicationDate);
+                  
+                  if (!isDateValid) {
+                      if (isSuspicious) logger.log(`⚠️ [ATLANDI - TARİH] Marka: ${hit.markName} vs Term: ${term} | HitDate: ${hit.applicationDate} < MonitoredDate: ${applicationDate}`);
+                      continue;
+                  }
+
+                  // Nice sınıf filtresi
+                  const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
+
+                  // 3. Benzerlik Skoru Hesapla
+                  const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
+                  
+                  const { finalScore: similarityScore, positionalExactMatchScore } =
+                    calculateSimilarityScoreInternal(
+                      hit.markName,
+                      term, // DİKKAT: 'term' kullanılıyor
+                      hit.applicationDate,
+                      applicationDate,
+                      hit.niceClasses,
+                      niceClasses
+                    );
+
+                  // Eşik Değer Kontrolü
+                  const SIMILARITY_THRESHOLD = 0.5;
+                  const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+                  let isPrefixSuffixExactMatch = false;
+                  const MIN_SEARCH_LENGTH = 3;
+
+                  if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
+                    const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
+                    for (const w of searchWords) {
+                      if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
+                    }
+                    if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
+                      isPrefixSuffixExactMatch = true;
+                    }
+                  }
+
+                  // LOG 4: Kritik Eşik Kontrolü (Sadece şüpheli kayıtlar için)
+                  if (isSuspicious) {
+                      logger.log(`🧐 [ANALİZ] Marka: ${hit.markName} vs Term: ${term}`, {
+                          similarityScore,
+                          positionalExactMatchScore,
+                          isPrefixSuffixExactMatch,
+                          threshold: SIMILARITY_THRESHOLD,
+                          pass: (similarityScore >= SIMILARITY_THRESHOLD || positionalExactMatchScore >= SIMILARITY_THRESHOLD || isPrefixSuffixExactMatch)
+                      });
+                  }
+
+                  if (
+                    similarityScore < SIMILARITY_THRESHOLD &&
+                    positionalExactMatchScore < SIMILARITY_THRESHOLD &&
+                    !isPrefixSuffixExactMatch
+                  ) {
+                    continue;
+                  }
+
+                  // 4. Sonuç Hazırla
+                  let isEarlier = false;
+                  try {
+                    const searchDate = applicationDate ? new Date(applicationDate) : null;
+                    const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
+                    if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
+                  } catch (_) { isEarlier = false; }
+
+                  const resultObj = {
+                    objectID: hit.id,
+                    markName: hit.markName,
+                    applicationNo: hit.applicationNo,
+                    applicationDate: hit.applicationDate,
+                    niceClasses: hit.niceClasses,
+                    holders: hit.holders,
+                    imagePath: hit.imagePath,
+                    bulletinId: hit.bulletinId,
+                    similarityScore,
+                    positionalExactMatchScore,
+                    sameClass: hasNiceClassOverlap,
+
+                    // Frontend alanları
+                    monitoredTrademark: primaryName, 
+                    matchedTerm: term, // Hangi kelimeyle bulundu
+                    monitoredNiceClasses: monitoredMark.niceClassSearch || [],
+                    monitoredTrademarkId: monitoredMark.id,
+                    monitoredMarkId: monitoredMark.id,
+                    isEarlier
+                  };
+
+                  // 5. AKILLI TEKİLLEŞTİRME
+                  if (uniqueResultsMap.has(hit.applicationNo)) {
+                      const existingResult = uniqueResultsMap.get(hit.applicationNo);
+                      if (resultObj.similarityScore > existingResult.similarityScore) {
+                          uniqueResultsMap.set(hit.applicationNo, resultObj);
+                          if(isSuspicious) logger.log(`🆙 [GÜNCELLEME] ${hit.markName} için daha yüksek skor bulundu (${resultObj.similarityScore})`);
+                      }
+                  } else {
+                      uniqueResultsMap.set(hit.applicationNo, resultObj);
+                      if(isSuspicious) logger.log(`✅ [EKLENDİ] ${hit.markName} sonuçlara eklendi.`);
+                  }
+              }
+          } // Term döngüsü sonu
+
+          const bestResultsForMark = Array.from(uniqueResultsMap.values());
+          allResults.push(...bestResultsForMark);
+
+          logger.log(`📊 '${primaryName}' (ID: ${monitoredMark.id}) için toplam ${bestResultsForMark.length} tekil eşleşme bulundu.`);
+        }
+
+        // Batch arası bekleme (rate limiting)
+        if (batchIndex < markBatches.length - 1) {
+          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
+        }
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
+
+        // Batch arası bekleme (rate limiting)
+        if (batchIndex < markBatches.length - 1) {
+          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
+        }
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
+      }
+
+      allResults.sort((a, b) => b.similarityScore - a.similarityScore);
+
+      logger.log(`✅ Toplam ${allResults.length} sonuç döndürülüyor`, {
+        sampleResult: allResults[0] ? {
+          markName: allResults[0].markName,
+          monitoredTrademark: allResults[0].monitoredTrademark,
+          monitoredMarkId: allResults[0].monitoredMarkId,
+          monitoredTrademarkId: allResults[0].monitoredTrademarkId
+        } : 'No results'
+      });
+
+      return { success: true, results: allResults };
+    } catch (error) {
+      logger.error('❌ Cloud Function hata:', error);
+      throw new HttpsError('internal', 'Marka benzerliği araması sırasında hata oluştu.', error.message);
+    }
+  }
+);
+
+// functions/index.js -> processSearchInBackground (AĞ TRAFİĞİ OPTİMİZE EDİLMİŞ FİNAL VERSİYON)
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
-  const TIMEOUT_LIMIT = 480 * 1000; 
+  const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika (Cloud Functions 9dk sınırına yakın güvenlik payı)
   const startTime = Date.now();
   
   let pendingResults = [];
   let totalFoundCount = 0;
   
-  // --- AYAR 1: Batch boyutu 200'e çekildi (500 çok büyük geliyordu) ---
-  const WRITE_BATCH_SIZE = 200; 
+  // --- AYAR 1: Batch boyutu 150'ye çekildi (Ağ paketlerini küçülttük) ---
+  const WRITE_BATCH_SIZE = 150; 
 
-  // --- AYAR 2: Güvenli Gönderim + Nefes Alma Mekanizması ---
+  // --- AYAR 2: Güvenli Gönderim + Kademeli Retry + Nefes Alma ---
   const publishSafely = async (results) => {
       if (results.length === 0) return;
+      
+      const payload = { json: { jobId, results } };
+
       try {
-          await pubsubClient.topic('save-search-results').publishMessage({ 
-              json: { jobId, results } 
-          });
+          // 1. Deneme
+          await pubsubClient.topic('save-search-results').publishMessage(payload);
           
-          // --- KRİTİK: Her gönderimden sonra 100ms bekle (Ağ trafiği rahatlasın) ---
-          await new Promise(r => setTimeout(r, 100));
+          // --- KRİTİK: Her gönderimden sonra 150ms bekle (Ağ trafiği rahatlasın) ---
+          await new Promise(r => setTimeout(r, 150));
 
       } catch (err) {
-          logger.warn(`⚠️ Pub/Sub hatası (Worker ${workerId}), 1sn bekleyip tekrar deneniyor...`);
-          // Hata durumunda 1 saniye bekle
+          logger.warn(`⚠️ Pub/Sub hatası (Worker ${workerId}), 1sn bekleyip tekrar deneniyor...`, err.message);
+          
+          // 2. Deneme (1 saniye bekle)
           await new Promise(r => setTimeout(r, 1000));
           try {
-              await pubsubClient.topic('save-search-results').publishMessage({ 
-                  json: { jobId, results } 
-              });
+              await pubsubClient.topic('save-search-results').publishMessage(payload);
           } catch (retryErr) {
-              logger.error(`❌ Pub/Sub başarısız, Firestore'a yazılıyor...`);
-              // Son çare Firestore (Fallback)
+              logger.warn(`⚠️ Pub/Sub 2. kez başarısız (Worker ${workerId}), 2sn bekleyip son kez deneniyor...`);
+              
+              // 3. Deneme (2 saniye bekle)
+              await new Promise(r => setTimeout(r, 2000));
               try {
-                  const batch = adminDb.batch();
-                  const col = mainJobRef.collection('foundResults');
-                  results.forEach(r => batch.set(col.doc(), r));
-                  await batch.commit();
-              } catch(e) { 
-                  logger.error("Firestore Fallback Hatası:", e); 
+                  await pubsubClient.topic('save-search-results').publishMessage(payload);
+              } catch (finalErr) {
+                  logger.error(`❌ Pub/Sub tamamen başarısız, Acil durum protokolü: Firestore'a yazılıyor...`);
+                  
+                  // SON ÇARE: Doğrudan Firestore'a yaz (Veri kaybını önle)
+                  try {
+                      const batch = adminDb.batch();
+                      const col = mainJobRef.collection('foundResults');
+                      results.forEach(r => batch.set(col.doc(), r));
+                      await batch.commit();
+                      logger.info(`✅ Firestore Fallback başarılı.`);
+                  } catch(e) { 
+                      logger.error("❌ Firestore Fallback de HATALI (Veri Kaybı):", e); 
+                  }
               }
           }
       }
@@ -4668,34 +5008,49 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     const indexFile = bucket.file(indexFilePath);
 
     const [exists] = await indexFile.exists();
-    if (!exists) throw new Error(`İndeks dosyası bulunamadı.`);
+    if (!exists) throw new Error(`İndeks dosyası bulunamadı: ${indexFilePath}`);
 
     const [metadata] = await indexFile.getMetadata();
     const totalBytes = parseInt(metadata.size, 10) || 1; 
 
     // Başlangıç Logu
     if (startIndex === 0) {
-        await workerProgressRef.set({ 
+        // Fire-and-forget update
+        workerProgressRef.set({ 
             status: 'processing', progress: 0, processed: 0, found: 0, 
             total: totalBytes, lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        logger.info(`✅ Worker ${workerId} başladı (Batch: 200 | Throttle: ON).`);
+        }, { merge: true }).catch(()=>{});
+        
+        logger.info(`✅ Worker ${workerId} başladı (Batch: ${WRITE_BATCH_SIZE} | Throttle: ON).`);
     } else {
-        await workerProgressRef.set({ 
+        workerProgressRef.set({ 
             status: 'processing_continued', lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        }, { merge: true }).catch(()=>{});
+        
         logger.info(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
     }
 
+    // Marka hazırlığı (RAM dostu)
     const preparedMonitoredMarks = monitoredMarks.map(mark => {
         const originalName = (mark.markName || mark.title || '').trim();
         const overrideName = (mark.searchMarkName || '').trim();
         const primaryName = (overrideName || originalName).trim();
         let alternatives = Array.isArray(mark.brandTextSearch) ? mark.brandTextSearch : [];
+        
         const searchTerms = [primaryName, ...alternatives]
             .filter(t => t && t.trim().length > 0)
-            .map(term => ({ term, cleanedSearchName: cleanMarkName(term, term.trim().split(/\s+/).length > 1) }));
-        return { ...mark, primaryName, searchTerms, applicationDate: mark.applicationDate || null, niceClasses: mark.niceClassSearch || mark.niceClasses || [] };
+            .map(term => ({
+                term: term,
+                cleanedSearchName: cleanMarkName(term, term.trim().split(/\s+/).length > 1)
+            }));
+
+        return {
+            ...mark,
+            primaryName,
+            searchTerms,
+            applicationDate: mark.applicationDate || null,
+            niceClasses: mark.niceClassSearch || mark.niceClasses || []
+        };
     });
 
     const fileStream = indexFile.createReadStream();
@@ -4727,6 +5082,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
+        // Karşılaştırma Döngüsü
         for (const monitoredMark of preparedMonitoredMarks) {
             if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
 
@@ -4737,10 +5093,15 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
                 const SIMILARITY_THRESHOLD = 0.5;
                 const cleanedHitName = hit.cleanName || cleanMarkName(hit.markName);
+                
                 let isPrefixSuffixExactMatch = false;
-                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) isPrefixSuffixExactMatch = true;
+                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) {
+                    isPrefixSuffixExactMatch = true;
+                }
 
-                if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) continue;
+                if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) {
+                  continue;
+                }
 
                 pendingResults.push({
                   objectID: hit.id, markName: hit.markName, applicationNo: hit.applicationNo,
@@ -4752,7 +5113,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             }
         }
 
-        // Batch Kontrol (200'de bir gönder)
+        // Batch Kontrol ve Gönderim
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
             totalFoundCount += pendingResults.length;
             await publishSafely(pendingResults);
@@ -4762,11 +5123,12 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         currentLineIndex++;
         processedCount++;
 
-        // Progress Güncelleme (2000 satırda bir)
+        // Progress Güncelleme (Her 2000 satırda bir)
         if (currentLineIndex % 2000 === 0) { 
             const elapsedTime = Date.now() - startTime;
             const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
             
+            // Fire-and-forget update (Worker duraksamasın)
             workerProgressRef.set({ 
                 processed: processedCount,
                 progress: progressPercent,
@@ -4774,26 +5136,32 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true }).catch(()=>{});
 
+            // Zaman Aşımı Kontrolü
             if (elapsedTime > TIMEOUT_LIMIT) {
-                logger.warn(`⚠️ Worker ${workerId} devrediliyor.`);
+                logger.warn(`⚠️ Worker ${workerId} zaman aşımı sınırında. Devrediliyor.`);
+                
+                // Elde kalanları gönder
                 if (pendingResults.length > 0) await publishSafely(pendingResults);
 
+                // Durumu kaydet ve bir sonraki worker'ı tetikle
                 await workerProgressRef.set({ status: 'resuming', nextIndex: currentLineIndex }, { merge: true });
                 const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
                 await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
                 
-                rl.close(); fileStream.destroy();
+                rl.close(); 
+                fileStream.destroy();
                 return;
             }
         }
     } 
 
-    // Bitiş
+    // Bitiş: Kalan son paketi gönder
     if (pendingResults.length > 0) {
         totalFoundCount += pendingResults.length;
         await publishSafely(pendingResults);
     }
 
+    // Worker Bitiş Durumu
     await workerProgressRef.set({
       status: 'completed',
       progress: 100,
@@ -4802,10 +5170,10 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     
-    logger.info(`✅ Worker ${workerId} bitti. Bulunan: ${totalFoundCount}`);
+    logger.info(`✅ Worker ${workerId} başarıyla tamamlandı. Toplam Bulunan: ${totalFoundCount}`);
 
   } catch (error) {
-      logger.error(`❌ Worker ${workerId} hatası:`, error);
+      logger.error(`❌ Worker ${workerId} kritik hata:`, error);
       await workerProgressRef.set({ status: 'error', error: error.message }, { merge: true });
   }
 }
@@ -7039,12 +7407,11 @@ export const similaritySearchWorker = onMessagePublished(
   {
     topic: 'similarity-search-jobs',
     region: 'europe-west1',
-    memory: '2GiB',
+    memory: '2GiB', // <--- BURASI ÇOK ÖNEMLİ (Ağ bant genişliği için)
     timeoutSeconds: 540,
   },
   async (event) => {
     const payload = event?.data?.message?.json || {};
-    // startIndex parametresini de alıyoruz (Varsayılan 0)
     const { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex } = payload;
 
     if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
@@ -7054,23 +7421,20 @@ export const similaritySearchWorker = onMessagePublished(
 
     const currentStartIndex = startIndex || 0;
 
-    // Worker başladığında kendi durumunu 'workers' koleksiyonuna yazsın
-    // Eğer startIndex 0 ise 'starting', değilse 'resuming' durumundadır.
+    // Worker durumunu güncelle
     await adminDb.collection('searchProgress').doc(jobId)
         .collection('workers').doc(String(workerId)).set({
             status: currentStartIndex === 0 ? 'starting' : 'resuming',
-            progress: 0, // Bu değer process fonksiyonunda güncellenecek
+            progress: 0, 
             processed: currentStartIndex,
             total: monitoredMarks.length,
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
     try {
-      // workerId ve startIndex'i fonksiyona iletiyoruz
       await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, currentStartIndex, workerId);
       return null;
     } catch (err) {
-      // Hata durumunu worker'ın kendi belgesine yaz
       await adminDb.collection('searchProgress').doc(jobId)
         .collection('workers').doc(String(workerId)).update({
             status: 'error',
@@ -7960,7 +8324,7 @@ export const deleteNotificationOnEpatsRemoval = onDocumentUpdated(
   }
 );
 
-// functions/index.js -> writeSearchResultsWorker (LOGLU VERSİYON)
+// functions/index.js -> writeSearchResultsWorker (OPTİMİZE EDİLMİŞ YAZICI)
 
 export const writeSearchResultsWorker = onMessagePublished(
   {
@@ -7968,7 +8332,7 @@ export const writeSearchResultsWorker = onMessagePublished(
     region: 'europe-west1',
     memory: '256MiB',
     timeoutSeconds: 540,
-    maxInstances: 40, // Firestore yazma limitine takılmamak için 20 idealdir
+    maxInstances: 30, // Firestore yazma limitlerine takılmamak için 30 güvenlidir
   },
   async (event) => {
     try {
@@ -7987,13 +8351,12 @@ export const writeSearchResultsWorker = onMessagePublished(
         // Yazma işlemini yap
         await batch.commit();
         
-        // --- LOG EKLENDİ ---
-        // Her 500'lük paket veritabanına güvenle indiğinde bu logu göreceksiniz.
-        logger.info(`💾 Job: ${jobId} | +${results.length} kayıt veritabanına başarıyla yazıldı.`);
+        // Log atarak takibi sağla (Her 150'lik pakette bir log düşer)
+        logger.info(`💾 Job: ${jobId} | +${results.length} kayıt yazıldı.`);
 
     } catch (error) {
-        logger.error("❌ Yazma Worker Hatası:", error);
-        throw error; // Pub/Sub'ın tekrar denemesi için hatayı fırlat
+        logger.error("❌ Yazma Worker Hatası (Retry Edilecek):", error);
+        throw error; // Hatayı fırlat ki Pub/Sub tekrar denesin
     }
   }
 );
