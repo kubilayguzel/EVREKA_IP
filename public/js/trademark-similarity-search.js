@@ -977,7 +977,6 @@ const checkCacheAndToggleButtonStates = async () => {
     }
 };
 
-// --- LOGIC FUNCTIONS (PerformSearch, vb.) ---
 const performSearch = async () => {
     const bulletinSelect = document.getElementById('bulletinSelect');
     const startSearchBtn = document.getElementById('startSearchBtn');
@@ -989,33 +988,17 @@ const performSearch = async () => {
 
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) return;
+    
     SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyin...');
 
-    // ✅ Loading panelini sağ üst köşeye taşı - Modern UX
+    // Loading panelini sağ üst köşeye taşı (UX İyileştirmesi)
     setTimeout(() => {
-        const loadingOverlay = document.querySelector('.simple-loading-overlay');
         const loadingContent = document.querySelector('.simple-loading-content');
-        
-        if (loadingOverlay) {
-            // Overlay'i transparan yap, tıklamaları engelleme
-            loadingOverlay.style.background = 'transparent';
-            loadingOverlay.style.pointerEvents = 'none';
-            loadingOverlay.style.zIndex = '9998';
-        }
-        
         if (loadingContent) {
-            // Loading panelini sağ üste taşı
-            loadingContent.style.position = 'fixed';
             loadingContent.style.top = '80px';
             loadingContent.style.right = '20px';
             loadingContent.style.left = 'auto';
             loadingContent.style.transform = 'none';
-            loadingContent.style.pointerEvents = 'auto';
-            loadingContent.style.zIndex = '10001';
-            loadingContent.style.maxWidth = '350px';
-            loadingContent.style.minWidth = '300px';
-            loadingContent.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
-            loadingContent.style.borderRadius = '12px';
         }
     }, 100);
 
@@ -1023,6 +1006,7 @@ const performSearch = async () => {
     infoMessageContainer.innerHTML = '';
     resultsTableBody.innerHTML = '';
     allSimilarResults = [];
+    
     const monitoredMarksPayload = filteredMonitoringTrademarks.map(tm => ({
         id: tm.id,
         markName: (tm.title || tm.markName || '').trim() || 'BELİRSİZ_MARKA',
@@ -1030,39 +1014,78 @@ const performSearch = async () => {
         niceClassSearch: tm.niceClassSearch || [],
         goodsAndServicesByClass: tm.goodsAndServicesByClass || []
     }));
+
     try {
         const onProgress = (pd) => {
-            // Sadeleştirilmiş Ekran: Sadece Yüzde ve Bulunan Sonuç
-            SimpleLoading.update(
-                `Bülten Taranıyor... %${pd.progress || 0}`, 
-                `Tespit Edilen Benzerlik: ${pd.currentResults || 0} adet`
-            );
+            if (pd.status === 'downloading') {
+                 SimpleLoading.update(
+                    `Sonuçlar İndiriliyor...`, 
+                    `Alınan Kayıt: ${pd.message.split('...')[1] || ''}`
+                );
+            } else {
+                SimpleLoading.update(
+                    `Bülten Taranıyor... %${pd.progress || 0}`, 
+                    `Tespit Edilen Benzerlik: ${pd.currentResults || 0} adet`
+                );
+            }
         };
 
-        // startWorkerListeners çağrısını buradan SİLİYORUZ çünkü onProgress halledecek.
+        // 1. ARAMA VE İNDİRME ADIMI
         const resultsFromCF = await runTrademarkSearch(monitoredMarksPayload, bulletinKey, onProgress);
+        
         if (resultsFromCF?.length > 0) {
+            // Sonuçları işle
             allSimilarResults = resultsFromCF.map(hit => ({ ...hit,
                 source: 'new',
                 monitoredTrademark: filteredMonitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId)?.title || hit.markName
             }));
+
+            // Gruplama
             const groupedResults = allSimilarResults.reduce((acc, r) => {
                 const key = r.monitoredTrademarkId;
                 (acc[key] = acc[key] || []).push(r);
                 return acc;
             }, {});
-            for (const [monitoredTrademarkId, results] of Object.entries(groupedResults)) {
-                await searchRecordService.saveRecord(bulletinKey, monitoredTrademarkId, {
-                    results,
-                    searchDate: new Date().toISOString()
-                });
+
+            // 2. KAYDETME ADIMI (GÜNCELLENMİŞ: BATCH & THROTTLE)
+            // Hata veren "Write stream exhausted" sorununu çözen kısım burasıdır.
+            const entries = Object.entries(groupedResults);
+            const SAVE_BATCH_SIZE = 50; // Her seferde 50 marka kaydet
+            
+            SimpleLoading.updateText('Sonuçlar Kaydediliyor...', `0 / ${entries.length} marka`);
+
+            for (let i = 0; i < entries.length; i += SAVE_BATCH_SIZE) {
+                const chunk = entries.slice(i, i + SAVE_BATCH_SIZE);
+                
+                // Chunk içindekileri paralel kaydet
+                await Promise.all(chunk.map(async ([monitoredTrademarkId, results]) => {
+                     try {
+                        await searchRecordService.saveRecord(bulletinKey, monitoredTrademarkId, {
+                            results,
+                            searchDate: new Date().toISOString()
+                        });
+                     } catch (saveErr) {
+                         console.warn(`Kayıt hatası (${monitoredTrademarkId}):`, saveErr);
+                     }
+                }));
+
+                // Firestore SDK'sının "nefes alması" için bekleme (500ms)
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // UI Güncelle
+                SimpleLoading.updateText(
+                    'Sonuçlar Kaydediliyor...', 
+                    `${Math.min(i + SAVE_BATCH_SIZE, entries.length)} / ${entries.length} marka`
+                );
             }
         }
     } catch (error) {
-        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu.</div>`;
+        console.error("Arama süreci hatası:", error);
+        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu: ${error.message}</div>`;
     } finally {
         SimpleLoading.hide();
         groupAndSortResults();
+        
         if (allSimilarResults.length > 0) {
             infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
             startSearchBtn.disabled = true;
@@ -1078,6 +1101,7 @@ const performSearch = async () => {
             researchBtn.disabled = true;
             btnGenerateReportAndNotifyGlobal.disabled = true;
         }
+        
         if (pagination) pagination.update(allSimilarResults.length);
         renderCurrentPageOfResults();
     }
