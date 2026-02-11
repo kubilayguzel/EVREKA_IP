@@ -5030,11 +5030,12 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-        let hit;
+    let hit;
         try {
             if(!line.trim()) continue;
             hit = JSON.parse(line);
             
+            // Mapping (kısa kodları uzun isimlere çevir)
             if (!hit.markName && hit.o) {
                 hit.markName = hit.o;
                 hit.cleanName = hit.n;
@@ -5042,6 +5043,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 hit.applicationDate = hit.d;
                 hit.niceClasses = hit.c;
                 hit.id = hit.id;
+                hit.imagePath = hit.i; // <--- ✅ BU SATIRI EKLEYİN (Görseli geri alıyoruz)
                 hit.bulletinId = selectedBulletinId;
             }
         } catch (e) {
