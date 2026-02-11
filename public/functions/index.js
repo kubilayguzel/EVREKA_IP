@@ -8045,7 +8045,7 @@ export const deleteNotificationOnEpatsRemoval = onDocumentUpdated(
   }
 );
 
-// functions/index.js -> writeSearchResultsWorker (OPTİMİZE EDİLMİŞ YAZICI)
+// functions/index.js -> writeSearchResultsWorker (SAYAÇ GÜNCELLEYEN VERSİYON)
 
 export const writeSearchResultsWorker = onMessagePublished(
   {
@@ -8053,7 +8053,7 @@ export const writeSearchResultsWorker = onMessagePublished(
     region: 'europe-west1',
     memory: '256MiB',
     timeoutSeconds: 540,
-    maxInstances: 30, // Firestore limiti için güvenli sınır
+    maxInstances: 30, 
   },
   async (event) => {
     try {
@@ -8063,20 +8063,31 @@ export const writeSearchResultsWorker = onMessagePublished(
 
         const batch = adminDb.batch();
         const resultsCollection = adminDb.collection('searchProgress').doc(jobId).collection('foundResults');
-
+        
+        // 1. Detaylı kayıtları koleksiyona ekle
         results.forEach(res => {
             const newDocRef = resultsCollection.doc(); 
             batch.set(newDocRef, res);
         });
 
+        // --- KRİTİK EKLEME BURASI ---
+        // 2. Ana İş Dokümanındaki (searchProgress/{jobId}) sayacı artır
+        const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
+        
+        batch.update(mainJobRef, {
+            currentResults: admin.firestore.FieldValue.increment(results.length), // +150 ekle
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        });
+        // ----------------------------
+
+        // 3. Hepsini tek seferde atomic olarak yaz
         await batch.commit();
         
-        // Log ile takip
-        logger.info(`💾 Job: ${jobId} | +${results.length} kayıt yazıldı.`);
+        logger.info(`💾 Job: ${jobId} | +${results.length} kayıt yazıldı ve sayaç güncellendi.`);
 
     } catch (error) {
         logger.error("❌ Yazma Worker Hatası:", error);
-        throw error; // Tekrar denenmesi için hatayı fırlat
+        throw error; 
     }
   }
 );
