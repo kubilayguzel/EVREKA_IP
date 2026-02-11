@@ -1032,9 +1032,10 @@ const performSearch = async () => {
     }));
     try {
         const onProgress = (pd) => {
+            // Sadeleştirilmiş Ekran: Sadece Yüzde ve Bulunan Sonuç
             SimpleLoading.update(
-                `Arama devam ediyor... %${pd.progress || 0}`, 
-                `İşlenen: ${pd.processed || 0}/${pd.total || monitoredMarksPayload.length} - Bulunan: ${pd.currentResults || 0}`
+                `Bülten Taranıyor... %${pd.progress || 0}`, 
+                `Tespit Edilen Benzerlik: ${pd.currentResults || 0} adet`
             );
         };
 
