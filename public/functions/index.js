@@ -4352,6 +4352,8 @@ function levenshteinSimilarity(a, b) {
   return maxLen === 0 ? 1 : (1 - distance / maxLen);
 }
 
+// functions/index.js içindeki calculateSimilarityScoreInternal fonksiyonunu bununla değiştirin
+
 function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplicationDate, searchApplicationDate, hitNiceClasses, searchNiceClasses) {
     // Jenerik ibare temizliği
     const isSearchMultiWord = searchMarkName.trim().split(/\s+/).length > 1;
@@ -4360,15 +4362,15 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     const cleanedSearchName = cleanMarkName(searchMarkName || '', isSearchMultiWord).toLowerCase().trim();
     const cleanedHitName = cleanMarkName(hitMarkName || '', isHitMultiWord).toLowerCase().trim();
 
-    logger.log(`📊 Skorlama: '${searchMarkName}' (temizlenmiş: '${cleanedSearchName}') vs '${hitMarkName}' (temizlenmiş: '${cleanedHitName}')`);
-
+    // Log satırı kaldırıldı
+    
     if (!cleanedSearchName || !cleanedHitName) {
-        return { finalScore: 0.0, positionalExactMatchScore: 0.0 }; // Her iki skoru da döndür
+        return { finalScore: 0.0, positionalExactMatchScore: 0.0 }; 
     }
 
     // Tam eşleşme kontrolü (en yüksek öncelik)
     if (cleanedSearchName === cleanedHitName) {
-        return { finalScore: 1.0, positionalExactMatchScore: 1.0 }; // Her iki skoru da döndür
+        return { finalScore: 1.0, positionalExactMatchScore: 1.0 }; 
     }
 
     // ======== Alt Benzerlik Skorları ========
@@ -4397,7 +4399,7 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
         const maxLength = Math.max(cleanedSearchName.length, cleanedHitName.length);
         return maxLength === 0 ? 1.0 : 1.0 - (matrix[cleanedHitName.length][cleanedSearchName.length] / maxLength);
     })();
-    logger.log(`   - Levenshtein Score: ${levenshteinScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     const jaroWinklerScore = (() => {
         const s1 = cleanedSearchName;
@@ -4460,7 +4462,7 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
 
         return jaro_score + l * p * (1 - jaro_score);
     })();
-    logger.log(`   - Jaro-Winkler Score: ${jaroWinklerScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     const ngramScore = (() => {
         const s1 = cleanedSearchName;
@@ -4492,14 +4494,14 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
 
         return common / Math.min(ngrams1.size, ngrams2.size);
     })();
-    logger.log(`   - N-gram Score (n=2): ${ngramScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     const visualScore = (() => {
         const visualPenalty = visualMismatchPenalty(cleanedSearchName, cleanedHitName);
         const maxPossibleVisualPenalty = Math.max(cleanedSearchName.length, cleanedHitName.length) * 1.0;
         return maxPossibleVisualPenalty === 0 ? 1.0 : (1.0 - (visualPenalty / maxPossibleVisualPenalty));
     })();
-    logger.log(`   - Visual Score: ${visualScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     const prefixScore = (() => {
         const s1 = cleanedSearchName;
@@ -4512,9 +4514,9 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
         if (prefix1 === prefix2) return 1.0;
         if (prefix1.length === 0 && prefix2.length === 0) return 1.0;
 
-        return levenshteinSimilarity(prefix1, prefix2); // Önek karşılaştırması için levenshteinSimilarity kullan
+        return levenshteinSimilarity(prefix1, prefix2); 
     })();
-    logger.log(`   - Prefix Score (len 3): ${prefixScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     // 6. Kelime Bazında En Yüksek Benzerlik Skoru + Eşleşen Kelime Çifti
     const { maxWordScore, maxWordPair } = (() => {
@@ -4542,7 +4544,7 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
         return { maxWordScore: maxSim, maxWordPair: pair };
     })();
 
-    logger.log(`   - Max Word Score: ${maxWordScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     // Yeni: Konumsal Tam Eşleşme Skoru (örn: ilk 3 karakter tam eşleşiyorsa)
     const positionalExactMatchScore = (() => {
@@ -4556,13 +4558,13 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
 
         // Tüm karakterleri kontrol et - HEPSİ eşleşmeli
         for (let i = 0; i < len; i++) {
-            if (s1[i] !== s2[i]) {  // ✅ DÜZELTME: Farklı karakter bulduğunda
-                return 0.0;          // ✅ DÜZELTME: 0.0 döndür ve çık
+            if (s1[i] !== s2[i]) {  
+                return 0.0;          
             }
         }
-        return 1.0; // ✅ DÜZELTME: Sadece TÜM karakterler eşleşirse 1.0 döndür
+        return 1.0; 
     })();
-    logger.log(`   - Positional Exact Match Score (first 3 chars): ${positionalExactMatchScore.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     // ======== YENİ KURAL: Yüksek Kelime Benzerliği Kontrolü ve Önceliklendirme ========
 
@@ -4576,10 +4578,10 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
         // Eğer tam kelime eşleşmesi ile 1.0 elde edildiyse ve bu kelime 2 karakterden kısaysa
         // erken dönüşü engelle (tek harfli "a" gibi durumlar %100 yapmasın)
         if (maxWordScore === 1.0 && exactWordLen < 2) {
-            logger.log(`   *** Tam kelime eşleşmesi tek/çok kısa kelime ile (len=${exactWordLen}) bulundu; erken dönüş iptal edildi. ***`);
+            // Log satırı kaldırıldı
             // Erken dönme, alttaki karma skorlamaya devam
         } else {
-            logger.log(`   *** Yüksek kelime bazında benzerlik tespit edildi (maxWordScore=${(maxWordScore*100).toFixed(0)}%). Erken dönüş uygulanıyor. ***`);
+            // Log satırı kaldırıldı
             return { finalScore: maxWordScore, positionalExactMatchScore: positionalExactMatchScore };
         }
     }
@@ -4595,22 +4597,21 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     );
 
     const nameSimilarityWeighted = nameSimilarityRaw * 0.95;
-    logger.log(`   - Name Similarity (weighted 95%): ${nameSimilarityWeighted.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     // ======== Fonetik Benzerlik Skoru (%5 Ağırlık) ========
     const phoneticScoreRaw = isPhoneticallySimilar(searchMarkName, hitMarkName);
     const phoneticSimilarityWeighted = phoneticScoreRaw * 0.05;
-    logger.log(`   - Phonetic Score (weighted 5%): ${phoneticSimilarityWeighted.toFixed(2)}`);
+    // Log satırı kaldırıldı
 
     // ======== Genel Benzerlik Skoru ========
     let finalScore = nameSimilarityWeighted + phoneticSimilarityWeighted;
 
     finalScore = Math.max(0.0, Math.min(1.0, finalScore));
 
-    logger.log(`   - FINAL SCORE: ${finalScore.toFixed(2)}\n`);
-    return { finalScore: finalScore, positionalExactMatchScore: positionalExactMatchScore }; // Her iki skoru da döndür
+    // Log satırı kaldırıldı
+    return { finalScore: finalScore, positionalExactMatchScore: positionalExactMatchScore }; 
 }
-
 
 // ======== Sunucu Tarafında Marka Benzerliği Araması (GÜNCEL) ========
 export const performTrademarkSimilaritySearch = onCall(
@@ -4941,6 +4942,8 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
+// functions/index.js içindeki processSearchInBackground fonksiyonunu bununla değiştirin:
+
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
@@ -4949,9 +4952,10 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
   const startTime = Date.now();
   
+  // Sonuçları biriktirip toplu yazmak için tampon
   let pendingResults = [];
   
-  // --- DEĞİŞİKLİK 1: Batch Boyutunu Düşürdük (RAM Güvenliği) ---
+  // --- OPTİMİZASYON 1: Batch Boyutunu Düşürdük (RAM Güvenliği) ---
   const WRITE_BATCH_SIZE = 50; 
 
   try {
@@ -4982,7 +4986,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         console.log(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
     }
 
-    // --- DEĞİŞİKLİK 2: Marka Hazırlığını Döngü DIŞINA Aldık (Büyük RAM Tasarrufu) ---
+    // --- OPTİMİZASYON 2: Marka Hazırlığını Döngü DIŞINA Aldık (Büyük RAM Tasarrufu) ---
     // Her bülten satırı için tekrar tekrar hesaplamak yerine 1 kere hesaplayıp hafızada tutuyoruz.
     const preparedMonitoredMarks = monitoredMarks.map(mark => {
         const originalName = (mark.markName || mark.title || '').trim();
@@ -5142,6 +5146,8 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
                 await workerProgressRef.update({ status: 'resuming', nextIndex: currentLineIndex });
                 const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
+                
+                // --- DÜZELTME: Global PubSub Kullanımı ---
                 await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
                 
                 rl.close(); 
@@ -5167,6 +5173,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
+    // Ana işi de güncelle (tek worker varsayımıyla)
     await mainJobRef.update({
         status: 'completed',
         progress: 100,
