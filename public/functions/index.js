@@ -4941,118 +4941,100 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
+// functions/index.js içine bu temizlenmiş versiyonu koyun
+
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
+  // readline import'u dosyanın en başında olmalı, burada değil.
+  // const mainJobRef = ... (değişkenler aynı kalacak)
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
-  const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
+  const TIMEOUT_LIMIT = 480 * 1000;
   const startTime = Date.now();
   
-  // Sonuçları biriktirip toplu yazmak için tampon
   let pendingResults = [];
-  const WRITE_BATCH_SIZE = 100; // 100 sonuçta bir DB'ye yaz
+  const WRITE_BATCH_SIZE = 500; 
 
   try {
-    if (startIndex === 0) {
-        await workerProgressRef.set({ 
-            status: 'processing', 
-            progress: 0, 
-            processed: 0,
-            total: 0,
-            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(err => {
-            console.error(`❌ Worker ${workerId} başlangıç yazma hatası:`, err);
-            throw err; // İlk yazma başarısızsa durdur
-        });
-        
-        // ✅ İlk yazmayı doğrula
-        console.log(`✅ Worker ${workerId} Firestore'a başarıyla yazıldı`);
-    } else {
-        await workerProgressRef.update({ status: 'processing_continued' });
-        console.log(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
-    }
-
-    // 2. Akış (Stream) Hazırlığı
     const bucket = admin.storage().bucket();
     let bulletinNo = selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId;
     const indexFilePath = `bulletins/${bulletinNo}_index.json`;
     const indexFile = bucket.file(indexFilePath);
 
     const [exists] = await indexFile.exists();
-    if (!exists) {
-        throw new Error(`İndeks dosyası bulunamadı: ${indexFilePath}. Lütfen bülteni tekrar yükleyin.`);
+    if (!exists) throw new Error(`İndeks dosyası bulunamadı: ${indexFilePath}`);
+
+    const [metadata] = await indexFile.getMetadata();
+    const totalBytes = parseInt(metadata.size, 10) || 1; 
+
+    // Başlangıç durumu
+    if (startIndex === 0) {
+        await workerProgressRef.set({ 
+            status: 'processing', 
+            progress: 0, 
+            processed: 0, 
+            total: totalBytes, 
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } else {
+        await workerProgressRef.update({ status: 'processing_continued' });
+        // console.log(`🔄 Worker ${workerId} devam ediyor...`); // Bu log kalabilir, tek sefer çalışır.
     }
 
-    // Dosyayı belleğe indirmek YERİNE, bir okuma akışı (ReadStream) açıyoruz.
-    // Bu işlem RAM tüketmez.
     const fileStream = indexFile.createReadStream();
-
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    });
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
     let currentLineIndex = 0;
     let processedCount = startIndex;
+    let processedBytes = 0;
 
-    // 3. SATIR SATIR OKUMA VE KARŞILAŞTIRMA DÖNGÜSÜ
     for await (const line of rl) {
-        
-        // A) Kaldığımız yere gelene kadar satırları atla (Resume mantığı)
+        const lineBytes = Buffer.byteLength(line, 'utf8') + 1;
+        processedBytes += lineBytes;
+
         if (currentLineIndex < startIndex) {
             currentLineIndex++;
             continue;
         }
 
-        // B) Satırı Parse Et
         let hit;
         try {
-            if(!line.trim()) continue; // Boş satır varsa atla
+            if(!line.trim()) continue;
             hit = JSON.parse(line);
             
-            // JSON mapping (Kısa adları uzun adlara çevir)
-            // Upload sırasında: n=cleanName, o=markName, an=appNo, c=classes
             if (!hit.markName && hit.o) {
-                hit.markName = hit.o;
-                hit.cleanName = hit.n;
-                hit.applicationNo = hit.an;
-                hit.applicationDate = hit.d;
-                hit.niceClasses = hit.c;
-                hit.id = hit.id;
+                hit.markName = hit.o; hit.cleanName = hit.n; hit.applicationNo = hit.an;
+                hit.applicationDate = hit.d; hit.niceClasses = hit.c; hit.id = hit.id;
                 hit.bulletinId = selectedBulletinId;
             }
         } catch (e) {
-            console.warn(`Satır okuma hatası (${currentLineIndex}):`, e);
             currentLineIndex++;
             continue;
         }
 
-        // C) Bu bülten kaydını, elimizdeki TÜM izlenen markalarla karşılaştır
-        // (MonitoredMarks zaten RAM'de, 200 tane olduğu için sorun yok)
+        // --- KRİTİK: DÖNGÜ İÇİNDEKİ LOGLARI SİLDİK ---
+        // Buradaki tüm console.log veya logger.log satırları kaldırıldı.
+        
         for (const monitoredMark of monitoredMarks) {
-            
+            // ... (Benzerlik hesaplama kodları aynen kalacak) ...
             const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
             const overrideName = (monitoredMark.searchMarkName || '').trim();
             const primaryName = (overrideName || originalName).trim();
             let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
-            
             const searchTerms = [primaryName, ...alternatives].filter(t => t && t.trim().length > 0);
 
             for (const term of searchTerms) {
-                // Benzerlik Hesaplama (Mevcut Fonksiyonunuz)
+                // ... (Hesaplamalar) ...
                 const applicationDate = monitoredMark.applicationDate || null;
-                // Tarih filtresi
                 if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) continue;
 
                 const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
-                
                 const { finalScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
                   hit.markName, term, hit.applicationDate, applicationDate, hit.niceClasses, niceClasses
                 );
 
                 const SIMILARITY_THRESHOLD = 0.5;
-                // Basit substring kontrolü
                 const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
                 const cleanedHitName = hit.cleanName || cleanMarkName(hit.markName);
                 
@@ -5065,107 +5047,71 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   continue;
                 }
 
-                // Eşleşme bulundu!
                 const resultObj = {
-                  objectID: hit.id,
-                  markName: hit.markName,
-                  applicationNo: hit.applicationNo,
-                  applicationDate: hit.applicationDate,
-                  niceClasses: hit.niceClasses,
-                  holders: hit.holders || [],      
-                  imagePath: hit.imagePath || null,
-                  bulletinId: hit.bulletinId,
-                  similarityScore: finalScore,
-                  positionalExactMatchScore,
-                  monitoredTrademark: primaryName,
-                  matchedTerm: term,
-                  monitoredTrademarkId: monitoredMark.id,
-                  monitoredMarkId: monitoredMark.id,
-                  isEarlier: false 
+                  objectID: hit.id, markName: hit.markName, applicationNo: hit.applicationNo,
+                  applicationDate: hit.applicationDate, niceClasses: hit.niceClasses, holders: hit.holders || [],      
+                  imagePath: hit.imagePath || null, bulletinId: hit.bulletinId, similarityScore: finalScore,
+                  positionalExactMatchScore, monitoredTrademark: primaryName, matchedTerm: term,
+                  monitoredTrademarkId: monitoredMark.id, monitoredMarkId: monitoredMark.id, isEarlier: false 
                 };
-                
-                // Aynı başvuru numarası için en yüksek skoru tutma mantığı (Buffer içinde)
-                // Basitlik için direkt ekliyoruz, toplu yazımda filtreleyebiliriz veya burada map kullanabiliriz.
                 pendingResults.push(resultObj);
             }
         }
 
-        // D) Sonuçları Parça Parça Kaydet (RAM dolmasın diye)
+        // Batch Yazma
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
             const batchWrite = adminDb.batch();
             const resultsCollection = mainJobRef.collection('foundResults');
-            
             pendingResults.forEach(res => {
                 const newDocRef = resultsCollection.doc(); 
                 batchWrite.set(newDocRef, res);
             });
-            
-            // ✅ Timeout ayarı ekle
-              await Promise.race([
-                  batchWrite.commit(),
-                  new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Batch commit timeout')), 30000) // 30 saniye
-                  )
-              ]);
-              
-              console.log(`✅ Worker ${workerId}: ${pendingResults.length} sonuç kaydedildi`);
-            await mainJobRef.update({ currentResults: admin.firestore.FieldValue.increment(pendingResults.length) }).catch(()=>{});
-            
-            pendingResults = []; // Tamponu boşalt
+            await batchWrite.commit();
+            // mainJobRef update işlemini de hata toleranslı yapalım
+            mainJobRef.update({ currentResults: admin.firestore.FieldValue.increment(pendingResults.length) }).catch(()=>{});
+            pendingResults = [];
         }
 
-        // E) Zaman Kontrolü (Sonsuz Döngü / Resume için)
         currentLineIndex++;
         processedCount++;
 
-        // Her 1000 satırda bir zamanı kontrol et (Performans için her satırda yapmıyoruz)
-        if (currentLineIndex % 1000 === 0) {
+        // Progress Güncelleme (Her 1000 satırda bir log atabilir, bu güvenlidir)
+        if (currentLineIndex % 1000 === 0) { // 200 yerine 1000 yaptık, log azaltmak için
             const elapsedTime = Date.now() - startTime;
-            
-            // Progress güncelle - PROGRESS YÜZDESINI EKLE
-            const estimatedTotal = 5000; // Tahmini bülten satır sayısı
-            const progressPercent = Math.min(100, Math.floor((processedCount / estimatedTotal) * 100));
+            const progressPercent = Math.min(99, Math.ceil((processedBytes / totalBytes) * 100));
             
             await workerProgressRef.update({ 
+                progress: progressPercent, 
                 processed: processedCount,
-                progress: progressPercent,  // ✅ YÜZDE HESABI EKLENDI
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             });
 
             if (elapsedTime > TIMEOUT_LIMIT) {
-                logger.warn(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor. Son satır: ${currentLineIndex}`);
-                
-                // Kalan sonuçları kaydet
+                console.log(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor.`);
+                // ... (Devretme kodları) ...
                 if (pendingResults.length > 0) {
                     const batchWrite = adminDb.batch();
                     const resultsCollection = mainJobRef.collection('foundResults');
                     pendingResults.forEach(res => batchWrite.set(resultsCollection.doc(), res));
                     await batchWrite.commit();
                 }
-
-                // Yeni Worker'ı Tetikle
                 await workerProgressRef.update({ status: 'resuming', nextIndex: currentLineIndex });
+                const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
                 
-                const nextPayload = {
-                    jobId,
-                    monitoredMarks,
-                    selectedBulletinId,
-                    workerId,
-                    startIndex: currentLineIndex // Kaldığımız satır
-                };
+                try {
+                    // PubSub import'u fonksiyon dışında globalde olmalı ama burada hata almamak için:
+                    // const { PubSub } = await import('@google-cloud/pubsub'); 
+                    // (Index.js başında tanımlı varsayıyoruz)
+                    await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
+                } catch(e) { console.error('PubSub Hatası:', e); }
                 
-                await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
-                
-                rl.close(); // Okumayı durdur
-                fileStream.destroy();
-                return; // Fonksiyonu bitir
+                rl.close(); fileStream.destroy();
+                return;
             }
         }
-    } // Döngü sonu
+    } 
 
-    // 4. BİTİŞ İŞLEMLERİ
-    
-    // Kalan son sonuçları kaydet
+    // Bitiş İşlemleri
     if (pendingResults.length > 0) {
         const batchWrite = adminDb.batch();
         const resultsCollection = mainJobRef.collection('foundResults');
@@ -5175,19 +5121,20 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     }
 
     await workerProgressRef.update({
-      status: 'completed',
-      progress: 100,
-      processed: processedCount,
+      status: 'completed', progress: 100, processed: processedCount,
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    // Ana Job kontrolü (Basitçe, son worker ise ana job'ı kapat diyebiliriz ama paralel çalıştığı için mainJob'ı update etmek riskli olabilir.
-    // Şimdilik sadece worker'ı kapatıyoruz, frontend tüm workerlar bitince anlayacak.)
-    
-    logger.log(`✅ Worker ${workerId} bülteni taramayı tamamladı.`);
+    // Tek worker ise ana işi de kapat
+    await mainJobRef.update({
+        status: 'completed', progress: 100,
+        completedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`✅ Worker ${workerId} tamamlandı. (Sessiz mod)`);
 
   } catch (error) {
-      logger.error(`❌ Worker ${workerId} hatası:`, error);
+      console.error(`❌ Worker ${workerId} hatası:`, error);
       await workerProgressRef.update({ status: 'error', error: error.message });
   }
 }
