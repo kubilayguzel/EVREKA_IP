@@ -4940,7 +4940,7 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
-// functions/index.js içindeki processSearchInBackground fonksiyonunu bununla değiştirin:
+// functions/index.js -> processSearchInBackground Fonksiyonu
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
@@ -4950,10 +4950,9 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
   const startTime = Date.now();
   
-  // Sonuçları biriktirip toplu yazmak için tampon
   let pendingResults = [];
   
-  // --- OPTİMİZASYON 1: Batch Boyutunu Düşürdük (RAM Güvenliği) ---
+  // Batch boyutu 50 (Güvenli)
   const WRITE_BATCH_SIZE = 50; 
 
   try {
@@ -4970,6 +4969,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     const [metadata] = await indexFile.getMetadata();
     const totalBytes = parseInt(metadata.size, 10) || 1; 
 
+    // --- DÜZELTME 1: Başlangıç ve Devam Durumları (SET MERGE) ---
     if (startIndex === 0) {
         await workerProgressRef.set({ 
             status: 'processing', 
@@ -4978,38 +4978,38 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             total: totalBytes, 
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        console.log(`✅ Worker ${workerId} Firestore'a başarıyla yazıldı`);
+        console.log(`✅ Worker ${workerId} başladı.`);
     } else {
-        await workerProgressRef.update({ status: 'processing_continued' });
+        // BURASI PATLIYORDU -> ARTIK GÜVENLİ
+        await workerProgressRef.set({ 
+            status: 'processing_continued',
+            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
         console.log(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
     }
 
-    // --- OPTİMİZASYON 2: Marka Hazırlığını Döngü DIŞINA Aldık (Büyük RAM Tasarrufu) ---
-    // Her bülten satırı için tekrar tekrar hesaplamak yerine 1 kere hesaplayıp hafızada tutuyoruz.
+    // Marka hazırlığı (RAM Optimizasyonu)
     const preparedMonitoredMarks = monitoredMarks.map(mark => {
         const originalName = (mark.markName || mark.title || '').trim();
         const overrideName = (mark.searchMarkName || '').trim();
         const primaryName = (overrideName || originalName).trim();
         let alternatives = Array.isArray(mark.brandTextSearch) ? mark.brandTextSearch : [];
         
-        // Temizlenmiş ve hazırlanmış arama terimleri
         const searchTerms = [primaryName, ...alternatives]
             .filter(t => t && t.trim().length > 0)
             .map(term => ({
                 term: term,
-                // Terimin temiz halini de önceden hazırlayalım
                 cleanedSearchName: cleanMarkName(term, term.trim().split(/\s+/).length > 1)
             }));
 
         return {
             ...mark,
             primaryName,
-            searchTerms, // Önceden hesaplanmış liste
+            searchTerms,
             applicationDate: mark.applicationDate || null,
             niceClasses: mark.niceClassSearch || mark.niceClasses || []
         };
     });
-    // -----------------------------------------------------------------------------
 
     const fileStream = indexFile.createReadStream();
     const rl = readline.createInterface({
@@ -5030,12 +5030,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-    let hit;
+        let hit;
         try {
             if(!line.trim()) continue;
             hit = JSON.parse(line);
             
-            // Mapping (kısa kodları uzun isimlere çevir)
             if (!hit.markName && hit.o) {
                 hit.markName = hit.o;
                 hit.cleanName = hit.n;
@@ -5043,7 +5042,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 hit.applicationDate = hit.d;
                 hit.niceClasses = hit.c;
                 hit.id = hit.id;
-                hit.imagePath = hit.i; // <--- ✅ BU SATIRI EKLEYİN (Görseli geri alıyoruz)
+                hit.imagePath = hit.i; // Görsel yolu
                 hit.bulletinId = selectedBulletinId;
             }
         } catch (e) {
@@ -5051,17 +5050,13 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-        // --- OPTİMİZE EDİLMİŞ İÇ DÖNGÜ ---
-        // Artık sadece önceden hazırlanmış veriyi okuyoruz, string işlemi yapmıyoruz.
+        // Karşılaştırma Döngüsü
         for (const monitoredMark of preparedMonitoredMarks) {
-            
-            // Tarih kontrolü
             if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
 
             for (const searchItem of monitoredMark.searchTerms) {
-                const { term, cleanedSearchName } = searchItem; // Hazır veri
+                const { term } = searchItem;
                 
-                // Sadece karşılaştırma fonksiyonunu çağırıyoruz
                 const { finalScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
                   hit.markName, term, hit.applicationDate, monitoredMark.applicationDate, hit.niceClasses, monitoredMark.niceClasses
                 );
@@ -5070,7 +5065,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 const cleanedHitName = hit.cleanName || cleanMarkName(hit.markName);
                 
                 let isPrefixSuffixExactMatch = false;
-                if (cleanedSearchName.length >= 3 && cleanedHitName.includes(cleanedSearchName)) {
+                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) {
                     isPrefixSuffixExactMatch = true;
                 }
 
@@ -5110,17 +5105,17 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 batchWrite.set(newDocRef, res);
             });
             
-            // Hata toleransı
             await Promise.race([
                   batchWrite.commit(),
                   new Promise((_, reject) => setTimeout(() => reject(new Error('Batch timeout')), 30000))
             ]);
-              
-            // update yerine set + merge kullanıyoruz (NOT_FOUND hatasını çözer)
+            
+            // --- DÜZELTME 2: Sayaç Güncelleme (SET MERGE) ---
             await mainJobRef.set({ 
                 currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
-            }, { merge: true }).catch(e => console.warn("Sayaç güncellenemedi:", e.message));
-            pendingResults = []; // Hafızayı boşalt
+            }, { merge: true }).catch(()=>{});
+            
+            pendingResults = []; 
         }
 
         currentLineIndex++;
@@ -5131,12 +5126,14 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             const elapsedTime = Date.now() - startTime;
             const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
             
-            await workerProgressRef.update({ 
+            // --- DÜZELTME 3: Worker Progress Güncelleme (SET MERGE) ---
+            await workerProgressRef.set({ 
                 processed: processedCount,
                 progress: progressPercent,
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
-            });
+            }, { merge: true });
 
+            // Zaman Aşımı ve Devretme
             if (elapsedTime > TIMEOUT_LIMIT) {
                 console.log(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor.`);
                 
@@ -5147,10 +5144,13 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                     await batchWrite.commit();
                 }
 
-                await workerProgressRef.update({ status: 'resuming', nextIndex: currentLineIndex });
+                // --- DÜZELTME 4: Resuming Status Güncelleme (SET MERGE) ---
+                await workerProgressRef.set({ 
+                    status: 'resuming', 
+                    nextIndex: currentLineIndex 
+                }, { merge: true });
+
                 const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
-                
-                // --- DÜZELTME: Global PubSub Kullanımı ---
                 await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
                 
                 rl.close(); 
@@ -5166,30 +5166,34 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         const resultsCollection = mainJobRef.collection('foundResults');
         pendingResults.forEach(res => batchWrite.set(resultsCollection.doc(), res));
         await batchWrite.commit();
-        // update yerine set + merge kullanıyoruz (NOT_FOUND hatasını çözer)
+        
         await mainJobRef.set({ 
             currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
-        }, { merge: true }).catch(e => console.warn("Sayaç güncellenemedi:", e.message));
-      }
+        }, { merge: true }).catch(()=>{});
+    }
 
-    await workerProgressRef.update({
+    // --- DÜZELTME 5: Worker Bitiş Durumu (SET MERGE) ---
+    await workerProgressRef.set({
       status: 'completed',
       progress: 100,
       processed: processedCount,
       completedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    }, { merge: true });
     
-    // Ana işi güvenli güncelle
-    // NOT: Paralel workerlarda ana işi 'completed' yapmak riskli olabilir ama şimdilik set ile güvenli hale getiriyoruz.
+    // --- DÜZELTME 6: Ana Job Güncelleme (SET MERGE) ---
     await mainJobRef.set({
         lastWorkerUpdate: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).catch(e => console.warn("Job update hatası:", e.message));
+    }, { merge: true }).catch(()=>{});
 
     console.log(`✅ Worker ${workerId} tamamlandı. Toplam: ${processedCount}`);
 
   } catch (error) {
       console.error(`❌ Worker ${workerId} hatası:`, error);
-      await workerProgressRef.update({ status: 'error', error: error.message });
+      // --- DÜZELTME 7: Hata Durumu (SET MERGE) ---
+      await workerProgressRef.set({ 
+          status: 'error', 
+          error: error.message 
+      }, { merge: true });
   }
 }
 
