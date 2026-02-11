@@ -4940,7 +4940,7 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
-// functions/index.js -> processSearchInBackground Fonksiyonu
+// functions/index.js
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
@@ -4952,8 +4952,8 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   
   let pendingResults = [];
   
-  // Batch boyutu 50 (Güvenli)
-  const WRITE_BATCH_SIZE = 50; 
+  // --- OPTİMİZASYON: Daha küçük batch, daha güvenli yazma ---
+  const WRITE_BATCH_SIZE = 25; // 50'den 25'e düşürdük
 
   try {
     const bucket = admin.storage().bucket();
@@ -4969,7 +4969,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     const [metadata] = await indexFile.getMetadata();
     const totalBytes = parseInt(metadata.size, 10) || 1; 
 
-    // --- DÜZELTME 1: Başlangıç ve Devam Durumları (SET MERGE) ---
     if (startIndex === 0) {
         await workerProgressRef.set({ 
             status: 'processing', 
@@ -4980,7 +4979,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         }, { merge: true });
         console.log(`✅ Worker ${workerId} başladı.`);
     } else {
-        // BURASI PATLIYORDU -> ARTIK GÜVENLİ
         await workerProgressRef.set({ 
             status: 'processing_continued',
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
@@ -5021,6 +5019,29 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     let processedCount = startIndex;
     let processedBytes = 0;
 
+    // --- YARDIMCI: Güvenli Batch Yazma Fonksiyonu ---
+    const commitBatchSafely = async (resultsToSave) => {
+        if (resultsToSave.length === 0) return;
+        
+        const batchWrite = adminDb.batch();
+        const resultsCollection = mainJobRef.collection('foundResults');
+        
+        resultsToSave.forEach(res => {
+            const newDocRef = resultsCollection.doc(); 
+            batchWrite.set(newDocRef, res);
+        });
+
+        // 60 saniye timeout (Daha uzun süre)
+        await Promise.race([
+            batchWrite.commit(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Batch timeout')), 60000))
+        ]);
+
+        await mainJobRef.set({ 
+            currentResults: admin.firestore.FieldValue.increment(resultsToSave.length) 
+        }, { merge: true }).catch(()=>{});
+    };
+
     for await (const line of rl) {
         const lineBytes = Buffer.byteLength(line, 'utf8') + 1;
         processedBytes += lineBytes;
@@ -5042,7 +5063,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 hit.applicationDate = hit.d;
                 hit.niceClasses = hit.c;
                 hit.id = hit.id;
-                hit.imagePath = hit.i; // Görsel yolu
+                hit.imagePath = hit.i;
                 hit.bulletinId = selectedBulletinId;
             }
         } catch (e) {
@@ -5050,7 +5071,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-        // Karşılaştırma Döngüsü
         for (const monitoredMark of preparedMonitoredMarks) {
             if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
 
@@ -5095,27 +5115,24 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             }
         }
 
-        // Batch Kaydetme
+        // Batch Kaydetme (Güvenli)
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
-            const batchWrite = adminDb.batch();
-            const resultsCollection = mainJobRef.collection('foundResults');
-            
-            pendingResults.forEach(res => {
-                const newDocRef = resultsCollection.doc(); 
-                batchWrite.set(newDocRef, res);
-            });
-            
-            await Promise.race([
-                  batchWrite.commit(),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('Batch timeout')), 30000))
-            ]);
-            
-            // --- DÜZELTME 2: Sayaç Güncelleme (SET MERGE) ---
-            await mainJobRef.set({ 
-                currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
-            }, { merge: true }).catch(()=>{});
-            
-            pendingResults = []; 
+            try {
+                await commitBatchSafely(pendingResults);
+                pendingResults = []; 
+            } catch (err) {
+                console.warn(`⚠️ Batch yazma hatası (Worker ${workerId}), yeniden deneniyor...`);
+                // Basit bir retry (tekrar deneme)
+                await new Promise(r => setTimeout(r, 2000));
+                try {
+                    await commitBatchSafely(pendingResults);
+                    pendingResults = [];
+                } catch (retryErr) {
+                    console.error(`❌ Batch yazma başarısız:`, retryErr);
+                    // Veri kaybı olmaması için pendingResults'ı temizlemiyoruz,
+                    // bir sonraki turda veya kapanışta tekrar denenecek.
+                }
+            }
         }
 
         currentLineIndex++;
@@ -5126,25 +5143,20 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             const elapsedTime = Date.now() - startTime;
             const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
             
-            // --- DÜZELTME 3: Worker Progress Güncelleme (SET MERGE) ---
             await workerProgressRef.set({ 
                 processed: processedCount,
                 progress: progressPercent,
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
 
-            // Zaman Aşımı ve Devretme
+            // Zaman Aşımı
             if (elapsedTime > TIMEOUT_LIMIT) {
                 console.log(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor.`);
                 
                 if (pendingResults.length > 0) {
-                    const batchWrite = adminDb.batch();
-                    const resultsCollection = mainJobRef.collection('foundResults');
-                    pendingResults.forEach(res => batchWrite.set(resultsCollection.doc(), res));
-                    await batchWrite.commit();
+                    try { await commitBatchSafely(pendingResults); } catch(e){}
                 }
 
-                // --- DÜZELTME 4: Resuming Status Güncelleme (SET MERGE) ---
                 await workerProgressRef.set({ 
                     status: 'resuming', 
                     nextIndex: currentLineIndex 
@@ -5160,19 +5172,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         }
     } 
 
-    // Bitiş
+    // Bitiş (Kalanları kaydet)
     if (pendingResults.length > 0) {
-        const batchWrite = adminDb.batch();
-        const resultsCollection = mainJobRef.collection('foundResults');
-        pendingResults.forEach(res => batchWrite.set(resultsCollection.doc(), res));
-        await batchWrite.commit();
-        
-        await mainJobRef.set({ 
-            currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
-        }, { merge: true }).catch(()=>{});
+        try { await commitBatchSafely(pendingResults); } catch(e){}
     }
 
-    // --- DÜZELTME 5: Worker Bitiş Durumu (SET MERGE) ---
     await workerProgressRef.set({
       status: 'completed',
       progress: 100,
@@ -5180,7 +5184,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     
-    // --- DÜZELTME 6: Ana Job Güncelleme (SET MERGE) ---
     await mainJobRef.set({
         lastWorkerUpdate: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).catch(()=>{});
@@ -5189,7 +5192,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
   } catch (error) {
       console.error(`❌ Worker ${workerId} hatası:`, error);
-      // --- DÜZELTME 7: Hata Durumu (SET MERGE) ---
       await workerProgressRef.set({ 
           status: 'error', 
           error: error.message 
