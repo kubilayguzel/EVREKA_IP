@@ -977,6 +977,8 @@ const checkCacheAndToggleButtonStates = async () => {
     }
 };
 
+// public/js/trademark-similarity-search.js içindeki performSearch fonksiyonunu bununla değiştirin:
+
 const performSearch = async () => {
     const bulletinSelect = document.getElementById('bulletinSelect');
     const startSearchBtn = document.getElementById('startSearchBtn');
@@ -991,7 +993,7 @@ const performSearch = async () => {
     
     SimpleLoading.show('Arama başlatılıyor...', 'Lütfen bekleyin...');
 
-    // Loading panelini sağ üst köşeye taşı (UX İyileştirmesi)
+    // Loading panelini sağ üst köşeye taşı
     setTimeout(() => {
         const loadingContent = document.querySelector('.simple-loading-content');
         if (loadingContent) {
@@ -1018,11 +1020,13 @@ const performSearch = async () => {
     try {
         const onProgress = (pd) => {
             if (pd.status === 'downloading') {
+                 // İndirme aşaması
                  SimpleLoading.update(
                     `Sonuçlar İndiriliyor...`, 
                     `Alınan Kayıt: ${pd.message.split('...')[1] || ''}`
                 );
             } else {
+                // Arama aşaması
                 SimpleLoading.update(
                     `Bülten Taranıyor... %${pd.progress || 0}`, 
                     `Tespit Edilen Benzerlik: ${pd.currentResults || 0} adet`
@@ -1030,29 +1034,39 @@ const performSearch = async () => {
             }
         };
 
-        // 1. ARAMA VE İNDİRME ADIMI
+        // 1. ARAMA VE İNDİRME
         const resultsFromCF = await runTrademarkSearch(monitoredMarksPayload, bulletinKey, onProgress);
         
         if (resultsFromCF?.length > 0) {
             // Sonuçları işle
-            allSimilarResults = resultsFromCF.map(hit => ({ ...hit,
+            const processedResults = resultsFromCF.map(hit => ({ ...hit,
                 source: 'new',
                 monitoredTrademark: filteredMonitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId)?.title || hit.markName
             }));
 
+            // Ham veriyi bellekten temizle (RAM tasarrufu)
+            resultsFromCF.length = 0; 
+
             // Gruplama
-            const groupedResults = allSimilarResults.reduce((acc, r) => {
+            const groupedResults = processedResults.reduce((acc, r) => {
                 const key = r.monitoredTrademarkId;
                 (acc[key] = acc[key] || []).push(r);
                 return acc;
             }, {});
 
-            // 2. KAYDETME ADIMI (GÜNCELLENMİŞ: BATCH & THROTTLE)
-            // Hata veren "Write stream exhausted" sorununu çözen kısım burasıdır.
+            // Global değişkene ata
+            allSimilarResults = processedResults;
+
+            // 2. KAYDETME ADIMI (ULTRA GÜVENLİ MOD)
+            // "Write stream exhausted" hatasını önlemek için çok yavaş ve küçük paketlerle kaydediyoruz.
             const entries = Object.entries(groupedResults);
-            const SAVE_BATCH_SIZE = 50; // Her seferde 50 marka kaydet
             
-            SimpleLoading.updateText('Sonuçlar Kaydediliyor...', `0 / ${entries.length} marka`);
+            // --- AYARLAR ---
+            const SAVE_BATCH_SIZE = 10;   // Her seferde sadece 10 marka grubu kaydet
+            const DELAY_MS = 1500;        // Her paket arası 1.5 saniye bekle
+            // ----------------
+
+            SimpleLoading.updateText('Sonuçlar Kaydediliyor...', `0 / ${entries.length} marka grubu`);
 
             for (let i = 0; i < entries.length; i += SAVE_BATCH_SIZE) {
                 const chunk = entries.slice(i, i + SAVE_BATCH_SIZE);
@@ -1066,22 +1080,23 @@ const performSearch = async () => {
                         });
                      } catch (saveErr) {
                          console.warn(`Kayıt hatası (${monitoredTrademarkId}):`, saveErr);
+                         // Hata olsa bile devam et, döngüyü kırma
                      }
                 }));
 
-                // Firestore SDK'sının "nefes alması" için bekleme (500ms)
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Firestore'un "Write Stream"ini boşaltması için bekleme süresi
+                await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
                 // UI Güncelle
                 SimpleLoading.updateText(
                     'Sonuçlar Kaydediliyor...', 
-                    `${Math.min(i + SAVE_BATCH_SIZE, entries.length)} / ${entries.length} marka`
+                    `${Math.min(i + SAVE_BATCH_SIZE, entries.length)} / ${entries.length} marka grubu`
                 );
             }
         }
     } catch (error) {
         console.error("Arama süreci hatası:", error);
-        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu: ${error.message}</div>`;
+        infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama sırasında bir sorun oluştu: ${error.message}</div>`;
     } finally {
         SimpleLoading.hide();
         groupAndSortResults();
