@@ -120,15 +120,17 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         reject(error);
       });
 
-      // İlerleme Güncelleme
       function updateGlobalProgress() {
           const workerKeys = Object.keys(workersState);
           let sumProgress = 0;
+          let totalFound = 0; // Yeni sayaç mantığı
           let activeWorkerCount = 0;
 
           workerKeys.forEach(key => {
               const w = workersState[key];
               sumProgress += (w.progress || 0);
+              // Her worker'ın bulduğu sayıyı topla
+              totalFound += (w.found || 0); 
               activeWorkerCount++;
           });
 
@@ -138,7 +140,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
               onProgress({
                   status: mainState.status,
                   progress: globalProgress,
-                  currentResults: mainState.currentResults || 0,
+                  currentResults: totalFound, // Backend'den değil, worker toplamından alıyoruz
                   message: mainState.status === 'resuming' ? 'İşlem devrediliyor...' : null
               });
           }
