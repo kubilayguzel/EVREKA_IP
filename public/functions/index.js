@@ -4940,20 +4940,21 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
-// functions/index.js
+// functions/index.js -> processSearchInBackground (GÜNCELLENMİŞ VERSİYON)
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
-  const TIMEOUT_LIMIT = 480 * 1000; // 8 Dakika
+  const TIMEOUT_LIMIT = 480 * 1000; 
   const startTime = Date.now();
   
   let pendingResults = [];
+  let totalFoundCount = 0; // Worker'ın bulduğu toplam sayı (Yerel Sayaç)
   
-  // --- OPTİMİZASYON: Daha küçük batch, daha güvenli yazma ---
-  const WRITE_BATCH_SIZE = 25; // 50'den 25'e düşürdük
+  // Pub/Sub için paket boyutu (Daha büyük olabilir çünkü sadece mesaj atıyoruz)
+  const WRITE_BATCH_SIZE = 100; 
 
   try {
     const bucket = admin.storage().bucket();
@@ -4962,28 +4963,26 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     const indexFile = bucket.file(indexFilePath);
 
     const [exists] = await indexFile.exists();
-    if (!exists) {
-        throw new Error(`İndeks dosyası bulunamadı: ${indexFilePath}. Lütfen bülteni tekrar yükleyin.`);
-    }
+    if (!exists) throw new Error(`İndeks dosyası bulunamadı.`);
 
     const [metadata] = await indexFile.getMetadata();
     const totalBytes = parseInt(metadata.size, 10) || 1; 
 
+    // Başlangıç Durumu
     if (startIndex === 0) {
         await workerProgressRef.set({ 
             status: 'processing', 
             progress: 0, 
             processed: 0, 
+            found: 0, // Yeni alan
             total: totalBytes, 
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        console.log(`✅ Worker ${workerId} başladı.`);
     } else {
         await workerProgressRef.set({ 
             status: 'processing_continued',
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        console.log(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
     }
 
     // Marka hazırlığı (RAM Optimizasyonu)
@@ -5000,51 +4999,18 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                 cleanedSearchName: cleanMarkName(term, term.trim().split(/\s+/).length > 1)
             }));
 
-        return {
-            ...mark,
-            primaryName,
-            searchTerms,
-            applicationDate: mark.applicationDate || null,
-            niceClasses: mark.niceClassSearch || mark.niceClasses || []
-        };
+        return { ...mark, primaryName, searchTerms, applicationDate: mark.applicationDate || null, niceClasses: mark.niceClassSearch || mark.niceClasses || [] };
     });
 
     const fileStream = indexFile.createReadStream();
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    });
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
     let currentLineIndex = 0;
     let processedCount = startIndex;
     let processedBytes = 0;
 
-    // --- YARDIMCI: Güvenli Batch Yazma Fonksiyonu ---
-    const commitBatchSafely = async (resultsToSave) => {
-        if (resultsToSave.length === 0) return;
-        
-        const batchWrite = adminDb.batch();
-        const resultsCollection = mainJobRef.collection('foundResults');
-        
-        resultsToSave.forEach(res => {
-            const newDocRef = resultsCollection.doc(); 
-            batchWrite.set(newDocRef, res);
-        });
-
-        // 60 saniye timeout (Daha uzun süre)
-        await Promise.race([
-            batchWrite.commit(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Batch timeout')), 60000))
-        ]);
-
-        await mainJobRef.set({ 
-            currentResults: admin.firestore.FieldValue.increment(resultsToSave.length) 
-        }, { merge: true }).catch(()=>{});
-    };
-
     for await (const line of rl) {
-        const lineBytes = Buffer.byteLength(line, 'utf8') + 1;
-        processedBytes += lineBytes;
+        processedBytes += Buffer.byteLength(line, 'utf8') + 1;
 
         if (currentLineIndex < startIndex) {
             currentLineIndex++;
@@ -5055,147 +5021,113 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         try {
             if(!line.trim()) continue;
             hit = JSON.parse(line);
-            
             if (!hit.markName && hit.o) {
-                hit.markName = hit.o;
-                hit.cleanName = hit.n;
-                hit.applicationNo = hit.an;
-                hit.applicationDate = hit.d;
-                hit.niceClasses = hit.c;
-                hit.id = hit.id;
-                hit.imagePath = hit.i;
-                hit.bulletinId = selectedBulletinId;
+                hit.markName = hit.o; hit.cleanName = hit.n; hit.applicationNo = hit.an;
+                hit.applicationDate = hit.d; hit.niceClasses = hit.c; hit.id = hit.id;
+                hit.imagePath = hit.i; hit.bulletinId = selectedBulletinId;
             }
         } catch (e) {
             currentLineIndex++;
             continue;
         }
 
+        // Karşılaştırma
         for (const monitoredMark of preparedMonitoredMarks) {
             if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
 
             for (const searchItem of monitoredMark.searchTerms) {
-                const { term } = searchItem;
-                
                 const { finalScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
-                  hit.markName, term, hit.applicationDate, monitoredMark.applicationDate, hit.niceClasses, monitoredMark.niceClasses
+                  hit.markName, searchItem.term, hit.applicationDate, monitoredMark.applicationDate, hit.niceClasses, monitoredMark.niceClasses
                 );
 
                 const SIMILARITY_THRESHOLD = 0.5;
                 const cleanedHitName = hit.cleanName || cleanMarkName(hit.markName);
-                
                 let isPrefixSuffixExactMatch = false;
-                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) {
-                    isPrefixSuffixExactMatch = true;
-                }
+                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) isPrefixSuffixExactMatch = true;
 
-                if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) {
-                  continue;
-                }
+                if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) continue;
 
-                const resultObj = {
-                  objectID: hit.id,
-                  markName: hit.markName,
-                  applicationNo: hit.applicationNo,
-                  applicationDate: hit.applicationDate,
-                  niceClasses: hit.niceClasses,
-                  holders: hit.holders || [],      
-                  imagePath: hit.imagePath || null,
-                  bulletinId: hit.bulletinId,
-                  similarityScore: finalScore,
-                  positionalExactMatchScore,
-                  monitoredTrademark: monitoredMark.primaryName,
-                  matchedTerm: term,
-                  monitoredTrademarkId: monitoredMark.id,
-                  monitoredMarkId: monitoredMark.id,
-                  isEarlier: false 
-                };
-                
-                pendingResults.push(resultObj);
+                // Eşleşme
+                pendingResults.push({
+                  objectID: hit.id, markName: hit.markName, applicationNo: hit.applicationNo,
+                  applicationDate: hit.applicationDate, niceClasses: hit.niceClasses, holders: hit.holders || [],      
+                  imagePath: hit.imagePath || null, bulletinId: hit.bulletinId, similarityScore: finalScore,
+                  positionalExactMatchScore, monitoredTrademark: monitoredMark.primaryName, matchedTerm: searchItem.term,
+                  monitoredTrademarkId: monitoredMark.id, monitoredMarkId: monitoredMark.id, isEarlier: false 
+                });
             }
         }
 
-        // Batch Kaydetme (Güvenli)
+        // --- YENİ YÖNTEM: Pub/Sub'a Gönder ---
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
-            try {
-                await commitBatchSafely(pendingResults);
-                pendingResults = []; 
-            } catch (err) {
-                console.warn(`⚠️ Batch yazma hatası (Worker ${workerId}), yeniden deneniyor...`);
-                // Basit bir retry (tekrar deneme)
-                await new Promise(r => setTimeout(r, 2000));
-                try {
-                    await commitBatchSafely(pendingResults);
-                    pendingResults = [];
-                } catch (retryErr) {
-                    console.error(`❌ Batch yazma başarısız:`, retryErr);
-                    // Veri kaybı olmaması için pendingResults'ı temizlemiyoruz,
-                    // bir sonraki turda veya kapanışta tekrar denenecek.
-                }
-            }
+            totalFoundCount += pendingResults.length;
+            
+            // Veriyi kaydetmek yerine MESAJ atıyoruz (Çok hızlıdır, bekleme yapmaz)
+            await pubsubClient.topic('save-search-results').publishMessage({ 
+                json: { jobId, results: pendingResults } 
+            });
+            
+            pendingResults = []; // Tamponu boşalt
         }
 
         currentLineIndex++;
         processedCount++;
 
-        // Progress Güncelleme
+        // Progress Güncelleme (Her 1000 satırda bir)
         if (currentLineIndex % 1000 === 0) {
             const elapsedTime = Date.now() - startTime;
             const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
             
+            // Worker'ın kendi durumunu güncelle (Found sayısını da ekle)
             await workerProgressRef.set({ 
                 processed: processedCount,
                 progress: progressPercent,
+                found: totalFoundCount, // Frontend burayı toplayıp gösterecek
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
 
-            // Zaman Aşımı
+            // Zaman Aşımı Kontrolü
             if (elapsedTime > TIMEOUT_LIMIT) {
-                console.log(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor.`);
+                console.log(`⚠️ Worker ${workerId} devrediliyor.`);
                 
+                // Kalanları gönder
                 if (pendingResults.length > 0) {
-                    try { await commitBatchSafely(pendingResults); } catch(e){}
+                    await pubsubClient.topic('save-search-results').publishMessage({ 
+                        json: { jobId, results: pendingResults } 
+                    });
                 }
 
-                await workerProgressRef.set({ 
-                    status: 'resuming', 
-                    nextIndex: currentLineIndex 
-                }, { merge: true });
-
+                await workerProgressRef.set({ status: 'resuming', nextIndex: currentLineIndex }, { merge: true });
                 const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
                 await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
                 
-                rl.close(); 
-                fileStream.destroy();
+                rl.close(); fileStream.destroy();
                 return;
             }
         }
     } 
 
-    // Bitiş (Kalanları kaydet)
+    // Bitiş
     if (pendingResults.length > 0) {
-        try { await commitBatchSafely(pendingResults); } catch(e){}
+        totalFoundCount += pendingResults.length;
+        await pubsubClient.topic('save-search-results').publishMessage({ 
+            json: { jobId, results: pendingResults } 
+        });
     }
 
     await workerProgressRef.set({
       status: 'completed',
       progress: 100,
       processed: processedCount,
+      found: totalFoundCount,
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     
-    await mainJobRef.set({
-        lastWorkerUpdate: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).catch(()=>{});
-
-    console.log(`✅ Worker ${workerId} tamamlandı. Toplam: ${processedCount}`);
+    console.log(`✅ Worker ${workerId} bitti. Bulunan: ${totalFoundCount}`);
 
   } catch (error) {
       console.error(`❌ Worker ${workerId} hatası:`, error);
-      await workerProgressRef.set({ 
-          status: 'error', 
-          error: error.message 
-      }, { merge: true });
+      await workerProgressRef.set({ status: 'error', error: error.message }, { merge: true });
   }
 }
 
@@ -8346,5 +8278,43 @@ export const deleteNotificationOnEpatsRemoval = onDocumentUpdated(
     }
 
     return null;
+  }
+);
+
+// functions/index.js EN ALTINA EKLEYİN
+
+// --- YENİ: Sadece Veritabanı Yazma İşini Yapan Worker ---
+export const writeSearchResultsWorker = onMessagePublished(
+  {
+    topic: 'save-search-results', // Yeni Topic
+    region: 'europe-west1',
+    memory: '256MiB',
+    timeoutSeconds: 540,
+    maxInstances: 20, // Aynı anda en fazla 20 yazıcı çalışsın (Firestore'u korumak için)
+  },
+  async (event) => {
+    try {
+        const { jobId, results } = event.data.message.json || {};
+        
+        if (!jobId || !Array.isArray(results) || results.length === 0) return;
+
+        const batch = adminDb.batch();
+        const resultsCollection = adminDb.collection('searchProgress').doc(jobId).collection('foundResults');
+
+        results.forEach(res => {
+            const newDocRef = resultsCollection.doc(); 
+            batch.set(newDocRef, res);
+        });
+
+        // Yazma işlemini yap
+        await batch.commit();
+        
+        // Başarılı logu (isteğe bağlı, çok log olmaması için kapalı kalabilir)
+        // console.log(`💾 ${results.length} kayıt yazıldı.`);
+
+    } catch (error) {
+        console.error("❌ Yazma Worker Hatası:", error);
+        throw error; // Hata fırlat ki Pub/Sub tekrar denesin (Retry)
+    }
   }
 );
