@@ -4971,8 +4971,8 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       logger.error(`❌ Worker ${workerId} hatası:`, error);
       await workerProgressRef.set({ status: 'error', error: error.message }, { merge: true });
   }
-}
 
+  
 const bucket = admin.storage().bucket();
 export const generateSimilarityReport = onCall(
   {
