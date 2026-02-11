@@ -2,9 +2,9 @@
 
 import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { getFirestore, doc, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, doc, onSnapshot, collection, getDocs, query, limit, startAfter, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-console.log(">>> run-search.js modülü yüklendi (Sadeleştirilmiş Worker Versiyonu) <<<");
+console.log(">>> run-search.js modülü yüklendi (Batch Download Versiyonu) <<<");
 
 const functions = getFunctions(firebaseServices.app, "europe-west1");
 const db = getFirestore(firebaseServices.app);
@@ -37,7 +37,6 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     // Progress tracking
     return new Promise((resolve, reject) => {
       const progressRef = doc(db, 'searchProgress', jobId);
-      // Workerları dinlemeye devam ediyoruz (Çünkü ana yüzdeyi burası hesaplıyor)
       const workersRef = collection(db, 'searchProgress', jobId, 'workers'); 
       
       let safetyTimeout;
@@ -58,19 +57,17 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           safetyTimeout = setTimeout(() => {
               cleanup();
               reject(new Error('İşlem zaman aşımına uğradı (Uzun süre işlem yapılmadı)'));
-          }, 15 * 60 * 1000); 
+          }, 20 * 60 * 1000); // Süreyi 20 dakikaya çıkardık (Büyük veri indirme payı)
       };
 
       resetSafetyTimeout();
 
-      // 1. WORKERLARI DİNLEME (Sadece toplam sayı için)
+      // 1. WORKERLARI DİNLEME
       unsubscribeWorkers = onSnapshot(workersRef, (snapshot) => {
         resetSafetyTimeout();
-        
         snapshot.forEach(doc => {
             workersState[doc.id] = doc.data();
         });
-
         updateGlobalProgress();
       });
 
@@ -91,20 +88,30 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           reject(new Error(mainState.error || 'Arama sırasında hata oluştu'));
         }
 
+        // --- DEĞİŞİKLİK: TAMAMLANDIĞINDA PARÇA PARÇA İNDİRME ---
         if (mainState.status === 'completed') {
           cleanup(); 
-          console.log(`✅ İşlem tamamlandı. Veritabanından sonuçlar indiriliyor...`);
+          console.log(`✅ İşlem tamamlandı. ${mainState.currentResults || 0} sonuç parça parça indiriliyor...`);
 
-          const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
-          
           try {
-            const snapshot = await getDocs(resultsRef);
-            const allResults = snapshot.docs.map(doc => doc.data());
+            // Batch Download Fonksiyonunu Çağır
+            const allResults = await getAllResultsInBatches(jobId, (downloadedCount) => {
+                 // İndirme sırasında kullanıcıya bilgi verelim
+                 if (onProgress) {
+                     onProgress({
+                        status: 'downloading',
+                        progress: 100,
+                        currentResults: mainState.currentResults,
+                        message: `Sonuçlar indiriliyor... (${downloadedCount} / ${mainState.currentResults})`
+                     });
+                 }
+            });
+            
             console.log(`📥 ${allResults.length} adet sonuç başarıyla indirildi.`);
             resolve(allResults);
           } catch (err) {
             console.error("Sonuçları indirirken hata oluştu:", err);
-            reject(new Error("Sonuçlar veritabanından çekilemedi."));
+            reject(new Error("Sonuçlar veritabanından çekilemedi: " + err.message));
           }
         }
       }, (error) => {
@@ -113,7 +120,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         reject(error);
       });
 
-      // --- YARDIMCI FONKSİYON: Gerçek İlerlemeyi Hesapla ---
+      // İlerleme Güncelleme
       function updateGlobalProgress() {
           const workerKeys = Object.keys(workersState);
           let sumProgress = 0;
@@ -121,13 +128,10 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
 
           workerKeys.forEach(key => {
               const w = workersState[key];
-              // Backend'den gelen 'progress' değeri (Byte bazlı gerçek yüzde)
               sumProgress += (w.progress || 0);
               activeWorkerCount++;
           });
 
-          // Tüm workerların ortalamasını al (Paralel çalıştıkları için)
-          // Eğer hiç worker yoksa 0
           const globalProgress = activeWorkerCount > 0 ? Math.floor(sumProgress / activeWorkerCount) : 0;
 
           if (onProgress) {
@@ -139,11 +143,61 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
               });
           }
       }
-
     });
 
   } catch (error) {
     console.error('❌ Cloud Function çağrılırken hata:', error);
     throw error;
   }
+}
+
+// --- YENİ YARDIMCI FONKSİYON: Batch (Parçalı) İndirme ---
+async function getAllResultsInBatches(jobId, onBatchLoaded) {
+    const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
+    let allData = [];
+    let lastVisible = null;
+    const BATCH_SIZE = 2000; // Her seferinde 2000 kayıt indir (Browser'ı yormaz)
+    let keepFetching = true;
+
+    while (keepFetching) {
+        try {
+            let q;
+            // Sıralama olmadan pagination çalışmaz, similarityScore'a göre sıralayıp çekelim
+            // (Veya documentID'ye göre de olabilir ama sıralama tutarlı olmalı)
+            if (lastVisible) {
+                q = query(resultsRef, orderBy('__name__'), startAfter(lastVisible), limit(BATCH_SIZE));
+            } else {
+                q = query(resultsRef, orderBy('__name__'), limit(BATCH_SIZE));
+            }
+
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                keepFetching = false;
+                break;
+            }
+
+            const batchData = snapshot.docs.map(doc => doc.data());
+            allData = allData.concat(batchData);
+            
+            lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            
+            console.log(`📦 Batch indirildi: ${batchData.length} kayıt (Toplam: ${allData.length})`);
+            
+            if (onBatchLoaded) {
+                onBatchLoaded(allData.length);
+            }
+
+            // Eğer çekilen paket limitten azsa, veri bitmiş demektir
+            if (batchData.length < BATCH_SIZE) {
+                keepFetching = false;
+            }
+
+        } catch (error) {
+            console.error("Batch indirme hatası:", error);
+            throw error;
+        }
+    }
+
+    return allData;
 }
