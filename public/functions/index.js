@@ -8298,16 +8298,15 @@ export const deleteNotificationOnEpatsRemoval = onDocumentUpdated(
   }
 );
 
-// functions/index.js EN ALTINA EKLEYİN
+// functions/index.js -> writeSearchResultsWorker (LOGLU VERSİYON)
 
-// --- YENİ: Sadece Veritabanı Yazma İşini Yapan Worker ---
 export const writeSearchResultsWorker = onMessagePublished(
   {
-    topic: 'save-search-results', // Yeni Topic
+    topic: 'save-search-results',
     region: 'europe-west1',
     memory: '256MiB',
     timeoutSeconds: 540,
-    maxInstances: 20, // Aynı anda en fazla 20 yazıcı çalışsın (Firestore'u korumak için)
+    maxInstances: 20, // Firestore yazma limitine takılmamak için 20 idealdir
   },
   async (event) => {
     try {
@@ -8326,12 +8325,13 @@ export const writeSearchResultsWorker = onMessagePublished(
         // Yazma işlemini yap
         await batch.commit();
         
-        // Başarılı logu (isteğe bağlı, çok log olmaması için kapalı kalabilir)
-        // console.log(`💾 ${results.length} kayıt yazıldı.`);
+        // --- LOG EKLENDİ ---
+        // Her 500'lük paket veritabanına güvenle indiğinde bu logu göreceksiniz.
+        logger.info(`💾 Job: ${jobId} | +${results.length} kayıt veritabanına başarıyla yazıldı.`);
 
     } catch (error) {
-        console.error("❌ Yazma Worker Hatası:", error);
-        throw error; // Hata fırlat ki Pub/Sub tekrar denesin (Retry)
+        logger.error("❌ Yazma Worker Hatası:", error);
+        throw error; // Pub/Sub'ın tekrar denemesi için hatayı fırlat
     }
   }
 );
