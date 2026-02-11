@@ -4,7 +4,7 @@ import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { getFirestore, doc, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-console.log(">>> run-search.js modülü yüklendi (Worker Destekli Versiyon) <<<");
+console.log(">>> run-search.js modülü yüklendi (Sadeleştirilmiş Worker Versiyonu) <<<");
 
 const functions = getFunctions(firebaseServices.app, "europe-west1");
 const db = getFirestore(firebaseServices.app);
@@ -37,13 +37,12 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     // Progress tracking
     return new Promise((resolve, reject) => {
       const progressRef = doc(db, 'searchProgress', jobId);
-      // --- ÖNEMLİ EKLENTİ: Workerları Dinleme ---
+      // Workerları dinlemeye devam ediyoruz (Çünkü ana yüzdeyi burası hesaplıyor)
       const workersRef = collection(db, 'searchProgress', jobId, 'workers'); 
       
       let safetyTimeout;
-      // Durumları hafızada tutuyoruz
       let mainState = { status: 'starting', totalMarks: monitoredMarks.length };
-      let workersState = {}; // { 'workerId': { progress: 50, status: 'processing', ... } }
+      let workersState = {}; 
 
       let unsubscribeMain = null;
       let unsubscribeWorkers = null;
@@ -59,12 +58,12 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           safetyTimeout = setTimeout(() => {
               cleanup();
               reject(new Error('İşlem zaman aşımına uğradı (Uzun süre işlem yapılmadı)'));
-          }, 15 * 60 * 1000); // 15 dakika
+          }, 15 * 60 * 1000); 
       };
 
       resetSafetyTimeout();
 
-      // --- 1. WORKERLARI DİNLEME (Detaylı İlerleme Çubukları İçin) ---
+      // 1. WORKERLARI DİNLEME (Sadece toplam sayı için)
       unsubscribeWorkers = onSnapshot(workersRef, (snapshot) => {
         resetSafetyTimeout();
         
@@ -72,11 +71,10 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
             workersState[doc.id] = doc.data();
         });
 
-        // Worker verileri her değiştiğinde genel durumu güncelle
         updateGlobalProgress();
       });
 
-      // --- 2. ANA DÖKÜMANI DİNLEME (Tamamlandı/Hata durumu için) ---
+      // 2. ANA DÖKÜMANI DİNLEME
       unsubscribeMain = onSnapshot(progressRef, async (snapshot) => {
         if (!snapshot.exists()) {
           cleanup();
@@ -85,16 +83,14 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         }
 
         mainState = snapshot.data();
-        updateGlobalProgress(); // Durum değişirse tetikle
+        updateGlobalProgress(); 
 
-        // Hata Durumu
         if (mainState.status === 'error') {
           cleanup();
           console.error('❌ Arama hatası:', mainState.error);
           reject(new Error(mainState.error || 'Arama sırasında hata oluştu'));
         }
 
-        // Tamamlandı Durumu
         if (mainState.status === 'completed') {
           cleanup(); 
           console.log(`✅ İşlem tamamlandı. Veritabanından sonuçlar indiriliyor...`);
@@ -117,43 +113,31 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         reject(error);
       });
 
-      // --- YARDIMCI FONKSİYON: İlerlemeyi Hesapla ve UI'a Gönder ---
+      // --- YARDIMCI FONKSİYON: Sadece Global İlerlemeyi Hesapla ---
       function updateGlobalProgress() {
-          // Tüm workerların işlediği toplam sayıyı bul
           const workerKeys = Object.keys(workersState);
           let totalProcessed = 0;
-          let activeWorkersList = [];
+
+          // Worker'ların işlediği toplam sayıyı topla
           workerKeys.forEach(key => {
               const w = workersState[key];
               totalProcessed += (w.processed || 0);
-              
-              // Frontend'e worker listesi gönder (UI'da ayrı barlar çizmek için)
-              activeWorkersList.push({
-                  id: key,
-                  status: w.status,
-                  progress: w.progress,
-                  processed: w.processed,
-                  total: w.total || 0,
-                  error: w.error
-              });
           });
 
           // Ana toplam sayı
           const totalMarks = mainState.totalMarks || monitoredMarks.length;
           
-          // Ana yüzde hesabı (Bültenin toplam satır sayısı başta bilinmediği için tahmini hesaplanır veya işlenen satır sayısı gösterilir)
-          // Burada işlenen satır sayısını baz alarak sembolik bir progress gösterebiliriz veya sadece sayacı güncelleriz.
-          const globalProgress = totalMarks > 0 ? Math.min(100, Math.floor((totalProcessed / 5000) * 100)) : 0; // 5000 tahmini satır sayısı
+          // Yüzde hesabı (Tahmini 5000 satır üzerinden veya backend'den gelen bilgiyle)
+          const globalProgress = totalMarks > 0 ? Math.min(100, Math.floor((totalProcessed / 5000) * 100)) : 0; 
 
           if (onProgress) {
-                console.log('📤 [DEBUG] onProgress çağrılıyor, workers:', activeWorkersList); // ✅ EKLE
+              // ARTIK 'workers' ARRAY'İ GÖNDERİLMİYOR
               onProgress({
                   status: mainState.status,
                   progress: globalProgress,
-                  processed: totalProcessed, // <--- İşte ekranda "0" yerine sayının artmasını sağlayacak değer
+                  processed: totalProcessed, 
                   total: totalMarks,
                   currentResults: mainState.currentResults || 0,
-                  workers: activeWorkersList,
                   message: mainState.status === 'resuming' ? 'İşlem devrediliyor...' : null
               });
           }
