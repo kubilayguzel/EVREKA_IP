@@ -1031,21 +1031,11 @@ const performSearch = async () => {
         goodsAndServicesByClass: tm.goodsAndServicesByClass || []
     }));
     try {
-        // GÜNCELLENEN KISIM BAŞLANGICI
         const onProgress = (pd) => {
-            // 1. Loading ekranındaki yazıyı güncelle
             SimpleLoading.update(
                 `Arama devam ediyor... %${pd.progress || 0}`, 
                 `İşlenen: ${pd.processed || 0}/${pd.total || monitoredMarksPayload.length} - Bulunan: ${pd.currentResults || 0}`
             );
-
-            // 2. Worker Grid'ini güncelle (run-search.js'den gelen veriyi kullanıyoruz)
-            console.log('🎨 [DEBUG] pd.workers:', pd.workers); // ✅ EKLE
-            if (pd.workers && Array.isArray(pd.workers)) {
-                renderWorkersGrid(pd.workers);
-            } else {
-                console.warn('⚠️ [DEBUG] pd.workers yok veya array değil!'); // ✅ EKLE
-            }
         };
 
         // startWorkerListeners çağrısını buradan SİLİYORUZ çünkü onProgress halledecek.
@@ -2138,81 +2128,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     setTimeout(addGlobalOptionToBulletinSelect, 1000);
 });
-// --- WORKER ARAYÜZ GÜNCELLEME FONKSİYONU ---
-function renderWorkersGrid(workers) {
-    const container = document.getElementById('workersGridContainer');
-    const gridEl = document.getElementById('workersGrid');
-    
-    if (!container || !gridEl) {
-        console.error('❌ Worker container bulunamadı!', { container, gridEl });
-        return;
-    }
-
-    container.style.display = 'block';
-    container.style.position = 'relative';
-    container.style.zIndex = '10000';
-    container.style.marginTop = '15px';
-    container.style.marginBottom = '15px';
-    
-    console.log(`🎨 Worker container görünür yapıldı, ${workers.length} worker render ediliyor`);
-
-    workers.forEach((worker) => {
-    const workerId = worker.id;
-    
-    console.log(`🔨 Worker #${workerId} kartı oluşturuluyor/güncelleniyor`); // ✅ EKLE
-    
-    // Kart DOM elementi var mı?
-    let card = document.getElementById(`worker-card-${workerId}`);
-        
-        // Yoksa oluştur
-        if (!card) {
-            card = document.createElement('div');
-            card.id = `worker-card-${workerId}`;
-            card.className = 'worker-card';
-            // CSS styles (İsterseniz CSS dosyasına taşıyabilirsiniz)
-            card.style.cssText = `
-                background: #fff; 
-                border: 1px solid #e0e0e0; 
-                border-radius: 8px; 
-                padding: 10px; 
-                text-align: center; 
-                font-size: 11px; 
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                transition: all 0.3s ease;
-            `;
-            gridEl.appendChild(card);
-        }
-
-        // Duruma göre renk ve ikon belirle
-        let statusColor = '#f59e0b'; // Sarı (İşleniyor)
-        let iconHtml = '<i class="fas fa-cog fa-spin"></i>';
-        
-        if (worker.status === 'completed') {
-            statusColor = '#10b981'; // Yeşil
-            iconHtml = '<i class="fas fa-check-circle"></i>';
-        } else if (worker.status === 'error') {
-            statusColor = '#ef4444'; // Kırmızı
-            iconHtml = '<i class="fas fa-exclamation-circle"></i>';
-        } else if (worker.status === 'paused') {
-            statusColor = '#6366f1'; // Mor
-            iconHtml = '<i class="fas fa-pause-circle"></i>';
-        }
-
-        const percent = worker.progress || 0;
-
-        // Kart içeriğini güncelle
-        card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <strong style="color:#333;">Worker #${workerId}</strong>
-                <span style="color:${statusColor}; font-size:14px;">${iconHtml}</span>
-            </div>
-            <div class="progress" style="height: 6px; background-color: #f1f5f9; border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
-                <div class="progress-bar" style="width: ${percent}%; background-color: ${statusColor}; transition: width 0.5s;"></div>
-            </div>
-            <div style="display:flex; justify-content:space-between; color:#64748b;">
-                <span>${worker.processed || 0} / ${worker.total || '?'}</span>
-                <strong>%${percent}</strong>
-            </div>
-        `;
-    });
-}
