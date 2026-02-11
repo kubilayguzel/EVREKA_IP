@@ -4940,7 +4940,7 @@ export const performTrademarkSimilaritySearch = onCall(
   }
 );
 
-// functions/index.js -> processSearchInBackground (GÜNCELLENMİŞ VERSİYON)
+// functions/index.js -> processSearchInBackground (SON VE EN SAĞLAM VERSİYON)
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
@@ -4951,10 +4951,39 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   const startTime = Date.now();
   
   let pendingResults = [];
-  let totalFoundCount = 0; // Worker'ın bulduğu toplam sayı (Yerel Sayaç)
+  let totalFoundCount = 0;
   
-  // Pub/Sub için paket boyutu (Daha büyük olabilir çünkü sadece mesaj atıyoruz)
-  const WRITE_BATCH_SIZE = 100; 
+  // --- OPTİMİZASYON: Trafiği rahatlatmak için batch boyutunu 500'e çıkardık ---
+  const WRITE_BATCH_SIZE = 500; 
+
+  // --- YARDIMCI: Pub/Sub Güvenli Gönderim (Retry Mekanizmalı) ---
+  const publishSafely = async (results) => {
+      if (results.length === 0) return;
+      try {
+          // Mesajı gönder
+          await pubsubClient.topic('save-search-results').publishMessage({ 
+              json: { jobId, results } 
+          });
+      } catch (err) {
+          console.warn(`⚠️ Pub/Sub gönderim hatası (Worker ${workerId}), tekrar deneniyor...`, err.message);
+          // 2 saniye bekle ve tekrar dene
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          try {
+              await pubsubClient.topic('save-search-results').publishMessage({ 
+                  json: { jobId, results } 
+              });
+          } catch (retryErr) {
+              console.error(`❌ Pub/Sub gönderimi başarısız:`, retryErr);
+              // Kritik hata: Veri kaybı olmaması için Firestore'a yazmayı dene (Fallback)
+              try {
+                  const batch = adminDb.batch();
+                  const col = mainJobRef.collection('foundResults');
+                  results.forEach(r => batch.set(col.doc(), r));
+                  await batch.commit();
+              } catch(e) { console.error("Firestore Fallback de başarısız:", e); }
+          }
+      }
+  };
 
   try {
     const bucket = admin.storage().bucket();
@@ -4974,18 +5003,20 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             status: 'processing', 
             progress: 0, 
             processed: 0, 
-            found: 0, // Yeni alan
+            found: 0, 
             total: totalBytes, 
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        logger.info(`✅ Worker ${workerId} başladı.`);
     } else {
         await workerProgressRef.set({ 
             status: 'processing_continued',
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        logger.info(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
     }
 
-    // Marka hazırlığı (RAM Optimizasyonu)
+    // Marka hazırlığı
     const preparedMonitoredMarks = monitoredMarks.map(mark => {
         const originalName = (mark.markName || mark.title || '').trim();
         const overrideName = (mark.searchMarkName || '').trim();
@@ -5031,7 +5062,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-        // Karşılaştırma
         for (const monitoredMark of preparedMonitoredMarks) {
             if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
 
@@ -5047,7 +5077,6 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
                 if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) continue;
 
-                // Eşleşme
                 pendingResults.push({
                   objectID: hit.id, markName: hit.markName, applicationNo: hit.applicationNo,
                   applicationDate: hit.applicationDate, niceClasses: hit.niceClasses, holders: hit.holders || [],      
@@ -5058,43 +5087,33 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             }
         }
 
-        // --- YENİ YÖNTEM: Pub/Sub'a Gönder ---
+        // Batch Gönderim (500 adet birikince)
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
             totalFoundCount += pendingResults.length;
-            
-            // Veriyi kaydetmek yerine MESAJ atıyoruz (Çok hızlıdır, bekleme yapmaz)
-            await pubsubClient.topic('save-search-results').publishMessage({ 
-                json: { jobId, results: pendingResults } 
-            });
-            
-            pendingResults = []; // Tamponu boşalt
+            await publishSafely(pendingResults);
+            pendingResults = []; 
         }
 
         currentLineIndex++;
         processedCount++;
 
-        // Progress Güncelleme (Her 1000 satırda bir)
-        if (currentLineIndex % 1000 === 0) {
+        // Progress Güncelleme
+        if (currentLineIndex % 2000 === 0) { // Sıklığı azalttık (1000 -> 2000)
             const elapsedTime = Date.now() - startTime;
             const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
             
-            // Worker'ın kendi durumunu güncelle (Found sayısını da ekle)
             await workerProgressRef.set({ 
                 processed: processedCount,
                 progress: progressPercent,
-                found: totalFoundCount, // Frontend burayı toplayıp gösterecek
+                found: totalFoundCount, 
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
 
-            // Zaman Aşımı Kontrolü
             if (elapsedTime > TIMEOUT_LIMIT) {
-                console.log(`⚠️ Worker ${workerId} devrediliyor.`);
+                logger.warn(`⚠️ Worker ${workerId} zaman aşımı. Devrediliyor.`);
                 
-                // Kalanları gönder
                 if (pendingResults.length > 0) {
-                    await pubsubClient.topic('save-search-results').publishMessage({ 
-                        json: { jobId, results: pendingResults } 
-                    });
+                    await publishSafely(pendingResults);
                 }
 
                 await workerProgressRef.set({ status: 'resuming', nextIndex: currentLineIndex }, { merge: true });
@@ -5110,9 +5129,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     // Bitiş
     if (pendingResults.length > 0) {
         totalFoundCount += pendingResults.length;
-        await pubsubClient.topic('save-search-results').publishMessage({ 
-            json: { jobId, results: pendingResults } 
-        });
+        await publishSafely(pendingResults);
     }
 
     await workerProgressRef.set({
@@ -5123,10 +5140,10 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     
-    console.log(`✅ Worker ${workerId} bitti. Bulunan: ${totalFoundCount}`);
+    logger.info(`✅ Worker ${workerId} bitti. Bulunan: ${totalFoundCount}`);
 
   } catch (error) {
-      console.error(`❌ Worker ${workerId} hatası:`, error);
+      logger.error(`❌ Worker ${workerId} hatası:`, error);
       await workerProgressRef.set({ status: 'error', error: error.message }, { merge: true });
   }
 }
