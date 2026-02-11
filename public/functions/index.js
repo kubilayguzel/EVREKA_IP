@@ -3271,20 +3271,18 @@ export const processTrademarkBulletinUploadV3 = onObjectFinalized(
       try {
         console.log("⚡ Arama indeksi (JSON) oluşturuluyor...");
 
-        // writeBatchesToFirestore fonksiyonunda record.id ataması yapıldığı için burada ID'ler mevcuttur.
         const searchIndex = records.map(item => ({
-          id: item.id,                        // Firestore Belge ID'si
-          n: (item.markName || "").toLowerCase().replace(/[^a-z0-9ğüşöçı\s]/g, '').trim(), // Arama için temizlenmiş isim (Hız)
-          o: item.markName || "",             // Orijinal isim
-          c: item.niceClasses || [],          // Sınıflar
-          an: item.applicationNo || "",       // Başvuru No
-          d: item.applicationDate || ""       // Tarih
+          id: item.id,
+          n: (item.markName || "").toLowerCase().replace(/[^a-z0-9ğüşöçı\s]/g, '').trim(),
+          o: item.markName || "",
+          c: item.niceClasses || [],
+          an: item.applicationNo || "",
+          d: item.applicationDate || "",
+          i: item.imagePath || "" // <--- ✅ BU SATIRI EKLEYİN (Görsel Yolu)
         }));
 
-        // Diziyi "Satır Satır JSON" (NDJSON) formatına çeviriyoruz.
-      // Her kayıt bir satır (\n) ile ayrılır.
-      const ndjsonString = searchIndex.map(item => JSON.stringify(item)).join('\n');
 
+      const ndjsonString = searchIndex.map(item => JSON.stringify(item)).join('\n');
       const indexFileName = `bulletins/${bulletinNo}_index.json`;
       const bucket = admin.storage().bucket();
       
