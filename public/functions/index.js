@@ -4700,23 +4700,24 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   const mainJobRef = adminDb.collection('searchProgress').doc(jobId);
   const workerProgressRef = mainJobRef.collection('workers').doc(String(workerId));
 
+  // --- AYAR: 8 Dakika (480.000 ms) ---
   const TIMEOUT_LIMIT = 480 * 1000; 
   const startTime = Date.now();
   
   let pendingResults = [];
-  let totalFoundCount = 0; // Yerel sayaç (Bu worker'ın buldukları)
+  let totalFoundCount = 0; // Yerel sayaç
   
-  // --- YENİ: Kümülatif Sayaç Başlangıcı ---
-  // Eğer bu bir devam işiyse, veritabanındaki mevcut 'found' sayısını al
+  // Devam eden iş ise, önceki sayıyı al
   if (startIndex > 0) {
       const snap = await workerProgressRef.get();
       if (snap.exists) {
           totalFoundCount = snap.data().found || 0;
       }
   }
-  // ----------------------------------------
 
-  const WRITE_BATCH_SIZE = 150; 
+  // --- GÜNCELLEME: Batch boyutu 300'e çıkarıldı ---
+  const WRITE_BATCH_SIZE = 300; 
+  // ------------------------------------------------
 
   // --- Güvenli Gönderim (Atomic Increment ile) ---
   const publishSafely = async (results) => {
@@ -4725,20 +4726,22 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       
       try {
           await pubsubClient.topic('save-search-results').publishMessage(payload);
-          await new Promise(r => setTimeout(r, 150)); 
+          // 300'lük paket biraz daha büyük olduğu için bekleme süresini de 
+          // orantılı olarak çok az artırabiliriz (150ms -> 200ms) ki şişme yapmasın.
+          await new Promise(r => setTimeout(r, 200)); 
       } catch (err) {
           logger.warn(`⚠️ Pub/Sub hatası (Worker ${workerId}), tekrar deneniyor...`);
           await new Promise(r => setTimeout(r, 1000));
           try {
               await pubsubClient.topic('save-search-results').publishMessage(payload);
           } catch (retryErr) {
-              // Fallback: Firestore (Burada da sayacı artırmalıyız)
+              // Fallback: Firestore
               try {
                   const batch = adminDb.batch();
                   const col = mainJobRef.collection('foundResults');
                   results.forEach(r => batch.set(col.doc(), r));
                   
-                  // Manuel sayaç artırımı (Pub/Sub çalışmadığı için Yazıcı Worker bunu yapamaz)
+                  // Manuel sayaç artırımı
                   batch.update(mainJobRef, {
                       currentResults: admin.firestore.FieldValue.increment(results.length),
                       lastUpdate: admin.firestore.FieldValue.serverTimestamp()
@@ -4768,12 +4771,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             status: 'processing', progress: 0, processed: 0, found: 0, total: totalBytes, 
             lastUpdate: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true }).catch(()=>{});
-        logger.info(`✅ Worker ${workerId} başladı.`);
+        logger.info(`✅ Worker ${workerId} başladı (Batch: 300).`);
     } else {
-        logger.info(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor (Mevcut Bulunan: ${totalFoundCount})...`);
+        logger.info(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor (Mevcut: ${totalFoundCount})...`);
     }
 
-    // ... (Marka hazırlığı kodu AYNEN KALACAK) ...
     const preparedMonitoredMarks = monitoredMarks.map(mark => {
         const originalName = (mark.markName || mark.title || '').trim();
         const overrideName = (mark.searchMarkName || '').trim();
@@ -4799,16 +4801,13 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             logger.warn(`⚠️ SÜRE DOLDU (${passedSeconds}s). Worker ${workerId} devrediliyor.`);
             
             if (pendingResults.length > 0) {
-                // Kalanları gönder ama totalFoundCount'u henüz artırma (Publish fonksiyonu başarılı olursa artar ama burada tahmini ekliyoruz)
-                // Dikkat: Burada totalFoundCount artırmıyoruz çünkü 'found' alanı kümülatif gidiyor.
                 await publishSafely(pendingResults);
             }
 
-            // Durumu kaydet (status: resuming)
             await workerProgressRef.set({ 
                 status: 'resuming', 
                 nextIndex: currentLineIndex,
-                found: totalFoundCount // Buraya kadar bulduklarını kaydet
+                found: totalFoundCount 
             }, { merge: true });
 
             const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
@@ -4826,18 +4825,17 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             continue;
         }
 
-        // ARA GÜNCELLEME (Arayüz için)
+        // ARA GÜNCELLEME (Arayüzde donma olmasın diye)
         if (currentLineIndex % 500 === 0) {
              const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
              workerProgressRef.set({ 
                 processed: processedCount, 
                 progress: progressPercent, 
-                found: totalFoundCount, // Kümülatif sayıyı gönder
+                found: totalFoundCount, 
                 lastUpdate: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true }).catch(()=>{});
         }
 
-        // ... (JSON Parse AYNEN KALACAK) ...
         let hit;
         try {
             if(!line.trim()) continue;
@@ -4874,8 +4872,9 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
              }
         }
 
+        // BATCH KONTROL (Burada artık 300'ü bekleyecek)
         if (pendingResults.length >= WRITE_BATCH_SIZE) {
-            totalFoundCount += pendingResults.length; // Yerel sayacı artır
+            totalFoundCount += pendingResults.length; 
             await publishSafely(pendingResults);
             pendingResults = []; 
         }
@@ -4890,12 +4889,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         await publishSafely(pendingResults);
     }
 
-    // KESİN BİTİŞ İŞARETİ
     await workerProgressRef.set({
       status: 'completed', 
       progress: 100, 
       processed: processedCount, 
-      found: totalFoundCount, // Final sayıyı yaz
+      found: totalFoundCount, 
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     
