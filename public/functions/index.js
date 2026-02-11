@@ -5116,7 +5116,10 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
                   new Promise((_, reject) => setTimeout(() => reject(new Error('Batch timeout')), 30000))
             ]);
               
-            await mainJobRef.update({ currentResults: admin.firestore.FieldValue.increment(pendingResults.length) }).catch(()=>{});
+            // update yerine set + merge kullanıyoruz (NOT_FOUND hatasını çözer)
+            await mainJobRef.set({ 
+                currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
+            }, { merge: true }).catch(e => console.warn("Sayaç güncellenemedi:", e.message));
             pendingResults = []; // Hafızayı boşalt
         }
 
@@ -5163,8 +5166,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         const resultsCollection = mainJobRef.collection('foundResults');
         pendingResults.forEach(res => batchWrite.set(resultsCollection.doc(), res));
         await batchWrite.commit();
-        await mainJobRef.update({ currentResults: admin.firestore.FieldValue.increment(pendingResults.length) }).catch(()=>{});
-    }
+        // update yerine set + merge kullanıyoruz (NOT_FOUND hatasını çözer)
+        await mainJobRef.set({ 
+            currentResults: admin.firestore.FieldValue.increment(pendingResults.length) 
+        }, { merge: true }).catch(e => console.warn("Sayaç güncellenemedi:", e.message));
+      }
 
     await workerProgressRef.update({
       status: 'completed',
@@ -5173,12 +5179,11 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
       completedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    // Ana işi de güncelle (tek worker varsayımıyla)
-    await mainJobRef.update({
-        status: 'completed',
-        progress: 100,
-        completedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    // Ana işi güvenli güncelle
+    // NOT: Paralel workerlarda ana işi 'completed' yapmak riskli olabilir ama şimdilik set ile güvenli hale getiriyoruz.
+    await mainJobRef.set({
+        lastWorkerUpdate: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).catch(e => console.warn("Job update hatası:", e.message));
 
     console.log(`✅ Worker ${workerId} tamamlandı. Toplam: ${processedCount}`);
 
