@@ -4611,336 +4611,7 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     return { finalScore: finalScore, positionalExactMatchScore: positionalExactMatchScore }; 
 }
 
-// ======== Sunucu Tarafında Marka Benzerliği Araması (GÜNCEL) ========
-export const performTrademarkSimilaritySearch = onCall(
-  {
-    region: 'europe-west1',
-    timeoutSeconds: 540,
-    memory: '2GiB'
-  },
-  async (request) => {
-    const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
-
-    // =========================
-    // ASYNC MODE: İşi Parçala ve Workerlara Dağıt
-    // =========================
-    if (async && !jobId) {
-      const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const WORKER_COUNT = 10; // 10 Paralel Worker
-
-      // Başlangıç progress kaydı
-      await adminDb.collection('searchProgress').doc(newJobId).set({
-        status: 'queued',
-        progress: 0,
-        total: Array.isArray(monitoredMarks) ? monitoredMarks.length : 0,
-        processed: 0,
-        results: [],
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        bulletinId: selectedBulletinId,
-        totalChunks: WORKER_COUNT
-      });
-
-      // Markaları parçalara böl
-      const batchSize = Math.ceil(monitoredMarks.length / WORKER_COUNT);
-      const promises = [];
-      const TOPIC_NAME = 'similarity-search-jobs';
-      await ensureTopic(TOPIC_NAME);
-
-      console.log(`🚀 Arama işi ${WORKER_COUNT} parçaya bölünüyor. Toplam Marka: ${monitoredMarks.length}`);
-
-      for (let i = 0; i < WORKER_COUNT; i++) {
-        const start = i * batchSize;
-        const end = start + batchSize;
-        const markChunk = monitoredMarks.slice(start, end);
-
-        if (markChunk.length === 0) continue;
-
-        // Her parça için bir Pub/Sub mesajı gönder
-        const messagePayload = {
-          jobId: newJobId,
-          workerId: i + 1,
-          monitoredMarks: markChunk,
-          selectedBulletinId: selectedBulletinId,
-          // BulletinNo'yu ID'den çıkarıyoruz (örn: 469_27052025 -> 469)
-          bulletinNo: selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId
-        };
-
-        const p = pubsubClient.topic(TOPIC_NAME).publishMessage({
-          json: messagePayload
-        });
-        promises.push(p);
-      }
-
-      await Promise.all(promises);
-      console.log(`✅ ${promises.length} adet Worker tetiklendi.`);
-
-      return { success: true, jobId: newJobId, async: true, workerCount: promises.length };
-    }
-
-    // =========================
-    // SYNC MODE: (mevcut mantığın korunuyor)
-    // =========================
-    if (!Array.isArray(monitoredMarks) || monitoredMarks.length === 0 || !selectedBulletinId) {
-      throw new HttpsError(
-        'invalid-argument',
-        'Missing required parameters: monitoredMarks (array) or selectedBulletinId'
-      );
-    }
-
-    // BATCH PROCESSING PARAMETRELERİ
-    const BATCH_SIZE = 3;   // Her batch'te 3 marka
-    const PROCESS_DELAY = 500; // Batch'ler arası 500ms bekleme
-
-    logger.log('🚀 Cloud Function: performTrademarkSimilaritySearch BAŞLATILDI', {
-      numMonitoredMarks: monitoredMarks.length,
-      selectedBulletinId,
-      batchSize: BATCH_SIZE,
-      estimatedBatches: Math.ceil(monitoredMarks.length / BATCH_SIZE)
-    });
-
-    try {
-      let bulletinRecordsSnapshot;
-
-      // Önce bulletinId olarak direkt ara
-      bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-        .where('bulletinId', '==', selectedBulletinId)
-        .get();
-
-      // Eğer sonuç yoksa veya gönderilen değer "469_27052025" gibi ise → bulletinNo ile ara
-      if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
-        let selectedBulletinNo = selectedBulletinId;
-        if (selectedBulletinId.includes('_')) {
-          selectedBulletinNo = selectedBulletinId.split('_')[0];
-        }
-
-        const bulletinDoc = await adminDb.collection('trademarkBulletins')
-          .where('bulletinNo', '==', selectedBulletinNo)
-          .limit(1)
-          .get();
-
-        if (!bulletinDoc.empty) {
-          const bulletinIdFromNo = bulletinDoc.docs[0].id;
-          bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
-            .where('bulletinId', '==', bulletinIdFromNo)
-            .get();
-        }
-      }
-
-      const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      logger.log(`✅ ${bulletinRecords.length} kayıt bulundu.`);
-
-      const allResults = [];
-
-      // BATCH PROCESSING: Markaları gruplara böl
-      const markBatches = [];
-      for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
-        markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
-      }
-      logger.log(`📦 ${markBatches.length} batch oluşturuldu (her biri max ${BATCH_SIZE} marka)`);
-
-      // Her batch'i sırayla işle
-      for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
-        const batch = markBatches[batchIndex];
-        const progress = Math.round(((batchIndex + 1) / markBatches.length) * 100);
-        logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor... (${progress}%)`);
-
-        // Batch içindeki her markayı işle
-        for (const monitoredMark of batch) {
-          
-          // LOG 1: Gelen veriyi kontrol et
-          logger.log(`🔍 [DEBUG] İşlenen Marka ID: ${monitoredMark.id}`, {
-             anaMarka: monitoredMark.markName,
-             brandTextSearch: monitoredMark.brandTextSearch, // Burası dolu mu?
-             niceClasses: monitoredMark.niceClasses
-          });
-
-          // 1. Aranacak TÜM terimleri belirle (Ana Marka + Alternatifler)
-          const originalName = (monitoredMark.markName || monitoredMark.title || '').trim();
-          const overrideName = (monitoredMark.searchMarkName || '').trim();
-          const primaryName = (overrideName || originalName).trim();
-          
-          // brandTextSearch dizisini güvenli bir şekilde al
-          let alternatives = Array.isArray(monitoredMark.brandTextSearch) ? monitoredMark.brandTextSearch : [];
-          
-          // Override varsa, orijinal marka adını alternatiflerden çıkar (arama dışı bırak)
-          const normText = (s) => (s || '').toString().trim().toLowerCase();
-          if (overrideName && originalName) {
-              const originalNorm = normText(originalName);
-              alternatives = alternatives.filter(t => normText(t) !== originalNorm);
-          }
-          
-          const searchTerms = [
-              primaryName, 
-              ...alternatives
-          ].filter(t => t && t.trim().length > 0); // Boş olanları temizle
-
-          // LOG 2: Oluşturulan arama listesini gör
-          logger.log(`📝 [DEBUG] Arama Listesi (SearchTerms):`, searchTerms);
-
-          // Tekilleştirme Havuzu
-          const uniqueResultsMap = new Map();
-
-          // 2. Her bir terim için arama yap
-          for (const term of searchTerms) {
-              const cleanedSearchName = cleanMarkName(term, term.trim().split(/\s+/).length > 1);
-              
-              // LOG 3: Şu an hangi kelime aranıyor?
-              logger.log(`🔄 [DEBUG] Döngü: '${term}' için taranıyor...`);
-
-              // Bülten kayıtlarını tara
-              for (const hit of bulletinRecords) {
-                  
-                  // DEBUG ÖZEL: Eğer bültendeki marka aranan kelimeyi içeriyorsa detaylı log bas
-                  // (Böylece neden elendiğini anlarız)
-                  const isSuspicious = hit.markName.toLowerCase().includes(term.toLowerCase());
-
-                  // Tarih filtresi
-                  const applicationDate = monitoredMark.applicationDate || null;
-                  const isDateValid = isValidBasedOnDate(hit.applicationDate, applicationDate);
-                  
-                  if (!isDateValid) {
-                      if (isSuspicious) logger.log(`⚠️ [ATLANDI - TARİH] Marka: ${hit.markName} vs Term: ${term} | HitDate: ${hit.applicationDate} < MonitoredDate: ${applicationDate}`);
-                      continue;
-                  }
-
-                  // Nice sınıf filtresi
-                  const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
-
-                  // 3. Benzerlik Skoru Hesapla
-                  const niceClasses = monitoredMark.niceClassSearch || monitoredMark.niceClasses || [];
-                  
-                  const { finalScore: similarityScore, positionalExactMatchScore } =
-                    calculateSimilarityScoreInternal(
-                      hit.markName,
-                      term, // DİKKAT: 'term' kullanılıyor
-                      hit.applicationDate,
-                      applicationDate,
-                      hit.niceClasses,
-                      niceClasses
-                    );
-
-                  // Eşik Değer Kontrolü
-                  const SIMILARITY_THRESHOLD = 0.5;
-                  const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
-                  let isPrefixSuffixExactMatch = false;
-                  const MIN_SEARCH_LENGTH = 3;
-
-                  if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
-                    const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
-                    for (const w of searchWords) {
-                      if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
-                    }
-                    if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
-                      isPrefixSuffixExactMatch = true;
-                    }
-                  }
-
-                  // LOG 4: Kritik Eşik Kontrolü (Sadece şüpheli kayıtlar için)
-                  if (isSuspicious) {
-                      logger.log(`🧐 [ANALİZ] Marka: ${hit.markName} vs Term: ${term}`, {
-                          similarityScore,
-                          positionalExactMatchScore,
-                          isPrefixSuffixExactMatch,
-                          threshold: SIMILARITY_THRESHOLD,
-                          pass: (similarityScore >= SIMILARITY_THRESHOLD || positionalExactMatchScore >= SIMILARITY_THRESHOLD || isPrefixSuffixExactMatch)
-                      });
-                  }
-
-                  if (
-                    similarityScore < SIMILARITY_THRESHOLD &&
-                    positionalExactMatchScore < SIMILARITY_THRESHOLD &&
-                    !isPrefixSuffixExactMatch
-                  ) {
-                    continue;
-                  }
-
-                  // 4. Sonuç Hazırla
-                  let isEarlier = false;
-                  try {
-                    const searchDate = applicationDate ? new Date(applicationDate) : null;
-                    const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
-                    if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
-                  } catch (_) { isEarlier = false; }
-
-                  const resultObj = {
-                    objectID: hit.id,
-                    markName: hit.markName,
-                    applicationNo: hit.applicationNo,
-                    applicationDate: hit.applicationDate,
-                    niceClasses: hit.niceClasses,
-                    holders: hit.holders,
-                    imagePath: hit.imagePath,
-                    bulletinId: hit.bulletinId,
-                    similarityScore,
-                    positionalExactMatchScore,
-                    sameClass: hasNiceClassOverlap,
-
-                    // Frontend alanları
-                    monitoredTrademark: primaryName, 
-                    matchedTerm: term, // Hangi kelimeyle bulundu
-                    monitoredNiceClasses: monitoredMark.niceClassSearch || [],
-                    monitoredTrademarkId: monitoredMark.id,
-                    monitoredMarkId: monitoredMark.id,
-                    isEarlier
-                  };
-
-                  // 5. AKILLI TEKİLLEŞTİRME
-                  if (uniqueResultsMap.has(hit.applicationNo)) {
-                      const existingResult = uniqueResultsMap.get(hit.applicationNo);
-                      if (resultObj.similarityScore > existingResult.similarityScore) {
-                          uniqueResultsMap.set(hit.applicationNo, resultObj);
-                          if(isSuspicious) logger.log(`🆙 [GÜNCELLEME] ${hit.markName} için daha yüksek skor bulundu (${resultObj.similarityScore})`);
-                      }
-                  } else {
-                      uniqueResultsMap.set(hit.applicationNo, resultObj);
-                      if(isSuspicious) logger.log(`✅ [EKLENDİ] ${hit.markName} sonuçlara eklendi.`);
-                  }
-              }
-          } // Term döngüsü sonu
-
-          const bestResultsForMark = Array.from(uniqueResultsMap.values());
-          allResults.push(...bestResultsForMark);
-
-          logger.log(`📊 '${primaryName}' (ID: ${monitoredMark.id}) için toplam ${bestResultsForMark.length} tekil eşleşme bulundu.`);
-        }
-
-        // Batch arası bekleme (rate limiting)
-        if (batchIndex < markBatches.length - 1) {
-          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
-          await new Promise(r => setTimeout(r, PROCESS_DELAY));
-        }
-
-        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
-
-        // Batch arası bekleme (rate limiting)
-        if (batchIndex < markBatches.length - 1) {
-          logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
-          await new Promise(r => setTimeout(r, PROCESS_DELAY));
-        }
-
-        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
-      }
-
-      allResults.sort((a, b) => b.similarityScore - a.similarityScore);
-
-      logger.log(`✅ Toplam ${allResults.length} sonuç döndürülüyor`, {
-        sampleResult: allResults[0] ? {
-          markName: allResults[0].markName,
-          monitoredTrademark: allResults[0].monitoredTrademark,
-          monitoredMarkId: allResults[0].monitoredMarkId,
-          monitoredTrademarkId: allResults[0].monitoredTrademarkId
-        } : 'No results'
-      });
-
-      return { success: true, results: allResults };
-    } catch (error) {
-      logger.error('❌ Cloud Function hata:', error);
-      throw new HttpsError('internal', 'Marka benzerliği araması sırasında hata oluştu.', error.message);
-    }
-  }
-);
-
-// functions/index.js -> processSearchInBackground (SON VE EN SAĞLAM VERSİYON)
+// functions/index.js -> processSearchInBackground (AĞ TIKANIKLIĞI ÇÖZÜLMÜŞ VERSİYON)
 
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId, startIndex = 0, workerId = '1') {
   
@@ -4953,37 +4624,191 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
   let pendingResults = [];
   let totalFoundCount = 0;
   
-  // --- OPTİMİZASYON: Trafiği rahatlatmak için batch boyutunu 500'e çıkardık ---
-  const WRITE_BATCH_SIZE = 500; 
+  // --- AYAR 1: Batch boyutu 200'e çekildi (500 çok büyük geliyordu) ---
+  const WRITE_BATCH_SIZE = 200; 
 
-  // --- YARDIMCI: Pub/Sub Güvenli Gönderim (Retry Mekanizmalı) ---
+  // --- AYAR 2: Güvenli Gönderim + Nefes Alma Mekanizması ---
   const publishSafely = async (results) => {
       if (results.length === 0) return;
       try {
-          // Mesajı gönder
           await pubsubClient.topic('save-search-results').publishMessage({ 
               json: { jobId, results } 
           });
+          
+          // --- KRİTİK: Her gönderimden sonra 100ms bekle (Ağ trafiği rahatlasın) ---
+          await new Promise(r => setTimeout(r, 100));
+
       } catch (err) {
-          console.warn(`⚠️ Pub/Sub gönderim hatası (Worker ${workerId}), tekrar deneniyor...`, err.message);
-          // 2 saniye bekle ve tekrar dene
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          logger.warn(`⚠️ Pub/Sub hatası (Worker ${workerId}), 1sn bekleyip tekrar deneniyor...`);
+          // Hata durumunda 1 saniye bekle
+          await new Promise(r => setTimeout(r, 1000));
           try {
               await pubsubClient.topic('save-search-results').publishMessage({ 
                   json: { jobId, results } 
               });
           } catch (retryErr) {
-              console.error(`❌ Pub/Sub gönderimi başarısız:`, retryErr);
-              // Kritik hata: Veri kaybı olmaması için Firestore'a yazmayı dene (Fallback)
+              logger.error(`❌ Pub/Sub başarısız, Firestore'a yazılıyor...`);
+              // Son çare Firestore (Fallback)
               try {
                   const batch = adminDb.batch();
                   const col = mainJobRef.collection('foundResults');
                   results.forEach(r => batch.set(col.doc(), r));
                   await batch.commit();
-              } catch(e) { console.error("Firestore Fallback de başarısız:", e); }
+              } catch(e) { 
+                  logger.error("Firestore Fallback Hatası:", e); 
+              }
           }
       }
   };
+
+  try {
+    const bucket = admin.storage().bucket();
+    let bulletinNo = selectedBulletinId.includes('_') ? selectedBulletinId.split('_')[0] : selectedBulletinId;
+    const indexFilePath = `bulletins/${bulletinNo}_index.json`;
+    const indexFile = bucket.file(indexFilePath);
+
+    const [exists] = await indexFile.exists();
+    if (!exists) throw new Error(`İndeks dosyası bulunamadı.`);
+
+    const [metadata] = await indexFile.getMetadata();
+    const totalBytes = parseInt(metadata.size, 10) || 1; 
+
+    // Başlangıç Logu
+    if (startIndex === 0) {
+        await workerProgressRef.set({ 
+            status: 'processing', progress: 0, processed: 0, found: 0, 
+            total: totalBytes, lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        logger.info(`✅ Worker ${workerId} başladı (Batch: 200 | Throttle: ON).`);
+    } else {
+        await workerProgressRef.set({ 
+            status: 'processing_continued', lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        logger.info(`🔄 Worker ${workerId} satır ${startIndex}'den devam ediyor...`);
+    }
+
+    const preparedMonitoredMarks = monitoredMarks.map(mark => {
+        const originalName = (mark.markName || mark.title || '').trim();
+        const overrideName = (mark.searchMarkName || '').trim();
+        const primaryName = (overrideName || originalName).trim();
+        let alternatives = Array.isArray(mark.brandTextSearch) ? mark.brandTextSearch : [];
+        const searchTerms = [primaryName, ...alternatives]
+            .filter(t => t && t.trim().length > 0)
+            .map(term => ({ term, cleanedSearchName: cleanMarkName(term, term.trim().split(/\s+/).length > 1) }));
+        return { ...mark, primaryName, searchTerms, applicationDate: mark.applicationDate || null, niceClasses: mark.niceClassSearch || mark.niceClasses || [] };
+    });
+
+    const fileStream = indexFile.createReadStream();
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+    let currentLineIndex = 0;
+    let processedCount = startIndex;
+    let processedBytes = 0;
+
+    for await (const line of rl) {
+        processedBytes += Buffer.byteLength(line, 'utf8') + 1;
+
+        if (currentLineIndex < startIndex) {
+            currentLineIndex++;
+            continue;
+        }
+
+        let hit;
+        try {
+            if(!line.trim()) continue;
+            hit = JSON.parse(line);
+            if (!hit.markName && hit.o) {
+                hit.markName = hit.o; hit.cleanName = hit.n; hit.applicationNo = hit.an;
+                hit.applicationDate = hit.d; hit.niceClasses = hit.c; hit.id = hit.id;
+                hit.imagePath = hit.i; hit.bulletinId = selectedBulletinId;
+            }
+        } catch (e) {
+            currentLineIndex++;
+            continue;
+        }
+
+        for (const monitoredMark of preparedMonitoredMarks) {
+            if (!isValidBasedOnDate(hit.applicationDate, monitoredMark.applicationDate)) continue;
+
+            for (const searchItem of monitoredMark.searchTerms) {
+                const { finalScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
+                  hit.markName, searchItem.term, hit.applicationDate, monitoredMark.applicationDate, hit.niceClasses, monitoredMark.niceClasses
+                );
+
+                const SIMILARITY_THRESHOLD = 0.5;
+                const cleanedHitName = hit.cleanName || cleanMarkName(hit.markName);
+                let isPrefixSuffixExactMatch = false;
+                if (searchItem.cleanedSearchName.length >= 3 && cleanedHitName.includes(searchItem.cleanedSearchName)) isPrefixSuffixExactMatch = true;
+
+                if (finalScore < SIMILARITY_THRESHOLD && positionalExactMatchScore < SIMILARITY_THRESHOLD && !isPrefixSuffixExactMatch) continue;
+
+                pendingResults.push({
+                  objectID: hit.id, markName: hit.markName, applicationNo: hit.applicationNo,
+                  applicationDate: hit.applicationDate, niceClasses: hit.niceClasses, holders: hit.holders || [],      
+                  imagePath: hit.imagePath || null, bulletinId: hit.bulletinId, similarityScore: finalScore,
+                  positionalExactMatchScore, monitoredTrademark: monitoredMark.primaryName, matchedTerm: searchItem.term,
+                  monitoredTrademarkId: monitoredMark.id, monitoredMarkId: monitoredMark.id, isEarlier: false 
+                });
+            }
+        }
+
+        // Batch Kontrol (200'de bir gönder)
+        if (pendingResults.length >= WRITE_BATCH_SIZE) {
+            totalFoundCount += pendingResults.length;
+            await publishSafely(pendingResults);
+            pendingResults = []; 
+        }
+
+        currentLineIndex++;
+        processedCount++;
+
+        // Progress Güncelleme (2000 satırda bir)
+        if (currentLineIndex % 2000 === 0) { 
+            const elapsedTime = Date.now() - startTime;
+            const progressPercent = Math.min(100, Math.floor((processedBytes / totalBytes) * 100));
+            
+            workerProgressRef.set({ 
+                processed: processedCount,
+                progress: progressPercent,
+                found: totalFoundCount, 
+                lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(()=>{});
+
+            if (elapsedTime > TIMEOUT_LIMIT) {
+                logger.warn(`⚠️ Worker ${workerId} devrediliyor.`);
+                if (pendingResults.length > 0) await publishSafely(pendingResults);
+
+                await workerProgressRef.set({ status: 'resuming', nextIndex: currentLineIndex }, { merge: true });
+                const nextPayload = { jobId, monitoredMarks, selectedBulletinId, workerId, startIndex: currentLineIndex };
+                await pubsubClient.topic('similarity-search-jobs').publishMessage({ json: nextPayload });
+                
+                rl.close(); fileStream.destroy();
+                return;
+            }
+        }
+    } 
+
+    // Bitiş
+    if (pendingResults.length > 0) {
+        totalFoundCount += pendingResults.length;
+        await publishSafely(pendingResults);
+    }
+
+    await workerProgressRef.set({
+      status: 'completed',
+      progress: 100,
+      processed: processedCount,
+      found: totalFoundCount,
+      completedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    logger.info(`✅ Worker ${workerId} bitti. Bulunan: ${totalFoundCount}`);
+
+  } catch (error) {
+      logger.error(`❌ Worker ${workerId} hatası:`, error);
+      await workerProgressRef.set({ status: 'error', error: error.message }, { merge: true });
+  }
+}
 
   try {
     const bucket = admin.storage().bucket();
