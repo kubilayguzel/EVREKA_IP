@@ -8306,7 +8306,7 @@ export const writeSearchResultsWorker = onMessagePublished(
     region: 'europe-west1',
     memory: '256MiB',
     timeoutSeconds: 540,
-    maxInstances: 20, // Firestore yazma limitine takılmamak için 20 idealdir
+    maxInstances: 40, // Firestore yazma limitine takılmamak için 20 idealdir
   },
   async (event) => {
     try {
