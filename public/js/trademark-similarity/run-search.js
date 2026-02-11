@@ -113,30 +113,27 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         reject(error);
       });
 
-      // --- YARDIMCI FONKSİYON: Sadece Global İlerlemeyi Hesapla ---
+      // --- YARDIMCI FONKSİYON: Gerçek İlerlemeyi Hesapla ---
       function updateGlobalProgress() {
           const workerKeys = Object.keys(workersState);
-          let totalProcessed = 0;
+          let sumProgress = 0;
+          let activeWorkerCount = 0;
 
-          // Worker'ların işlediği toplam sayıyı topla
           workerKeys.forEach(key => {
               const w = workersState[key];
-              totalProcessed += (w.processed || 0);
+              // Backend'den gelen 'progress' değeri (Byte bazlı gerçek yüzde)
+              sumProgress += (w.progress || 0);
+              activeWorkerCount++;
           });
 
-          // Ana toplam sayı
-          const totalMarks = mainState.totalMarks || monitoredMarks.length;
-          
-          // Yüzde hesabı (Tahmini 5000 satır üzerinden veya backend'den gelen bilgiyle)
-          const globalProgress = totalMarks > 0 ? Math.min(100, Math.floor((totalProcessed / 5000) * 100)) : 0; 
+          // Tüm workerların ortalamasını al (Paralel çalıştıkları için)
+          // Eğer hiç worker yoksa 0
+          const globalProgress = activeWorkerCount > 0 ? Math.floor(sumProgress / activeWorkerCount) : 0;
 
           if (onProgress) {
-              // ARTIK 'workers' ARRAY'İ GÖNDERİLMİYOR
               onProgress({
                   status: mainState.status,
                   progress: globalProgress,
-                  processed: totalProcessed, 
-                  total: totalMarks,
                   currentResults: mainState.currentResults || 0,
                   message: mainState.status === 'resuming' ? 'İşlem devrediliyor...' : null
               });
