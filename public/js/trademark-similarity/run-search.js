@@ -2,7 +2,7 @@ import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { getFirestore, doc, onSnapshot, collection, getDocs, query, limit, startAfter, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-console.log(">>> run-search.js modülü yüklendi (Akıllı Worker Takip Versiyonu) <<<");
+console.log(">>> run-search.js modülü yüklendi (Writer-Aware Versiyon) <<<");
 
 const functions = getFunctions(firebaseServices.app, "europe-west1");
 const db = getFirestore(firebaseServices.app);
@@ -10,16 +10,12 @@ const performSearchCallable = httpsCallable(functions, 'performTrademarkSimilari
 
 export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onProgress) {
   try {
-    console.log('🚀 Cloud Function çağrılıyor (ASYNC mode):', {
-      monitoredMarksCount: monitoredMarks.length,
-      selectedBulletinId
-    });
+    console.log('🚀 Cloud Function çağrılıyor (ASYNC mode)...');
 
     // 1. İşlemi Başlat
     const response = await performSearchCallable({
       monitoredMarks,
       selectedBulletinId,
-      startIndex: 0, 
       async: true
     });
 
@@ -38,12 +34,15 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
       const workersRef = collection(db, 'searchProgress', jobId, 'workers'); 
       
       let safetyTimeout;
-      let mainState = { status: 'starting', totalMarks: monitoredMarks.length };
-      let workersState = {}; 
+      // Ana dökümandan gelen verileri tutacağımız yer
+      let mainState = { 
+          status: 'queued', 
+          currentResults: 0, // YAZICI WORKER'IN GÜNCELLEDİĞİ GERÇEK SAYI
+          total: monitoredMarks.length 
+      };
       
-      // Toplam kaç worker olmalı? (Her worker 200 marka işler)
-      const CHUNK_SIZE = 200;
-      const expectedWorkerCount = Math.ceil(monitoredMarks.length / CHUNK_SIZE);
+      let workersState = {}; 
+      const WORKER_COUNT = 10; // Sabit worker sayısı
       let isJobFinished = false;
 
       let unsubscribeMain = null;
@@ -55,58 +54,71 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
         if (unsubscribeWorkers) unsubscribeWorkers();
       };
 
+      // Güvenlik zaman aşımı (30 dakika hiç hareket olmazsa)
       const resetSafetyTimeout = () => {
           if (safetyTimeout) clearTimeout(safetyTimeout);
-          // 30 Dakika süre (Veri çok büyükse beklesin)
           safetyTimeout = setTimeout(() => {
               if (!isJobFinished) {
                   cleanup();
-                  reject(new Error('İşlem zaman aşımına uğradı (Uzun süre yanıt alınamadı)'));
+                  reject(new Error('İşlem zaman aşımına uğradı (Uzun süre işlem yapılmadı)'));
               }
           }, 30 * 60 * 1000); 
       };
 
       resetSafetyTimeout();
 
-      // --- EKSİK PARÇA: İŞİN BİTTİĞİNİ KONTROL ET ---
+      // --- BİTİŞ KONTROLÜ ---
       const checkCompletion = async () => {
           if (isJobFinished) return;
 
           const workerKeys = Object.keys(workersState);
-          const activeWorkers = workerKeys.length;
           
-          // 1. Tüm workerlar oluştu mu?
-          if (activeWorkers < expectedWorkerCount) return;
+          // 1. Tüm workerlar raporda görünüyor mu?
+          if (workerKeys.length < WORKER_COUNT) return;
 
           // 2. Hepsi "completed" durumunda mı?
           const allCompleted = workerKeys.every(key => workersState[key].status === 'completed');
 
           if (allCompleted) {
-              isJobFinished = true; // Tekrar çalışmasını engelle
-              console.log(`✅ Tüm workerlar (${activeWorkers}/${expectedWorkerCount}) tamamlandı. İndirme başlıyor...`);
+              isJobFinished = true;
+              console.log(`✅ Tüm workerlar tamamlandı. İndirme başlıyor...`);
               
-              // Hafif bir bekleme (Backend'in son yazma işlemleri için)
-              await new Promise(r => setTimeout(r, 2000));
+              // Yazma işlemlerinin (Writer Worker) son paketleri bitirmesi için biraz bekle
+              if (onProgress) onProgress({ status: 'finalizing', message: 'Son veriler yazılıyor...' });
+              await new Promise(r => setTimeout(r, 5000));
               
-              cleanup(); // Dinlemeyi durdur
+              cleanup(); 
 
               try {
-                // Batch Download Fonksiyonunu Çağır
-                const totalFoundResults = Object.values(workersState).reduce((sum, w) => sum + (w.found || 0), 0);
+                // Sonuçları İndir
+                const finalCount = mainState.currentResults || 0;
+                
+                // Kullanıcıya bilgi ver
+                if (onProgress) {
+                    onProgress({
+                       status: 'downloading',
+                       progress: 100,
+                       currentResults: finalCount,
+                       message: `Sonuçlar indiriliyor... (Toplam: ${finalCount})`
+                    });
+                }
 
                 const allResults = await getAllResultsInBatches(jobId, (downloadedCount) => {
+                     // İndirme sırasında ilerleme çubuğu
                      if (onProgress) {
+                         const dlPercent = Math.min(100, Math.floor((downloadedCount / (finalCount || 1)) * 100));
                          onProgress({
                             status: 'downloading',
-                            progress: 100,
-                            currentResults: totalFoundResults,
-                            message: `Sonuçlar indiriliyor... (${downloadedCount} / ${totalFoundResults})`
+                            progress: 100, // Arama bitti, indirme progress'i
+                            currentResults: finalCount,
+                            message: `Veriler alınıyor... ${downloadedCount} / ${finalCount}`
                          });
                      }
                 });
                 
                 console.log(`📥 ${allResults.length} adet sonuç başarıyla indirildi.`);
                 resolve(allResults);
+
               } catch (err) {
                 console.error("Sonuçları indirirken hata oluştu:", err);
                 reject(new Error("Sonuçlar veritabanından çekilemedi: " + err.message));
@@ -114,51 +126,58 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
           }
       };
 
-      // 1. WORKERLARI DİNLEME
+      // 1. ANA DÖKÜMANI DİNLEME (SAYAÇ İÇİN)
+      // Burası Writer Worker'ın yazdığı "KESİN" sayıyı takip eder.
+      unsubscribeMain = onSnapshot(progressRef, (snapshot) => {
+        if (!snapshot.exists()) return;
+        
+        const data = snapshot.data();
+        // Sadece gerekli alanları güncelle
+        mainState.status = data.status || mainState.status;
+        mainState.currentResults = data.currentResults || 0; 
+        
+        if (mainState.status === 'error') {
+          cleanup();
+          reject(new Error(data.error || 'Arama sırasında hata oluştu'));
+        }
+        
+        updateGlobalProgress(); // Arayüzü güncelle
+      });
+
+      // 2. WORKERLARI DİNLEME (YÜZDE İLERLEME VE BİTİŞ İÇİN)
       unsubscribeWorkers = onSnapshot(workersRef, (snapshot) => {
         resetSafetyTimeout();
         snapshot.forEach(doc => {
             workersState[doc.id] = doc.data();
         });
         updateGlobalProgress();
-        checkCompletion(); // Her worker güncellemesinde bitip bitmediğini kontrol et
+        checkCompletion(); 
       });
 
-      // 2. ANA DÖKÜMANI DİNLEME (Sadece Hata Takibi İçin)
-      unsubscribeMain = onSnapshot(progressRef, (snapshot) => {
-        if (!snapshot.exists()) return;
-        mainState = snapshot.data();
-        
-        if (mainState.status === 'error') {
-          cleanup();
-          reject(new Error(mainState.error || 'Arama sırasında hata oluştu'));
-        }
-      }, (error) => {
-        console.error('Snapshot hatası:', error);
-      });
-
-      // İlerleme Güncelleme
+      // Arayüz Güncelleme Fonksiyonu
       function updateGlobalProgress() {
+          if (isJobFinished) return;
+
           const workerKeys = Object.keys(workersState);
           let sumProgress = 0;
-          let totalFound = 0;
           let activeWorkerCount = 0;
 
+          // Sadece workerların YÜZDESİNİ alıyoruz (Sayacı mainState'den alacağız)
           workerKeys.forEach(key => {
               const w = workersState[key];
               sumProgress += (w.progress || 0);
-              totalFound += (w.found || 0);
               activeWorkerCount++;
           });
 
-          // Tüm workerların ortalaması
-          const globalProgress = activeWorkerCount > 0 ? Math.floor(sumProgress / activeWorkerCount) : 0;
+          // Ortalama İlerleme (0-100%)
+          // Henüz başlamayan workerları da hesaba katmak için toplam beklenen worker sayısına bölüyoruz
+          const globalProgress = Math.floor(sumProgress / WORKER_COUNT);
 
-          if (onProgress && !isJobFinished) {
+          if (onProgress) {
               onProgress({
-                  status: mainState.status,
+                  status: mainState.status === 'queued' ? 'processing' : mainState.status,
                   progress: globalProgress,
-                  currentResults: totalFound,
+                  currentResults: mainState.currentResults, // <-- ARTIK DOĞRU SAYI BURADAN GELİYOR
                   message: null
               });
           }
@@ -172,6 +191,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
 }
 
 // --- YARDIMCI FONKSİYON: Batch (Parçalı) İndirme ---
+// Büyük veriyi (70.000+) tarayıcıyı dondurmadan indirmek için
 async function getAllResultsInBatches(jobId, onBatchLoaded) {
     const resultsRef = collection(db, 'searchProgress', jobId, 'foundResults');
     let allData = [];
@@ -182,7 +202,7 @@ async function getAllResultsInBatches(jobId, onBatchLoaded) {
     while (keepFetching) {
         try {
             let q;
-            // Sıralama similarityScore'a göre yapılırsa daha mantıklı olur
+            // Firestore'da 'orderBy' olmadan 'startAfter' kullanmak için document ID (__name__) kullanıyoruz
             if (lastVisible) {
                 q = query(resultsRef, orderBy('__name__'), startAfter(lastVisible), limit(BATCH_SIZE));
             } else {
@@ -205,6 +225,7 @@ async function getAllResultsInBatches(jobId, onBatchLoaded) {
                 onBatchLoaded(allData.length);
             }
 
+            // Eğer gelen veri limiti doldurmadıysa, daha fazla veri yok demektir
             if (batchData.length < BATCH_SIZE) {
                 keepFetching = false;
             }
