@@ -679,11 +679,34 @@ const renderCurrentPageOfResults = () => {
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
 
+        // 1. Sahip Bilgisini Al
+        const ownerInfo = _getOwnerKey(null, tmMeta, allPersons);
+        let ownerBadge = '';
+        
+        // Sahip adı geçerliyse rozeti oluştur
+        if (ownerInfo && ownerInfo.name && ownerInfo.name !== 'Bilinmeyen Sahip' && ownerInfo.name !== '-') {
+            ownerBadge = `<span class="badge badge-light border ml-3" style="font-weight:normal; font-size: 0.85em; color:#555; display:inline-flex; align-items:center;">
+                <i class="fas fa-user-tie text-muted mr-1"></i> ${ownerInfo.name}
+            </span>`;
+        }
+
         const imageHtml = headerImg ?
             `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>` :
             `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
 
-        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
+        // 2. Başlık HTML'ini Güncelle (Sahip Rozetini Ekle)
+        groupHeaderRow.innerHTML = `<td colspan="10">
+            <div class="group-title" style="display: flex; align-items: center;">
+                ${imageHtml}
+                <span style="display:flex; align-items:center;">
+                    <a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}" style="font-size:1.1em; color:#1e3c72;">
+                        <strong>${headerName}</strong>
+                    </a>
+                    <span class="text-muted ml-2" style="font-size:0.9em;">(${totalCount} sonuç)</span>
+                    ${ownerBadge}
+                </span>
+            </div>
+        </td>`;
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içi döngü (Global sayaç ile)
