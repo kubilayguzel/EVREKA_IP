@@ -927,7 +927,7 @@ const loadDataFromCache = async (bulletinKey) => {
         allSimilarResults = cachedResults;
         infoMessageContainer.innerHTML = cachedResults.length > 0 ? `<div class="info-message success">Önbellekten ${cachedResults.length} benzer sonuç yüklendi.</div>` : '';
         noRecordsMessage.style.display = cachedResults.length > 0 ? 'none' : 'block';
-        groupAndSortResults();
+        await groupAndSortResults();
         if (pagination) pagination.update(allSimilarResults.length);
         renderCurrentPageOfResults();
     } catch (error) {
@@ -1097,7 +1097,7 @@ const performSearch = async () => {
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> ${error.message}</div>`;
     } finally {
         SimpleLoading.hide();
-        groupAndSortResults();
+        await groupAndSortResults();
         
         if (allSimilarResults.length > 0) {
             infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
@@ -1138,39 +1138,56 @@ const performResearch = async () => {
     }
 };
 
-const groupAndSortResults = () => {
-    // 1. Sonuçları İzlenen Marka ID'sine göre grupla
+const groupAndSortResults = async () => {
+    // 1. Sonuçları Grupla
     const groupedByTrademark = allSimilarResults.reduce((acc, result) => {
         const id = result.monitoredTrademarkId || 'unknown';
         (acc[id] = acc[id] || []).push(result);
         return acc;
     }, {});
 
-    // 2. Grupları Sırala (Önce Sahip, Sonra Marka Adı)
-    const sortedIds = Object.keys(groupedByTrademark).sort((idA, idB) => {
-        // İlgili markaların bilgilerini monitoringTrademarks listesinden bul
-        const tmA = monitoringTrademarks.find(t => String(t.id) === String(idA));
-        const tmB = monitoringTrademarks.find(t => String(t.id) === String(idB));
+    const uniqueIds = Object.keys(groupedByTrademark);
 
-        // 1. Adım: Sahip İsimlerini Al
-        // _getOwnerKey fonksiyonunu kullanarak tutarlı sahip ismi elde ediyoruz
-        const ownerNameA = tmA ? (_getOwnerKey(null, tmA, allPersons).name || '').toLowerCase() : '';
-        const ownerNameB = tmB ? (_getOwnerKey(null, tmB, allPersons).name || '').toLowerCase() : '';
+    // 2. Eksik Sahip Bilgilerini Tamamla
+    const sortData = new Map(); 
 
-        // Sahipleri Karşılaştır
-        const ownerCompare = ownerNameA.localeCompare(ownerNameB);
-        
-        // Eğer sahipler farklıysa, sahip sırasına göre döndür
+    await Promise.all(uniqueIds.map(async (id) => {
+        const tm = monitoringTrademarks.find(t => String(t.id) === String(id));
+        let ownerName = '';
+        let markName = '';
+
+        if (tm) {
+            // Önce eldeki veriden sahibini bul
+            let ownerInfo = _getOwnerKey(null, tm, allPersons);
+            
+            // Eğer sahip adı yoksa veritabanından çek
+            if ((!ownerInfo.name || ownerInfo.name === 'Bilinmeyen Sahip') && (tm.ipRecordId || tm.sourceRecordId)) {
+                try {
+                    const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId);
+                    if (ip) ownerInfo = _getOwnerKey(ip, tm, allPersons);
+                } catch (e) { }
+            }
+            ownerName = (ownerInfo.name || '').toLowerCase();
+            markName = (tm.title || tm.markName || '').toLowerCase();
+        } else {
+            markName = (groupedByTrademark[id][0]?.monitoredTrademark || '').toLowerCase();
+        }
+
+        sortData.set(id, { ownerName, markName });
+    }));
+
+    // 3. Sıralama: Önce Sahip, Sonra Marka
+    const sortedIds = uniqueIds.sort((idA, idB) => {
+        const dataA = sortData.get(idA) || { ownerName: '', markName: '' };
+        const dataB = sortData.get(idB) || { ownerName: '', markName: '' };
+
+        const ownerCompare = dataA.ownerName.localeCompare(dataB.ownerName);
         if (ownerCompare !== 0) return ownerCompare;
 
-        // 2. Adım: Sahipler aynıysa Marka İsimlerini Karşılaştır
-        const nameA = (tmA?.title || tmA?.markName || groupedByTrademark[idA][0]?.monitoredTrademark || '').toLowerCase();
-        const nameB = (tmB?.title || tmB?.markName || groupedByTrademark[idB][0]?.monitoredTrademark || '').toLowerCase();
-        
-        return nameA.localeCompare(nameB);
+        return dataA.markName.localeCompare(dataB.markName);
     });
 
-    // 3. Sıralanmış grupları tekrar listeye dök (İçerideki sonuçlar Benzerlik Puanına göre)
+    // 4. Listeyi Düzleştir
     allSimilarResults = sortedIds.flatMap(id => 
         groupedByTrademark[id].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0))
     );
@@ -1760,7 +1777,7 @@ const saveManualResultEntry = async () => {
             allSimilarResults.push({ ...newResultItem,
                 monitoredTrademark: monitoredTm?.title || monitoredTm?.markName || 'Bilinmeyen'
             });
-            groupAndSortResults();
+            await groupAndSortResults();
             if (pagination) pagination.update(allSimilarResults.length);
             renderCurrentPageOfResults();
             infoMessageContainer.innerHTML = `<div class="info-message success">Yeni kayıt başarıyla eklendi.</div>`;
