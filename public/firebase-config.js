@@ -702,9 +702,9 @@ export const ipRecordsService = {
             const termRaw = searchTerm.trim();
             const term = termRaw.toLowerCase();
             
-            // ÖNCE: Numaralar ile Tam Eşleşme Sorguları (Çok Hızlıdır)
-            // Not: Firestore OR sorgusu olmadığından sırayla deneriz.
             const exactFields = ['applicationNumber', 'applicationNo', 'wipoIR', 'aripoIR', 'dosyaNo', 'fileNo'];
+            
+            // 1. Önce tam eşleşme dene
             for (const field of exactFields) {
                 try {
                     const qExact = query(collection(db, 'ipRecords'), where(field, '==', termRaw), limit(5));
@@ -713,13 +713,32 @@ export const ipRecordsService = {
                         return { success: true, data: snapExact.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
                     }
                 } catch (e) {
-                    // Bazı alanlar şema dışı olabilir ya da index/permission sorunları yaşanabilir; sessizce devam et.
+                    // Sessizce devam et
+                }
+            }
+
+            // 2. Tam eşleşme bulunamazsa, prefix (başlangıç) araması dene
+            for (const field of exactFields) {
+                try {
+                    const endStr = termRaw + '\uf8ff';
+                    const qPrefix = query(
+                        collection(db, 'ipRecords'), 
+                        where(field, '>=', termRaw), 
+                        where(field, '<=', endStr), 
+                        limit(10)
+                    );
+                    const snapPrefix = await getDocs(qPrefix);
+                    if (!snapPrefix.empty) {
+                        return { success: true, data: snapPrefix.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+                    }
+                } catch (e) {
+                    // Index yoksa veya permission hatası olursa sessizce devam et
                 }
             }
 
             // SONRA: Eğer numara değilse, mevcut "fetch 500" mantığını 
             // Cache'i zorlayarak (daha önce indiyse anında gelir) çalıştırın.
-            const q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(500));
+            const q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
             
             // getDocsFromCache kullanımı hızı inanılmaz artırır
             let snapshot;
