@@ -14,6 +14,7 @@ export class PersonModalManager {
         this.documents = []; // {type, validityDate, countryCode, fileName, fileObj, url, isNew}
         this.relatedDraft = [];
         this.relatedLoaded = [];
+        this.relatedToDelete = [];
         this.init();
     }
 
@@ -673,13 +674,19 @@ resetRelatedForm() {
         if (addBtn) addBtn.style.display = 'inline-block'; // veya flex yapınıza göre
     }
 
+    // ARTIK ANINDA SİLMEYECEK, LİSTEDEN ÇIKARIP "SİLİNECEKLER" KUTUSUNA ATACAK
     async removeRelated(idx, isLoaded) {
-        if (!confirm('Bu ilgiliyi silmek istediğinizden emin misiniz?')) return;
+        if (!confirm('Bu ilgiliyi listeden kaldırmak istiyor musunuz? (İşlem "Kaydet" butonuna basınca tamamlanacaktır)')) return;
+        
         if (isLoaded) {
+            // Veritabanından gelen bir kayıt ise, ID'sini silinecekler listesine at
             const item = this.relatedLoaded[idx];
-            await deleteDoc(doc(db, 'personsRelated', item.id));
+            this.relatedToDelete.push(item.id); 
+            
+            // Ekranda görünmemesi için listeden çıkar
             this.relatedLoaded.splice(idx, 1);
         } else {
+            // Henüz kaydedilmemiş taslak ise sadece listeden sil
             this.relatedDraft.splice(idx, 1);
         }
         this.renderRelatedList();
@@ -860,10 +867,15 @@ resetRelatedForm() {
         this.documents = [];
         this.relatedDraft = [];
         this.relatedLoaded = [];
+        
+        // --- YENİ: Listeyi Sıfırla ---
+        this.relatedToDelete = [];
+        // -----------------------------
+        
         document.getElementById('relatedSection').style.display = 'none';
         document.getElementById('docListContainer').innerHTML = '';
         document.getElementById('relatedListContainer').innerHTML = '';
-        window.personModal = this; // Global erişim için (remove metodları)
+        window.personModal = this; 
     }
 
 // PersonModalManager.js
@@ -891,13 +903,49 @@ resetRelatedForm() {
     }
 
     async saveRelatedToDb(personId) {
-        if (!this.relatedDraft.length) return;
         const batch = writeBatch(db);
-        this.relatedDraft.forEach(r => {
-            const newRef = doc(collection(db, 'personsRelated'));
-            batch.set(newRef, { ...r, personId, createdAt: Date.now() });
-        });
-        await batch.commit();
+        let hasOperations = false;
+
+        // 1. YENİ EKLENENLERİ KAYDET (Create)
+        if (this.relatedDraft.length > 0) {
+            this.relatedDraft.forEach(r => {
+                const newRef = doc(collection(db, 'personsRelated'));
+                batch.set(newRef, { ...r, personId, createdAt: Date.now() });
+                hasOperations = true;
+            });
+        }
+
+        // 2. MEVCUT KAYITLARI GÜNCELLE (Update) -- EKSİK OLAN KISIM BUYDU --
+        if (this.relatedLoaded.length > 0) {
+            this.relatedLoaded.forEach(r => {
+                // Sadece ID'si olan (veritabanından gelmiş) kayıtları güncelle
+                if (r.id) {
+                    const ref = doc(db, 'personsRelated', r.id);
+                    // ID alanını verinin içinden çıkarıp saf veriyi güncelle
+                    const { id, ...dataToUpdate } = r; 
+                    batch.update(ref, dataToUpdate);
+                    hasOperations = true;
+                }
+            });
+        }
+
+        // 3. SİLİNECEKLERİ SİL (Delete) -- YENİ EKLENEN GÜVENLİ SİLME --
+        if (this.relatedToDelete.length > 0) {
+            this.relatedToDelete.forEach(delId => {
+                const ref = doc(db, 'personsRelated', delId);
+                batch.delete(ref);
+                hasOperations = true;
+            });
+        }
+
+        // Eğer yapılacak işlem varsa batch'i çalıştır
+        if (hasOperations) {
+            await batch.commit();
+        }
+        
+        // Temizlik
         this.relatedDraft = [];
+        this.relatedToDelete = [];
+        // relatedLoaded'ı temizlemiyoruz çünkü modal kapanmadan tekrar işlem yapılabilir
     }
 }
