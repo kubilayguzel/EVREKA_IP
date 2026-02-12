@@ -354,7 +354,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
             if (!monitoredMarkId) continue;
             const tm = tmById.get(monitoredMarkId);
             if (!tm) continue;
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+            const ip = tm.ipRecord || await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
             const ownerInfo = _getOwnerKey(ip, tm, allPersons);
             if (ownerInfo?.id) taskTriggeredStatus.set(ownerInfo.id, 'Evet');
         }
@@ -364,7 +364,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
 };
 
 // --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
-const renderMonitoringList = async () => {
+const renderMonitoringList = () => {
     const tbody = document.getElementById('monitoringListBody');
     
     // Veri yoksa hemen göster
@@ -373,34 +373,16 @@ const renderMonitoringList = async () => {
         return;
     }
 
-    // --- OPTİMİZASYON 1: Cache Kontrolü ---
-    // Eğer veriyi daha önce grupladıysak ve filtre değişmediyse, tekrar hesaplama!
+    // --- OPTİMİZASYON: Cache Kontrolü ---
     if (!cachedGroupedData) {
-        // Yükleniyor mesajı göster (İlk hesaplama biraz sürebilir)
         tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Veriler işleniyor...</td></tr>';
         
-        // --- OPTİMİZASYON 2: Paralel İşleme (Promise.all) ---
-        // for döngüsü yerine map kullanarak tüm işlemleri aynı anda başlatıyoruz
-        const processPromises = filteredMonitoringTrademarks.map(async (tm) => {
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        // [PERFORMANS] _getIp çağrısı YOK — loadInitialData'da zaten ipRecord yüklendi
+        const grouped = {};
+        for (const tm of filteredMonitoringTrademarks) {
+            const ip = tm.ipRecord || null; // Zaten yüklü veriyi kullan
             const ownerInfo = _getOwnerKey(ip, tm, allPersons);
             const nices = _uniqNice(ip || tm);
-            
-            return {
-                tm,
-                ip,
-                ownerInfo,
-                nices
-            };
-        });
-
-        // Tüm verilerin hazırlanmasını bekle (Paralel olduğu için çok daha hızlı biter)
-        const processedItems = await Promise.all(processPromises);
-
-        // Şimdi gruplama yap (Senkron işlem, çok hızlıdır)
-        const grouped = {};
-        for (const item of processedItems) {
-            const { tm, ip, ownerInfo, nices } = item;
             const ownerKey = ownerInfo.key;
 
             if (!grouped[ownerKey]) {
@@ -412,14 +394,10 @@ const renderMonitoringList = async () => {
                 };
             }
             
-            // Nice sınıflarını ekle
             if(nices) nices.split(', ').forEach(n => grouped[ownerKey].allNiceClasses.add(n));
-            
-            // Markayı gruba ekle
             grouped[ownerKey].trademarks.push({ tm, ip, ownerInfo });
         }
 
-        // Cache'e kaydet
         cachedGroupedData = grouped;
     }
 
@@ -482,6 +460,8 @@ const renderMonitoringList = async () => {
     attachTrademarkClickListener();
     
     // Cachelenmiş veriyi lazy load fonksiyonuna gönder
+    // Her renderda yeni tbody içeriği oluştuğu için flag'i sıfırla
+    tbody._lazyLoadAttached = false;
     attachLazyLoadListeners(groupedByOwner);
 
     // Badge güncellemeleri
@@ -771,33 +751,33 @@ const initializeMonitoringPagination = () => {
         onPageChange: () => renderMonitoringList()
     });
 };
-const updateMonitoringCount = async () => {
+const updateMonitoringCount = () => {
     const ownerGroups = {};
     for (const tm of filteredMonitoringTrademarks) {
-        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ip = tm.ipRecord || null;
         const ownerInfo = _getOwnerKey(ip, tm, allPersons);
         if (!ownerGroups[ownerInfo.key]) ownerGroups[ownerInfo.key] = true;
     }
     document.getElementById('monitoringCount').textContent = `${Object.keys(ownerGroups).length} Sahip (${filteredMonitoringTrademarks.length} Marka)`;
 };
-const updateOwnerBasedPagination = async () => {
+const updateOwnerBasedPagination = () => {
     const ownerGroups = {};
     for (const tm of filteredMonitoringTrademarks) {
-        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ip = tm.ipRecord || null;
         const ownerInfo = _getOwnerKey(ip, tm, allPersons);
         if (!ownerGroups[ownerInfo.key]) ownerGroups[ownerInfo.key] = true;
     }
     monitoringPagination.update(Object.keys(ownerGroups).length);
     monitoringPagination.reset();
 };
-const applyMonitoringListFilters = async () => {
+const applyMonitoringListFilters = () => {
     const ownerSearchInput = document.getElementById('ownerSearch');
     const niceClassSearchInput = document.getElementById('niceClassSearch');
     const brandNameSearchInput = document.getElementById('brandNameSearch');
     const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput?.value || '', niceClassSearchInput?.value || '', brandNameSearchInput?.value || ''].map(s => s.toLowerCase());
     const filteredResults = [];
     for (const data of monitoringTrademarks) {
-        const ip = await _getIp(data.ipRecordId || data.sourceRecordId || data.id);
+        const ip = data.ipRecord || null;
         const ownerInfo = _getOwnerKey(ip, data, allPersons);
         const ownerName = ownerInfo.name.toLowerCase();
         const niceClasses = _uniqNice(ip || data);
@@ -808,9 +788,9 @@ const applyMonitoringListFilters = async () => {
         if (ownerMatch && niceMatch && brandMatch) filteredResults.push(data);
     }
     filteredMonitoringTrademarks = filteredResults;
-    await updateOwnerBasedPagination();
+    updateOwnerBasedPagination();
     cachedGroupedData = null;
-    await renderMonitoringList();
+    renderMonitoringList();
     updateMonitoringCount();
     checkCacheAndToggleButtonStates();
 };
@@ -830,10 +810,13 @@ const loadInitialData = async () => {
         };
         if (tmData.ipRecordId || tmData.sourceRecordId) {
             try {
-                const ipDoc = await getDoc(doc(db, 'ipRecords', tmData.ipRecordId || tmData.sourceRecordId));
+                const recordId = tmData.ipRecordId || tmData.sourceRecordId;
+                const ipDoc = await getDoc(doc(db, 'ipRecords', recordId));
                 if (ipDoc.exists()) {
                     tmData.ipRecord = ipDoc.data();
                     tmData.goodsAndServicesByClass = ipDoc.data().goodsAndServicesByClass || [];
+                    // _ipCache'e de ekle ki diğer fonksiyonlar (_getIp) tekrar sorgu yapmasın
+                    _ipCache.set(recordId, ipDoc.data());
                 }
             } catch (e) {}
         }
@@ -843,7 +826,8 @@ const loadInitialData = async () => {
     initializeMonitoringPagination();
     renderMonitoringList();
     updateMonitoringCount();
-    monitoringPagination.update(filteredMonitoringTrademarks.length);
+    // [DÜZELTME] Pagination sahip sayısına göre güncelleniyor (marka sayısı değil)
+    updateOwnerBasedPagination();
     const bs = document.getElementById('bulletinSelect');
     if (bs?.value) {
         const bNo = String(bs.value).split('_')[0];
