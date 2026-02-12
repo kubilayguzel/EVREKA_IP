@@ -181,7 +181,7 @@ export class BulkIndexingModule {
         if (recordSearchInput) {
             recordSearchInput.addEventListener(
                 'input',
-                debounce((e) => this.searchRecords(e.target.value, 'manual'), 300)
+                debounce((e) => this.searchRecords(e.target.value, 'manual'), 100)
             );
             // Blur gecikmeli olsun ki tıklama algılansın
             recordSearchInput.addEventListener('blur', () => {
@@ -268,6 +268,8 @@ export class BulkIndexingModule {
         this.checkFormCompleteness();
     }
 
+    // public/js/indexing/bulk-upload-manager.js içindeki mevcut searchRecords fonksiyonunu silip bunu yapıştırın:
+
     async searchRecords(query, tabContext) {
         const containerId = 'searchResultsContainerManual';
         const container = document.getElementById(containerId);
@@ -275,44 +277,30 @@ export class BulkIndexingModule {
         if (!container) return;
 
         const rawQuery = (query || '').trim();
-        if (rawQuery.length < 2) {
-            container.style.display = 'none';
-            return;
-        }
-
-        // Çok kısa sorgularda Firestore tarafında minimum uzunluk var.
-        // Sadece numara araması gibi durumlarda (>=5 rakam) daha kısa sorguya izin ver.
-        const digitLen = rawQuery.replace(/\D/g, '').length;
-        if (rawQuery.length < 3 && digitLen < 5) {
+        
+        // DÜZELTME 1: 3 Karakter limitini kaldırdık. 1 harf yazılsa bile arar.
+        if (rawQuery.length < 1) {
             container.style.display = 'none';
             return;
         }
 
         const seq = ++this._manualSearchSeq;
-        container.innerHTML = '<div style="padding:10px; color:#666;">Aranıyor...</div>';
-        container.style.display = 'block';
+        
+        // Yükleniyor ibaresine gerek yok çünkü işlem anlık gerçekleşecek.
+        
+        const lowerQuery = rawQuery.toLowerCase();
 
-        let filtered = [];
-        try {
-            const res = await ipRecordsService.searchRecords(rawQuery);
-            // Kullanıcı hızlı yazdıysa eski sonucu basma
-            if (seq !== this._manualSearchSeq) return;
+        // DÜZELTME 2: Sunucu (Firestore) yerine yerel hafızadaki (this.allRecords) veriyi filtreliyoruz.
+        // Bu sayede "hızlıca listeyi gösterme" talebi karşılanır.
+        let filtered = (this.allRecords || []).filter(r => {
+            const title = (r.title || r.markName || '').toLowerCase();
+            const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
+            
+            // Marka adı veya Başvuru numarası içinde arama yap
+            return title.includes(lowerQuery) || appNo.includes(lowerQuery);
+        });
 
-            if (res && res.success) {
-                filtered = res.data || [];
-            } else {
-                throw new Error(res?.error || 'Arama başarısız');
-            }
-        } catch (err) {
-            // Firestore araması başarısız olursa (permission/offline vb.) local listeden dene
-            const lowerQuery = rawQuery.toLowerCase();
-            filtered = (this.allRecords || []).filter(r => {
-                const title = (r.title || r.markName || '').toLowerCase();
-                const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
-                return title.includes(lowerQuery) || appNo.includes(lowerQuery);
-            });
-        }
-
+        // Yarış koşulu kontrolü (Hızlı yazımda eski sonucun yeniyi ezmesini önler)
         if (seq !== this._manualSearchSeq) return;
 
         container.innerHTML = '';
@@ -320,8 +308,8 @@ export class BulkIndexingModule {
         if (filtered.length === 0) {
             container.innerHTML = '<div style="padding:10px; color:#666;">Kayıt bulunamadı.</div>';
         } else {
-            // İlk 10 kaydı göster
-            filtered.slice(0, 10).forEach(record => {
+            // Performans için ilk 20 sonucu gösteriyoruz
+            filtered.slice(0, 20).forEach(record => {
                 const item = document.createElement('div');
                 item.style.padding = '10px 15px';
                 item.style.borderBottom = '1px solid #eee';
@@ -331,13 +319,20 @@ export class BulkIndexingModule {
                 item.addEventListener('mouseenter', () => item.style.background = '#f8f9fa');
                 item.addEventListener('mouseleave', () => item.style.background = 'white');
 
-                const label = this.matcher.getDisplayLabel(record);
+                // Matcher üzerinden label al veya manuel oluştur
                 const title = record.title || record.markName || '(İsimsiz)';
                 const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
                 
+                // Vurgulama (Highlight) efekti - Opsiyonel ama şık durur
+                const highlight = (text) => {
+                    if(!text) return '';
+                    const regex = new RegExp(`(${rawQuery})`, 'gi');
+                    return text.replace(regex, '<span style="background:#fff3cd; font-weight:bold;">$1</span>');
+                };
+
                 item.innerHTML = `
-                    <div style="font-weight: 600; color: #1e3c72;">${title}</div>
-                    <div style="font-size: 0.85em; color: #666;">${label} - ${appNo}</div>
+                    <div style="font-weight: 600; color: #1e3c72;">${highlight(title)}</div>
+                    <div style="font-size: 0.85em; color: #666;">${highlight(appNo)}</div>
                 `;
                 
                 item.addEventListener('click', (e) => {
