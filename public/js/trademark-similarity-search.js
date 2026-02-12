@@ -813,15 +813,37 @@ const loadInitialData = async () => {
                 const recordId = tmData.ipRecordId || tmData.sourceRecordId;
                 const ipDoc = await getDoc(doc(db, 'ipRecords', recordId));
                 if (ipDoc.exists()) {
-                    tmData.ipRecord = ipDoc.data();
-                    tmData.goodsAndServicesByClass = ipDoc.data().goodsAndServicesByClass || [];
-                    // _ipCache'e de ekle ki diğer fonksiyonlar (_getIp) tekrar sorgu yapmasın
-                    _ipCache.set(recordId, ipDoc.data());
+                    const ipData = ipDoc.data();
+                    // Applicants içindeki id'leri allPersons'tan isimle zenginleştir
+                    if (Array.isArray(ipData.applicants)) {
+                        ipData.applicants = ipData.applicants.map(a => {
+                            if (a?.id && !a.name) {
+                                const person = allPersons.find(p => p.id === a.id);
+                                if (person) return { ...a, name: person.name || person.companyName || a.id };
+                            }
+                            return a;
+                        });
+                    }
+                    tmData.ipRecord = ipData;
+                    tmData.goodsAndServicesByClass = ipData.goodsAndServicesByClass || [];
+                    _ipCache.set(recordId, ipData);
                 }
             } catch (e) {}
         }
         return tmData;
     }));
+    // Monitoring kayıtlarındaki applicants'a da isim ekle (ipRecord olmayan durumlar için)
+    monitoringTrademarks.forEach(tmData => {
+        if (Array.isArray(tmData.applicants)) {
+            tmData.applicants = tmData.applicants.map(a => {
+                if (a?.id && !a.name) {
+                    const person = allPersons.find(p => p.id === a.id);
+                    if (person) return { ...a, name: person.name || person.companyName || a.id };
+                }
+                return a;
+            });
+        }
+    });
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     initializeMonitoringPagination();
     renderMonitoringList();
