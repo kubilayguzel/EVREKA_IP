@@ -1156,42 +1156,75 @@ updateChildTransactionOptions() {
             };
         });
     }
-    async selectRecordWithHierarchy(record) {
-        console.log("🎯 Kayıt Kontrol Ediliyor:", record.title);
 
+    async selectRecordWithHierarchy(record) {
+        console.group("🔍 WIPO Hiyerarşi Kontrolü");
+        console.log("Seçilen Kayıt:", record);
+
+        if (!record) {
+            console.error("Hata: Kayıt verisi boş!");
+            console.groupEnd();
+            return;
+        }
+
+        // 1. WIPO/ARIPO Parent Tespiti
         const origin = (record.origin || '').toUpperCase();
+        const hierarchy = (record.transactionHierarchy || 'parent').toLowerCase();
+        
         const isInternational = ['WIPO', 'ARIPO', 'WO', 'AP'].some(o => origin.includes(o));
-        const isParent = (record.transactionHierarchy || 'parent').toLowerCase() === 'parent';
+        const isParent = hierarchy === 'parent';
+
+        console.log(`Analiz: Origin=${origin}, Hierarchy=${hierarchy} -> International: ${isInternational}, IsParent: ${isParent}`);
 
         if (isInternational && isParent) {
-            if (window.SimpleLoadingController) window.SimpleLoadingController.show({ text: 'Alt dosyalar aranıyor...' });
+            if (window.SimpleLoadingController) {
+                window.SimpleLoadingController.show({ text: 'Alt dosyalar ve ulusal kayıtlar aranıyor...' });
+            }
             
             try {
                 const parentId = record.id;
+                // Numarayı atomik hale getir (Sadece rakamlar)
                 const parentIR = String(record.internationalRegNumber || record.wipoIR || '').replace(/\D/g, '');
+                
+                console.log(`Sorgu Hazırlanıyor: parentId=${parentId}, parentIR=${parentIR}`);
 
-                // Sadece bu Parent'a ait Child'ları Firestore'dan sorgula
-                const q = query(collection(db, 'ipRecords'), where('transactionHierarchy', '==', 'child'));
+                const recordsRef = collection(db, 'ipRecords');
+                
+                // Firestore sorgusu: Sadece bu parent'a bağlı child kayıtları iste
+                const q = query(recordsRef, where('transactionHierarchy', '==', 'child'));
                 const querySnapshot = await getDocs(q);
                 
+                console.log(`Firestore'dan ${querySnapshot.docs.length} adet child aday kayıt geldi. Filtreleniyor...`);
+
                 const children = querySnapshot.docs
                     .map(d => ({ id: d.id, ...d.data() }))
                     .filter(child => {
                         const childIR = String(child.wipoIR || child.internationalRegNumber || '').replace(/\D/g, '');
-                        return (child.parentId === parentId) || (parentIR && childIR === parentIR);
+                        // Eşleşme Şartı: parentId UUID eşleşmesi VEYA IR Numarası eşleşmesi
+                        const isMatch = (child.parentId === parentId) || (parentIR !== "" && childIR === parentIR);
+                        
+                        if (isMatch) console.log("✅ Eşleşen Child:", child.country, child.id);
+                        return isMatch;
                     });
 
                 if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
 
                 if (children.length > 0) {
+                    console.log(`Toplam ${children.length} adet alt kayıt bulundu. Modal açılıyor.`);
+                    console.groupEnd();
                     this._openWipoSelectionModal(record, children);
                     return;
+                } else {
+                    console.warn("Hiç alt kayıt (child) bulunamadı. Doğrudan ana kayıt seçiliyor.");
                 }
             } catch (err) {
-                console.error("Alt kayıt sorgu hatası:", err);
+                console.error("Alt kayıt sorgulama sırasında kritik hata:", err);
                 if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
             }
         }
+
+        console.log("Standart seçim akışına devam ediliyor...");
+        console.groupEnd();
         await this.selectRecord(record.id);
     }
 
