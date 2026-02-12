@@ -685,7 +685,7 @@ class DataEntryModule {
 
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
                     if(res.success) {
-                        await this.addTransactionForNewRecord(res.id, data.ipType, 'child');
+                        await this.addTransactionForNewRecord(res.id, data.ipType, 'parent');
                     }
                 } catch (e) { console.error('Child hata:', e); }
             });
@@ -775,7 +775,7 @@ class DataEntryModule {
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
                     
                     if (res.success) {
-                        await this.addTransactionForNewRecord(res.id, parentData.ipType, 'child');
+                        await this.addTransactionForNewRecord(res.id, parentData.ipType, 'parent');
                     }
                 } catch (err) {
                     console.error(`❌ Child oluşturma hatası (${country.code}):`, err);
