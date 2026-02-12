@@ -292,7 +292,7 @@ class PortfolioController {
         }
 
         // --- 3. ARAMA KUTUSU ---
-        const searchInput = document.getElementById('searchInput');
+        const searchInput = document.getElementById('searchBar');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 if (this.searchTimeout) clearTimeout(this.searchTimeout);
