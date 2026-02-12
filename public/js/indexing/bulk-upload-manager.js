@@ -268,8 +268,6 @@ export class BulkIndexingModule {
         this.checkFormCompleteness();
     }
 
-    // public/js/indexing/bulk-upload-manager.js içindeki mevcut searchRecords fonksiyonunu silip bunu yapıştırın:
-
     async searchRecords(query, tabContext) {
         const containerId = 'searchResultsContainerManual';
         const container = document.getElementById(containerId);
@@ -278,71 +276,106 @@ export class BulkIndexingModule {
 
         const rawQuery = (query || '').trim();
         
-        // DÜZELTME 1: 3 Karakter limitini kaldırdık. 1 harf yazılsa bile arar.
+        // Arama kutusu boşsa gizle
         if (rawQuery.length < 1) {
             container.style.display = 'none';
             return;
         }
 
+        // Veri Kontrolü: Sayfa yeni açıldıysa ve veriler (allRecords) henüz gelmediyse uyar
+        if (!this.allRecords || this.allRecords.length === 0) {
+            container.innerHTML = '<div style="padding:10px; color:#e67e22; font-size:0.9em;"><i class="fas fa-spinner fa-spin"></i> Veriler yükleniyor, lütfen bekleyin...</div>';
+            container.style.display = 'block';
+            return;
+        }
+
         const seq = ++this._manualSearchSeq;
-        
-        // Yükleniyor ibaresine gerek yok çünkü işlem anlık gerçekleşecek.
-        
         const lowerQuery = rawQuery.toLowerCase();
 
-        // DÜZELTME 2: Sunucu (Firestore) yerine yerel hafızadaki (this.allRecords) veriyi filtreliyoruz.
-        // Bu sayede "hızlıca listeyi gösterme" talebi karşılanır.
-        let filtered = (this.allRecords || []).filter(r => {
+        // 1. İSTEMCİ TARAFLI FİLTRELEME (Anlık Hız)
+        let filtered = this.allRecords.filter(r => {
             const title = (r.title || r.markName || '').toLowerCase();
             const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
-            
-            // Marka adı veya Başvuru numarası içinde arama yap
             return title.includes(lowerQuery) || appNo.includes(lowerQuery);
         });
 
-        // Yarış koşulu kontrolü (Hızlı yazımda eski sonucun yeniyi ezmesini önler)
+        // Yarış koşulu (Race Condition) önlemi
         if (seq !== this._manualSearchSeq) return;
 
         container.innerHTML = '';
+        container.style.display = 'block';
         
         if (filtered.length === 0) {
             container.innerHTML = '<div style="padding:10px; color:#666;">Kayıt bulunamadı.</div>';
-        } else {
-            // Performans için ilk 20 sonucu gösteriyoruz
-            filtered.slice(0, 20).forEach(record => {
-                const item = document.createElement('div');
-                item.style.padding = '10px 15px';
-                item.style.borderBottom = '1px solid #eee';
-                item.style.cursor = 'pointer';
-                item.style.transition = 'background 0.2s';
-                
-                item.addEventListener('mouseenter', () => item.style.background = '#f8f9fa');
-                item.addEventListener('mouseleave', () => item.style.background = 'white');
-
-                // Matcher üzerinden label al veya manuel oluştur
-                const title = record.title || record.markName || '(İsimsiz)';
-                const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
-                
-                // Vurgulama (Highlight) efekti - Opsiyonel ama şık durur
-                const highlight = (text) => {
-                    if(!text) return '';
-                    const regex = new RegExp(`(${rawQuery})`, 'gi');
-                    return text.replace(regex, '<span style="background:#fff3cd; font-weight:bold;">$1</span>');
-                };
-
-                item.innerHTML = `
-                    <div style="font-weight: 600; color: #1e3c72;">${highlight(title)}</div>
-                    <div style="font-size: 0.85em; color: #666;">${highlight(appNo)}</div>
-                `;
-                
-                item.addEventListener('click', (e) => {
-                    this.selectRecord(record);
-                    container.style.display = 'none';
-                });
-                container.appendChild(item);
-            });
+            return;
         }
-        container.style.display = 'block';
+
+        // 2. LİSTELEME (Görsel En Başta)
+        // Performans için ilk 30 kaydı gösteriyoruz
+        filtered.slice(0, 30).forEach(record => {
+            const item = document.createElement('div');
+            // Flexbox ile düzen: [Görsel] [Metin Bilgileri]
+            item.className = "search-result-item";
+            item.style.cssText = `
+                display: flex; 
+                align-items: center; 
+                padding: 8px 12px; 
+                border-bottom: 1px solid #eee; 
+                cursor: pointer; 
+                transition: background 0.1s;
+            `;
+            
+            // Hover efekti
+            item.onmouseenter = () => item.style.backgroundColor = '#f0f7ff';
+            item.onmouseleave = () => item.style.backgroundColor = 'white';
+
+            // Verileri Hazırla
+            const title = record.title || record.markName || '(İsimsiz)';
+            const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
+            
+            // İçerik HTML'i (Resim placeholder ile başlar)
+            item.innerHTML = `
+                <div class="result-img-wrapper" style="width: 45px; height: 45px; margin-right: 12px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px;">
+                    <i class="fas fa-image text-muted" style="font-size: 1.2em;"></i>
+                </div>
+                <div style="flex-grow: 1; min-width: 0;">
+                    <div style="font-weight: 600; color: #1e3c72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this._highlightText(title, rawQuery)}</div>
+                    <div style="font-size: 0.85em; color: #666;">${this._highlightText(appNo, rawQuery)}</div>
+                </div>
+            `;
+
+            // Tıklama Olayı
+            item.addEventListener('click', () => {
+                this.selectRecord(record);
+                container.style.display = 'none';
+            });
+
+            // Resmi Asenkron Yükle (Listeyi kilitlememek için)
+            this._loadResultImage(record, item.querySelector('.result-img-wrapper'));
+
+            container.appendChild(item);
+        });
+    }
+
+    // YENİ: Metin Vurgulama Yardımcısı
+    _highlightText(text, query) {
+        if (!text) return '';
+        if (!query) return text;
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<span style="background-color:#fff3cd; color:#333;">$1</span>');
+    }
+
+    // YENİ: Liste Resmi Yükleyicisi
+    async _loadResultImage(record, wrapperEl) {
+        try {
+            const url = await this._resolveRecordImageUrl(record);
+            if (url) {
+                wrapperEl.innerHTML = `<img src="${url}" style="width:100%; height:100%; object-fit:contain; border-radius:3px;">`;
+                wrapperEl.style.backgroundColor = 'white';
+            }
+        } catch (e) {
+            // Hata olursa ikon kalır
+        }
     }
 
     selectRecord(record) {
