@@ -363,213 +363,128 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     }
 };
 
-// --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
-    
-    // Veri yoksa hemen göster
+    if (!tbody) return;
+
     if (!filteredMonitoringTrademarks.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Kayıt bulunamadı.</td></tr>';
         return;
     }
 
-    // --- OPTİMİZASYON 1: Cache Kontrolü ---
-    // Eğer veriyi daha önce grupladıysak ve filtre değişmediyse, tekrar hesaplama!
-    if (!cachedGroupedData) {
-        // Yükleniyor mesajı göster (İlk hesaplama biraz sürebilir)
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Veriler işleniyor...</td></tr>';
-        
-        // --- OPTİMİZASYON 2: Paralel İşleme (Promise.all) ---
-        // for döngüsü yerine map kullanarak tüm işlemleri aynı anda başlatıyoruz
-        const processPromises = filteredMonitoringTrademarks.map(async (tm) => {
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-            const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-            const nices = _uniqNice(ip || tm);
-            
-            return {
-                tm,
-                ip,
-                ownerInfo,
-                nices
+    // 1. Gruplamayı SENKRON yapın (IP fetch yapmadan, eldeki veriyi kullanır)
+    const groupedByOwner = {};
+    for (const tm of filteredMonitoringTrademarks) {
+        const ownerInfo = _getOwnerKey(null, tm, allPersons);
+        const key = ownerInfo.key;
+        if (!groupedByOwner[key]) {
+            groupedByOwner[key] = {
+                ownerName: ownerInfo.name,
+                ownerId: ownerInfo.id,
+                trademarks: []
             };
-        });
-
-        // Tüm verilerin hazırlanmasını bekle (Paralel olduğu için çok daha hızlı biter)
-        const processedItems = await Promise.all(processPromises);
-
-        // Şimdi gruplama yap (Senkron işlem, çok hızlıdır)
-        const grouped = {};
-        for (const item of processedItems) {
-            const { tm, ip, ownerInfo, nices } = item;
-            const ownerKey = ownerInfo.key;
-
-            if (!grouped[ownerKey]) {
-                grouped[ownerKey] = {
-                    ownerName: ownerInfo.name,
-                    ownerId: ownerInfo.id,
-                    trademarks: [],
-                    allNiceClasses: new Set()
-                };
-            }
-            
-            // Nice sınıflarını ekle
-            if(nices) nices.split(', ').forEach(n => grouped[ownerKey].allNiceClasses.add(n));
-            
-            // Markayı gruba ekle
-            grouped[ownerKey].trademarks.push({ tm, ip, ownerInfo });
         }
-
-        // Cache'e kaydet
-        cachedGroupedData = grouped;
+        groupedByOwner[key].trademarks.push(tm);
     }
 
-    // --- SIRALAMA VE SAYFALAMA ---
-    // Artık elimizde hazır veri var, sadece sayfalamayı yapıyoruz.
-    const groupedByOwner = cachedGroupedData;
+    // 2. Pagination dilimini SAHİP listesi üzerinden al
     const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
         groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
     );
 
-    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
-    const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedOwnerKeys = sortedOwnerKeys.slice(startIndex, endIndex);
+    // Pagination'ı sahip sayısına göre doğrula
+    monitoringPagination.update(sortedOwnerKeys.length);
+    const paginatedKeys = monitoringPagination.getCurrentPageData(sortedOwnerKeys);
 
-    let allRowsHtml = [];
-
-    // Sadece ekranda görülecek 5 kişi için döngüye gir
-    for (const ownerKey of paginatedOwnerKeys) {
-        const group = groupedByOwner[ownerKey];
-        const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
+    // 3. Akordeon yapısını kuran HTML
+    let rowsHtml = '';
+    paginatedKeys.forEach(key => {
+        const group = groupedByOwner[key];
+        const groupUid = `collapse-${group.ownerId}-${key.replace(/[^a-z0-9]/gi, '').slice(-8)}`;
         const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
-        const statusText = isTriggered ? 'Evet' : 'Hazır';
-        const statusClass = isTriggered ? 'trigger-yes' : 'trigger-ready';
-
-        // 1. BAŞLIK SATIRI
-        const headerRow = `
-        <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}">
-            <td><i class="fas fa-chevron-down toggle-icon"></i></td>
-            <td>${group.ownerName}</td>
-            <td>${group.trademarks.length}</td>
-            <td><span class="task-triggered-status trigger-status-badge ${statusClass}" data-owner-id="${group.ownerId}">${statusText}</span></td>
-            <td><span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" data-owner-id="${group.ownerId}">${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}</span></td>
+        
+        rowsHtml += `
+        <tr class="owner-row" style="cursor:pointer">
+            <td class="toggle-trigger" data-target="#${groupUid}"><i class="fas fa-chevron-down toggle-icon"></i></td>
+            <td class="toggle-trigger" data-target="#${groupUid}">${group.ownerName}</td>
+            <td class="toggle-trigger" data-target="#${groupUid}">${group.trademarks.length}</td>
+            <td><span class="badge ${isTriggered ? 'badge-success' : 'badge-light'}">${isTriggered ? 'Evet' : 'Hazır'}</span></td>
+            <td><span class="badge badge-light">${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}</span></td>
             <td>
                 <div class="action-btn-group">
-                    <button class="action-btn btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor + Bildir"><i class="fas fa-paper-plane"></i></button>
-                    <button class="action-btn btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}" title="Rapor İndir"><i class="fas fa-file-pdf"></i></button>
+                    <button class="btn btn-sm btn-success generate-report-and-notify-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}"><i class="fas fa-paper-plane"></i></button>
+                    <button class="btn btn-sm btn-primary generate-report-btn" data-owner-id="${group.ownerId}" data-owner-name="${group.ownerName}"><i class="fas fa-file-pdf"></i></button>
+                </div>
+            </td>
+        </tr>
+        <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
+            <td colspan="6" class="p-0">
+                <div class="nested-content-container p-3 bg-light" data-loaded="false" data-owner-key="${key}">
+                    <div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Markalar yükleniyor...</div>
                 </div>
             </td>
         </tr>`;
-        allRowsHtml.push(headerRow);
+    });
 
-        // 2. İÇERİK SATIRI (Lazy Load Placeholder)
-        // Veriyi data attribute'a eklemiyoruz, groupedByOwner üzerinden ID ile erişeceğiz.
-        const contentRow = `
-            <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="6">
-                    <div class="nested-content-container" data-loaded="false" data-owner-key="${ownerKey}">
-                        <div class="p-3 text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>
-                    </div>
-                </td>
-            </tr>`;
-        allRowsHtml.push(contentRow);
-    }
-    
-    tbody.innerHTML = allRowsHtml.join('');
+    tbody.innerHTML = rowsHtml;
 
     attachGenerateReportListener();
-    attachTrademarkClickListener();
-    
-    // Cachelenmiş veriyi lazy load fonksiyonuna gönder
-    attachLazyLoadListeners(groupedByOwner);
-
-    // Badge güncellemeleri
-    setTimeout(() => {
-        document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
-            const btn = row.querySelector('.generate-report-and-notify-btn');
-            if (!btn) return;
-            const ownerId = btn.dataset.ownerId;
-            const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
-            if (badge) {
-                const hasTriggered = taskTriggeredStatus.get(ownerId) === 'Evet';
-                badge.textContent = hasTriggered ? 'Evet' : 'Hazır';
-                badge.classList.remove('trigger-yes', 'trigger-no', 'trigger-ready');
-                badge.classList.add(hasTriggered ? 'trigger-yes' : 'trigger-ready');
-            }
-        });
-    }, 50);
+    attachLazyLoadListeners(groupedByOwner); 
 };
 
-// --- YENİ HELPER FONKSİYON ---
 const attachLazyLoadListeners = (groupedData) => {
     const tbody = document.getElementById('monitoringListBody');
-    
-    // Eski listener'ları temizlemek için klonlama yapabiliriz veya
-    // jQuery kullanıyorsanız off() yapabilirsiniz. Vanilla JS'de üst üste binmemesi için kontrol:
-    if (tbody._lazyLoadAttached) return;
-    tbody._lazyLoadAttached = true;
+    if (!tbody || tbody._lazyLoadBound) return;
+    tbody._lazyLoadBound = true;
 
-    tbody.addEventListener('click', (e) => {
-        // Butonlara tıklanırsa accordion'ı tetikleme
-        if (e.target.closest('.action-btn, button, a')) return;
+    tbody.addEventListener('click', async (e) => {
+        // Sadece ok ikonuna veya isim hücresine tıklandığında çalış
+        const trigger = e.target.closest('.toggle-trigger');
+        if (!trigger) return;
 
-        const headerRow = e.target.closest('.owner-row');
-        if (!headerRow) return;
+        const headerRow = trigger.closest('.owner-row');
+        const targetId = trigger.dataset.target;
+        const collapseRow = document.querySelector(targetId);
+        if (!collapseRow) return;
 
-        const targetId = headerRow.dataset.target || '#' + headerRow.getAttribute('aria-controls');
-        const contentRow = document.querySelector(targetId);
+        const isCurrentlyHidden = collapseRow.style.display === 'none';
         
-        if (!contentRow) return;
-
-        const isExpanded = headerRow.getAttribute('aria-expanded') === 'true';
-        
-        // Görünürlüğü değiştir
-        contentRow.style.display = isExpanded ? 'none' : 'table-row';
-        headerRow.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
-        
-        // İkonu değiştir
+        // 1. Akordeon aç/kapa
+        collapseRow.style.display = isCurrentlyHidden ? 'table-row' : 'none';
         const icon = headerRow.querySelector('.toggle-icon');
         if (icon) {
-            icon.classList.toggle('fa-chevron-up', !isExpanded);
-            icon.classList.toggle('fa-chevron-down', isExpanded);
+            icon.classList.toggle('fa-chevron-up', isCurrentlyHidden);
+            icon.classList.toggle('fa-chevron-down', !isCurrentlyHidden);
         }
 
-        // Eğer açılıyorsa (isExpanded false -> true olacaksa) ve veri yüklenmemişse YÜKLE
-        if (!isExpanded) {
-            const container = contentRow.querySelector('.nested-content-container');
-            if (container && container.dataset.loaded === 'false') {
-                const ownerKey = container.dataset.ownerKey;
-                const group = groupedData[ownerKey];
-                
-                if (group && group.trademarks) {
-                    // HTML OLUŞTURMA (Burada yapılıyor)
-                    const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
-                        const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
-                        
-                        // loading="lazy" eklendi
-                        return `
-                            <tr class="trademark-detail-row">
-                                <td class="td-nested-toggle"></td>
-                                <td class="td-nested-img">
-                                    ${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}
-                                </td>
-                                <td class="td-nested-name"><strong>${markName}</strong></td>
-                                <td class="td-nested-appno">${appNo}</td>
-                                <td class="td-nested-nice">${nices || '-'}</td> 
-                                <td class="td-nested-date">${appDate}</td>
-                            </tr>`;
-                    }).join('');
+        // 2. Veri Yüklenmemişse Lazy Load Başlat
+        const container = collapseRow.querySelector('.nested-content-container');
+        if (isCurrentlyHidden && container && container.dataset.loaded === 'false') {
+            const ownerKey = container.dataset.ownerKey;
+            const marks = groupedData[ownerKey].trademarks;
+            
+            try {
+                // Her marka için IP kaydını asenkron çek
+                const detailRows = await Promise.all(marks.map(async (tm) => {
+                    const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+                    return `
+                        <tr>
+                            <td>${_pickImg(ip, tm) ? `<img src="${_pickImg(ip, tm)}" style="height:40px">` : '-'}</td>
+                            <td><strong>${_pickName(ip, tm)}</strong></td>
+                            <td>${_pickAppNo(ip, tm)}</td>
+                            <td>${_uniqNice(ip || tm)}</td>
+                            <td>${_pickAppDate(ip, tm)}</td>
+                        </tr>`;
+                }));
 
-                    const tableHtml = `
-                        <table class="table table-sm nested-table">
-                            <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
-                            <tbody>${detailRowsHtml}</tbody>
-                        </table>`;
-
-                    container.innerHTML = tableHtml;
-                    container.dataset.loaded = 'true'; // Tekrar yüklemeyi engelle
-                }
+                container.innerHTML = `
+                    <table class="table table-sm table-bordered bg-white mb-0">
+                        <thead class="thead-light"><tr><th>Görsel</th><th>Marka Adı</th><th>Başvuru No</th><th>Sınıf</th><th>B. Tarihi</th></tr></thead>
+                        <tbody>${detailRows.join('')}</tbody>
+                    </table>`;
+                container.dataset.loaded = 'true';
+            } catch (err) {
+                container.innerHTML = '<div class="alert alert-danger p-2">Veriler yüklenemedi.</div>';
             }
         }
     });
@@ -780,16 +695,20 @@ const updateMonitoringCount = async () => {
     }
     document.getElementById('monitoringCount').textContent = `${Object.keys(ownerGroups).length} Sahip (${filteredMonitoringTrademarks.length} Marka)`;
 };
+
+// renderMonitoringList fonksiyonunun hemen üstüne ekleyin:
 const updateOwnerBasedPagination = async () => {
-    const ownerGroups = {};
+    const ownerGroups = new Set(); 
     for (const tm of filteredMonitoringTrademarks) {
-        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-        if (!ownerGroups[ownerInfo.key]) ownerGroups[ownerInfo.key] = true;
+        // IP kaydı çekmeden, eldeki veriyle gruplama anahtarını oluşturur
+        const ownerInfo = _getOwnerKey(null, tm, allPersons);
+        ownerGroups.add(ownerInfo.key);
     }
-    monitoringPagination.update(Object.keys(ownerGroups).length);
-    monitoringPagination.reset();
+    // Pagination toplam sayısını benzersiz sahip (client) sayısına göre günceller
+    monitoringPagination.update(ownerGroups.size);
+    monitoringPagination.reset(); 
 };
+
 const applyMonitoringListFilters = async () => {
     const ownerSearchInput = document.getElementById('ownerSearch');
     const niceClassSearchInput = document.getElementById('niceClassSearch');
@@ -823,22 +742,16 @@ const loadInitialData = async () => {
     if (personsResult.success) allPersons = personsResult.data;
     await loadBulletinOptions();
     const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
-    monitoringTrademarks = await Promise.all(snapshot.docs.map(async (docSnap) => {
-        const tmData = {
-            id: docSnap.id,
-            ...docSnap.data()
-        };
-        if (tmData.ipRecordId || tmData.sourceRecordId) {
-            try {
-                const ipDoc = await getDoc(doc(db, 'ipRecords', tmData.ipRecordId || tmData.sourceRecordId));
-                if (ipDoc.exists()) {
-                    tmData.ipRecord = ipDoc.data();
-                    tmData.goodsAndServicesByClass = ipDoc.data().goodsAndServicesByClass || [];
-                }
-            } catch (e) {}
-        }
-        return tmData;
-    }));
+    const ownerGroupsCount = new Set(filteredMonitoringTrademarks.map(tm => _getOwnerKey(null, tm, allPersons).key)).size;
+    monitoringPagination.update(ownerGroupsCount);
+
+    renderMonitoringList();
+
+    // ÖNEMLİ: Pagination'ı sahip sayısına göre ayarlayan yeni fonksiyonu burada çağırıyoruz
+    await updateOwnerBasedPagination(); 
+
+    renderMonitoringList();
+    
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     initializeMonitoringPagination();
     renderMonitoringList();
