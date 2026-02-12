@@ -10,7 +10,7 @@ import {
 } from '../../firebase-config.js';
 
 import { 
-    doc, getDoc, updateDoc, collection, arrayUnion, Timestamp
+    doc, getDoc, updateDoc, collection, arrayUnion, Timestamp, query, where, getDocs
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { 
@@ -46,6 +46,7 @@ export class DocumentReviewManager {
         this.analysisResult = null;
         this.currentTransactions = []; 
         this.allTransactionTypes = []; 
+        this.countryMap = new Map();
         this.init();
     }
 
@@ -93,8 +94,18 @@ export class DocumentReviewManager {
 
         this.currentUser = authService.getCurrentUser();
         this.setupEventListeners();
+        await this.loadCountriesOnly();
         await this.loadTransactionTypes();
         await this.loadData();
+    }
+
+    async loadCountriesOnly() {
+        try {
+            const countriesSnap = await getDoc(doc(db, 'common', 'countries'));
+            if (countriesSnap.exists()) {
+                countriesSnap.data().list.forEach(c => this.countryMap.set(c.code, c.name));
+            }
+        } catch (e) { console.error("Ülke listesi yüklenemedi:", e); }
     }
 
     async loadTransactionTypes() {
@@ -1114,19 +1125,104 @@ updateChildTransactionOptions() {
 
     renderSearchResults(results) {
         const container = document.getElementById('manualSearchResults');
+        if (!container) return;
+        
         container.innerHTML = '';
         container.style.display = results.length ? 'block' : 'none';
-        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
-        container.innerHTML = results.map(r => `
-            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
-                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
-            </div>`).join('');
+        
+        if (!results.length) { 
+            container.innerHTML = '<div class="p-2 text-muted italic">Sonuç bulunamadı.</div>'; 
+            return; 
+        }
+
+        container.innerHTML = results.map(r => {
+            const countryName = this.countryMap.get(r.country) || r.country || '-';
+            const detailText = `${r.applicationNumber || r.internationalRegNumber || r.wipoIR || '-'} • ${r.origin || 'WIPO'} • ${countryName}`;
+            
+            return `
+                <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
+                    <div class="font-weight-bold text-primary" style="font-size:0.9rem;">${r.title || r.markName || '(İsimsiz)'}</div>
+                    <div class="small text-muted" style="font-size:0.75rem;">${detailText}</div>
+                </div>`;
+        }).join('');
+
         container.querySelectorAll('.search-result-item').forEach(el => {
             el.onclick = () => {
-                this.selectRecord(el.dataset.id);
+                const selected = results.find(rec => rec.id === el.dataset.id);
+                if (selected) {
+                    this.selectRecordWithHierarchy(selected); // <-- selectRecord yerine bu çalışacak
+                }
                 container.style.display = 'none';
             };
         });
+    }
+    async selectRecordWithHierarchy(record) {
+        console.log("🎯 Kayıt Kontrol Ediliyor:", record.title);
+
+        const origin = (record.origin || '').toUpperCase();
+        const isInternational = ['WIPO', 'ARIPO', 'WO', 'AP'].some(o => origin.includes(o));
+        const isParent = (record.transactionHierarchy || 'parent').toLowerCase() === 'parent';
+
+        if (isInternational && isParent) {
+            if (window.SimpleLoadingController) window.SimpleLoadingController.show({ text: 'Alt dosyalar aranıyor...' });
+            
+            try {
+                const parentId = record.id;
+                const parentIR = String(record.internationalRegNumber || record.wipoIR || '').replace(/\D/g, '');
+
+                // Sadece bu Parent'a ait Child'ları Firestore'dan sorgula
+                const q = query(collection(db, 'ipRecords'), where('transactionHierarchy', '==', 'child'));
+                const querySnapshot = await getDocs(q);
+                
+                const children = querySnapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(child => {
+                        const childIR = String(child.wipoIR || child.internationalRegNumber || '').replace(/\D/g, '');
+                        return (child.parentId === parentId) || (parentIR && childIR === parentIR);
+                    });
+
+                if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+
+                if (children.length > 0) {
+                    this._openWipoSelectionModal(record, children);
+                    return;
+                }
+            } catch (err) {
+                console.error("Alt kayıt sorgu hatası:", err);
+                if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+            }
+        }
+        await this.selectRecord(record.id);
+    }
+
+    _openWipoSelectionModal(parent, children) {
+        const listEl = document.getElementById('wipoSelectionList');
+        if (!listEl) return;
+
+        listEl.innerHTML = '';
+        [parent, ...children].forEach(rec => {
+            const isParent = rec.id === parent.id;
+            const country = isParent ? 'Uluslararası' : (this.countryMap.get(rec.country) || rec.country || '-');
+            
+            const item = document.createElement('button');
+            item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center mb-2 border rounded shadow-sm";
+            item.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas ${isParent ? 'fa-globe-americas text-primary' : 'fa-flag text-danger'} fa-lg mr-3"></i>
+                    <div>
+                        <div class="font-weight-bold">${rec.title}</div>
+                        <div class="small text-muted">${rec.wipoIR || rec.internationalRegNumber || '-'} • ${rec.origin} • ${country}</div>
+                    </div>
+                </div>
+                <span class="badge ${isParent ? 'badge-primary' : 'badge-light border'} px-2 py-1">${isParent ? 'ANA KAYIT' : 'ULUSAL'}</span>
+            `;
+            item.onclick = () => {
+                this.selectRecord(rec.id);
+                if (typeof $ !== 'undefined') $('#wipoSelectionModal').modal('hide');
+            };
+            listEl.appendChild(item);
+        });
+        if (typeof $ !== 'undefined') $('#wipoSelectionModal').modal('show');
     }
 }
 
