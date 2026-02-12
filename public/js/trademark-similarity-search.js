@@ -523,50 +523,32 @@ const attachLazyLoadListeners = (groupedData) => {
                 const group = groupedData[ownerKey];
                 
                 if (group && group.trademarks) {
-                    // Loading göster
-                    container.innerHTML = '<div class="p-3 text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Markalar yükleniyor...</div>';
-                    
-                    // Async: Bu grubun markalarının ipRecords'ını çek
-                    (async () => {
-                        try {
-                            const enrichedTrademarks = await Promise.all(group.trademarks.map(async ({ tm, ip, ownerInfo }) => {
-                                // ip zaten null, şimdi _getIp ile çek (cache'ten gelirse anında döner)
-                                const fetchedIp = ip || await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-                                return { tm, ip: fetchedIp, ownerInfo };
-                            }));
+                    // HTML OLUŞTURMA (Burada yapılıyor)
+                    const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
+                        const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
+                        
+                        // loading="lazy" eklendi
+                        return `
+                            <tr class="trademark-detail-row">
+                                <td class="td-nested-toggle"></td>
+                                <td class="td-nested-img">
+                                    ${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}
+                                </td>
+                                <td class="td-nested-name"><strong>${markName}</strong></td>
+                                <td class="td-nested-appno">${appNo}</td>
+                                <td class="td-nested-nice">${nices || '-'}</td> 
+                                <td class="td-nested-date">${appDate}</td>
+                            </tr>`;
+                    }).join('');
 
-                            // Grup verisini güncelle (tekrar açılırsa cache'ten gelsin)
-                            group.trademarks = enrichedTrademarks;
+                    const tableHtml = `
+                        <table class="table table-sm nested-table">
+                            <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
+                            <tbody>${detailRowsHtml}</tbody>
+                        </table>`;
 
-                            const detailRowsHtml = enrichedTrademarks.map(({ tm, ip }) => {
-                                const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
-                                
-                                return `
-                                    <tr class="trademark-detail-row">
-                                        <td class="td-nested-toggle"></td>
-                                        <td class="td-nested-img">
-                                            ${imgSrc ? `<div class="tm-img-box tm-img-box-sm"><img class="trademark-image-thumbnail-large" src="${imgSrc}" loading="lazy" alt="Marka"></div>` : `<div class="tm-img-box tm-img-box-sm tm-placeholder">-</div>`}
-                                        </td>
-                                        <td class="td-nested-name"><strong>${markName}</strong></td>
-                                        <td class="td-nested-appno">${appNo}</td>
-                                        <td class="td-nested-nice">${nices || '-'}</td> 
-                                        <td class="td-nested-date">${appDate}</td>
-                                    </tr>`;
-                            }).join('');
-
-                            const tableHtml = `
-                                <table class="table table-sm nested-table">
-                                    <thead><tr><th></th><th class="col-nest-img">Görsel</th><th class="col-nest-name">Marka Adı</th><th class="col-nest-appno">Başvuru No</th><th class="col-nest-nice">Nice Sınıfı</th><th class="col-nest-date">B. Tarihi</th></tr></thead>
-                                    <tbody>${detailRowsHtml}</tbody>
-                                </table>`;
-
-                            container.innerHTML = tableHtml;
-                            container.dataset.loaded = 'true';
-                        } catch (err) {
-                            console.error('Akordeon veri yükleme hatası:', err);
-                            container.innerHTML = '<div class="p-3 text-danger text-center">Veriler yüklenirken hata oluştu.</div>';
-                        }
-                    })();
+                    container.innerHTML = tableHtml;
+                    container.dataset.loaded = 'true'; // Tekrar yüklemeyi engelle
                 }
             }
         }
@@ -820,12 +802,39 @@ const loadInitialData = async () => {
     const personsResult = await personService.getPersons();
     if (personsResult.success) allPersons = personsResult.data;
     await loadBulletinOptions();
-
-    // Monitoring kayıtlarını çek (ipRecords ÇEKMEDEN — akordeon açılınca lazy load edilecek)
     const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
-    monitoringTrademarks = snapshot.docs.map(docSnap => {
-        const tmData = { id: docSnap.id, ...docSnap.data() };
-        // Applicants'a isim zenginleştirmesi (persons listesinden)
+    monitoringTrademarks = await Promise.all(snapshot.docs.map(async (docSnap) => {
+        const tmData = {
+            id: docSnap.id,
+            ...docSnap.data()
+        };
+        // ipRecordId, sourceRecordId veya kendi id'si ile ipRecord çek
+        const recordId = tmData.ipRecordId || tmData.sourceRecordId || tmData.id;
+        if (recordId) {
+            try {
+                // Önce ipRecordsService kullan (eski çalışan mantık ile aynı)
+                const { success, data } = await ipRecordsService.getRecordById(recordId);
+                if (success && data) {
+                    // Applicants içindeki id'leri allPersons'tan isimle zenginleştir
+                    if (Array.isArray(data.applicants)) {
+                        data.applicants = data.applicants.map(a => {
+                            if (a?.id && !a.name) {
+                                const person = allPersons.find(p => p.id === a.id);
+                                if (person) return { ...a, name: person.name || person.companyName || a.id };
+                            }
+                            return a;
+                        });
+                    }
+                    tmData.ipRecord = data;
+                    tmData.goodsAndServicesByClass = data.goodsAndServicesByClass || [];
+                    _ipCache.set(recordId, data);
+                }
+            } catch (e) {}
+        }
+        return tmData;
+    }));
+    // Monitoring kayıtlarındaki applicants'a da isim ekle (ipRecord olmayan durumlar için)
+    monitoringTrademarks.forEach(tmData => {
         if (Array.isArray(tmData.applicants)) {
             tmData.applicants = tmData.applicants.map(a => {
                 if (a?.id && !a.name) {
@@ -835,13 +844,12 @@ const loadInitialData = async () => {
                 return a;
             });
         }
-        return tmData;
     });
-
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     initializeMonitoringPagination();
     renderMonitoringList();
     updateMonitoringCount();
+    // [DÜZELTME] Pagination sahip sayısına göre güncelleniyor (marka sayısı değil)
     updateOwnerBasedPagination();
     const bs = document.getElementById('bulletinSelect');
     if (bs?.value) {
