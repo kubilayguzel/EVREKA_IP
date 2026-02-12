@@ -460,9 +460,8 @@ const renderMonitoringList = () => {
     attachTrademarkClickListener();
     
     // Cachelenmiş veriyi lazy load fonksiyonuna gönder
-    // Her renderda yeni tbody içeriği oluştuğu için flag'i sıfırla
-    tbody._lazyLoadAttached = false;
-    attachLazyLoadListeners(groupedByOwner);
+    // Her renderda yeni tbody içeriği oluştuğu için listener'ı yenile
+    attachLazyLoadListeners();
 
     // Badge güncellemeleri
     setTimeout(() => {
@@ -482,12 +481,22 @@ const renderMonitoringList = () => {
 };
 
 // --- YENİ HELPER FONKSİYON ---
-const attachLazyLoadListeners = (groupedData) => {
+const attachLazyLoadListeners = () => {
     const tbody = document.getElementById('monitoringListBody');
     
-    // Eski listener'ları temizlemek için klonlama yapabiliriz veya
-    // jQuery kullanıyorsanız off() yapabilirsiniz. Vanilla JS'de üst üste binmemesi için kontrol:
-    if (tbody._lazyLoadAttached) return;
+    // Eski listener'ı temizlemek için tbody'yi klonla
+    if (tbody._lazyLoadAttached) {
+        const newTbody = tbody.cloneNode(true);
+        tbody.parentNode.replaceChild(newTbody, tbody);
+        newTbody._lazyLoadAttached = false;
+        // Klonlanmış element üzerine devam et
+        attachLazyLoadListenersToElement(newTbody);
+        return;
+    }
+    attachLazyLoadListenersToElement(tbody);
+};
+
+const attachLazyLoadListenersToElement = (tbody) => {
     tbody._lazyLoadAttached = true;
 
     tbody.addEventListener('click', (e) => {
@@ -515,12 +524,12 @@ const attachLazyLoadListeners = (groupedData) => {
             icon.classList.toggle('fa-chevron-down', isExpanded);
         }
 
-        // Eğer açılıyorsa (isExpanded false -> true olacaksa) ve veri yüklenmemişse YÜKLE
+        // Eğer açılıyorsa ve veri yüklenmemişse — HER ZAMAN güncel cachedGroupedData'dan oku
         if (!isExpanded) {
             const container = contentRow.querySelector('.nested-content-container');
             if (container && container.dataset.loaded === 'false') {
                 const ownerKey = container.dataset.ownerKey;
-                const group = groupedData[ownerKey];
+                const group = cachedGroupedData?.[ownerKey];
                 
                 if (group && group.trademarks) {
                     const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
@@ -683,7 +692,7 @@ const renderCurrentPageOfResults = () => {
             `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>` :
             `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
 
-        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> <small style="color:#666;">— ${_pickOwners(tmMeta.ipRecord || null, tmMeta, allPersons)}</small> — bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
+        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içi döngü (Global sayaç ile)
@@ -772,17 +781,27 @@ const applyMonitoringListFilters = () => {
     const ownerSearchInput = document.getElementById('ownerSearch');
     const niceClassSearchInput = document.getElementById('niceClassSearch');
     const brandNameSearchInput = document.getElementById('brandNameSearch');
-    const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput?.value || '', niceClassSearchInput?.value || '', brandNameSearchInput?.value || ''].map(s => s.toLowerCase());
+    const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput?.value || '', niceClassSearchInput?.value || '', brandNameSearchInput?.value || ''].map(s => s.toLowerCase().trim());
     const filteredResults = [];
     for (const data of monitoringTrademarks) {
         const ip = data.ipRecord || null;
         const ownerInfo = _getOwnerKey(ip, data, allPersons);
         const ownerName = ownerInfo.name.toLowerCase();
+
+        // Nice sınıfları: ipRecord + monitoring kaydı + niceClassSearch hepsi dahil
         const niceClasses = _uniqNice(ip || data);
+        const niceClassSearchArr = (data.niceClassSearch || []).map(String).join(', ');
+        const allNiceStr = (niceClasses + ', ' + niceClassSearchArr).toLowerCase();
+
+        // Marka adı: title, markName, brandText + brandTextSearch (aranacak ibareler) hepsi dahil
         const markName = (data.title || data.markName || data.brandText || '').toLowerCase();
+        const brandTextSearchStr = (data.brandTextSearch || []).join(' ').toLowerCase();
+        const allBrandStr = markName + ' ' + brandTextSearchStr;
+
+        // Kümülatif filtre (AND mantığı)
         const ownerMatch = !ownerFilter || ownerName.includes(ownerFilter);
-        const niceMatch = !niceFilter || niceClasses.toLowerCase().includes(niceFilter);
-        const brandMatch = !brandFilter || markName.includes(brandFilter);
+        const niceMatch = !niceFilter || allNiceStr.includes(niceFilter);
+        const brandMatch = !brandFilter || allBrandStr.includes(brandFilter);
         if (ownerMatch && niceMatch && brandMatch) filteredResults.push(data);
     }
     filteredMonitoringTrademarks = filteredResults;
