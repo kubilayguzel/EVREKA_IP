@@ -3048,6 +3048,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
+        itiraz_sahibi: enrichedData.itirazSahibi,
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         
         // [GÜNCELLEME] Hata veren değişken kaldırıldı, sabit değer atandı.
