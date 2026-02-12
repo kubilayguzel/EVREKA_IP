@@ -1139,21 +1139,28 @@ const performResearch = async () => {
 };
 
 const groupAndSortResults = async () => {
-    // 1. Sonuçları Grupla
+    // 1. Sonuçları ID'ye göre Grupla
     const groupedByTrademark = allSimilarResults.reduce((acc, result) => {
-        const id = result.monitoredTrademarkId || 'unknown';
+        const id = String(result.monitoredTrademarkId || 'unknown'); // ID'yi string'e çevir
         (acc[id] = acc[id] || []).push(result);
         return acc;
     }, {});
 
     const uniqueIds = Object.keys(groupedByTrademark);
 
-    // 2. Eksik Sahip Bilgilerini Tamamla
+    // OPTİMİZASYON: Hızlı Erişim için Map Oluştur (find yerine get kullanılır)
+    // Bu sayede ID eşleşmeme riski ve döngü maliyeti ortadan kalkar
+    const tmMap = new Map();
+    if (monitoringTrademarks && Array.isArray(monitoringTrademarks)) {
+        monitoringTrademarks.forEach(tm => tmMap.set(String(tm.id), tm));
+    }
+
+    // 2. Sıralama Verilerini Hazırla
     const sortData = new Map(); 
 
     await Promise.all(uniqueIds.map(async (id) => {
-        const tm = monitoringTrademarks.find(t => String(t.id) === String(id));
-        let ownerName = '';
+        const tm = tmMap.get(id); // Map üzerinden anlık erişim
+        let ownerName = 'zzzzzzzz'; // Varsayılan: En sona at
         let markName = '';
 
         if (tm) {
@@ -1161,7 +1168,7 @@ const groupAndSortResults = async () => {
             let ownerInfo = _getOwnerKey(null, tm, allPersons);
             let currentName = (ownerInfo.name || '').trim();
 
-            // KONTROL: Eğer isim yoksa, '-' ise veya 'Bilinmeyen' ise VERİTABANINDAN ÇEK
+            // KONTROL: Veri eksikse veritabanından çek (IP Record)
             if ((!currentName || currentName === '-' || currentName === 'Bilinmeyen Sahip') && (tm.ipRecordId || tm.sourceRecordId)) {
                 try {
                     const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId);
@@ -1172,33 +1179,31 @@ const groupAndSortResults = async () => {
                 } catch (e) { }
             }
             
-            // Hala '-' veya boş ise sıralamada en sona gitmesi için özel bir değer ata (Örn: zzz_en_son)
-            if (!currentName || currentName === '-' || currentName === 'Bilinmeyen Sahip') {
-                ownerName = 'zzzzzzzz'; // En sona atar
-            } else {
+            // Sahip ismini belirle (Varsa ata, yoksa zzzzz kalır)
+            if (currentName && currentName !== '-' && currentName !== 'Bilinmeyen Sahip') {
                 ownerName = currentName.toLowerCase();
             }
 
             markName = (tm.title || tm.markName || '').toLowerCase();
         } else {
-            // İzlenenler listesinde yoksa (silinmişse) en sona at
-            ownerName = 'zzzzzzzz';
+            // Listede bulunamayanlar en sona, isim olarak sonuçtan geleni kullan
             markName = (groupedByTrademark[id][0]?.monitoredTrademark || '').toLowerCase();
         }
 
         sortData.set(id, { ownerName, markName });
     }));
 
-    // 3. Sıralama: Önce Sahip (Türkçe Karakter Uyumlu), Sonra Marka
+    // 3. Sıralama Algoritması
     const sortedIds = uniqueIds.sort((idA, idB) => {
-        const dataA = sortData.get(idA) || { ownerName: 'zzzzzzzz', markName: '' };
-        const dataB = sortData.get(idB) || { ownerName: 'zzzzzzzz', markName: '' };
+        const dataA = sortData.get(idA);
+        const dataB = sortData.get(idB);
 
-        // Türkçe karakter destekli sıralama (localeCompare)
+        // Türkçe ve Rakam Uyumlu Sıralama (numeric: true ile 9 < A çalışır)
         const ownerCompare = dataA.ownerName.localeCompare(dataB.ownerName, 'tr-TR', { numeric: true, sensitivity: 'base' });
         
         if (ownerCompare !== 0) return ownerCompare;
 
+        // Sahipler aynıysa Marka Adına göre sırala
         return dataA.markName.localeCompare(dataB.markName, 'tr-TR', { numeric: true, sensitivity: 'base' });
     });
 
