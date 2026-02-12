@@ -683,7 +683,7 @@ const renderCurrentPageOfResults = () => {
             `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>` :
             `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
 
-        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
+        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> <small style="color:#666;">— ${_pickOwners(tmMeta.ipRecord || null, tmMeta, allPersons)}</small> — bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içi döngü (Global sayaç ile)
