@@ -523,11 +523,9 @@ const attachLazyLoadListeners = (groupedData) => {
                 const group = groupedData[ownerKey];
                 
                 if (group && group.trademarks) {
-                    // HTML OLUŞTURMA (Burada yapılıyor)
                     const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
                         const [markName, imgSrc, appNo, nices, appDate] = [_pickName(ip, tm), _pickImg(ip, tm), _pickAppNo(ip, tm), _uniqNice(ip || tm), _pickAppDate(ip, tm)];
                         
-                        // loading="lazy" eklendi
                         return `
                             <tr class="trademark-detail-row">
                                 <td class="td-nested-toggle"></td>
@@ -548,7 +546,7 @@ const attachLazyLoadListeners = (groupedData) => {
                         </table>`;
 
                     container.innerHTML = tableHtml;
-                    container.dataset.loaded = 'true'; // Tekrar yüklemeyi engelle
+                    container.dataset.loaded = 'true';
                 }
             }
         }
@@ -802,39 +800,39 @@ const loadInitialData = async () => {
     const personsResult = await personService.getPersons();
     if (personsResult.success) allPersons = personsResult.data;
     await loadBulletinOptions();
-    const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
-    monitoringTrademarks = await Promise.all(snapshot.docs.map(async (docSnap) => {
-        const tmData = {
-            id: docSnap.id,
-            ...docSnap.data()
-        };
-        // ipRecordId, sourceRecordId veya kendi id'si ile ipRecord çek
-        const recordId = tmData.ipRecordId || tmData.sourceRecordId || tmData.id;
-        if (recordId) {
-            try {
-                // Önce ipRecordsService kullan (eski çalışan mantık ile aynı)
-                const { success, data } = await ipRecordsService.getRecordById(recordId);
-                if (success && data) {
-                    // Applicants içindeki id'leri allPersons'tan isimle zenginleştir
-                    if (Array.isArray(data.applicants)) {
-                        data.applicants = data.applicants.map(a => {
-                            if (a?.id && !a.name) {
-                                const person = allPersons.find(p => p.id === a.id);
-                                if (person) return { ...a, name: person.name || person.companyName || a.id };
-                            }
-                            return a;
-                        });
-                    }
-                    tmData.ipRecord = data;
-                    tmData.goodsAndServicesByClass = data.goodsAndServicesByClass || [];
-                    _ipCache.set(recordId, data);
+
+    // 1. Monitoring kayıtlarını ve tüm ipRecords'ı PARALEL çek (2 sorgu)
+    const [monitoringSnapshot, ipRecordsSnapshot] = await Promise.all([
+        getDocs(collection(db, 'monitoringTrademarks')),
+        getDocs(collection(db, 'ipRecords'))
+    ]);
+
+    // 2. ipRecords'ı Map'e at (tek seferlik, senkron)
+    const ipRecordsMap = new Map();
+    ipRecordsSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (Array.isArray(data.applicants)) {
+            data.applicants = data.applicants.map(a => {
+                if (a?.id && !a.name) {
+                    const person = allPersons.find(p => p.id === a.id);
+                    if (person) return { ...a, name: person.name || person.companyName || a.id };
                 }
-            } catch (e) {}
+                return a;
+            });
         }
-        return tmData;
-    }));
-    // Monitoring kayıtlarındaki applicants'a da isim ekle (ipRecord olmayan durumlar için)
-    monitoringTrademarks.forEach(tmData => {
+        ipRecordsMap.set(docSnap.id, data);
+        _ipCache.set(docSnap.id, data);
+    });
+
+    // 3. Monitoring verilerini ipRecords ile eşleştir (senkron)
+    monitoringTrademarks = monitoringSnapshot.docs.map(docSnap => {
+        const tmData = { id: docSnap.id, ...docSnap.data() };
+        const recordId = tmData.ipRecordId || tmData.sourceRecordId || tmData.id;
+        const ipRecord = ipRecordsMap.get(recordId) || null;
+        if (ipRecord) {
+            tmData.ipRecord = ipRecord;
+            tmData.goodsAndServicesByClass = ipRecord.goodsAndServicesByClass || [];
+        }
         if (Array.isArray(tmData.applicants)) {
             tmData.applicants = tmData.applicants.map(a => {
                 if (a?.id && !a.name) {
@@ -844,12 +842,13 @@ const loadInitialData = async () => {
                 return a;
             });
         }
+        return tmData;
     });
+
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     initializeMonitoringPagination();
     renderMonitoringList();
     updateMonitoringCount();
-    // [DÜZELTME] Pagination sahip sayısına göre güncelleniyor (marka sayısı değil)
     updateOwnerBasedPagination();
     const bs = document.getElementById('bulletinSelect');
     if (bs?.value) {
