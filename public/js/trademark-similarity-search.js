@@ -372,7 +372,7 @@ const renderMonitoringList = async () => {
         return;
     }
 
-    // 1. Gruplamayı SENKRON yapın (IP fetch yapmadan, eldeki veriyi kullanır)
+    // 1. Veriyi Sahip (Owner) bazlı grupla
     const groupedByOwner = {};
     for (const tm of filteredMonitoringTrademarks) {
         const ownerInfo = _getOwnerKey(null, tm, allPersons);
@@ -387,20 +387,24 @@ const renderMonitoringList = async () => {
         groupedByOwner[key].trademarks.push(tm);
     }
 
-    // 2. Pagination dilimini SAHİP listesi üzerinden al
+    // 2. Sahipleri sırala
     const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
         groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
     );
 
-    // Pagination'ı sahip sayısına göre doğrula
-    monitoringPagination.update(sortedOwnerKeys.length);
-    const paginatedKeys = monitoringPagination.getCurrentPageData(sortedOwnerKeys);
+    // 3. Pagination'ı SAHİP sayısına göre güncelle
+    if (monitoringPagination) {
+        monitoringPagination.update(sortedOwnerKeys.length);
+    }
+    
+    // O anki sayfaya ait sahipleri al
+    const paginatedKeys = monitoringPagination ? monitoringPagination.getCurrentPageData(sortedOwnerKeys) : sortedOwnerKeys.slice(0, 5);
 
-    // 3. Akordeon yapısını kuran HTML
+    // 4. HTML oluştur (Akordeon yapısı)
     let rowsHtml = '';
     paginatedKeys.forEach(key => {
         const group = groupedByOwner[key];
-        const groupUid = `collapse-${group.ownerId}-${key.replace(/[^a-z0-9]/gi, '').slice(-8)}`;
+        const groupUid = `collapse-${group.ownerId.replace(/[^a-z0-9]/gi, '')}`;
         const isTriggered = taskTriggeredStatus.get(group.ownerId) === 'Evet';
         
         rowsHtml += `
@@ -428,7 +432,9 @@ const renderMonitoringList = async () => {
 
     tbody.innerHTML = rowsHtml;
 
+    // Dinleyicileri bağla
     attachGenerateReportListener();
+    attachTrademarkClickListener();
     attachLazyLoadListeners(groupedByOwner); 
 };
 
@@ -438,7 +444,6 @@ const attachLazyLoadListeners = (groupedData) => {
     tbody._lazyLoadBound = true;
 
     tbody.addEventListener('click', async (e) => {
-        // Sadece ok ikonuna veya isim hücresine tıklandığında çalış
         const trigger = e.target.closest('.toggle-trigger');
         if (!trigger) return;
 
@@ -449,7 +454,7 @@ const attachLazyLoadListeners = (groupedData) => {
 
         const isCurrentlyHidden = collapseRow.style.display === 'none';
         
-        // 1. Akordeon aç/kapa
+        // Satırı aç/kapat
         collapseRow.style.display = isCurrentlyHidden ? 'table-row' : 'none';
         const icon = headerRow.querySelector('.toggle-icon');
         if (icon) {
@@ -457,14 +462,13 @@ const attachLazyLoadListeners = (groupedData) => {
             icon.classList.toggle('fa-chevron-down', !isCurrentlyHidden);
         }
 
-        // 2. Veri Yüklenmemişse Lazy Load Başlat
+        // Veri yüklenmemişse Firestore'dan çek (Lazy Load)
         const container = collapseRow.querySelector('.nested-content-container');
         if (isCurrentlyHidden && container && container.dataset.loaded === 'false') {
             const ownerKey = container.dataset.ownerKey;
             const marks = groupedData[ownerKey].trademarks;
             
             try {
-                // Her marka için IP kaydını asenkron çek
                 const detailRows = await Promise.all(marks.map(async (tm) => {
                     const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
                     return `
@@ -738,25 +742,27 @@ const loadInitialData = async () => {
     await loadSharedLayout({
         activeMenuLink: 'trademark-similarity-search.html'
     });
+    
     const personsResult = await personService.getPersons();
     if (personsResult.success) allPersons = personsResult.data;
+    
     await loadBulletinOptions();
+
+    // 1. İzleme listesini çek (IP detaylarını çekmeden, sadece liste)
     const snapshot = await getDocs(collection(db, 'monitoringTrademarks'));
-    const ownerGroupsCount = new Set(filteredMonitoringTrademarks.map(tm => _getOwnerKey(null, tm, allPersons).key)).size;
-    monitoringPagination.update(ownerGroupsCount);
+    monitoringTrademarks = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+    }));
+    filteredMonitoringTrademarks = [...monitoringTrademarks];
 
-    renderMonitoringList();
+    // 2. ÖNCE pagination nesnesini başlat (update hatasını önler)
+    initializeMonitoringPagination();
 
-    // ÖNEMLİ: Pagination'ı sahip sayısına göre ayarlayan yeni fonksiyonu burada çağırıyoruz
-    await updateOwnerBasedPagination(); 
-
+    // 3. ŞİMDİ listeyi render et (Pagination nesnesi artık hazır)
     renderMonitoringList();
     
-    filteredMonitoringTrademarks = [...monitoringTrademarks];
-    initializeMonitoringPagination();
-    renderMonitoringList();
-    updateMonitoringCount();
-    monitoringPagination.update(filteredMonitoringTrademarks.length);
+    // Bülten seçim kontrolü
     const bs = document.getElementById('bulletinSelect');
     if (bs?.value) {
         const bNo = String(bs.value).split('_')[0];
