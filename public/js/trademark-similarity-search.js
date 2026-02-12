@@ -679,57 +679,11 @@ const renderCurrentPageOfResults = () => {
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
 
-        // --- GÜNCELLENMİŞ SAHİP BİLGİSİ ALANI ---
-
-        // 1. Sahip İsmini Bulmaya Çalış (3 Farklı Yöntemle)
-        let finalOwnerName = null;
-
-        // Yöntem A: Yardımcı fonksiyonu dene
-        const ownerInfo = _getOwnerKey(null, tmMeta, allPersons);
-        if (ownerInfo && ownerInfo.name && ownerInfo.name !== 'Bilinmeyen Sahip' && ownerInfo.name !== '-') {
-            finalOwnerName = ownerInfo.name;
-        }
-        
-        // Yöntem B: Eğer A bulamadıysa, tmMeta içinde doğrudan kayıtlı isme bak
-        if (!finalOwnerName && tmMeta) {
-            if (tmMeta.ownerName) finalOwnerName = tmMeta.ownerName;
-            else if (tmMeta.clientName) finalOwnerName = tmMeta.clientName;
-        }
-
-        // Yöntem C: Eğer hala yoksa ve ownerId varsa, Kişi Listesinden (allPersons) manuel bul
-        if (!finalOwnerName && tmMeta && tmMeta.ownerId && Array.isArray(allPersons)) {
-            const foundPerson = allPersons.find(p => p.id === tmMeta.ownerId);
-            if (foundPerson) {
-                finalOwnerName = foundPerson.name || foundPerson.fullName || foundPerson.companyName;
-            }
-        }
-
-        // 2. Rozeti Oluştur
-        let ownerBadge = '';
-        if (finalOwnerName) {
-            ownerBadge = `<span class="badge badge-light border ml-3" style="font-weight:normal; font-size: 0.85em; color:#555; display:inline-flex; align-items:center;">
-                <i class="fas fa-user-tie text-muted mr-1"></i> ${finalOwnerName}
-            </span>`;
-        }
-
-        // 3. Marka Görselini Hazırla
         const imageHtml = headerImg ?
             `<div class="group-trademark-image"><div class="tm-img-box tm-img-box-sm"><img src="${headerImg}" class="group-header-img" alt="${headerName}"></div></div>` :
             `<div class="group-trademark-image" data-header-appno="${appNo}"><div class="tm-img-box tm-img-box-sm tm-placeholder">?</div></div>`;
 
-        // 4. HTML'i Bas
-        groupHeaderRow.innerHTML = `<td colspan="10">
-            <div class="group-title" style="display: flex; align-items: center;">
-                ${imageHtml}
-                <span style="display:flex; align-items:center;">
-                    <a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}" style="font-size:1.1em; color:#1e3c72;">
-                        <strong>${headerName}</strong>
-                    </a>
-                    <span class="text-muted ml-2" style="font-size:0.9em;">(${totalCount} sonuç)</span>
-                    ${ownerBadge}
-                </span>
-            </div>
-        </td>`;
+        groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title">${imageHtml}<span><a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a> markası için bulunan sonuçlar (${totalCount} adet)</span></div></td>`;
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içi döngü (Global sayaç ile)
