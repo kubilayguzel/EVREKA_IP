@@ -1137,19 +1137,45 @@ const performResearch = async () => {
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Yeniden arama sırasında bir hata oluştu.</div>`;
     }
 };
+
 const groupAndSortResults = () => {
+    // 1. Sonuçları İzlenen Marka ID'sine göre grupla
     const groupedByTrademark = allSimilarResults.reduce((acc, result) => {
         const id = result.monitoredTrademarkId || 'unknown';
         (acc[id] = acc[id] || []).push(result);
         return acc;
     }, {});
-    const sortedIds = Object.keys(groupedByTrademark).sort((a, b) => {
-        const nameA = groupedByTrademark[a][0]?.monitoredTrademark || '';
-        const nameB = groupedByTrademark[b][0]?.monitoredTrademark || '';
+
+    // 2. Grupları Sırala (Önce Sahip, Sonra Marka Adı)
+    const sortedIds = Object.keys(groupedByTrademark).sort((idA, idB) => {
+        // İlgili markaların bilgilerini monitoringTrademarks listesinden bul
+        const tmA = monitoringTrademarks.find(t => String(t.id) === String(idA));
+        const tmB = monitoringTrademarks.find(t => String(t.id) === String(idB));
+
+        // 1. Adım: Sahip İsimlerini Al
+        // _getOwnerKey fonksiyonunu kullanarak tutarlı sahip ismi elde ediyoruz
+        const ownerNameA = tmA ? (_getOwnerKey(null, tmA, allPersons).name || '').toLowerCase() : '';
+        const ownerNameB = tmB ? (_getOwnerKey(null, tmB, allPersons).name || '').toLowerCase() : '';
+
+        // Sahipleri Karşılaştır
+        const ownerCompare = ownerNameA.localeCompare(ownerNameB);
+        
+        // Eğer sahipler farklıysa, sahip sırasına göre döndür
+        if (ownerCompare !== 0) return ownerCompare;
+
+        // 2. Adım: Sahipler aynıysa Marka İsimlerini Karşılaştır
+        const nameA = (tmA?.title || tmA?.markName || groupedByTrademark[idA][0]?.monitoredTrademark || '').toLowerCase();
+        const nameB = (tmB?.title || tmB?.markName || groupedByTrademark[idB][0]?.monitoredTrademark || '').toLowerCase();
+        
         return nameA.localeCompare(nameB);
     });
-    allSimilarResults = sortedIds.flatMap(id => groupedByTrademark[id].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0)));
+
+    // 3. Sıralanmış grupları tekrar listeye dök (İçerideki sonuçlar Benzerlik Puanına göre)
+    allSimilarResults = sortedIds.flatMap(id => 
+        groupedByTrademark[id].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0))
+    );
 };
+
 const handleSimilarityToggle = async (event) => {
     const {
         resultId,
