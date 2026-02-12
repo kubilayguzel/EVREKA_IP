@@ -630,7 +630,7 @@
                                 wipoIR: baseData.registrationNumber
                             });
                             if(childRes.success) {
-                                createdRecords.push({ id: childRes.id || childRes.data?.id, role: 'child' });
+                                createdRecords.push({ id: childRes.id || childRes.data?.id, role: 'parent' });
                             }
                         }
                     } else {
