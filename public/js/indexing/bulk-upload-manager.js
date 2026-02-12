@@ -268,6 +268,8 @@ export class BulkIndexingModule {
         this.checkFormCompleteness();
     }
 
+    // public/js/indexing/bulk-upload-manager.js içindeki mevcut searchRecords fonksiyonunu silip bunu yapıştırın:
+
     async searchRecords(query, tabContext) {
         const containerId = 'searchResultsContainerManual';
         const container = document.getElementById(containerId);
@@ -284,7 +286,7 @@ export class BulkIndexingModule {
 
         // Veri Kontrolü: Sayfa yeni açıldıysa ve veriler (allRecords) henüz gelmediyse uyar
         if (!this.allRecords || this.allRecords.length === 0) {
-            container.innerHTML = '<div style="padding:10px; color:#e67e22; font-size:0.9em;"><i class="fas fa-spinner fa-spin"></i> Veriler yükleniyor, lütfen bekleyin...</div>';
+            container.innerHTML = '<div style="padding:10px; color:#e67e22; font-size:0.9em;"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor, lütfen bekleyin...</div>';
             container.style.display = 'block';
             return;
         }
@@ -314,8 +316,8 @@ export class BulkIndexingModule {
         // Performans için ilk 30 kaydı gösteriyoruz
         filtered.slice(0, 30).forEach(record => {
             const item = document.createElement('div');
-            // Flexbox ile düzen: [Görsel] [Metin Bilgileri]
             item.className = "search-result-item";
+            // Flexbox ile düzen: [Görsel] [Metin Bilgileri]
             item.style.cssText = `
                 display: flex; 
                 align-items: center; 
@@ -425,6 +427,29 @@ export class BulkIndexingModule {
             }
         } catch (err) {
             console.warn('Manuel kayıt görseli çözümlenemedi:', err);
+        }
+    }
+
+    // Metin Vurgulama Yardımcısı
+    _highlightText(text, query) {
+        if (!text) return '';
+        if (!query) return text;
+        try {
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<span style="background-color:#fff3cd; color:#333;">$1</span>');
+        } catch(e) { return text; }
+    }
+
+    // Liste Resmi Yükleyicisi (Listenin donmasını engeller)
+    async _loadResultImage(record, wrapperEl) {
+        try {
+            const url = await this._resolveRecordImageUrl(record);
+            if (url) {
+                wrapperEl.innerHTML = `<img src="${url}" style="width:100%; height:100%; object-fit:contain; border-radius:3px;">`;
+                wrapperEl.style.backgroundColor = 'white';
+            }
+        } catch (e) {
+            // Hata olursa ikon kalır, sorun yok
         }
     }
 
