@@ -1159,32 +1159,47 @@ const groupAndSortResults = async () => {
         if (tm) {
             // Önce eldeki veriden sahibini bul
             let ownerInfo = _getOwnerKey(null, tm, allPersons);
-            
-            // Eğer sahip adı yoksa veritabanından çek
-            if ((!ownerInfo.name || ownerInfo.name === 'Bilinmeyen Sahip') && (tm.ipRecordId || tm.sourceRecordId)) {
+            let currentName = (ownerInfo.name || '').trim();
+
+            // KONTROL: Eğer isim yoksa, '-' ise veya 'Bilinmeyen' ise VERİTABANINDAN ÇEK
+            if ((!currentName || currentName === '-' || currentName === 'Bilinmeyen Sahip') && (tm.ipRecordId || tm.sourceRecordId)) {
                 try {
                     const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId);
-                    if (ip) ownerInfo = _getOwnerKey(ip, tm, allPersons);
+                    if (ip) {
+                        ownerInfo = _getOwnerKey(ip, tm, allPersons);
+                        currentName = (ownerInfo.name || '').trim();
+                    }
                 } catch (e) { }
             }
-            ownerName = (ownerInfo.name || '').toLowerCase();
+            
+            // Hala '-' veya boş ise sıralamada en sona gitmesi için özel bir değer ata (Örn: zzz_en_son)
+            if (!currentName || currentName === '-' || currentName === 'Bilinmeyen Sahip') {
+                ownerName = 'zzzzzzzz'; // En sona atar
+            } else {
+                ownerName = currentName.toLowerCase();
+            }
+
             markName = (tm.title || tm.markName || '').toLowerCase();
         } else {
+            // İzlenenler listesinde yoksa (silinmişse) en sona at
+            ownerName = 'zzzzzzzz';
             markName = (groupedByTrademark[id][0]?.monitoredTrademark || '').toLowerCase();
         }
 
         sortData.set(id, { ownerName, markName });
     }));
 
-    // 3. Sıralama: Önce Sahip, Sonra Marka
+    // 3. Sıralama: Önce Sahip (Türkçe Karakter Uyumlu), Sonra Marka
     const sortedIds = uniqueIds.sort((idA, idB) => {
-        const dataA = sortData.get(idA) || { ownerName: '', markName: '' };
-        const dataB = sortData.get(idB) || { ownerName: '', markName: '' };
+        const dataA = sortData.get(idA) || { ownerName: 'zzzzzzzz', markName: '' };
+        const dataB = sortData.get(idB) || { ownerName: 'zzzzzzzz', markName: '' };
 
-        const ownerCompare = dataA.ownerName.localeCompare(dataB.ownerName);
+        // Türkçe karakter destekli sıralama (localeCompare)
+        const ownerCompare = dataA.ownerName.localeCompare(dataB.ownerName, 'tr-TR', { numeric: true, sensitivity: 'base' });
+        
         if (ownerCompare !== 0) return ownerCompare;
 
-        return dataA.markName.localeCompare(dataB.markName);
+        return dataA.markName.localeCompare(dataB.markName, 'tr-TR', { numeric: true, sensitivity: 'base' });
     });
 
     // 4. Listeyi Düzleştir
