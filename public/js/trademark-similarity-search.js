@@ -363,7 +363,7 @@ const refreshTriggeredStatus = async (bulletinNo) => {
     }
 };
 
-// --- 5. RENDER FUNCTIONS (OPTİMİZE EDİLMİŞ) ---
+// --- 5. RENDER FUNCTIONS (GÜNCELLENMİŞ) ---
 const renderMonitoringList = () => {
     const tbody = document.getElementById('monitoringListBody');
     
@@ -377,10 +377,9 @@ const renderMonitoringList = () => {
     if (!cachedGroupedData) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3"><i class="fas fa-spinner fa-spin"></i> Veriler işleniyor...</td></tr>';
         
-        // [PERFORMANS] _getIp çağrısı YOK — loadInitialData'da zaten ipRecord yüklendi
         const grouped = {};
         for (const tm of filteredMonitoringTrademarks) {
-            const ip = tm.ipRecord || null; // Zaten yüklü veriyi kullan
+            const ip = tm.ipRecord || null;
             const ownerInfo = _getOwnerKey(ip, tm, allPersons);
             const nices = _uniqNice(ip || tm);
             const ownerKey = ownerInfo.key;
@@ -401,9 +400,13 @@ const renderMonitoringList = () => {
         cachedGroupedData = grouped;
     }
 
-    // --- SIRALAMA VE SAYFALAMA ---
-    // Artık elimizde hazır veri var, sadece sayfalamayı yapıyoruz.
     const groupedByOwner = cachedGroupedData;
+    
+    // [KRİTİK DÜZELTME 1]: Filtrelenmiş veriyi tbody elementine 'property' olarak kaydet.
+    // Böylece Event Listener her zaman en güncel veriye ulaşır.
+    tbody._currentGroupedData = groupedByOwner;
+
+    // --- SIRALAMA VE SAYFALAMA ---
     const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
         groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
     );
@@ -416,7 +419,6 @@ const renderMonitoringList = () => {
 
     let allRowsHtml = [];
 
-    // Sadece ekranda görülecek 5 kişi için döngüye gir
     for (const ownerKey of paginatedOwnerKeys) {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
@@ -441,8 +443,7 @@ const renderMonitoringList = () => {
         </tr>`;
         allRowsHtml.push(headerRow);
 
-        // 2. İÇERİK SATIRI (Lazy Load Placeholder)
-        // Veriyi data attribute'a eklemiyoruz, groupedByOwner üzerinden ID ile erişeceğiz.
+        // 2. İÇERİK SATIRI
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="6">
@@ -459,10 +460,11 @@ const renderMonitoringList = () => {
     attachGenerateReportListener();
     attachTrademarkClickListener();
     
-    // Cachelenmiş veriyi lazy load fonksiyonuna gönder
-    // Her renderda yeni tbody içeriği oluştuğu için flag'i sıfırla
-    tbody._lazyLoadAttached = false;
-    attachLazyLoadListeners(groupedByOwner);
+    // [KRİTİK DÜZELTME 2]: Flag'i sıfırlayan kodu KALDIRDIK.
+    // tbody._lazyLoadAttached = false; <--- BU SATIRI SİLDİK.
+    
+    // Parametre göndermiyoruz, fonksiyon veriyi tbody._currentGroupedData'dan alacak.
+    attachLazyLoadListeners();
 
     // Badge güncellemeleri
     setTimeout(() => {
@@ -481,17 +483,20 @@ const renderMonitoringList = () => {
     }, 50);
 };
 
-// --- YENİ HELPER FONKSİYON ---
-const attachLazyLoadListeners = (groupedData) => {
+// --- YENİ HELPER FONKSİYON (GÜNCELLENMİŞ) ---
+// Parametre (groupedData) kaldırıldı.
+const attachLazyLoadListeners = () => {
     const tbody = document.getElementById('monitoringListBody');
     
-    // Eski listener'ları temizlemek için klonlama yapabiliriz veya
-    // jQuery kullanıyorsanız off() yapabilirsiniz. Vanilla JS'de üst üste binmemesi için kontrol:
+    // Daha önce event listener eklendiyse tekrar ekleme!
     if (tbody._lazyLoadAttached) return;
     tbody._lazyLoadAttached = true;
 
     tbody.addEventListener('click', (e) => {
-        // Butonlara tıklanırsa accordion'ı tetikleme
+        // [KRİTİK DÜZELTME 3]: Veriyi parametreden değil, DOM elementinden al.
+        // Böylece filtreleme değiştiğinde listener her zaman YENİ veriyi görür.
+        const currentGroupedData = tbody._currentGroupedData || {};
+
         if (e.target.closest('.action-btn, button, a')) return;
 
         const headerRow = e.target.closest('.owner-row');
@@ -504,23 +509,23 @@ const attachLazyLoadListeners = (groupedData) => {
 
         const isExpanded = headerRow.getAttribute('aria-expanded') === 'true';
         
-        // Görünürlüğü değiştir
         contentRow.style.display = isExpanded ? 'none' : 'table-row';
         headerRow.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
         
-        // İkonu değiştir
         const icon = headerRow.querySelector('.toggle-icon');
         if (icon) {
             icon.classList.toggle('fa-chevron-up', !isExpanded);
             icon.classList.toggle('fa-chevron-down', isExpanded);
         }
 
-        // Eğer açılıyorsa (isExpanded false -> true olacaksa) ve veri yüklenmemişse YÜKLE
         if (!isExpanded) {
             const container = contentRow.querySelector('.nested-content-container');
+            // Veri yüklenmemişse VEYA veriler değiştiyse (Cache'i zorlamak isterseniz data-loaded kontrolünü esnetebilirsiniz)
             if (container && container.dataset.loaded === 'false') {
                 const ownerKey = container.dataset.ownerKey;
-                const group = groupedData[ownerKey];
+                
+                // groupedData yerine currentGroupedData kullanıyoruz
+                const group = currentGroupedData[ownerKey];
                 
                 if (group && group.trademarks) {
                     const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
