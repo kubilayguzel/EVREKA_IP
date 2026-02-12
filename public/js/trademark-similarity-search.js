@@ -808,15 +808,16 @@ const loadInitialData = async () => {
             id: docSnap.id,
             ...docSnap.data()
         };
-        if (tmData.ipRecordId || tmData.sourceRecordId) {
+        // ipRecordId, sourceRecordId veya kendi id'si ile ipRecord çek
+        const recordId = tmData.ipRecordId || tmData.sourceRecordId || tmData.id;
+        if (recordId) {
             try {
-                const recordId = tmData.ipRecordId || tmData.sourceRecordId;
-                const ipDoc = await getDoc(doc(db, 'ipRecords', recordId));
-                if (ipDoc.exists()) {
-                    const ipData = ipDoc.data();
+                // Önce ipRecordsService kullan (eski çalışan mantık ile aynı)
+                const { success, data } = await ipRecordsService.getRecordById(recordId);
+                if (success && data) {
                     // Applicants içindeki id'leri allPersons'tan isimle zenginleştir
-                    if (Array.isArray(ipData.applicants)) {
-                        ipData.applicants = ipData.applicants.map(a => {
+                    if (Array.isArray(data.applicants)) {
+                        data.applicants = data.applicants.map(a => {
                             if (a?.id && !a.name) {
                                 const person = allPersons.find(p => p.id === a.id);
                                 if (person) return { ...a, name: person.name || person.companyName || a.id };
@@ -824,9 +825,9 @@ const loadInitialData = async () => {
                             return a;
                         });
                     }
-                    tmData.ipRecord = ipData;
-                    tmData.goodsAndServicesByClass = ipData.goodsAndServicesByClass || [];
-                    _ipCache.set(recordId, ipData);
+                    tmData.ipRecord = data;
+                    tmData.goodsAndServicesByClass = data.goodsAndServicesByClass || [];
+                    _ipCache.set(recordId, data);
                 }
             } catch (e) {}
         }
