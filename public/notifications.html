@@ -1016,37 +1016,47 @@ window.switchTab = async function(tabName) {
     };
 
     async function applyTabFilter() {
+      if (!loader) return;
       loader.style.display = "block";
       tableBody.innerHTML = "";
 
       try {
         if (activeTab === 'pending') {
-          // BEKLEYENLER: Statüsü 'sent' olmayanlar
+          // 1. BEKLEYENLER: Statüsü 'sent' olmayan her şey
           notificationsData = allNotifications.filter(n => n.status !== 'sent');
         } else {
-          // GÖNDERİLENLER VE HATIRLATMALAR
+          // 2. GÖNDERİLENLER VE HATIRLATMALAR İÇİN TASK KONTROLÜ
           const sentNotifications = allNotifications.filter(n => n.status === 'sent');
-          const taskIds = [...new Set(sentNotifications.map(n => n.relatedRecordId).filter(id => id))];
+          
+          // Mail içindeki 'dependentTaskId' alanlarını topluyoruz
+          const taskIds = [...new Set(sentNotifications.map(n => n.dependentTaskId).filter(id => id))];
           
           const taskStatusMap = {};
+          // Task statülerini topluca (paralel) Firestore'dan çekiyoruz
           await Promise.all(taskIds.map(async (id) => {
             const taskData = await getDocFromDb("tasks", id);
             if (taskData) taskStatusMap[id] = taskData.status;
           }));
 
           if (activeTab === 'reminders') {
+            // HATIRLATMALAR: Veritabanındaki teknik statü "awaiting_client_approval"
             notificationsData = sentNotifications.filter(n => {
-              const taskStatus = taskStatusMap[n.relatedRecordId];
-              return taskStatus === "Müvekkil Onayı Bekliyor";
+              const tId = n.dependentTaskId;
+              const taskStatus = taskStatusMap[tId];
+              // 🔥 Metni "awaiting_client_approval" olarak güncelledik:
+              return tId && taskStatus === "awaiting_client_approval";
             });
           } else {
+            // GÖNDERİLENLER: Statü "awaiting_client_approval" DEĞİLSE veya iş yoksa
             notificationsData = sentNotifications.filter(n => {
-              const taskStatus = taskStatusMap[n.relatedRecordId];
-              return taskStatus !== "Müvekkil Onayı Bekliyor";
+              const tId = n.dependentTaskId;
+              const taskStatus = taskStatusMap[tId];
+              return !tId || taskStatus !== "awaiting_client_approval";
             });
           }
         }
 
+        // Tabloyu ve Pagination'ı güncelle
         const emptyMsgs = {
           'pending': 'Bekleyen bildirim bulunamadı.',
           'reminders': 'Hatırlatılacak (onay bekleyen) bildirim bulunamadı.',
@@ -1067,7 +1077,7 @@ window.switchTab = async function(tabName) {
         console.error("Filtreleme hatası:", err);
         tableBody.innerHTML = `<tr><td colspan="11" class="no-records">Veriler işlenirken hata oluştu.</td></tr>`;
       } finally {
-        loader.style.display = "none";
+        if (loader) loader.style.display = "none";
       }
     }
 
