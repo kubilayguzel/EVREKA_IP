@@ -5,6 +5,7 @@ import { ipRecordsService, transactionTypeService, db, storage, waitForAuthUser,
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { STATUSES } from '../../utils.js';
+import '../simple-loading.js';
 
 export class PortfolioDetailManager {
     constructor() {
