@@ -1048,25 +1048,46 @@ const checkCacheAndToggleButtonStates = async () => {
         btnGenerateReportAndNotifyGlobal.disabled = true;
         return;
     }
+
+    // 🔥 Loading animasyonunu başlat
+    if (SimpleLoading) {
+        SimpleLoading.show({
+            text: 'Bülten Sorgulanıyor',
+            subtext: 'Önbellekteki veriler ve bülten detayları kontrol ediliyor...'
+        });
+    }
+
     try {
         const selectedOption = bulletinSelect.options[bulletinSelect.selectedIndex];
         const hasOriginalBulletin = selectedOption?.dataset?.hasOriginalBulletin === 'true';
+        
+        // Önbelleği kontrol et
         const snapshot = await getDocs(collection(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks'));
         const hasCache = snapshot.docs.some(doc => doc.data().results?.length > 0);
+
         if (hasCache) {
             await loadDataFromCache(bulletinKey);
             startSearchBtn.disabled = true;
             researchBtn.disabled = !hasOriginalBulletin;
             btnGenerateReportAndNotifyGlobal.disabled = allSimilarResults.length === 0;
+            
             const messageType = hasOriginalBulletin ? 'success' : 'warning';
-            const messageText = hasOriginalBulletin ? 'Bu bülten sistemde kayıtlı. Önbellekten sonuçlar yüklendi.' : 'Bu bülten sistemde kayıtlı değil. Sadece eski arama sonuçları gösterilmektedir.';
+            const messageText = hasOriginalBulletin ? 
+                'Bu bülten sistemde kayıtlı. Önbellekten sonuçlar yüklendi.' : 
+                'Bu bülten sistemde kayıtlı değil. Sadece eski arama sonuçları gösterilmektedir.';
+            
             infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`;
         } else {
+            // Önbellek yoksa sonuçları temizle
             startSearchBtn.disabled = !hasOriginalBulletin;
             researchBtn.disabled = true;
             btnGenerateReportAndNotifyGlobal.disabled = true;
+            
             const messageType = hasOriginalBulletin ? 'info' : 'error';
-            const messageText = hasOriginalBulletin ? 'Önbellekte veri bulunamadı. "Arama Başlat" butonuna tıklayarak arama yapabilirsiniz.' : 'Bu bülten sistemde kayıtlı değil ve arama sonucu da bulunamadı.';
+            const messageText = hasOriginalBulletin ? 
+                'Önbellekte veri bulunamadı. "Arama Başlat" butonuna tıklayarak arama yapabilirsiniz.' : 
+                'Bu bülten sistemde kayıtlı değil ve arama sonucu da bulunamadı.';
+                
             infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`;
             allSimilarResults = [];
             if (pagination) pagination.update(0);
@@ -1074,10 +1095,10 @@ const checkCacheAndToggleButtonStates = async () => {
         }
     } catch (error) {
         console.error('Cache check error:', error);
-        startSearchBtn.disabled = true;
-        researchBtn.disabled = true;
-        btnGenerateReportAndNotifyGlobal.disabled = true;
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Bülten bilgileri kontrol edilirken bir hata oluştu.</div>`;
+    } finally {
+        // 🔥 İşlem bittiğinde animasyonu kapat
+        if (SimpleLoading) SimpleLoading.hide();
     }
 };
 
