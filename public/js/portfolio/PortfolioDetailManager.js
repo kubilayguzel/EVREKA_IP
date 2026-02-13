@@ -167,21 +167,19 @@ export class PortfolioDetailManager {
             <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
             <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
             <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
-            
             <div class="kv-item"><div class="label">Yenileme Tarihi</div><div class="value">${this.formatDate(r.renewalDate)}</div></div>
             
             ${(!isTP) ? `
-                ${r.country ? `
-                    <div class="kv-item">
+                <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
+                    <div class="kv-item" style="border:none; padding:0;">
                         <div class="label">Ülke</div>
-                        <div class="value" id="heroCountryName">${r.country}</div>
-                    </div>` : ''}
-                
-                ${r.origin ? `
-                    <div class="kv-item">
+                        <div class="value" id="heroCountryName">${r.country || '-'}</div>
+                    </div>
+                    <div class="kv-item" style="border:none; padding:0;">
                         <div class="label">Orijin</div>
-                        <div class="value">${r.origin}</div>
-                    </div>` : ''}
+                        <div class="value">${r.origin || '-'}</div>
+                    </div>
+                </div>
             ` : ''}
 
             <div class="kv-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
