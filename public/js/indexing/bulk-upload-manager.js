@@ -264,11 +264,17 @@ export class BulkIndexingModule {
 
     activateTab(tabName) {
         this.activeTab = tabName;
-        // Tab değişince form kontrolü yap (buton durumu için)
         this.checkFormCompleteness();
-    }
 
-    // public/js/indexing/bulk-upload-manager.js içindeki mevcut searchRecords fonksiyonunu silip bunu yapıştırın:
+        // 🔥 ETEBS Tebligatları sekmesine geçildiğinde loader ile veriyi tazele
+        if (tabName === 'etebs-notifications-pane') {
+            // ETEBSManager nesnesine window üzerinden ulaşıyoruz (etebs-module.js tarafından set edilir)
+            if (window.etebsManager) {
+                // loadAndProcessDocuments metodu SimpleLoadingController'ı otomatik kullanır
+                window.etebsManager.loadAndProcessDocuments(false);
+            }
+        }
+    }
 
     async searchRecords(query, tabContext) {
         const containerId = 'searchResultsContainerManual';
@@ -709,75 +715,108 @@ export class BulkIndexingModule {
         this.processFiles(files);
     }
 
+    // public/js/indexing/bulk-upload-manager.js
+
     async processFiles(files) {
+        // 1. Önce verileri yükle (eğer boşsa)
         if (this.allRecords.length === 0) await this.loadAllData();
-        showNotification(`${files.length} PDF dosyası işleniyor...`, 'info');
         
-        for (const file of files) {
-            await this.uploadFileToFirebase(file);
+        // 2. 🚀 LOADER'I DERHAL GÖSTER
+        if (window.SimpleLoadingController) {
+            window.SimpleLoadingController.show({
+                text: 'Dosyalar Yükleniyor',
+                subtext: `${files.length} adet PDF hazırlanıyor, lütfen beklemeye devam edin...`
+            });
         }
-        
-        const fileInput = document.getElementById('bulkFiles');
-        if (fileInput) fileInput.value = '';
+
+        // 🔥 KRİTİK: Tarayıcının loader'ı ekrana basması için 250ms bekleme (Paint Delay)
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        try {
+            for (const file of files) {
+                // Yükleme durumunu loader metninde anlık güncelle
+                if (window.SimpleLoadingController) {
+                    window.SimpleLoadingController.updateText('Dosyalar Yükleniyor', `${file.name} aktarılıyor...`);
+                }
+                await this.uploadFileToFirebase(file);
+            }
+            
+            if (window.SimpleLoadingController) {
+                window.SimpleLoadingController.showSuccess(`${files.length} dosya başarıyla yüklendi.`);
+            }
+
+            // --- 🔄 DOĞRU SEKME İLE YENİLE ---
+            setTimeout(() => {
+                window.location.href = 'bulk-indexing-page.html?tab=bulk';
+            }, 1500);
+
+        } catch (error) {
+            console.error("Yükleme hatası:", error);
+            if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+            showNotification('Yükleme sırasında bir hata oluştu.', 'error');
+        }
     }
 
-    // ETEBS / Bulk için Upload (Collection'a kayıt atar)
     async uploadFileToFirebase(file) {
+        // Mükerrer tetiklenmeyi engellemek için kontrol
+        if (file._isProcessing) return;
+        file._isProcessing = true;
+
         try {
-            const storageRef = ref(firebaseServices.storage, `pdfs/${this.currentUser.uid}/${file.name}`);
+            const id = generateUUID();
+            const timestamp = Date.now();
+            // Manuel yüklemeleri ayrı bir klasöre alıyoruz
+            const storagePath = `manual_uploads/${this.currentUser.uid}/${timestamp}_${file.name}`;
+            const storageRef = ref(firebaseServices.storage, storagePath);
             const uploadTask = uploadBytesResumable(storageRef, file);
             
             return new Promise((resolve, reject) => {
-                uploadTask.on('state_changed', 
-                    (snapshot) => {},
-                    (error) => reject(error),
-                    async () => {
-                        try {
-                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                            
-                            const extractedAppNumber = this.parser.extractApplicationNumber(file.name);
-                            let matchedRecordId = null;
-                            let matchedRecordDisplay = null;
-                            let recordOwnerType = 'self';
+                uploadTask.on('state_changed', null, (error) => reject(error), async () => {
+                    try {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        const extractedAppNumber = this.parser.extractApplicationNumber(file.name);
+                        
+                        let matchedRecordId = null;
+                        let matchedRecordDisplay = null;
+                        let recordOwnerType = 'self';
 
-                            if (extractedAppNumber) {
-                                const matchResult = this.matcher.findMatch(extractedAppNumber, this.allRecords);
-                                if (matchResult) {
-                                    matchedRecordId = matchResult.record.id;
-                                    matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record) + ` - ${matchResult.record.title}`;
-                                    recordOwnerType = matchResult.record.recordOwnerType || 'self';
-                                }
+                        if (extractedAppNumber) {
+                            const matchResult = this.matcher.findMatch(extractedAppNumber, this.allRecords);
+                            if (matchResult) {
+                                matchedRecordId = matchResult.record.id;
+                                matchedRecordDisplay = this.matcher.getDisplayLabel(matchResult.record) + ` - ${matchResult.record.title}`;
+                                recordOwnerType = matchResult.record.recordOwnerType || 'self';
                             }
-                            
-                            const pdfData = {
-                                fileName: file.name,
-                                fileUrl: downloadURL,
-                                fileSize: file.size,
-                                uploadedAt: new Date(),
-                                userId: this.currentUser.uid,
-                                status: 'pending',
-                                extractedAppNumber: extractedAppNumber,
-                                matchedRecordId: matchedRecordId,
-                                matchedRecordDisplay: matchedRecordDisplay,
-                                recordOwnerType: recordOwnerType
-                            };
-                            
-                            await setDoc(doc(collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION), generateUUID()), pdfData);
-                            resolve(pdfData);
-                        } catch (error) {
-                            reject(error);
                         }
-                    }
-                );
+                        
+                        const pdfData = {
+                            fileName: file.name,
+                            fileUrl: downloadURL,
+                            filePath: storagePath,
+                            fileSize: file.size,
+                            uploadedAt: new Date(),
+                            userId: this.currentUser.uid,
+                            status: 'pending',
+                            source: 'manual', // 🔥 Kaynak 'manual' olarak set edildi
+                            isEtebs: false,
+                            extractedAppNumber: extractedAppNumber || null,
+                            matchedRecordId: matchedRecordId,
+                            matchedRecordDisplay: matchedRecordDisplay,
+                            recordOwnerType: recordOwnerType
+                        };
+                        
+                        await setDoc(doc(collection(firebaseServices.db, UNINDEXED_PDFS_COLLECTION), id), pdfData);
+                        resolve(pdfData);
+                    } catch (error) { reject(error); }
+                });
             });
-        } catch (error) {
-            console.error(error);
+        } catch (error) { 
+            console.error(error); 
+            throw error;
         }
     }
 
-    // public/js/indexing/bulk-upload-manager.js içindeki fonksiyon
-
-setupRealtimeListener() {
+    setupRealtimeListener() {
     if (!this.currentUser) return;
     
     console.log("📡 Firestore dinleyicisi kuruluyor...");
