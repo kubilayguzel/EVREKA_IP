@@ -296,56 +296,42 @@ function highlightActiveMenu(currentPage) {
     }
 }
 
-// Bildirim sayıları (Firebase yüklendikten sonra çağrılır)
+// public/js/layout-loader.js içindeki setupMenuBadges fonksiyonu
+
 function setupMenuBadges(db, collection, query, where, onSnapshot, userId) {
     try {
-        // 1. Tetiklenen Görevler (Mevcut - Müvekkil Onayı Bekleyenler)
+        // 1. Tetiklenen Görevler (Mevcut mantık)
         const tasksQuery = query(collection(db, "tasks"), where("status", "==", "awaiting_client_approval"));
         onSnapshot(tasksQuery, (snapshot) => updateBadgeUI('triggered-tasks', snapshot.size), (e) => console.error(e));
-        
-        // 2. Müvekkil Bildirimleri (Mevcut)
+
+        // 2. Müvekkil Bildirimleri (Mevcut mantık)
         const notificationsQuery = query(collection(db, "mail_notifications"), where("status", "in", ["awaiting_client_approval", "missing_info", "evaluation_pending"]));
         onSnapshot(notificationsQuery, (snapshot) => updateBadgeUI('client-notifications', snapshot.size), (e) => console.error(e));
 
-        // 3. [YENİ] İşlerim (My Tasks) Badge'i
+        // 3. 🔥 GÜNCELLENEN: İşlerim (My Tasks) Badge'i
+        // "Aktif İşler" sekmesiyle %100 uyumlu filtre
         if (userId) {
-        const myTasksQuery = query(
-            collection(db, "tasks"),
-            where("assignedTo_uid", "==", userId)
-        );
+            const myTasksQuery = query(
+                collection(db, "tasks"),
+                where("assignedTo_uid", "==", userId)
+            );
 
-        onSnapshot(myTasksQuery, (snapshot) => {
-            const FINISHED = new Set([
-            "completed",
-            "cancelled",
-            "client_approval_closed",
-            "client_no_response_closed",
-            ]);
+            onSnapshot(myTasksQuery, (snapshot) => {
+                // Filtre: Status 'completed' (Tamamlandı) veya 'cancelled' (İptal) DEĞİLSE say
+                const activeTasksCount = snapshot.docs.filter(doc => {
+                    const status = doc.data().status;
+                    return status !== 'completed' && status !== 'cancelled';
+                }).length;
 
-            const activeCount = snapshot.docs.filter((docSnap) => {
-            const raw = docSnap.data()?.status;
-            const s = String(raw ?? "").trim().toLowerCase();
-
-            // status boşsa: aktif kabul et
-            if (!s) return true;
-
-            // net bitmiş statüler
-            if (FINISHED.has(s)) return false;
-
-            // legacy/türkçe/serbest metin kapanma durumları
-            if (s.includes("kapatıldı")) return false;
-            if (s.includes("kapandı")) return false;
-            if (s.includes("tamamlandı")) return false;
-
-            return true;
-            }).length;
-
-            updateBadgeUI("my-tasks", activeCount);
-        });
+                updateBadgeUI('my-tasks', activeTasksCount);
+                console.log(`📊 Sidebar Sayaç: ${activeTasksCount} aktif iş (Aktif İşler sekmesiyle eşit)`);
+            }, (err) => console.error("My Tasks Badge Error:", err));
         }
 
-            } catch (e) { console.error("Badge setup error:", e); }
-        }
+    } catch (e) {
+        console.error("Badge setup error:", e);
+    }
+}
 
 function updateBadgeUI(menuId, count) {
     const badgeEl = document.getElementById(`badge-${menuId}`);
