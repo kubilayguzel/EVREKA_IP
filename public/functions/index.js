@@ -941,7 +941,7 @@ export const createObjectionTask = onCall(
 export const sendEmailNotificationV2 = onCall(
   { 
     region: "europe-west1",
-    memory: "216MiB", // <--- BU SATIRI EKLEYİN (Varsayılan 256MB yetersiz kalıyor)
+    memory: "512MiB", // <--- BU SATIRI EKLEYİN (Varsayılan 256MB yetersiz kalıyor)
     timeoutSeconds: 120 // (Tavsiye) Büyük dosyalar için zaman aşımı süresini de artırabilirsiniz
   },
   async (request) => {
@@ -1212,7 +1212,7 @@ export const sendEmailNotificationV2 = onCall(
         });
       } catch (logErr) { console.error("Log hatası:", logErr); }
 
-      // Notification Durum
+      // Notification Durum (GÜNCELLENDİ: Undefined hatası giderildi)
       const baseUpdate = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         sentBy: userEmail,
@@ -1220,9 +1220,14 @@ export const sendEmailNotificationV2 = onCall(
         gmailMessageId: sent?.id || null, 
         messageId: newMessageId, 
         gmailThreadId: sent?.threadId || null,
-        status: isReminder ? notificationData.status : "sent", 
-        sentAt: isReminder ? undefined : admin.firestore.FieldValue.serverTimestamp()
+        status: isReminder ? (notificationData.status || "sent") : "sent"
       };
+
+      // 🔥 KRİTİK DÜZELTME: Firestore undefined kabul etmez. 
+      // Sadece hatırlatma değilse (ilk gönderimse) sentAt alanını ekliyoruz.
+      if (!isReminder) {
+          baseUpdate.sentAt = admin.firestore.FieldValue.serverTimestamp();
+      }
 
       if (recordId && !notificationData.relatedIpRecordId) {
           baseUpdate.relatedIpRecordId = recordId;
@@ -1233,6 +1238,7 @@ export const sendEmailNotificationV2 = onCall(
           baseUpdate.lastReminderBy = userEmail;
       }
 
+      // Güncellemeyi yap
       await notificationRef.update(baseUpdate);
 
       return { success: true, message: "E-posta gönderildi.", id: sent?.id || null };
