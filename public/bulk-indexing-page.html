@@ -152,6 +152,50 @@
         white-space: nowrap;    /* satır kırma olmasın */
         }
 
+        
+
+        /* 1. LAYOUT FIX */
+    body { overflow-x: hidden; background-color: #f8f9fa; }
+
+    /* 2. ANA TAB NAVİGASYONU (Sadeleştirilmiş) */
+    .tab-navigation { display: flex; gap: 10px; margin-bottom: 25px; }
+    .nav-btn {
+        background: #fff; border: 1px solid #dee2e6;
+        padding: 10px 20px; border-radius: 8px; color: #495057;
+        font-weight: 600; cursor: pointer; transition: all 0.2s;
+        flex: 1; text-align: center;
+    }
+    .nav-btn.active { background: #1e3c72; color: #fff; border-color: #1e3c72; }
+
+    /* 3. DOSYA LİSTESİ TASARIMI (Eski haline dönüş) */
+    .pdf-list-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 15px; border: 1px solid #e9ecef; border-radius: 8px;
+        background: white; margin-bottom: 8px;
+    }
+    .pdf-list-item.matched { border-left: 4px solid #28a745; }
+    .pdf-list-item.unmatched { border-left: 4px solid #dc3545; }
+    
+    .pdf-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; }
+    .pdf-meta { font-size: 0.8rem; color: #6c757d; }
+
+    /* 4. BUTONLARIN GÖRÜNÜMÜ (Fix) */
+    .pdf-actions { display: flex; gap: 5px; }
+    .pdf-action-btn {
+        width: 32px; height: 32px; border-radius: 6px;
+        border: 1px solid #dee2e6; background: #fff;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: #1e3c72; transition: 0.2s;
+    }
+    .pdf-action-btn:hover { background: #f8f9fa; border-color: #ced4da; }
+    .pdf-action-danger { color: #dc3545; }
+
+    /* PANE YÖNETİMİ */
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .notification-tab-pane { display: none !important; }
+    .notification-tab-pane.active { display: block !important; }
+
     </style>
 </head>
 <body>
@@ -410,88 +454,89 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+    import { loadSharedLayout } from './js/layout-loader.js';
+    import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
+    import { ETEBSManager } from './js/etebs-module.js';
+    import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
+    // 🔥 Loader modülünü burada import ederek her zaman erişilebilir kılıyoruz
+    import './js/simple-loading.js'; 
 
-    <script type="module">
-        import { loadSharedLayout } from './js/layout-loader.js';
-        import { BulkIndexingModule } from './js/indexing/bulk-upload-manager.js';
-        import { ETEBSManager } from './js/etebs-module.js';
-        import { EpatsUiManager } from './js/indexing/epats-ui-manager.js';
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
+        // 1. Modülleri Başlat
+        window.etebsManager = new ETEBSManager();
+        window.epatsUiManager = new EpatsUiManager();
+        window.indexingModule = new BulkIndexingModule();
 
-            // Global modülleri başlat
-            window.etebsManager = new ETEBSManager();
-            window.epatsUiManager = new EpatsUiManager();
+        // 2. URL Parametresi Kontrolü (Yükleme veya ETEBS Sorgusu Sonrası)
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialTab = urlParams.get('tab'); 
+        
+        const navBtns = document.querySelectorAll('.nav-btn.tab-btn');
+        const panes = document.querySelectorAll('.tab-pane');
 
-            // ✅ Manuel işlemdeki kayıt araması ve "Manuel İşlemi Kaydet" akışı bu modülde.
-            window.indexingModule = new BulkIndexingModule();
-
-            // 1. Ana Tab Geçişleri
-
-            const navBtns = document.querySelectorAll('.nav-btn.tab-btn');
-            const panes = document.querySelectorAll('.tab-pane');
+        // Eğer URL'de tab=bulk varsa ETEBS sekmesini aktif et
+        if (initialTab === 'bulk') {
+            // Mevcut aktifleri temizle
+            navBtns.forEach(b => b.classList.remove('active'));
+            panes.forEach(p => p.classList.remove('active'));
             
-            navBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const target = btn.getAttribute('data-tab');
-                    
-                    // Görsel Sınıf Değişimleri
-                    navBtns.forEach(b => b.classList.remove('active'));
-                    panes.forEach(p => p.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.getElementById(target).classList.add('active');
-
-                    // ✅ EKLENECEK KISIM: ETEBS Sekmesine Tıklanırsa Listeyi Getir
-                    if (target === 'bulk-indexing-pane') {
-                        console.log("📂 ETEBS Sekmesi açıldı, veriler yükleniyor...");
-                        if (window.etebsManager) {
-                            // true = sessiz mod (loading spinner göstermeden, veritabanından okur)
-                            window.etebsManager.fetchNotifications(true, false);
-                        }
-                    }
-                });
-            });
-
-            // 2. ETEBS Modu (Token / Upload)
-            const modeBtns = document.querySelectorAll('.mode-btn');
-            const etebsContent = document.getElementById('etebs-content');
-            const uploadContent = document.getElementById('upload-content');
+            const bulkTabBtn = document.querySelector('[data-tab="bulk-indexing-pane"]');
+            const bulkPane = document.getElementById('bulk-indexing-pane');
             
-            modeBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    modeBtns.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const mode = btn.getAttribute('data-mode');
-                    
-                    if (mode === 'etebs') {
-                        etebsContent.style.display = 'block';
-                        uploadContent.style.display = 'none';
-                        // NotificationsSection'ı gizleme komutunu kaldırdık.
-                    } else {
-                        etebsContent.style.display = 'none';
-                        uploadContent.style.display = 'block';
-                        // Upload modunda da liste görünür kalacak.
-                    }
-                });
-            });
+            if (bulkTabBtn && bulkPane) {
+                bulkTabBtn.classList.add('active');
+                bulkPane.classList.add('active');
+                
+                // 🔥 Verileri LOADER İLE çek (false = sessiz mod kapalı)
+                // Sayfa yenilendiğinde kullanıcı verilerin yüklendiğini görsün.
+                if (window.etebsManager) {
+                    console.log("🔄 Sayfa yenilendi, ETEBS listesi loader ile tazeleniyor...");
+                    window.etebsManager.fetchNotifications(false, false);
+                }
+            }
+        }
 
-            // 3. Dosya Listesi Tabları
-            const fileTabBtns = document.querySelectorAll('.file-tab-btn');
-            const fileTabPanes = document.querySelectorAll('.file-tab-pane');
-            fileTabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const target = btn.getAttribute('data-target');
-                    fileTabBtns.forEach(b => b.classList.remove('active'));
-                    fileTabPanes.forEach(p => p.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.getElementById(target).classList.add('active');
-                });
-            });
+        // 3. Manuel Sekme Geçiş Dinleyicileri
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-tab');
+                
+                navBtns.forEach(b => b.classList.remove('active'));
+                panes.forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(target).classList.add('active');
 
+                // 🔥 ETEBS Sekmesine tıklandığında listeyi LOADER İLE tazele
+                if (target === 'bulk-indexing-pane' && window.etebsManager) {
+                    window.etebsManager.fetchNotifications(false, false); 
+                }
+            });
         });
-    </script>
+
+        // 4. ETEBS Modu (Token / Manuel Upload Butonları)
+        const modeBtns = document.querySelectorAll('.mode-btn');
+        const etebsContent = document.getElementById('etebs-content');
+        const uploadContent = document.getElementById('upload-content');
+        
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const mode = btn.getAttribute('data-mode');
+                
+                if (mode === 'etebs') {
+                    etebsContent.style.display = 'block';
+                    uploadContent.style.display = 'none';
+                } else {
+                    etebsContent.style.display = 'none';
+                    uploadContent.style.display = 'block';
+                }
+            });
+        });
+    });
+</script>
 </body>
 </html>
