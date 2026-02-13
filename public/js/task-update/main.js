@@ -67,52 +67,51 @@ class TaskUpdateController {
         this.setupRenewalModalEvents();
     }
 
-    async extractEpatsInfoFromFile(file) {
-        try {
-            // ARTIK KONTROLE GEREK YOK, IMPORT ETTİK
-            const arrayBuffer = await file.arrayBuffer();
-            
-            // window.pdfjsLib yerine direkt pdfjsLib kullanıyoruz
-            const loadingTask = pdfjsLib.getDocument(arrayBuffer);
-            const pdf = await loadingTask.promise;
+    // public/js/task-update/main.js içindeki metodun güncel hali
 
-            let fullText = '';
-            // Performans için ilk 2 sayfa yeterli
-            const maxPages = Math.min(pdf.numPages, 2);
-            for (let i = 1; i <= maxPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                const strings = content.items.map(item => item.str);
-                fullText += strings.join(' ') + '\n';
-            }
+async extractEpatsInfoFromFile(file) {
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+        const pdf = await loadingTask.promise;
 
-            // --- REGEX İLE VERİ AYIKLAMA ---
-            let evrakNo = null;
-            const standardMatch = fullText.match(/\b(\d{4}-[A-Z]{2,}-\d+)\b/); // Örn: 2024-GE-123456
-            const labeledMatch = fullText.match(/Evrak\s*No\s*[:]\s*([\w-]+)/i);
-
-            if (standardMatch) evrakNo = standardMatch[1];
-            else if (labeledMatch) evrakNo = labeledMatch[1];
-
-            let documentDate = null;
-            const dateLabelMatch = fullText.match(/(?:Evrak\s*)?Tarih(?:i)?\s*[:]\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i);
-            
-            if (dateLabelMatch) {
-                documentDate = this.parseDate(dateLabelMatch[1]);
-            } else {
-                const allDates = fullText.match(/(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/);
-                if (allDates) {
-                    documentDate = this.parseDate(allDates[0]);
-                }
-            }
-
-            return { evrakNo, documentDate };
-
-        } catch (e) {
-            console.error("PDF okuma hatası:", e);
-            return null;
+        let fullText = '';
+        const maxPages = Math.min(pdf.numPages, 2);
+        for (let i = 1; i <= maxPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const strings = content.items.map(item => item.str);
+            fullText += strings.join(' ') + '\n';
         }
+
+        // --- GÜNCELLENMİŞ REGEX MANTIĞI ---
+        
+        // 1. Evrak No: Önünde "İtirazın" kelimesi olmayan "Evrak Numarası" veya "Evrak No"yu bulur.
+        // Bu sayede "Karşı Görüş Sunulan İtirazın Evrak Numarası" alanını atlar.
+        let evrakNo = null;
+        const evrakNoRegex = /(?<!İtirazın\s)Evrak\s+(?:No|Numarası)\s*["\s,:]+([\w-]+)/i;
+        const evrakNoMatch = fullText.match(evrakNoRegex);
+        
+        if (evrakNoMatch) {
+            evrakNo = evrakNoMatch[1].trim();
+        }
+
+        // 2. Evrak Tarihi: "Evrak Tarihi" veya "Tarih" etiketinden sonraki tarihi yakalar.
+        let documentDate = null;
+        const dateRegex = /(?:Evrak\s+)?Tarih(?:i)?\s*["\s,:]+(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i;
+        const dateMatch = fullText.match(dateRegex);
+        
+        if (dateMatch) {
+            documentDate = this.parseDate(dateMatch[1]);
+        }
+
+        return { evrakNo, documentDate };
+
+    } catch (e) {
+        console.error("PDF okuma hatası:", e);
+        return null;
     }
+}
 
     // Yardımcı: DD.MM.YYYY formatını YYYY-MM-DD (HTML input formatı) yapar
     parseDate(dateStr) {
