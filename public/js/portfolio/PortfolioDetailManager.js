@@ -1,8 +1,9 @@
 // public/js/portfolio/PortfolioDetailManager.js
 import { TransactionHelper } from './TransactionHelper.js';
 import { loadSharedLayout } from '../layout-loader.js';
-import { ipRecordsService, transactionTypeService, db, storage, waitForAuthUser } from '../../firebase-config.js';
+import { ipRecordsService, transactionTypeService, db, storage, waitForAuthUser, redirectOnLogout } from '../../firebase-config.js';
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { STATUSES } from '../../utils.js';
 
 export class PortfolioDetailManager {
@@ -12,11 +13,8 @@ export class PortfolioDetailManager {
         this.transactionTypesMap = new Map();
         this.countriesMap = new Map();
         
-        // SimpleLoading Panelini Hazırla
-        this.simpleLoader = null;
-        if (window.SimpleLoading) {
-            this.simpleLoader = new window.SimpleLoading();
-        }
+        // SimpleLoading Panelini Singleton üzerinden yakala
+        this.loader = window.SimpleLoadingController || (window.SimpleLoading ? new window.SimpleLoading() : null);
 
         this.initElements();
         this.init();
@@ -31,20 +29,23 @@ export class PortfolioDetailManager {
             goodsContainer: document.getElementById('goodsContainer'),
             txAccordion: document.getElementById('txAccordion'),
             docsTbody: document.getElementById('documentsTbody'),
+            addDocForm: document.getElementById('addDocForm'),
             applicantName: document.getElementById('applicantName'),
             applicantAddress: document.getElementById('applicantAddress'),
             tpQueryBtn: document.getElementById('tpQueryBtn'),
-            loading: document.getElementById('loading'),
+            loadingStatic: document.getElementById('loading'), // "Yükleniyor..." yazan div
             detailRoot: document.getElementById('detail-root')
         };
     }
 
     async init() {
         try {
+            // Önce statik loading yazısını gizle ve profesyonel loader'ı aç
             this.toggleLoading(true);
             
-            // 1. Auth ve Paralel Veri Çekme (Hız için)
             await waitForAuthUser(); 
+
+            // HIZLI YÜKLEME: Kayıt, Ülkeler ve İşlem Tiplerini paralel çek
             const [recordSnap, countriesSnap, txTypesRes] = await Promise.all([
                 getDoc(doc(db, "ipRecords", this.recordId)),
                 getDoc(doc(db, 'common', 'countries')),
@@ -53,25 +54,28 @@ export class PortfolioDetailManager {
 
             if (!recordSnap.exists()) throw new Error("Kayıt bulunamadı.");
 
-            // 2. Lookup Haritalarını Doldur
+            // Ülke ve İşlem Tipi haritalarını doldur
             if (countriesSnap.exists()) {
                 countriesSnap.data().list?.forEach(c => this.countriesMap.set(String(c.id || c.code), c.name));
             }
-            if (txTypesRes.success) {
-                txTypesRes.data.forEach(t => this.transactionTypesMap.set(String(t.id), t));
+            if (txTypesRes.success && Array.isArray(txTypesRes.data)) {
+                txTypesRes.data.forEach(t => {
+                    this.transactionTypesMap.set(String(t.id), t.alias || t.name);
+                    if (t.code) this.transactionTypesMap.set(String(t.code), t.alias || t.name);
+                });
             }
 
             this.currentRecord = { id: recordSnap.id, ...recordSnap.data() };
             
-            // 3. UI Parçalarını Render Et
+            // Tüm render işlemlerini başlat
             await this.renderAll();
 
-            if (typeof loadSharedLayout === 'function') {
-                loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-            }
+            if (typeof loadSharedLayout === 'function') loadSharedLayout();
+            this.setupEventListeners();
+            redirectOnLogout();
 
         } catch (e) {
-            console.error("❌ Hata:", e);
+            console.error("❌ Başlatma hatası:", e);
             this.showError(e.message);
         } finally {
             this.toggleLoading(false);
@@ -81,41 +85,41 @@ export class PortfolioDetailManager {
     async renderAll() {
         this.renderHero();
         this.renderGoodsList();
-        await this.renderTransactions();
         this.renderDocuments();
-        await this.renderApplicants();
+        // Ağır işleri arka planda tamamla (Eski koddaki gibi)
+        this.renderApplicants().catch(e => console.warn(e));
+        this.renderTransactions().catch(e => console.warn(e));
     }
 
     renderHero() {
         const r = this.currentRecord;
         if (!r) return;
 
-        // Marka Başlığı ve Kart Görünürlüğü
-        if (this.elements.heroTitle) this.elements.heroTitle.textContent = r.trademarkName || r.brandText || r.title || '-';
+        this.elements.heroTitle.textContent = r.trademarkName || r.brandText || r.title || '-';
+        
+        // Marka örneği olmasa da kart her zaman görünür (İstediğiniz güncelleme)
         if (this.elements.heroCard) {
             this.elements.heroCard.classList.remove('d-none');
-            this.elements.heroCard.style.display = 'flex'; // Görsel olmasa da kart her zaman görünür
+            this.elements.heroCard.style.display = 'flex';
         }
 
-        // Görsel Kontrolü
         const imgSrc = r.brandImageUrl || r.brandImage || r.details?.brandInfo?.brandImage;
         const imgWrap = this.elements.brandImage?.closest('.hero-img-wrap');
         if (imgSrc && this.elements.brandImage) {
             this.elements.brandImage.src = imgSrc;
             if (imgWrap) imgWrap.style.display = 'block';
         } else {
-            if (imgWrap) imgWrap.style.display = 'none'; // Görsel yoksa alanı kapat, metinler genişlesin
+            if (imgWrap) imgWrap.style.display = 'none'; // Görsel yoksa alanı kapat, bilgiler genişlesin
         }
 
-        // Sınıf Numaraları (Hero Kartı için)
+        const isTP = this.checkIfTurkPatentOrigin(r);
+        const countryName = this.countriesMap.get(String(r.country)) || r.country || '-';
+        const regNo = r.registrationNumber || r.internationalRegNumber || r.wipoIrNumber || '-';
+
+        // Sınıf metni
         const gsbc = r.goodsAndServicesByClass;
         let classList = Array.isArray(gsbc) ? gsbc : (gsbc ? Object.values(gsbc) : []);
         let classesStr = classList.length > 0 ? classList.map(c => c.classNo).join(', ') : (r.classes || '-');
-
-        // Ülke ve Orijin Kontrolü
-        const isTP = String(r.origin || '').toUpperCase().includes('TÜRKPATENT');
-        const countryName = this.countriesMap.get(String(r.country)) || r.country || '-';
-        const regNo = r.registrationNumber || r.internationalRegNumber || r.wipoIrNumber || '-';
 
         if (this.elements.heroKv) {
             this.elements.heroKv.innerHTML = `
@@ -139,71 +143,45 @@ export class PortfolioDetailManager {
             `;
         }
 
-        // TÜRKPATENT Sorgula Butonu İşlevi
         if (this.elements.tpQueryBtn) {
             this.elements.tpQueryBtn.style.display = isTP ? 'inline-block' : 'none';
-            this.elements.tpQueryBtn.onclick = () => {
-                const appNo = r.applicationNumber;
-                if (!appNo) return alert('Başvuru numarası bulunamadı.');
-                window.open(`https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`, '_blank');
-            };
         }
     }
 
     renderGoodsList() {
         const container = this.elements.goodsContainer;
         if (!container) return;
-
         const gsbc = this.currentRecord.goodsAndServicesByClass;
         let arr = Array.isArray(gsbc) ? gsbc : (gsbc ? Object.values(gsbc) : []);
+        if (arr.length === 0) { container.innerHTML = '<div class="text-muted p-3">Eşya listesi yok.</div>'; return; }
 
-        if (arr.length === 0) {
-            container.innerHTML = '<div class="text-muted p-3">Eşya listesi bulunmuyor.</div>';
-            return;
-        }
-
-        container.innerHTML = arr.sort((a,b) => Number(a.classNo) - Number(b.classNo))
-            .map(entry => {
-                const listHtml = this.formatNiceClassContent(entry.classNo, entry.items || [entry.goodsText || '-']);
-                return `
-                <div class="goods-group border rounded p-3 mb-2 bg-white shadow-sm">
-                    <div class="font-weight-bold text-primary mb-2">Nice Sınıfı ${entry.classNo}</div>
-                    <ul class="pl-3 mb-0 small text-secondary" style="line-height: 1.6;">
-                        ${listHtml}
-                    </ul>
+        container.innerHTML = arr.sort((a,b) => Number(a.classNo) - Number(b.classNo)).map(entry => {
+            const listHtml = this.formatNiceClassContent(entry.classNo, entry.items || [entry.goodsText]);
+            return `
+                <div class="goods-group border rounded p-3 mb-2 bg-white">
+                    <div class="font-weight-bold text-primary mb-2">Nice ${entry.classNo}</div>
+                    <ul class="pl-3 mb-0 goods-items">${listHtml}</ul>
                 </div>`
-            }).join('');
+        }).join('');
     }
 
     formatNiceClassContent(classNo, items) {
         if (!items || !items.length) return '';
-        
-        // 🔥 35. Sınıf "satın alması için" Özel Biçimlendirmesi
         if (String(classNo) === '35') {
-            let html = '';
-            let isIndentedSection = false;
-            const triggerPhrase = "satın alması için";
-            const startPhrase = "müşterilerin malları";
-
+            let html = '', isIndentedSection = false;
+            const triggerPhrase = "satın alması için", startPhrase = "müşterilerin malları";
             items.forEach(t => {
-                const text = String(t || '');
-                const lowerText = text.toLowerCase();
-                
+                const text = String(t || ''), lowerText = text.toLowerCase();
                 if (!isIndentedSection && lowerText.includes(startPhrase) && lowerText.includes(triggerPhrase)) {
-                    const regex = new RegExp(`(${triggerPhrase})`, 'i');
-                    const match = text.match(regex);
+                    const match = text.match(new RegExp(`(${triggerPhrase})`, 'i'));
                     if (match) {
                         const splitIndex = match.index + match[1].length;
-                        const preText = text.substring(0, splitIndex);
-                        const postText = text.substring(splitIndex);
-                        html += `<li class="font-weight-bold mt-2" style="list-style:none;">${preText}</li>`;
-                        if (postText.trim().length > 0) html += `<li class="ml-4" style="list-style-type:circle;">${postText}</li>`;
-                        isIndentedSection = true;
-                        return;
+                        html += `<li class="font-weight-bold list-unstyled mt-2" style="list-style:none;">${text.substring(0, splitIndex)}</li>`;
+                        if (text.substring(splitIndex).trim()) html += `<li class="ml-4" style="list-style-type:circle;">${text.substring(splitIndex)}</li>`;
+                        isIndentedSection = true; return;
                     }
                 }
-                if (isIndentedSection) html += `<li class="ml-4" style="list-style-type:circle;">${text}</li>`;
-                else html += `<li>${text}</li>`;
+                html += isIndentedSection ? `<li class="ml-4" style="list-style-type:circle;">${text}</li>` : `<li>${text}</li>`;
             });
             return html;
         }
@@ -218,71 +196,127 @@ export class PortfolioDetailManager {
         const transactions = res.success ? res.transactions : [];
 
         if (transactions.length === 0) {
-            accordion.innerHTML = '<p class="p-3 text-muted">İşlem geçmişi bulunmuyor.</p>';
+            accordion.innerHTML = '<div class="p-3 text-muted">İşlem geçmişi bulunamadı.</div>';
             return;
         }
 
         const { parents, childrenMap } = TransactionHelper.organizeTransactions(transactions);
+        const enrichQueue = [];
 
         accordion.innerHTML = parents.map(parent => {
-            const typeInfo = this.transactionTypesMap.get(String(parent.type));
-            const typeName = typeInfo?.name || `İşlem ${parent.type}`;
+            const typeName = this.transactionTypesMap.get(String(parent.type)) || `İşlem ${parent.type}`;
             const children = childrenMap[parent.id] || [];
-            
-            // 🔥 PDF İkonu Kontrolü (Garantili)
-            const directDocs = TransactionHelper.getDirectDocuments ? TransactionHelper.getDirectDocuments(parent) : [];
-            const pdfUrl = parent.pdfUrl || parent.documentUrl || (directDocs.length > 0 ? directDocs[0].url : null);
+            const pId = this.safeDomId(`txdocs-${parent.id}`);
+
+            // Direkt PDF'leri bul
+            const pDirectDocs = TransactionHelper.getDirectDocuments(parent);
+            const pIcons = pDirectDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+
+            let pDocsHtml = pIcons || '';
+            if (parent.triggeringTaskId) {
+                pDocsHtml += `<span class="tx-docs-loading text-muted small ml-2"><i class="fas fa-spinner fa-spin"></i> PDF'ler...</span>`;
+                enrichQueue.push({ tx: parent, containerId: pId, hasAnyDirect: pDirectDocs.length > 0 });
+            }
+
+            const childrenHtml = children.length === 0 ? '' : `
+                <div class="accordion-transaction-children" style="display:none;">
+                    ${children.map(child => {
+                        const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
+                        const cId = this.safeDomId(`txdocs-${child.id}`);
+                        const cDirectDocs = TransactionHelper.getDirectDocuments(child);
+                        const cIcons = cDirectDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+                        
+                        let cDocsHtml = cIcons || '';
+                        if (child.triggeringTaskId) {
+                            cDocsHtml += `<span class="tx-docs-loading text-muted small ml-2"><i class="fas fa-spinner fa-spin"></i> PDF'ler...</span>`;
+                            enrichQueue.push({ tx: child, containerId: cId, hasAnyDirect: cDirectDocs.length > 0 });
+                        }
+
+                        return `
+                        <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
+                            <div><small class="text-muted">↳ ${cTypeName}</small><span class="text-muted ml-2 small">${this.formatDate(child.timestamp || child.date, true)}</span></div>
+                            <div id="${cId}">${cDocsHtml || '-'}</div>
+                        </div>`;
+                    }).join('')}
+                </div>`;
 
             return `
                 <div class="accordion-transaction-item border-bottom">
-                    <div class="accordion-transaction-header d-flex justify-content-between align-items-center p-3" style="cursor:pointer; background:#fff;">
+                    <div class="accordion-transaction-header d-flex justify-content-between align-items-center p-3" style="cursor:pointer; background: #fff;">
                         <div class="d-flex align-items-center">
-                            <i class="fas fa-chevron-right mr-2 text-muted transition-icon"></i>
+                            <i class="fas fa-chevron-right mr-2 text-muted transition-icon ${children.length ? 'has-child-indicator' : ''}"></i>
                             <div class="d-flex flex-column">
-                                <span class="font-weight-bold">${typeName}</span>
+                                <span class="font-weight-bold" data-tx-type="${parent.type}">${typeName}</span>
                                 <small class="text-muted">${this.formatDate(parent.timestamp || parent.date, true)}</small>
                             </div>
                         </div>
-                        <div class="d-flex align-items-center">
-                            ${pdfUrl ? `<i class="fas fa-file-pdf text-danger mx-3 fa-lg" style="cursor:pointer;" onclick="window.open('${pdfUrl}','_blank')"></i>` : ''}
-                            ${children.length ? `<span class="badge badge-light border">${children.length} alt</span>` : ''}
+                        <div class="d-flex align-items-center" id="${pId}">
+                            ${pDocsHtml || '-'}
+                            ${children.length ? `<span class="badge badge-light border ml-2">${children.length} alt</span>` : ''}
                         </div>
                     </div>
-                    <div class="accordion-transaction-children d-none bg-light">
-                        ${children.map(child => {
-                            const cPdf = child.pdfUrl || child.documentUrl;
-                            return `
-                            <div class="child-item d-flex justify-content-between p-2 ml-4 border-top">
-                                <small>↳ ${this.transactionTypesMap.get(String(child.type))?.name || child.type}</small>
-                                ${cPdf ? `<i class="fas fa-file-pdf text-danger" style="cursor:pointer;" onclick="window.open('${cPdf}','_blank')"></i>` : ''}
-                            </div>`;
-                        }).join('')}
-                    </div>
+                    ${childrenHtml}
                 </div>`;
         }).join('');
 
         this.setupAccordionEvents();
+        this.populateTaskDocsAsync(enrichQueue).catch(e => console.warn(e));
     }
 
+    safeDomId(raw) { return String(raw).replace(/[^a-zA-Z0-9_-]/g, '_'); }
+
+    async populateTaskDocsAsync(queue) {
+        if (!queue.length) return;
+        const worker = async (item) => {
+            const { tx, containerId, hasAnyDirect } = item;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const taskDocs = await TransactionHelper.getTaskDocuments(tx);
+            container.querySelector('.tx-docs-loading')?.remove();
+            if (!taskDocs || taskDocs.length === 0) {
+                if (!hasAnyDirect && container.innerText.trim() === '') container.innerHTML = '<span class="text-muted small">-</span>';
+                return;
+            }
+            const existing = new Set(Array.from(container.querySelectorAll('a')).map(a => a.getAttribute('href')));
+            const icons = taskDocs.filter(d => d?.url && !existing.has(d.url)).map((d, i) => this.createDocIcon(d, i === 0 && existing.size === 0)).join(' ');
+            if (icons) container.insertAdjacentHTML('beforeend', icons);
+        };
+        for (const item of queue) { await worker(item); }
+    }
+
+    createDocIcon(doc, isFirst) {
+        const color = (doc.source === 'task') ? 'text-info' : 'text-danger'; 
+        return `<a href="${doc.url}" target="_blank" class="mx-1 ${color}" title="${doc.name || 'Belge'}"><i class="fas fa-file-pdf fa-lg"></i></a>`;
+    }
+
+    toggleLoading(show) {
+        if (show) {
+            if (this.elements.loadingStatic) this.elements.loadingStatic.style.display = 'none'; 
+            if (this.elements.detailRoot) this.elements.detailRoot.classList.add('d-none');
+            if (this.loader) this.loader.show({ text: 'Yükleniyor', subtext: 'Kayıt detayları hazırlanıyor...' });
+        } else {
+            if (this.loader) this.loader.hide();
+            if (this.elements.detailRoot) this.elements.detailRoot.classList.remove('d-none');
+        }
+    }
+
+    // --- DİĞER METOTLAR (Orijinal ile aynı) ---
     async renderApplicants() {
         const r = this.currentRecord;
         if (!this.elements.applicantName) return;
         let names = [], addresses = [];
         if (Array.isArray(r.applicants) && r.applicants.length > 0) {
             const resolved = await Promise.all(r.applicants.map(async (app) => {
-                const personId = typeof app === 'string' ? app : (app.id || app.uid);
-                if (!personId) return { name: app.name || '-' };
+                const pId = typeof app === 'string' ? app : app.id;
+                if (!pId) return { name: app.name || '-' };
                 try {
-                    const snap = await getDoc(doc(db, 'persons', personId));
-                    if (snap.exists()) return { name: snap.data().name, address: snap.data().address };
-                } catch { }
-                return { name: app.name || '-' };
+                    const snap = await getDoc(doc(db, 'persons', pId));
+                    return snap.exists() ? { name: snap.data().name, address: snap.data().address } : { name: app.name || '-' };
+                } catch { return { name: app.name || '-' }; }
             }));
-            names = resolved.map(a => a.name);
-            addresses = resolved.map(a => a.address).filter(Boolean);
+            names = resolved.map(a => a.name); addresses = resolved.map(a => a.address).filter(Boolean);
         } else {
-            names = [r.applicantName || r.clientName || '-'];
-            addresses = [r.applicantAddress || '-'];
+            names = [r.applicantName || r.clientName || '-']; addresses = [r.applicantAddress || '-'];
         }
         this.elements.applicantName.innerHTML = names.join('<br>');
         if (this.elements.applicantAddress) this.elements.applicantAddress.innerHTML = addresses.join('<br>') || '-';
@@ -292,26 +326,21 @@ export class PortfolioDetailManager {
         const docs = this.currentRecord.documents || [];
         if (this.elements.docsTbody) {
             this.elements.docsTbody.innerHTML = docs.length ? docs.map(d => `
-                <tr>
-                    <td>${d.name}</td>
-                    <td>${d.documentDesignation || '-'}</td>
-                    <td>${this.formatDate(d.uploadedAt)}</td>
-                    <td class="text-right"><i class="fas fa-eye text-primary cursor-pointer" onclick="window.open('${d.url}','_blank')"></i></td>
-                </tr>`).join('') : '<tr><td colspan="4" class="text-center">Belge yok.</td></tr>';
+                <tr><td>${d.name}</td><td>${d.documentDesignation || '-'}</td><td>${this.formatDate(d.uploadedAt)}</td>
+                <td class="text-right"><i class="fas fa-eye text-primary cursor-pointer" onclick="window.open('${d.url}','_blank')"></i></td></tr>`).join('') : '<tr><td colspan="4" class="text-center">Belge yok.</td></tr>';
         }
     }
 
     setupAccordionEvents() {
         this.elements.txAccordion.querySelectorAll('.accordion-transaction-header').forEach(header => {
             header.onclick = (e) => {
-                if (e.target.closest('.fa-file-pdf')) return;
-                const item = header.closest('.accordion-transaction-item');
-                const children = item.querySelector('.accordion-transaction-children');
+                if (e.target.closest('a')) return;
+                const container = header.parentElement.querySelector('.accordion-transaction-children');
                 const icon = header.querySelector('.transition-icon');
-                if (children) {
-                    const isHidden = children.classList.contains('d-none');
-                    children.classList.toggle('d-none');
-                    if (icon) icon.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+                if (container) {
+                    const isVisible = container.style.display !== 'none';
+                    container.style.display = isVisible ? 'none' : 'block';
+                    if (icon) icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
                 }
             };
         });
@@ -331,23 +360,24 @@ export class PortfolioDetailManager {
         return found ? found.text : status;
     }
 
-    toggleLoading(show) {
-        if (show) {
-            if (this.elements.detailRoot) this.elements.detailRoot.classList.add('d-none');
-            if (this.simpleLoader) {
-                this.simpleLoader.show({ text: 'Yükleniyor', subtext: 'Portföy detayları hazırlanıyor...' });
-            }
-        } else {
-            if (this.simpleLoader) this.simpleLoader.hide();
-            if (this.elements.detailRoot) this.elements.detailRoot.classList.remove('d-none');
-        }
+    checkIfTurkPatentOrigin(rec) {
+        const c = [rec?.origin, rec?.source].map(s => (s||'').toUpperCase());
+        return c.some(s => s.includes('TURKPATENT') || s.includes('TÜRKPATENT'));
+    }
+
+    setupEventListeners() {
+        this.elements.tpQueryBtn?.addEventListener('click', () => {
+             const appNo = this.currentRecord.applicationNumber;
+             if(window.triggerTpQuery) window.triggerTpQuery(appNo);
+             else window.open(`https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`, '_blank');
+        });
     }
 
     showError(msg) {
-        if (this.simpleLoader) this.simpleLoader.hide();
-        if (this.elements.loading) {
-            this.elements.loading.style.display = 'block';
-            this.elements.loading.innerHTML = `<div class="alert alert-danger m-3"><h4>Hata</h4><p>${msg}</p></div>`;
+        if (this.loader) this.loader.hide();
+        if (this.elements.loadingStatic) {
+            this.elements.loadingStatic.style.display = 'block';
+            this.elements.loadingStatic.innerHTML = `<div class="alert alert-danger m-3">${msg}</div>`;
         }
     }
 }
