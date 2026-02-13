@@ -170,11 +170,19 @@ export class PortfolioDetailManager {
             
             <div class="kv-item"><div class="label">Yenileme Tarihi</div><div class="value">${this.formatDate(r.renewalDate)}</div></div>
             
-            ${(!isTP && r.country) ? `
-                <div class="kv-item">
-                    <div class="label">Ülke</div>
-                    <div class="value" id="heroCountryName">${r.country}</div>
-                </div>` : ''}
+            ${(!isTP) ? `
+                ${r.country ? `
+                    <div class="kv-item">
+                        <div class="label">Ülke</div>
+                        <div class="value" id="heroCountryName">${r.country}</div>
+                    </div>` : ''}
+                
+                ${r.origin ? `
+                    <div class="kv-item">
+                        <div class="label">Orijin</div>
+                        <div class="value">${r.origin}</div>
+                    </div>` : ''}
+            ` : ''}
 
             <div class="kv-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
                 <div class="label" style="margin-bottom: 4px;">Sınıflar (Nice)</div>
