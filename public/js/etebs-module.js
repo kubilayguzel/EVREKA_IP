@@ -41,9 +41,7 @@ export class ETEBSManager {
         // 3. Event Listener'ları kur
         this.bindEvents();
 
-        // 4. Upload modunu hazırla
-        this.setupUploadMode();
-    }
+   }
 
     // ============================================================
     // 0. GERİYE DÖNÜK UYUMLULUK (HTML ile Uyum)
@@ -139,9 +137,43 @@ export class ETEBSManager {
     // ============================================================
 
     async handleFetchButton() {
-        await this.triggerServerSync();
-        await this.loadAndProcessDocuments();
-        setTimeout(() => this.loadAndProcessDocuments(true), 2500);
+        const input = document.getElementById('etebsTokenInput');
+        const token = input ? input.value.trim() : null;
+
+        if (!token) {
+            showNotification('Lütfen geçerli bir ETEBS Token giriniz.', 'warning');
+            return;
+        }
+
+        // --- 🚀 LOADER BAŞLAT ---
+        if (window.SimpleLoadingController) {
+            window.SimpleLoadingController.show({
+                text: 'ETEBS Sorgulanıyor',
+                subtext: 'TürkPatent verileri kontrol ediliyor, lütfen bekleyin...'
+            });
+        }
+
+        // Tarayıcıya loader'ı çizmesi için kısa bir süre tanıyalım
+        await new Promise(r => setTimeout(r, 200));
+
+        try {
+            // Sunucu senkronizasyonunu başlat (Cloud Function tetiklenir)
+            await this.triggerServerSync();
+
+            if (window.SimpleLoadingController) {
+                window.SimpleLoadingController.showSuccess('Sorgulama başlatıldı. Liste güncelleniyor...');
+            }
+
+            // --- 🔄 SAYFAYI ETEBS SEKMESİYLE YENİLE ---
+            setTimeout(() => {
+                window.location.href = 'bulk-indexing-page.html?tab=bulk';
+            }, 1500);
+
+        } catch (error) {
+            console.error("Sorgu hatası:", error);
+            if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+            showNotification('Sorgu başlatılamadı.', 'error');
+        }
     }
 
     async loadAndProcessDocuments(isBackgroundRefresh = false) {
@@ -444,89 +476,6 @@ export class ETEBSManager {
         if(uploadContent) uploadContent.style.display = mode === 'upload' ? 'block' : 'none';
     }
 
-    // --- MANUEL UPLOAD MODU ---
-    
-    setupUploadMode() {
-        const input = document.getElementById('bulkFiles');
-        const btn = document.getElementById('bulkFilesButton');
-        const info = document.getElementById('bulkFilesInfo');
-
-        if (!input || input.dataset.bound) return;
-
-        if (btn) {
-            btn.addEventListener('click', () => input.click());
-            btn.addEventListener('dragover', (e) => { e.preventDefault(); btn.style.backgroundColor = '#f0f7ff'; });
-            btn.addEventListener('dragleave', (e) => { e.preventDefault(); btn.style.backgroundColor = ''; });
-            btn.addEventListener('drop', (e) => {
-                e.preventDefault();
-                btn.style.backgroundColor = '';
-                if(e.dataTransfer.files.length) {
-                    input.files = e.dataTransfer.files;
-                    input.dispatchEvent(new Event('change'));
-                }
-            });
-        }
-
-        input.addEventListener('change', async (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length === 0) return;
-
-            if(info) {
-                info.textContent = `${files.length} dosya yükleniyor...`;
-                info.style.display = 'block';
-            }
-            
-            const user = authService.auth.currentUser;
-            if(!user) {
-                showNotification('Oturum açmanız gerekiyor.', 'error');
-                return;
-            }
-
-            for (const file of files) {
-                await this._uploadSingleFile(file, user.uid);
-            }
-
-            if(info) info.textContent = 'Yükleme tamamlandı. Listeyi yenileyebilirsiniz.';
-            input.value = '';
-            showNotification('Dosyalar yüklendi. ETEBS sekmesinden listeyi yenileyin.', 'success');
-        });
-
-        input.dataset.bound = "true";
-    }
-
-    async _uploadSingleFile(file, userId) {
-        try {
-            const timestamp = Date.now();
-            const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-            const path = `users/${userId}/unindexed_pdfs/${timestamp}_${cleanName}`;
-            
-            const storage = getStorage();
-            const storageRef = ref(storage, path);
-            await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(storageRef);
-
-            const evrakNo = file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, '');
-
-            await addDoc(collection(firebaseServices.db, 'unindexed_pdfs'), {
-                evrakNo: evrakNo,
-                fileName: file.name,
-                belgeAciklamasi: 'Manuel Yükleme',
-                fileUrl: url,
-                filePath: path,
-                fileSize: file.size,
-                uploadedAt: new Date(),
-                belgeTarihi: new Date(),
-                userId: userId,
-                source: 'manual',
-                status: 'pending',
-                matched: false
-            });
-
-        } catch (e) {
-            console.error('Dosya yükleme hatası:', e);
-            showNotification(`${file.name} yüklenemedi.`, 'error');
-        }
-    }
 }
 
 // Global Erişim
