@@ -2732,6 +2732,41 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
     }
 
+    // --- İTİRAZ SAHİBİ VERİSİNİ PARENT TRANSACTION'DAN ÇEK ---
+    let oppositionOwnerName = "-";
+
+    try {
+        const relatedTxId = after.relatedTransactionId || after.transactionId;
+        if (after.relatedIpRecordId && relatedTxId) {
+            // 1. Mevcut (Child) Transaction'ı çekerek parentId'ye ulaşalım
+            const txSnap = await adminDb.collection("ipRecords")
+                .doc(after.relatedIpRecordId)
+                .collection("transactions")
+                .doc(relatedTxId)
+                .get();
+            
+            if (txSnap.exists) {
+                const txData = txSnap.data();
+                
+                // 2. parentId varsa, üst işleme gidip oppositionOwner bilgisini alalım
+                if (txData.parentId) {
+                    const parentSnap = await adminDb.collection("ipRecords")
+                        .doc(after.relatedIpRecordId)
+                        .collection("transactions")
+                        .doc(txData.parentId)
+                        .get();
+                    
+                    if (parentSnap.exists) {
+                        oppositionOwnerName = parentSnap.data().oppositionOwner || "-";
+                        console.log(`✅ İtiraz Sahibi üst işlemden çekildi: ${oppositionOwnerName}`);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("⚠️ İtiraz sahibi bilgisi hiyerarşiden çekilemedi:", e.message);
+    }
+
     // --- DATA HAZIRLIĞI ---
     let enrichedData = {
         applicantNames: "-",
@@ -3048,7 +3083,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         classNumbers: enrichedData.classNumbers,
         applicationDate: enrichedData.applicationDate,
         transactionDate: transactionDateStr,
-        itiraz_sahibi: enrichedData.itirazSahibi,
+        itiraz_sahibi: oppositionOwnerName,
         basvuru_no: ipRecord?.applicationNumber || ipRecord?.applicationNo || "-",
         
         // [GÜNCELLEME] Hata veren değişken kaldırıldı, sabit değer atandı.
@@ -7481,55 +7516,51 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
               subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
               body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
 
-              // C) Alıcıları Belirle
-              let toList = [];
-              
-              // 1. Öncelik: Task üzerindeki veriler
-              if (after.clientEmail) toList.push(after.clientEmail);
-              if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
-              
-              // 2. Öncelik: IP Kaydı ve Kişi Kartı (Fallback)
-              if (toList.length === 0 && after.relatedIpRecordId) {
+              // C) Alıcıları Belirle (Gelişmiş Mantık) ---
+              let finalTo = [];
+              let finalCc = [];
+
+              if (after.relatedIpRecordId) {
                   try {
                       const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
-                      if(ipDoc.exists) {
+                      if (ipDoc.exists) {
                           const ipData = ipDoc.data();
-                          const apps = ipData.applicants || [];
+                          const applicants = ipData.applicants || [];
                           
-                          for (const app of apps) {
-                              if (app.email) {
-                                  toList.push(app.email);
-                              }
-                              else if (app.id) {
-                                  const personDoc = await adminDb.collection('persons').doc(app.id).get();
-                                  if (personDoc.exists && personDoc.data().email) {
-                                      toList.push(personDoc.data().email);
-                                  }
-                              }
-                          }
-                          
-                          if (toList.length === 0 && ipData.clientEmail) {
-                              toList.push(ipData.clientEmail);
-                          }
+                          // 1. Müvekkil Sorumlularını ve Bildirim Ayarlarını Çöz (personsRelated üzerinden)
+                          const resolvedRecipients = await getRecipientsByApplicantIds(applicants, "marka");
+                          finalTo = resolvedRecipients.to || [];
+                          finalCc = resolvedRecipients.cc || [];
+
+                          // 2. Evreka Global CC Listesini Ekle (İşlem Tipine Göre)
+                          const extraCc = await getCcFromEvrekaListByTransactionType(after.taskType);
+                          finalCc = [...new Set([...finalCc, ...(extraCc || [])])];
                       }
                   } catch (err) {
-                      console.error("Müvekkil maili bulma hatası:", err);
+                      console.error("Alıcı çözme hatası:", err);
                   }
               }
 
-              // Tekilleştirme ve Boşları Temizleme
-              toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
+              // Fallback: Eğer hala hiç alıcı yoksa manuel alanlara bak
+              if (finalTo.length === 0) {
+                  if (after.clientEmail) finalTo.push(after.clientEmail);
+                  if (after.details?.relatedParty?.email) finalTo.push(after.details.relatedParty.email);
+              }
 
-              // --- D) EKSİK BİLGİ KONTROLÜ VE KAYIT ---
+              const dedupe = (arr) => Array.from(new Set(arr.filter(e => e && e.trim() !== "")));
+              finalTo = dedupe(finalTo);
+              finalCc = dedupe(finalCc).filter(e => !finalTo.includes(e));
+
               const missingFields = [];
-              if (toList.length === 0) missingFields.push("recipients");
+              if (finalTo.length === 0) missingFields.push("recipients");
 
-              // Eğer alıcı yoksa 'missing_info', varsa 'pending'
               const notificationStatus = missingFields.length > 0 ? "missing_info" : "pending";
 
               await adminDb.collection("mail_notifications").add({
-                  toList: toList,
-                  ccList: [], 
+                  toList: finalTo,
+                  ccList: finalCc,
+                  recipientTo: finalTo, // UI Görünürlüğü için
+                  recipientCc: finalCc, // UI Görünürlüğü için
                   subject: subject,
                   body: body,
                   status: notificationStatus,
@@ -7745,49 +7776,52 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
                 subject = subject.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
                 body = body.replace(/{{relatedIpRecordTitle}}/g, relatedTitle);
 
-                // C) Alıcı Belirle
-                let toList = [];
-                
-                if (after.clientEmail) toList.push(after.clientEmail);
-                if (after.details?.relatedParty?.email) toList.push(after.details.relatedParty.email);
+              // C) Alıcı Belirle (Gelişmiş Mantık) ---
+                let finalTo = [];
+                let finalCc = [];
 
-                if (toList.length === 0 && after.relatedIpRecordId) {
+                if (after.relatedIpRecordId) {
                     try {
                         const ipDoc = await adminDb.collection('ipRecords').doc(after.relatedIpRecordId).get();
                         if(ipDoc.exists) {
                             const ipData = ipDoc.data();
-                            const apps = ipData.applicants || [];
+                            const applicants = ipData.applicants || [];
                             
-                            for (const app of apps) {
-                                if (app.email) toList.push(app.email);
-                                else if (app.id) {
-                                    const personDoc = await adminDb.collection('persons').doc(app.id).get();
-                                    if (personDoc.exists && personDoc.data().email) {
-                                        toList.push(personDoc.data().email);
-                                    }
-                                }
-                            }
-                            if (toList.length === 0 && ipData.clientEmail) toList.push(ipData.clientEmail);
+                            // 1. Sorumlu ve Notify ayarlarını çöz
+                            const resolvedRecipients = await getRecipientsByApplicantIds(applicants, "marka");
+                            finalTo = resolvedRecipients.to || [];
+                            finalCc = resolvedRecipients.cc || [];
+
+                            // 2. Global CC listesini ekle
+                            const extraCc = await getCcFromEvrekaListByTransactionType(after.taskType);
+                            finalCc = [...new Set([...finalCc, ...(extraCc || [])])];
                         }
                     } catch (err) { console.error("Mail bulma hatası:", err); }
                 }
 
-                toList = [...new Set(toList.filter(e => e && e.trim() !== ""))];
+                if (finalTo.length === 0) {
+                    if (after.clientEmail) finalTo.push(after.clientEmail);
+                    if (after.details?.relatedParty?.email) finalTo.push(after.details.relatedParty.email);
+                }
 
-                // --- D) EKSİK BİLGİ KONTROLÜ VE KAYIT ---
+                const dedupe = (arr) => Array.from(new Set(arr.filter(e => e && e.trim() !== "")));
+                finalTo = dedupe(finalTo);
+                finalCc = dedupe(finalCc).filter(e => !finalTo.includes(e));
+
                 const missingFields = [];
-                if (toList.length === 0) missingFields.push("recipients");
+                if (finalTo.length === 0) missingFields.push("recipients");
 
                 const notificationStatus = missingFields.length > 0 ? "missing_info" : "pending";
 
                 await adminDb.collection("mail_notifications").add({
-                    toList: toList,
-                    ccList: [],
+                    toList: finalTo,
+                    ccList: finalCc,
+                    recipientTo: finalTo, // UI Görünürlüğü için
+                    recipientCc: finalCc, // UI Görünürlüğü için
                     subject: subject,
                     body: body,
                     status: notificationStatus,
                     missingFields: missingFields,
-                    
                     notificationType: "general_notification",
                     taskType: String(after.taskType),
                     relatedIpRecordId: after.relatedIpRecordId,
