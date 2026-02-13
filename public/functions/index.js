@@ -2526,11 +2526,31 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       files: allUiFiles, // UI'da görünmesi için dosyalar listesi
       assignedTo_uid: selcanUserId || null,
       assignedTo_email: selcanUserEmail || null,
+      dependentTaskId: (fetchedTxnData && fetchedTxnData.triggeringTaskId) || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const notificationRef = await adminDb.collection("mail_notifications").add(notificationData);
+
+    const mailNotificationId = notificationRef.id;
+    console.log(`✅ Mail bildirimi oluşturuldu: ${mailNotificationId}`);
+
+    if (recordId && associatedTransactionId) {
+        try {
+            await admin.firestore()
+                .collection("ipRecords")
+                .doc(recordId)
+                .collection("transactions")
+                .doc(associatedTransactionId)
+                .update({
+                    mailNotificationId: mailNotificationId // 🔗 Mail ve Transaction bağlandı
+                });
+            console.log(`🔗 Transaction ${associatedTransactionId} mail ID ile güncellendi.`);
+        } catch (error) {
+            console.error("❌ Transaction güncelleme hatası:", error);
+        }
+    }
 
     console.log(`🔍 ID 66 Kontrol:`, {
         isEvaluationRequired,
