@@ -126,6 +126,11 @@
           <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">
             <i class="fas fa-clock"></i> Bekleyen Bildirimler
           </button>
+          
+          <button class="tab-btn" data-tab="reminders" onclick="switchTab('reminders')">
+            <i class="fas fa-bell"></i> Hatırlatmalar
+          </button>
+          
           <button class="tab-btn" data-tab="sent" onclick="switchTab('sent')">
             <i class="fas fa-check-circle"></i> Gönderilen Bildirimler
           </button>
@@ -999,62 +1004,78 @@ function collectModalRecipients() {
   };
 }
 
-// Sekme Değiştirme Mantığı
-    window.switchTab = function(tabName) {
+window.switchTab = async function(tabName) {
       activeTab = tabName;
       
-      // Buton görünümlerini güncelle
       document.querySelectorAll('.tab-btn').forEach(btn => {
         if (btn.dataset.tab === tabName) btn.classList.add('active');
         else btn.classList.remove('active');
       });
 
-      // Veriyi filtrele ve sayfayı güncelle
-      applyTabFilter();
+      await applyTabFilter();
     };
 
-    // Filtreleme Fonksiyonu (Düzeltilmiş Hali)
-    function applyTabFilter() {
-      // 1. Veriyi filtrele
-      if (activeTab === 'sent') {
-        notificationsData = allNotifications.filter(n => n.status === 'sent');
-      } else {
-        notificationsData = allNotifications.filter(n => n.status !== 'sent');
-      }
+    async function applyTabFilter() {
+      loader.style.display = "block";
+      tableBody.innerHTML = "";
 
-      // 2. Tablo boş mesajını hazırla
-      const emptyMsg = activeTab === 'sent' ? 'Gönderilmiş bildirim bulunamadı.' : 'Bekleyen bildirim bulunamadı.';
-      
-      // 3. Pagination varsa güncelle
-      if (pagination) {
-        // Toplam sayıyı güncelle
-        pagination.update(notificationsData.length);
-        
-        // Sayfa numarasını 1'e çek (fakat render tetiklemesini bekleme)
-        // Eğer kütüphanenizde 'silent' modu yoksa bu işlem bazen tetiklemeyebilir.
-        // Bu yüzden aşağıda renderCurrentPage'i biz manuel çağıracağız.
-        if (pagination.currentPage !== 1) {
-            pagination.goToPage(1); 
-            // Not: Eğer sayfa zaten 1 değilse goToPage render'ı tetikler.
-            // Ancak biz her durumda garanti olsun diye aşağıda çağıracağız.
-            // Çift render olmasını önlemek için renderCurrentPage içindeki "bilet" mekanizması korur.
+      try {
+        if (activeTab === 'pending') {
+          // BEKLEYENLER: Statüsü 'sent' olmayanlar
+          notificationsData = allNotifications.filter(n => n.status !== 'sent');
+        } else {
+          // GÖNDERİLENLER VE HATIRLATMALAR
+          const sentNotifications = allNotifications.filter(n => n.status === 'sent');
+          const taskIds = [...new Set(sentNotifications.map(n => n.relatedRecordId).filter(id => id))];
+          
+          const taskStatusMap = {};
+          await Promise.all(taskIds.map(async (id) => {
+            const taskData = await getDocFromDb("tasks", id);
+            if (taskData) taskStatusMap[id] = taskData.status;
+          }));
+
+          if (activeTab === 'reminders') {
+            notificationsData = sentNotifications.filter(n => {
+              const taskStatus = taskStatusMap[n.relatedRecordId];
+              return taskStatus === "Müvekkil Onayı Bekliyor";
+            });
+          } else {
+            notificationsData = sentNotifications.filter(n => {
+              const taskStatus = taskStatusMap[n.relatedRecordId];
+              return taskStatus !== "Müvekkil Onayı Bekliyor";
+            });
+          }
         }
-      }
 
-      // 4. KRİTİK NOKTA: Eğer veri yoksa veya sayfa değişimi tetiklenmediyse tabloyu elle çiz
-      if (notificationsData.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="11" class="no-records">${emptyMsg}</td></tr>`;
-      } else {
-        // Listeyi zorla render et (Pagination tetiklemese bile)
-        renderCurrentPage();
+        const emptyMsgs = {
+          'pending': 'Bekleyen bildirim bulunamadı.',
+          'reminders': 'Hatırlatılacak (onay bekleyen) bildirim bulunamadı.',
+          'sent': 'Tamamlanmış gönderim bulunamadı.'
+        };
+
+        if (pagination) {
+          pagination.update(notificationsData.length);
+          pagination.goToPage(1);
+        }
+
+        if (notificationsData.length === 0) {
+          tableBody.innerHTML = `<tr><td colspan="11" class="no-records">${emptyMsgs[activeTab]}</td></tr>`;
+        } else {
+          await renderCurrentPage();
+        }
+      } catch (err) {
+        console.error("Filtreleme hatası:", err);
+        tableBody.innerHTML = `<tr><td colspan="11" class="no-records">Veriler işlenirken hata oluştu.</td></tr>`;
+      } finally {
+        loader.style.display = "none";
       }
     }
 
-// ---------- Firestore listener ----------
-let notificationsUnsub = null;
-// Mevcut startNotificationListener fonksiyonunu bulun ve içini şöyle güncelleyin:
+    // ---------- Firestore listener ----------
+    let notificationsUnsub = null;
+
     function startNotificationListener() {
-      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "desc")); // desc: Yeniden eskiye sırala
+      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "desc"));
       
       notificationsUnsub && notificationsUnsub();
       
@@ -1064,20 +1085,18 @@ let notificationsUnsub = null;
         if (snapshot.empty) {
           allNotifications = [];
           notificationsData = [];
-          applyTabFilter(); // Boş tabloyu gösterir
+          await applyTabFilter();
           return;
         }
 
-        // 1. Tüm veriyi çek ve sakla
         allNotifications = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        // 2. Pagination nesnesini bir kere oluştur
         if (!pagination) {
           pagination = new Pagination({
             containerId: "paginationContainer",
             itemsPerPage: 20,
             maxVisiblePages: 7,
-            onPageChange: () => renderCurrentPage(), // Burayı arrow function yaparak bağlamı garantileyebilirsiniz
+            onPageChange: () => renderCurrentPage(),
             showFirstLast: true,
             showPrevNext: true,
             showPageInfo: true,
@@ -1085,19 +1104,17 @@ let notificationsUnsub = null;
           });
         }
 
-        // 3. Mevcut sekmeye göre filtrele ve ekrana bas
-        applyTabFilter();
+        await applyTabFilter();
 
       }, (error) => {
         loader.style.display = "none";
         errorDiv.style.display = "block";
         errorDiv.textContent = "Bildirimler yüklenirken bir hata oluştu.";
-        console.error(error);
+        console.error("Firestore Listener Hatası:", error);
       });
     }
 
-
-onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, (user) => {
       if (user) {
         loadSharedLayout({ activeMenuLink: "notifications.html" });
         startNotificationListener();
