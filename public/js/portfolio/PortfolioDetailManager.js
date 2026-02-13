@@ -134,11 +134,17 @@ export class PortfolioDetailManager {
         this.elements.heroTitle.textContent = r.title || r.brandText || '-';
 
         const imgSrc = (r.type === 'trademark') ? (r.brandImageUrl || r.details?.brandInfo?.brandImage) : null;
+        
+        // 🔥 GÜNCELLEME: Marka örneği olmasa da kartı her durumda göster
+        this.elements.heroCard.classList.remove('d-none');
+
+        const imgWrap = this.elements.brandImage.closest('.hero-img-wrap');
         if (imgSrc) {
             this.elements.brandImage.src = imgSrc;
-            this.elements.heroCard.classList.remove('d-none');
+            if (imgWrap) imgWrap.style.display = 'block';
         } else {
-            this.elements.heroCard.classList.add('d-none');
+            // 🔥 GÜNCELLEME: Görsel yoksa görsel alanını gizle, bilgiler tam genişlik alır
+            if (imgWrap) imgWrap.style.display = 'none';
         }
 
         let regNo = r.registrationNumber;
@@ -153,12 +159,23 @@ export class PortfolioDetailManager {
             classesStr = r.classes;
         }
 
+        const isTP = this.checkIfTurkPatentOrigin(r);
+
         const kvHtml = `
             <div class="kv-item"><div class="label">Başvuru No</div><div class="value">${r.applicationNumber || '-'}</div></div>
             <div class="kv-item"><div class="label">Tescil No</div><div class="value">${regNo}</div></div>
             <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
             <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
             <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
+            
+            <div class="kv-item"><div class="label">Yenileme Tarihi</div><div class="value">${this.formatDate(r.renewalDate)}</div></div>
+            
+            ${(!isTP && r.country) ? `
+                <div class="kv-item">
+                    <div class="label">Ülke</div>
+                    <div class="value" id="heroCountryName">${r.country}</div>
+                </div>` : ''}
+
             <div class="kv-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
                 <div class="label" style="margin-bottom: 4px;">Sınıflar (Nice)</div>
                 <div class="value text-primary" style="font-weight: 700; line-height: 1.4;">${classesStr}</div>
@@ -167,9 +184,32 @@ export class PortfolioDetailManager {
 
         this.elements.heroKv.innerHTML = kvHtml;
 
-        const isTP = this.checkIfTurkPatentOrigin(r);
+        // 🔥 YENİ: Ülke adı TÜRKPATENT değilse common şemasından çek ve güncelle
+        if (!isTP && r.country) {
+            this.fetchAndSetCountryName(r.country);
+        }
+
         if (this.elements.tpQueryBtn) {
             this.elements.tpQueryBtn.style.display = isTP ? 'inline-block' : 'none';
+        }
+    }
+
+    async fetchAndSetCountryName(countryCode) {
+        try {
+            // common koleksiyonundaki countries dokümanını çekiyoruz
+            const snap = await getDoc(doc(db, 'common', 'countries'));
+            if (snap.exists()) {
+                const data = snap.data();
+                const list = data.list || [];
+                // Ülke kodunu listede bul
+                const found = list.find(c => c.id === countryCode || c.code === countryCode);
+                if (found) {
+                    const el = document.getElementById('heroCountryName');
+                    if (el) el.textContent = found.name;
+                }
+            }
+        } catch (e) {
+            console.warn('Ülke adı common şemasından alınamadı:', e);
         }
     }
     
