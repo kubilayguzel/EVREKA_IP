@@ -626,3 +626,19 @@ export function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+
+/**
+ * Tarih objesini veya stringini gg/aa/yyyy formatına çevirir.
+ */
+export function formatToTRDate(dateVal) {
+    if (!dateVal) return '-';
+    try {
+        const d = (dateVal.toDate && typeof dateVal.toDate === 'function') ? dateVal.toDate() : new Date(dateVal);
+        if (isNaN(d.getTime())) return '-';
+        
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    } catch (e) { return '-'; }
+}
