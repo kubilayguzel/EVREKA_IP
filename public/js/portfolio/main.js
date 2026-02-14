@@ -462,6 +462,10 @@ class PortfolioController {
                     console.error('Durum değiştirme hatası:', error);
                     showNotification('Hata: ' + error.message, 'error');
                 } finally {
+                    // Tablo ve filtre başlıkları oluştuktan sonra tarih seçicileri etkinleştir
+                    if (window.EvrekaDatePicker) {
+                        window.EvrekaDatePicker.refresh(document.querySelector('.portfolio-table thead'));
+                    }
                     this.renderer.showLoading(false);
                 }
             });
