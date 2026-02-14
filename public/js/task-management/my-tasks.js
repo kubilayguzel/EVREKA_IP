@@ -84,45 +84,56 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async loadAllData() {
+            // 1. Gelişmiş Loading Animasyonunu Başlat
+            if (window.SimpleLoadingController) {
+                window.SimpleLoadingController.show({
+                    text: 'İşleriniz Hazırlanıyor',
+                    subtext: 'Verileriniz optimize ediliyor, lütfen bekleyiniz...'
+                });
+            }
+
+            // Eski loader'ı gizle (varsa)
             const loader = document.getElementById('loadingIndicator');
-            if(loader) loader.style.display = 'block';
+            if(loader) loader.style.display = 'none';
 
             try {
-                // Not: ipRecords koleksiyonu büyük olabildiği için (ve cache bazen bayat kalabildiği için)
-                // artık tüm ipRecords'ları çekmek yerine yalnızca görevlerin işaret ettiği kayıtları getiriyoruz.
-                const [tasksResult, personsResult, accrualsResult, transactionTypesResult, usersResult] = await Promise.all([
-                    taskService.getTasksForUser(this.currentUser.uid),
-                    personService.getPersons(),
-                    accrualService.getAccruals(),
-                    transactionTypeService.getTransactionTypes(),
-                    taskService.getAllUsers()
-                ]);
+                // İlk adım: Sadece kullanıcıya ait görevleri çekerek kapsamı belirleyelim
+                const tasksResult = await taskService.getTasksForUser(this.currentUser.uid);
+                
+                // "Müvekkil Onayı Bekliyor" hariç görevleri filtrele
+                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => 
+                    t.status !== 'awaiting_client_approval'
+                ) : [];
 
-                // Sadece "Müvekkil Onayı Bekliyor" statüsünü hariç tutuyoruz, diğerleri (kapatılan onaylar dahil) burada listelenecek.
-                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => t.status !== 'awaiting_client_approval') : [];
-
-                // Görevlerin bağlı olduğu ipRecord'ları çek (cache-first) ve eksik kalanları server'dan tamamla.
+                // 2. Performans Optimizasyonu: Sadece gerekli IP Kayıtlarını belirle
                 const relatedIds = [...new Set(
                     this.allTasks
                         .map(t => t.relatedIpRecordId)
                         .filter(Boolean)
                         .map(id => String(id).trim())
                 )];
-                let ipRecords = [];
-                if (relatedIds.length) {
-                    const ipRes = await ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' });
-                    ipRecords = ipRes.success ? ipRes.data : [];
-                }
-				this.allIpRecords = ipRecords;
-				this.buildMaps();
 
-                this.allIpRecords = ipRecords;
+                // 3. Paralel Veri Çekme (Hız için)
+                // Not: accrualService.getAccruals() tüm koleksiyonu çektiği için en büyük darboğazdır.
+                // Gelecekte bu servise getAccrualsByTaskIds eklenerek daha da hızlandırılabilir.
+                const [ipRes, personsResult, accrualsResult, transactionTypesResult, usersResult] = await Promise.all([
+                    relatedIds.length ? ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' }) : Promise.resolve({success: true, data: []}),
+                    personService.getPersons(),
+                    accrualService.getAccruals(),
+                    transactionTypeService.getTransactionTypes(),
+                    taskService.getAllUsers()
+                ]);
+
+                // Verileri state'e işle
+                this.allIpRecords = ipRes.success ? ipRes.data : [];
+                this.buildMaps(); // Hızlı erişim için Map yapısını kur
+
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
                 this.allUsers = usersResult.success ? usersResult.data : [];
 
-                // Formlara kişi listelerini gönder ve çiz
+                // Form yöneticilerini güncelle
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
 
@@ -131,13 +142,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.completeTaskFormManager.render();
                 }
 
+                // Verileri işleyerek tabloya hazırla
                 this.processData();
 
             } catch (error) {
                 console.error(error);
-                showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+                if (typeof showNotification === 'function') {
+                    showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+                }
             } finally {
-                if(loader) loader.style.display = 'none';
+                // 4. Loading Animasyonunu Kapat
+                if (window.SimpleLoadingController) {
+                    window.SimpleLoadingController.hide();
+                }
             }
         }
 
