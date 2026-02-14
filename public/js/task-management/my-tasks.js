@@ -1,7 +1,7 @@
 // public/js/task-management/my-tasks.js
 
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, db } from '../../firebase-config.js';
-import { showNotification } from '../../utils.js';
+import { showNotification, TASK_STATUS_MAP } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import Pagination from '../pagination.js'; 
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
@@ -41,14 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // İki farklı form yöneticisi kullanıyoruz:
             this.accrualFormManager = null; // Ek Tahakkuk için
             this.completeTaskFormManager = null; // Tahakkuk İşini Tamamlamak için
-
-            this.statusDisplayMap = {
-                'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
-                'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
-                'awaiting-approval': 'Onay Bekliyor', 'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
-                'client_approval_opened': 'Müvekkil Onayı - Açıldı', 'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
-                'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
-            };
+            this.statusDisplayMap = TASK_STATUS_MAP;
         }
 
         init() {
@@ -104,9 +97,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     taskService.getAllUsers()
                 ]);
 
-                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => 
-                    !['awaiting_client_approval', 'client_approval_closed', 'client_no_response_closed'].includes(t.status)
-                ) : [];
+                // Sadece "Müvekkil Onayı Bekliyor" statüsünü hariç tutuyoruz, diğerleri (kapatılan onaylar dahil) burada listelenecek.
+                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => t.status !== 'awaiting_client_approval') : [];
 
                 // Görevlerin bağlı olduğu ipRecord'ları çek (cache-first) ve eksik kalanları server'dan tamamla.
                 const relatedIds = [...new Set(
@@ -292,12 +284,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // 3. TAB FİLTRESİ
                 let matchesTab = false;
-                const isFinished = item.status === 'completed' || item.status === 'cancelled';
+                // Aktif kabul edilen statüler: Açık, Devam Ediyor, Beklemede
+                const activeStatuses = ['open', 'in-progress', 'pending']; 
 
                 if (this.activeTab === 'active') {
-                    matchesTab = !isFinished;
+                    // Aktif İşler sekmesi: Sadece belirlenen 3 statü
+                    matchesTab = activeStatuses.includes(item.status);
                 } else {
-                    matchesTab = isFinished;
+                    // Biten/Kapatılan İşler sekmesi: Aktif statüler dışındaki her şey
+                    matchesTab = !activeStatuses.includes(item.status);
                 }
 
                 // [DÜZELTME] Kullanıcı Filtresi Güncellendi
@@ -466,10 +461,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const select = document.getElementById('statusFilter');
             if(!select) return;
             select.innerHTML = '<option value="all">Tümü</option>';
-            ['open', 'in-progress', 'completed', 'pending', 'cancelled', 'on-hold', 'awaiting-approval'].forEach(st => {
+
+            // Manuel liste yerine TASK_STATUS_MAP üzerinden dönün:
+            Object.entries(this.statusDisplayMap).forEach(([value, text]) => {
                 const opt = document.createElement('option');
-                opt.value = st;
-                opt.textContent = this.statusDisplayMap[st] || st;
+                opt.value = value;
+                opt.textContent = text;
                 select.appendChild(opt);
             });
         }
