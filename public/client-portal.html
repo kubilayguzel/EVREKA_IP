@@ -25,6 +25,27 @@
     .logout-btn { background-color: #d9534f; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; }
     .logout-btn:hover { background-color: #c9302c; }
 
+    /* 🔥 ÇÖZÜM: Kullanıcı Alanı Hizalaması */
+    .user-section { 
+        display: flex; 
+        align-items: center; 
+        gap: 12px; /* Elemanlar arası boşluk */
+    }
+    .user-info { 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+    }
+    .user-name { 
+        font-weight: 600; 
+        font-size: 0.9rem; 
+        line-height: 1.2; 
+    }
+    .user-role { 
+        font-size: 0.75rem; 
+        opacity: 0.8; 
+    }
+
     /* Kartlar & İstatistikler */
     .card { border-radius: 12px; border: none; transition: transform 0.3s, box-shadow 0.3s; overflow: hidden; }
     .card:hover { transform: translateY(-5px); }
@@ -941,7 +962,7 @@
 
 <script type="module">
     import { authService, db } from './firebase-config.js';
-    import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit, documentId } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import PaginationModule from './js/pagination.js';
 
@@ -1154,8 +1175,9 @@ async function initPortal() {
             // Firestore 'in' sorgusu en fazla 10 eleman kabul eder, bu yüzden bölüyoruz
             for (let i = 0; i < linkedIds.length; i += 10) {
                 const chunk = linkedIds.slice(i, i + 10);
-                const q = query(collection(db, 'persons'), where('__name__', 'in', chunk));
-                chunks.push(getDocs(q));
+                // '__name__' yerine documentId() kullanıyoruz ve hızlı getirme için runGetDocs'a çeviriyoruz
+                const q = query(collection(db, 'persons'), where(documentId(), 'in', chunk));
+                chunks.push(runGetDocs(q));
             }
             
             // Tüm sorguları paralel çalıştır
@@ -2225,6 +2247,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 }
             }
         });
+        const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
+        if (currentFilter === 'TÜRKPATENT') {
+            $('#dava-itiraz-list th.col-origin, #dava-itiraz-list td.col-origin').hide();
+        } else {
+            $('#dava-itiraz-list th.col-origin, #dava-itiraz-list td.col-origin').show();
+        }
     };
 
 // --- 5. İTİRAZ MODÜLÜ (FİLTRE SORUNU KESİN ÇÖZÜM) ---
@@ -3911,6 +3939,9 @@ window.generatePDF = async function(data, headers, filename) {
             window.applyMasterFilter(); // Portföy
             window.applyTaskFilter();   // İşlerim
             window.applyInvoiceFilter(); // Faturalar
+            if (typeof window.applyContractsFilter === 'function') {
+                window.applyContractsFilter(); // Vekaletler
+            }
             
             // 🔥 Dashboard Sayaçlarını Yeniden Hesapla
             window.updateDashboardCounts();
