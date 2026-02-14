@@ -1,5 +1,5 @@
 // public/js/portfolio/PortfolioRenderer.js
-import { STATUSES } from '../../utils.js';
+import { STATUSES, formatToTRDate } from '../../utils.js';
 import '../simple-loading.js';
 
 export class PortfolioRenderer {
@@ -194,7 +194,7 @@ export class PortfolioRenderer {
             <td title="${row.court || ''}">${row.court || '-'}</td>
             <td title="${row.client || ''}">${row.client || '-'}</td>
             <td title="${row.opposingParty || ''}">${row.opposingParty || '-'}</td>
-            <td>${row.openedDate || '-'}</td>
+            <td>${this.formatDate(row.openedDate)}</td>
             <td>${statusBadge}</td>
             <td>${actions}</td>`;
         return tr;
@@ -237,8 +237,7 @@ export class PortfolioRenderer {
     }
 
     formatDate(d) {
-        if (!d) return '-';
-        try { return new Date(d).toLocaleDateString('tr-TR'); } catch { return String(d); }
+        return formatToTRDate(d); // Artık merkezi utils fonksiyonunu kullanır
     }
     
     getStatusBadge(record) {
