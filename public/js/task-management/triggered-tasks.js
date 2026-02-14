@@ -1,7 +1,7 @@
 // public/js/indexing/triggered-tasks.js
 
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, functions } from '../../firebase-config.js';
-import { showNotification } from '../../utils.js';
+import { showNotification,TASK_STATUS_MAP } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { doc, getDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -42,22 +42,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // --- MANAGERS (Ortak Bileşenler) ---
             this.taskDetailManager = null;
             this.accrualFormManager = null;
-
-            // Statü Tanımları
-            this.statusDisplayMap = {
-                'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
-                'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
-                'awaiting-approval': 'Onay Bekliyor',
-                'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
-                'client_approval_opened': 'Müvekkil Onayı - Açıldı',
-                'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
-                'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
-            };
-
-            this.triggeredTaskStatuses = [
-                'awaiting_client_approval', 'client_approval_opened', 
-                'client_approval_closed', 'client_no_response_closed'
-            ];
+            this.statusDisplayMap = TASK_STATUS_MAP;
+            // Tetiklenen görevler sayfasında sadece müvekkil onayı bekleyen işler görünecek.
+            this.triggeredTaskStatuses = ['awaiting_client_approval'];
         }
 
         init() {
