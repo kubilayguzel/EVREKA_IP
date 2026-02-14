@@ -122,10 +122,10 @@ export const TASK_STATUSES = [
     { value: 'client_no_response_closed', text: 'Müvekkil Cevaplamadı - Kapatıldı', color: 'dark' }
 ];
 
-// Statü objesini döndüren yardımcı fonksiyon
-export const getTaskStatusInfo = (status) => {
-    return TASK_STATUSES.find(s => s.value === status) || { text: status || 'Belirsiz', color: 'secondary' };
-};
+export const TASK_STATUS_MAP = TASK_STATUSES.reduce((acc, status) => {
+    acc[status.value] = status.text;
+    return acc;
+}, {});
 
 // IP Kayıt durumları (data-entry.html'de kullanılır)
 export const STATUSES = {
