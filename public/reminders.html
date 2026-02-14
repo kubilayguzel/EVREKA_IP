@@ -133,7 +133,7 @@
                     </div>
                     <div class="form-group col-md-6">
                         <label class="small font-weight-bold text-muted mb-2 text-uppercase">Tarih</label>
-                        <input type="date" id="reminderDueDate" class="form-control" style="border-radius: 10px;" required>
+                        <input type="text" id="reminderDueDate" class="form-control" placeholder="gg.aa.yyyy" data-datepicker required>
                     </div>
                 </div>
                 <div class="form-group mb-4">
@@ -150,7 +150,7 @@
 
     <script type="module">
         import { reminderService, auth, db } from './firebase-config.js';
-        import { showNotification } from './utils.js';
+        import { showNotification,formatToTRDate } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
         import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -169,6 +169,7 @@
                         this.currentUser = user;
                         await this.loadAllSources();
                         this.setupEvents();
+                        if (window.EvrekaDatePicker) window.EvrekaDatePicker.init();
                     }
                 });
             }
@@ -249,7 +250,7 @@
                                     <span class="category-text uppercase font-weight-bold">
                                         ${!item.isRead ? '<span class="unread-indicator"></span>' : ''}${item.category}
                                     </span>
-                                    <span class="small text-muted font-weight-bold"><i class="far fa-clock mr-1"></i>${new Date(this.formatIsoDate(item.dueDate)).toLocaleDateString('tr-TR')}</span>
+                                    <span class="small text-muted font-weight-bold"><i class="far fa-clock mr-1"></i>${formatToTRDate(item.dueDate)}</span>
                                 </div>
                                 <h5 class="title-text mb-2">${item.title}</h5>
                                 <p class="mb-4 text-secondary" style="line-height: 1.6;">${item.message}</p>
