@@ -430,7 +430,7 @@ export async function ensurePersonModal() {
         </div>
         <div class="form-group" id="pm_birthDateGroup" style="display:none;">
             <label for="pm_birthDate" class="form-label">Doğum Tarihi</label>
-            <input id="pm_birthDate" type="date" class="form-input">
+            <input id="pm_birthDate" type="text" class="form-input" data-datepicker>
         </div>
         <div class="form-group">
           <label for="pm_tpeNo" class="form-label">TPE Müşteri No</label>
