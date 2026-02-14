@@ -316,11 +316,13 @@ function setupMenuBadges(db, collection, query, where, onSnapshot, userId) {
                 where("assignedTo_uid", "==", userId)
             );
 
-            onSnapshot(myTasksQuery, (snapshot) => {
-                // Filtre: Status 'completed' (Tamamlandı) veya 'cancelled' (İptal) DEĞİLSE say
+        onSnapshot(myTasksQuery, (snapshot) => {
+                // SADECE 'Açık', 'Devam Ediyor' ve 'Beklemede' olanları say (Aktif İşler Sekmesiyle %100 Uyumlu)
+                const activeStatuses = ['open', 'in-progress', 'pending'];
+                
                 const activeTasksCount = snapshot.docs.filter(doc => {
                     const status = doc.data().status;
-                    return status !== 'completed' && status !== 'cancelled';
+                    return activeStatuses.includes(status);
                 }).length;
 
                 updateBadgeUI('my-tasks', activeTasksCount);
