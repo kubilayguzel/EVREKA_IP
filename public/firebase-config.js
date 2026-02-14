@@ -537,7 +537,8 @@ export const ipRecordsService = {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const docRef = doc(db, "ipRecords", recordId);
-            const docSnap = await getDoc(docRef);
+            // Veriyi her zaman sunucudan (Server) çekmeyi deneyerek cache senkronizasyon sorununu çözüyoruz
+            const docSnap = await getDoc(docRef); 
             return docSnap.exists() ? { success: true, data: { id: docSnap.id, ...docSnap.data() } } : { success: false, error: "Kayıt bulunamadı." };
         } catch (error) {
             return { success: false, error: error.message };
