@@ -1,5 +1,6 @@
 // public/js/components/TaskDetailManager.js
 import { getFirestore, doc, getDoc, updateDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { formatToTRDate } from "../../utils.js";
 
 const db = getFirestore();
 
@@ -553,8 +554,7 @@ export class TaskDetailManager {
     }
 
     _formatDate(dateVal) {
-        if (!dateVal) return '-';
-        try { const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal); return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR'); } catch(e) { return '-'; }
+        return formatToTRDate(dateVal); // utils'deki fonksiyonu kullanır
     }
 
     _formatCurrency(amount, currency) {
