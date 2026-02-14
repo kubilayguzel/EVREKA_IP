@@ -25,7 +25,8 @@ import {
     isWeekend, 
     isHoliday, 
     TURKEY_HOLIDAYS,
-    generateUUID 
+    generateUUID,
+    formatToTRDate
 } from '../../utils.js';
 import '../simple-loading.js';
 
@@ -94,6 +95,7 @@ export class DocumentReviewManager {
 
         this.currentUser = authService.getCurrentUser();
         this.setupEventListeners();
+        if (window.EvrekaDatePicker) window.EvrekaDatePicker.refresh();
         await this.loadCountriesOnly();
         await this.loadTransactionTypes();
         await this.loadData();
@@ -388,7 +390,11 @@ async loadData() {
                 this.toYMD(this.pdfData?.belgeTarihi) ||
                 this.toYMD(this.pdfData?.uploadedAt);
 
-            if (ymd) dateInput.value = ymd;
+            if (ymd) {
+                dateInput.value = ymd;
+                // Datepicker görselini güncelle:
+                if (dateInput._flatpickr) dateInput._flatpickr.setDate(ymd, true);
+            }
         }
 
         // 2) "Kayıt Ara" input'unu doldurup arat
@@ -559,7 +565,7 @@ async loadData() {
                 
                 // Tarihi formatla
                 const dateObj = resolveDate(t);
-                const dateStr = dateObj ? dateObj.toLocaleDateString('tr-TR') : '-';
+                const dateStr = formatToTRDate(dateObj);
                 
                 const opt = document.createElement('option');
                 opt.value = t.id;
@@ -670,12 +676,13 @@ updateChildTransactionOptions() {
                 }
                 if (this.extractedRegDate) {
                     const regDateInput = document.getElementById('registry-registration-date');
-                    if (regDateInput && !regDateInput.value) {
-                        regDateInput.value = this.extractedRegDate;
-                        if (regDateInput._flatpickr) {
-                            regDateInput._flatpickr.setDate(this.extractedRegDate, true);
-                        }
+                if (regDateInput && !regDateInput.value) {
+                    regDateInput.value = this.extractedRegDate;
+                    // Merkezi yapıdaki instance'ı güncelle:
+                    if (regDateInput._flatpickr) {
+                        regDateInput._flatpickr.setDate(this.extractedRegDate, true);
                     }
+                }
                 }
                 // Marka durumu "Tescilli"
                 const statusSelect = document.getElementById('registry-status') || document.getElementById('status');
