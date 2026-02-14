@@ -32,7 +32,7 @@ export const FormTemplates = {
                         </div>
                         <div class="form-group">
                             <label for="applicationDate" class="form-label">Başvuru Tarihi</label>
-                            <input type="text" id="applicationDate" class="form-input" placeholder="gg.aa.yyyy">
+                            <input type="text" id="applicationDate" class="form-input" placeholder="gg.aa.yyyy" data-datepicker>
                         </div>
                         <div id="registrationNumberWrapper" class="form-group">
                             <label id="registrationNumberLabel" for="registrationNumber" class="form-label">Tescil Numarası</label>
@@ -40,11 +40,11 @@ export const FormTemplates = {
                         </div>
                         <div class="form-group">
                             <label for="registrationDate" class="form-label">Tescil Tarihi</label>
-                            <input type="text" id="registrationDate" class="form-input" placeholder="gg.aa.yyyy">
+                            <input type="text" id="registrationDate" class="form-input" placeholder="gg.aa.yyyy" data-datepicker>
                         </div>
                         <div class="form-group">
                             <label for="renewalDate" class="form-label">Yenileme Tarihi</label>
-                            <input type="text" id="renewalDate" class="form-input" placeholder="gg.aa.yyyy">
+                            <input type="text" id="renewalDate" class="form-input" placeholder="gg.aa.yyyy" data-datepicker>
                         </div>
                         <div class="form-group">
                             <label for="trademarkStatus" class="form-label">Durum</label>
@@ -57,7 +57,7 @@ export const FormTemplates = {
                             </div>
                             <div class="form-group col-md-6">
                                 <label for="bulletinDate" class="form-label">Bülten Tarihi</label>
-                                <input id="bulletinDate" type="text" class="form-input" placeholder="gg.aa.yyyy">
+                                <input id="bulletinDate" type="text" class="form-input" placeholder="gg.aa.yyyy" data-datepicker>
                             </div>
                         </div>
                         <div class="form-group">
@@ -145,7 +145,7 @@ export const FormTemplates = {
                         <div class="form-group row">
                             <label for="priorityDate" class="col-sm-3 col-form-label" id="priorityDateLabel">Rüçhan Tarihi</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control" id="priorityDate" placeholder="gg.aa.yyyy">
+                                <input type="text" class="form-control" id="priorityDate" placeholder="gg.aa.yyyy" data-datepicker>
                             </div>
                         </div>
                         
@@ -336,7 +336,7 @@ export const FormTemplates = {
 
                     <div class="form-group">
                         <label for="suitOpeningDate" class="form-label">Dava Tarihi (Açılış)</label>
-                        <input type="date" class="form-control" id="suitOpeningDate" required>
+                        <input type="text" class="form-control" id="suitOpeningDate" placeholder="gg.aa.yyyy" data-datepicker required
                     </div>
 
                     <div class="form-group full-width mt-3">
