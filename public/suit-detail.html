@@ -138,7 +138,7 @@
         import { db, auth } from './firebase-config.js';
         import { doc, getDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { showNotification, STATUSES } from './utils.js';
+        import { showNotification, STATUSES,formatToTRDate } from './utils.js';
 
         const params = new URLSearchParams(window.location.search);
         const suitId = params.get('id');
@@ -232,7 +232,7 @@
                     const t = docSnapshot.data();
                     
                     // Görüntülenecek veriler
-                    const date = t.creationDate ? new Date(t.creationDate).toLocaleDateString('tr-TR') : '-';
+                    const date = formatToTRDate(t.creationDate);
                     const desc = t.description || 'İşlem detay girilmemiş.';
                     const typeName = t.transactionTypeName || 'İşlem'; 
                     
@@ -308,11 +308,7 @@
         }
         
         function formatDate(dateVal) {
-            if(!dateVal) return '-';
-            try {
-                const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
-                return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
-            } catch { return '-'; }
+            return formatToTRDate(dateVal);
         }
 
         function formatRole(role) {
