@@ -1,13 +1,14 @@
 // public/js/task-management/my-tasks.js
 
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, db } from '../../firebase-config.js';
-import { showNotification, TASK_STATUS_MAP } from '../../utils.js';
+import { showNotification, TASK_STATUS_MAP,formatToTRDate } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import Pagination from '../pagination.js'; 
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
                     if (assignEntry?.timestamp) {
                         assignedDateObj = safeDate(assignEntry.timestamp);
-                        if (assignedDateObj) assignedAtText = assignedDateObj.toLocaleString('tr-TR');
+                        if (assignedDateObj) assignedAtText = formatToTRDate(assignedDateObj);
                     }
                 }
 
@@ -427,18 +428,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const officialDueISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
 
                 const row = document.createElement('tr');
+                // renderTasks metodu içindeki row.innerHTML kısmı
                 row.innerHTML = `
                     <td>${task.id}</td>
                     <td>${task.relatedRecordDisplay}</td>
                     <td>${task.taskTypeDisplay}</td>
                     <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
                     <td data-field="operationalDue" data-date="${dueDateISO}">
-                        ${task.dueDateObj ? task.dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
+                        ${formatToTRDate(task.dueDateObj)} 
                     </td>
                     <td data-field="officialDue" data-date="${officialDueISO}">
-                        ${task.officialDueObj ? task.officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
+                        ${formatToTRDate(task.officialDueObj)}
                     </td>
-                    <td>${task.createdAtObj ? task.createdAtObj.toLocaleString('tr-TR') : '-'}</td>
+                    <td>${formatToTRDate(task.createdAtObj)}</td>
                     <td>${task.assignedAtText}</td>
                     <td><span class="status-badge ${statusClass}">${task.statusText}</span></td>
                     <td>
