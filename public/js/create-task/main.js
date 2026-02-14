@@ -13,21 +13,9 @@ import { TaskSubmitHandler } from './TaskSubmitHandler.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
 function initTaskDatePickers(root = document) {
-    try {
-        const IDS = ['taskDueDate', 'priorityDate', 'lawsuitDate', 'lawsuitDecisionDate', 'suitOpeningDate'];
-        const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
-        IDS.forEach(id => {
-            const el = (root && root.querySelector) ? root.querySelector(`#${id}`) : document.getElementById(id);
-            if (!el || el._flatpickr) return;
-            try { if (el.type === 'date') el.type = 'text'; } catch (e) {}
-            if (typeof flatpickr !== 'function') return;
-            flatpickr(el, {
-                dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true, clickOpens: true,
-                locale: (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr) ? window.flatpickr.l10ns.tr : "tr",
-                onClose: (selectedDates, dateStr, inst) => { if (inst.altInput.value && !dateRegex.test(inst.altInput.value)) inst.clear(); }
-            });
-        });
-    } catch (err) { console.warn('Date picker init error:', err); }
+    if (window.EvrekaDatePicker) {
+        window.EvrekaDatePicker.refresh(root);
+    }
 }
 
 class CreateTaskController {
