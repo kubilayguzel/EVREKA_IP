@@ -444,37 +444,11 @@ class DataEntryModule {
     }
 
     initializeDatePickers() {
-        const dateFields = ['applicationDate', 'registrationDate', 'renewalDate', 'bulletinDate', 'priorityDate', 'suitOpeningDate'];
-        const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
-
-        dateFields.forEach(fieldId => {
-            const element = document.getElementById(fieldId);
-            if (element) {
-                flatpickr(element, {
-                    dateFormat: "d.m.Y",
-                    allowInput: true,
-                    clickOpens: false,
-                    locale: "tr",
-                    onReady: (selectedDates, dateStr, instance) => {
-                        element.addEventListener('input', (event) => {
-                            let value = event.target.value.replace(/[^\d.]/g, '');
-                            if (value.length === 2 && value.indexOf('.') === -1) value += '.';
-                            else if (value.length === 5 && value.split('.').length === 2) value += '.';
-                            if (value.length > 10) value = value.substring(0, 10);
-                            event.target.value = value;
-                        });
-                    },
-                    onClose: (selectedDates, dateStr, instance) => {
-                        if (dateStr && !dateRegex.test(dateStr)) { instance.clear(); element.value = ''; }
-                    },
-                    onKeydown: (selectedDates, dateStr, instance, event) => {
-                        if (event.key === 'Enter') element.blur();
-                    }
-                });
-                element.addEventListener('click', () => element._flatpickr.open());
-            }
-        });
+    // Merkezi date-picker'ı tetikle:
+    if (window.EvrekaDatePicker) {
+        window.EvrekaDatePicker.refresh(this.dynamicFormContainer);
     }
+}
 
     // ============================================================
     // 4. KAYDETME & WIPO/ARIPO MANTIĞI (CORE)
