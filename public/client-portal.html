@@ -937,6 +937,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap/dist/css/jsvectormap.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/jsvectormap"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsvectormap/dist/maps/world.js"></script>
+<script src="./js/simple-loading.js"></script>
 
 <script type="module">
     import { authService, db } from './firebase-config.js';
@@ -1008,8 +1009,7 @@
     window.linkedClientsMap = []; // [{id: '123', name: 'ABC Ltd.'}, ...]
     window.selectedClientId = 'ALL'; // Varsayılan 'HEPSİ'
 
-    const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
-
+    const runGetDocs = getDocs; // getDocsFromServer iptal edildi, önbellek aktif!
     // --- YARDIMCI FONKSİYONLAR ---
     window.formatDateTR = function(v) {
         if (!v) return '-';
@@ -1106,6 +1106,12 @@
 async function initPortal() {
     const user = authService.getCurrentUser();
     if (!user) return;
+    
+    // Yükleme ekranını başlat
+    if (window.SimpleLoadingController) {
+        window.SimpleLoadingController.show('Portal Hazırlanıyor', 'Verileriniz güvenle getiriliyor...');
+    }
+
     $('#userName').text(user.displayName || user.email);
     $('#userAvatar').text((user.displayName||'U').charAt(0).toUpperCase());
     $('#welcomeUserName').text(user.displayName || user.email);
@@ -1182,70 +1188,111 @@ async function initPortal() {
             window.contractsPaginationData.allDataUnfiltered = allDocuments || [];
             window.applyContractsFilter(); // Tabloyu ilk kez oluşturur
         // ========================================================================
-
         // Diğer verileri çek
         fetchAndDisplayPortfolio();
-        fetchAndDisplayTasks(linkedIds);
-        fetchAndDisplayInvoices(linkedIds);
-        fetchAndDisplaySuits();
-        fetchAndDisplayObjections();
+        // 1. En kritik veri olan Portföy'ü çek (Bu inmeden diğerleri düzgün çalışamaz)
+        await fetchAndDisplayPortfolio();
+        // 2. PORTAL HAZIR! Kullanıcıyı 40 saniye bekletmemek için YÜKLEME EKRANINI HEMEN KAPAT.
+        // Kullanıcı anında Dashboard ekranını görmeye başlayacak.
+        if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+
+        // 3. Ağır verileri ARKA PLANDA ve PARALEL (hepsi aynı anda) çek.
+        // Ekranda loading dönmez, sistem kilitlenmez. Kullanıcı sayfayı incelerken veriler inmeye devam eder.
+        Promise.all([
+            fetchAndDisplayTasks(linkedIds),
+            fetchAndDisplayInvoices(linkedIds),
+            fetchAndDisplaySuits(),
+            fetchAndDisplayObjections()
+        ]).then(() => {
+            console.log("Arka plan verileri başarıyla yüklendi.");
+            // Tüm veriler indiğinde sayaçları son kez çaktırmadan güncelle
+            window.updateDashboardCounts(); 
+        }).catch(err => {
+            console.error("Arka plan veri çekme hatası:", err);
+        });
 
     } catch (e) {
         console.error("Init Error:", e);
-    }
+        if (window.SimpleLoadingController) window.SimpleLoadingController.showError('Bağlantı hatası oluştu.');
+    } 
 }
 
-// --- 1. PORTFÖY ---
-    async function fetchAndDisplayPortfolio() {
-        const q = query(collection(db, "ipRecords")); 
-        try {
-            const snap = await runGetDocs(q);
-            let allPortfolios = [];
+// --- 1. PORTFÖY (YENİ VE HIZLI VERSİYON) ---
+async function fetchAndDisplayPortfolio() {
+    const tbody = document.querySelector('#marka-list tbody');
+    // Veriler gelene kadar tabloya yükleniyor yazısı koyalım
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> Portföy yükleniyor...</td></tr>';
+
+    try {
+        let allPortfolios = [];
+        
+        // Kullanıcının bağlı olduğu müvekkiller varsa işlemi yap
+        if (window.linkedPersonIds && window.linkedPersonIds.length > 0) {
+            const chunks = [];
             
-            snap.forEach(doc => {
-                const d = doc.data();
-                if (d.applicants && d.applicants.some(a => window.linkedPersonIds.includes(a.id))) {
-                    allPortfolios.push({ id: doc.id, ...d });
+            // "in" veya "array-contains-any" komutları maksimum 10 eleman alır. Gruplara bölüyoruz:
+            for (let i = 0; i < window.linkedPersonIds.length; i += 10) {
+                const chunk = window.linkedPersonIds.slice(i, i + 10);
+                
+                // İŞTE SİHİRLİ SORGUMUZ: applicantIds dizisinde bu müşterilerden BİRİ geçiyorsa anında getir!
+                const q = query(collection(db, "ipRecords"), where('applicantIds', 'array-contains-any', chunk));
+                
+                // runGetDocs kullanarak veriyi önbellekten veya sunucudan çok hızlı çekiyoruz
+                chunks.push(runGetDocs(q));
+            }
+            
+            // Tüm grupları paralel olarak (aynı anda) veritabanından çek
+            const snapshots = await Promise.all(chunks);
+            
+            snapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    allPortfolios.push({ id: doc.id, ...doc.data() });
+                });
+            });
+        }
+
+        // Çekilen veriyi Global Değişkene Kaydet (Diğer modüller buradan okuyacak)
+        window.allPortfolioData = allPortfolios;
+
+        // Dashboard Sayaçlarını Güncelle
+        window.updateDashboardCounts();
+        
+        // Marka Listesi (Pagination verisi hazırlığı)
+        // Sadece markaları filtrele
+        window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka' || p.brandType);
+        window.markaPaginationData.allData = [...window.markaPaginationData.allDataUnfiltered];
+
+        // Patent ve Tasarımları filtrele
+        const patentList = allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent');
+        const tasarimList = allPortfolios.filter(p => p.type === 'design' || p.type === 'Tasarım');
+        
+        // Sayfalama Modülünü Başlat
+        if (!window.markaPaginationData.pagination && window.Pagination) {
+            window.markaPaginationData.pagination = new window.Pagination({
+                itemsPerPage: 10,
+                containerId: 'markaPagination',
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const slice = window.markaPaginationData.allData.slice(start, start + perPage);
+                    window.populatePortfolioTable('#marka-list', slice, start);
                 }
             });
-
-            // 🔥 Veriyi Global Değişkene Kaydet
-            window.allPortfolioData = allPortfolios;
-
-            // 🔥 Dashboard'u Güncelle
-            window.updateDashboardCounts();
-            
-            // Ham Veriyi Kaydet (Marka Listesi İçin)
-            window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka');
-            window.markaPaginationData.allData = [...window.markaPaginationData.allDataUnfiltered];
-
-            const patentList = allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent');
-            const tasarimList = allPortfolios.filter(p => p.type === 'design' || p.type === 'Tasarım');
-            
-            if (!window.markaPaginationData.pagination && window.Pagination) {
-                window.markaPaginationData.pagination = new window.Pagination({
-                    itemsPerPage: 10,
-                    containerId: 'markaPagination',
-                    onPageChange: (page, perPage) => {
-                        const start = (page - 1) * perPage;
-                        const slice = window.markaPaginationData.allData.slice(start, start + perPage);
-                        window.populatePortfolioTable('#marka-list', slice, start);
-                    }
-                });
-            }
-            
-            if (window.markaPaginationData.pagination) {
-                window.markaPaginationData.pagination.update(window.markaPaginationData.allData.length);
-            }
-            
-            window.populatePortfolioTable('#marka-list', window.markaPaginationData.allData.slice(0,10));
-            window.populatePortfolioTable('#patent-list', patentList);
-            window.populatePortfolioTable('#tasarim-list', tasarimList);
-            
-        } catch (error) {
-            console.error("Portföy yükleme hatası:", error);
         }
+        
+        if (window.markaPaginationData.pagination) {
+            window.markaPaginationData.pagination.update(window.markaPaginationData.allData.length);
+        }
+        
+        // Tabloları İlk Verilerle Doldur
+        window.populatePortfolioTable('#marka-list', window.markaPaginationData.allData.slice(0,10));
+        window.populatePortfolioTable('#patent-list', patentList);
+        window.populatePortfolioTable('#tasarim-list', tasarimList);
+        
+    } catch (error) {
+        console.error("Portföy yükleme hatası:", error);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Portföy yüklenirken bir hata oluştu.</td></tr>';
     }
+}
 
 // === PORTFÖY TABLOSU DOLDURMA (GÜNCELLENMİŞ) ===
 window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
@@ -1451,11 +1498,10 @@ window.fetchCountries = async function() {
 };
 
 // --- 2. İŞLERİM (TASKS) ---
-    window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
+window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
         if (!taskData._relatedClientIds) taskData._relatedClientIds = [];
         let isMatch = false;
         
-        // A) Doğrudan Görev Üzerindeki ID'ler (ClientId ve TaskOwner - String)
         if (taskData.clientId && clientPersonIdSet.has(taskData.clientId)) {
             if (!taskData._relatedClientIds.includes(taskData.clientId)) taskData._relatedClientIds.push(taskData.clientId);
             isMatch = true;
@@ -1464,8 +1510,6 @@ window.fetchCountries = async function() {
             if (!taskData._relatedClientIds.includes(taskData.taskOwner)) taskData._relatedClientIds.push(taskData.taskOwner);
             isMatch = true;
         }
-
-        // B) TaskOwner Array ise (Sizin eklediğiniz kısım)
         if (Array.isArray(taskData.taskOwner)) {
             taskData.taskOwner.forEach(ownerId => {
                 if (clientPersonIdSet.has(ownerId)) {
@@ -1474,43 +1518,33 @@ window.fetchCountries = async function() {
                 }
             });
         }
-        
-        // C) Opponent ID Kontrolü (Sizin eklediğiniz kısım + details kontrolü)
-        // Hem ana obje hem de details içindeki opponent.id kontrol edilir.
         const opponentId = taskData.opponent?.id || taskData.details?.opponent?.id;
         if (opponentId && clientPersonIdSet.has(opponentId)) {
             if (!taskData._relatedClientIds.includes(opponentId)) taskData._relatedClientIds.push(opponentId);
             isMatch = true;
         }
         
-        // D) İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
+        // 🔥 HIZLANDIRILMIŞ KONTROL: Veritabanına ASLA gitme! 
+        // Eğer bu marka müşterininse, zaten şu an hafızadaki (window.allPortfolioData) listede vardır.
         if (taskData.relatedIpRecordId && !isMatch) {
-            try {
-                let applicants = [];
-                // Hafızadan kontrol
-                if (window.allPortfolioData) {
-                    const localRec = window.allPortfolioData.find(r => r.id === taskData.relatedIpRecordId);
-                    if (localRec && localRec.applicants) applicants = localRec.applicants;
+            if (window.allPortfolioData) {
+                const localRec = window.allPortfolioData.find(r => r.id === taskData.relatedIpRecordId);
+                if (localRec) {
+                    isMatch = true; 
+                    if (localRec.applicants) {
+                        localRec.applicants.forEach(app => {
+                            if (app.id && clientPersonIdSet.has(app.id) && !taskData._relatedClientIds.includes(app.id)) {
+                                taskData._relatedClientIds.push(app.id);
+                            }
+                        });
+                    }
                 }
-                // Veritabanından kontrol
-                if (applicants.length === 0) {
-                    const snap = await getDoc(doc(db, 'ipRecords', taskData.relatedIpRecordId));
-                    if (snap.exists()) applicants = snap.data().applicants || [];
-                }
-                
-                if (Array.isArray(applicants)) {
-                    applicants.forEach(app => {
-                        if (app.id && clientPersonIdSet.has(app.id)) {
-                            if (!taskData._relatedClientIds.includes(app.id)) taskData._relatedClientIds.push(app.id);
-                            isMatch = true;
-                        }
-                    });
-                }
-            } catch (e) { console.error('Task IP check error', e); }
+            }
         }
         
         return isMatch;
     };
+
 
     window.fetchAndDisplayTasks = async function(linkedIds) {
         const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
@@ -1775,120 +1809,111 @@ window.fetchCountries = async function() {
 
 // --- 3. FATURA ---
 window.fetchAndDisplayInvoices = async function(linkedIds) {
-        console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
+    console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
+    
+    const tbody = $('#invoices table tbody');
+    tbody.html('<tr><td colspan="10" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
+
+    if (!linkedIds || linkedIds.length === 0) {
+        tbody.html('<tr><td colspan="10" class="text-center text-muted">Bağlı hesap bilgisi bulunamadı.</td></tr>');
+        return;
+    }
+
+    try {
+        const allAccruals = [];
         
-        const tbody = $('#invoices table tbody');
-        tbody.html('<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
-
-        if (!linkedIds || linkedIds.length === 0) {
-            tbody.html('<tr><td colspan="9" class="text-center text-muted">Bağlı hesap bilgisi bulunamadı.</td></tr>');
-            return;
+        // 1. Faturaları Çek (Chunking ile)
+        for (let i = 0; i < linkedIds.length; i += 10) {
+            const chunk = linkedIds.slice(i, i + 10);
+            const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
+            const snap = await runGetDocs(q); // Önbellek avantajıyla anında gelir
+            snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
         }
+        
+        // Tekilleştirme ve Tarihe Göre Sıralama
+        const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values())
+            .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-        try {
-            const allAccruals = [];
-            
-            // 1. Faturaları Çek (Chunking ile)
-            for (let i = 0; i < linkedIds.length; i += 10) {
-                const chunk = linkedIds.slice(i, i + 10);
-                const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
-                const snap = await runGetDocs(q);
-                snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
-            }
-            
-            // Tekilleştirme
-            const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values())
-                .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        // 🔥 KRİTİK HIZLANDIRMA: Ekstra detayları (Başvuru No) bekletmeden SAYAÇLARI ANINDA GÜNCELLE
+        window.invoicesPaginationData.allDataUnfiltered = unique; 
+        window.applyInvoiceFilter(); // Tablo anında dolsun
+        window.updateDashboardCounts(); // Sayaç anında ekrana gelsin
 
-            // 2. Task ve IP Bilgilerini Getir (Başvuru No İçin)
-            // Benzersiz Task ID'lerini topla
-            const taskIds = [...new Set(unique.map(i => i.taskId).filter(Boolean))];
-            const taskMap = new Map(); // taskId -> { relatedIpRecordId }
+        // 🔥 ARKA PLAN İŞLEMİ: Ekranda sayaçlar görünürken, biz arkada eksik detayları (Başvuru No vb.) getirelim
+        (async () => {
+            try {
+                // Faturaya ait Task ID'lerini bul
+                const taskIds = [...new Set(unique.map(i => i.taskId).filter(Boolean))];
+                const taskMap = new Map(); // taskId -> task verisi
 
-            if (taskIds.length > 0) {
-                // Task'leri parça parça çek
-                for (let i = 0; i < taskIds.length; i += 10) {
-                    const chunk = taskIds.slice(i, i + 10);
-                    // Belge ID'sine (__name__) göre sorgu
-                    const tQ = query(collection(db, 'tasks'), where('__name__', 'in', chunk));
-                    const tSnap = await getDocs(tQ);
-                    tSnap.forEach(d => taskMap.set(d.id, d.data()));
+                if (taskIds.length > 0) {
+                    for (let i = 0; i < taskIds.length; i += 10) {
+                        const chunk = taskIds.slice(i, i + 10);
+                        const tQ = query(collection(db, 'tasks'), where('__name__', 'in', chunk));
+                        const tSnap = await getDocs(tQ);
+                        tSnap.forEach(d => taskMap.set(d.id, d.data()));
+                    }
                 }
-            }
 
-            // Benzersiz IP ID'lerini topla
-            const ipIds = [...new Set(Array.from(taskMap.values()).map(t => t.relatedIpRecordId).filter(Boolean))];
-            const ipMap = new Map(); // ipId -> applicationNumber
+                // Task'lere ait IP (Marka/Patent) ID'lerini bul
+                const ipIds = [...new Set(Array.from(taskMap.values()).map(t => t.relatedIpRecordId).filter(Boolean))];
+                const ipMap = new Map(); // ipId -> applicationNumber
 
-            if (ipIds.length > 0) {
-                // Önce eldeki portföy verisine bak (Hız kazandırır)
-                const localData = window.allPortfolioData || [];
-                const missingIpIds = [];
+                if (ipIds.length > 0) {
+                    // Önce portföyden belleğe alınmış veri var mı diye bak (Hız kazandırır)
+                    const localData = window.allPortfolioData || [];
+                    const missingIpIds = [];
 
-                ipIds.forEach(id => {
-                    const found = localData.find(p => p.id === id);
-                    if (found) {
-                        ipMap.set(id, found.applicationNumber);
-                    } else {
-                        missingIpIds.push(id);
+                    ipIds.forEach(id => {
+                        const found = localData.find(p => p.id === id);
+                        if (found) {
+                            ipMap.set(id, found.applicationNumber);
+                        } else {
+                            missingIpIds.push(id);
+                        }
+                    });
+
+                    // Bellekte olmayan eksik IP kayıtlarını veritabanından çek
+                    if (missingIpIds.length > 0) {
+                        for (let i = 0; i < missingIpIds.length; i += 10) {
+                            const chunk = missingIpIds.slice(i, i + 10);
+                            const ipQ = query(collection(db, 'ipRecords'), where('__name__', 'in', chunk));
+                            const ipSnap = await getDocs(ipQ);
+                            ipSnap.forEach(d => {
+                                ipMap.set(d.id, d.data().applicationNumber);
+                            });
+                        }
+                    }
+                }
+
+                // 3. Verileri Birleştir (Faturaya Başvuru No Ekle)
+                unique.forEach(inv => {
+                    if (inv.taskId) {
+                        const task = taskMap.get(inv.taskId);
+                        if (task && task.relatedIpRecordId) {
+                            inv.applicationNumber = ipMap.get(task.relatedIpRecordId);
+                        }
                     }
                 });
 
-                // Eksik IP kayıtlarını veritabanından çek
-                if (missingIpIds.length > 0) {
-                    for (let i = 0; i < missingIpIds.length; i += 10) {
-                        const chunk = missingIpIds.slice(i, i + 10);
-                        const ipQ = query(collection(db, 'ipRecords'), where('__name__', 'in', chunk));
-                        const ipSnap = await getDocs(ipQ);
-                        ipSnap.forEach(d => {
-                            ipMap.set(d.id, d.data().applicationNumber);
-                        });
-                    }
-                }
+                // Başvuru Numaraları tabloya yansısın diye filtreyi tekrar tetikle (kullanıcı fark etmez)
+                window.invoicesPaginationData.allDataUnfiltered = unique; 
+                window.applyInvoiceFilter();
+                
+            } catch (bgError) {
+                console.error("Faturalara arka planda detay eklenirken hata:", bgError);
             }
+        })(); // Arka plan (Async IIFE) fonksiyonu burada biter
 
-            // 3. Verileri Birleştir (Faturaya Başvuru No Ekle)
-            unique.forEach(inv => {
-                if (inv.taskId) {
-                    const task = taskMap.get(inv.taskId);
-                    if (task && task.relatedIpRecordId) {
-                        inv.applicationNumber = ipMap.get(task.relatedIpRecordId);
-                    }
-                }
-            });
+    } catch (error) {
+        console.error("❌ Fatura yükleme hatası:", error);
+        tbody.html('<tr><td colspan="10" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
+    }
+    
+    // Fallback olarak (hata olsa bile) diğer sayaçları güncelle
+    window.updateDashboardCounts();
+};
 
-            // State Güncelleme
-            $('#dashUnpaidInvoices').text(unique.filter(a => a.status === 'unpaid').length);
-            
-            // 1. Ham veriyi sakla (Filtreleme için kaynak)
-            window.invoicesPaginationData.allDataUnfiltered = unique; 
-            
-            // 2. Pagination modülünü başlat (Eğer yoksa)
-            if (!window.invoicesPaginationData.pagination && window.Pagination) {
-                window.invoicesPaginationData.pagination = new window.Pagination({
-                    itemsPerPage: 10,
-                    containerId: 'invoices-pagination-container',
-                    onPageChange: (page, perPage) => {
-                        // Sayfa değiştiğinde filtrelenmiş veriden dilim al
-                        const start = (page - 1) * perPage;
-                        const slice = window.invoicesPaginationData.allData.slice(start, start + perPage);
-                        window.renderInvoicesTable(slice);
-                    }
-                });
-            }
-
-            // 3. FİLTRELE VE GÖSTER (ÇÖZÜM BURADA)
-            // Veriyi doğrudan basmak yerine filtre fonksiyonunu çağırıyoruz.
-            // Bu fonksiyon 'window.selectedClientId' değerini kontrol edip doğru faturaları gösterecek.
-            window.applyInvoiceFilter();
-
-        } catch (error) {
-            console.error("❌ Fatura yükleme hatası:", error);
-            tbody.html('<tr><td colspan="7" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
-        }
-        
-        window.updateDashboardCounts();
-    };
 
     window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
@@ -2059,19 +2084,32 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
     };
 
 window.fetchAndDisplaySuits = async function() {
-        const tbody = document.getElementById('dava-tbody');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+    const tbody = document.getElementById('dava-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
 
-        try {
-            const q = query(collection(db, 'suits'));
-            const snap = await getDocs(q);
-            const suitRows = [];
-            let idx = 0;
+    try {
+        let suitRows = [];
+        let idx = 0;
+
+        // Kullanıcının bağlı olduğu müvekkil ID'leri varsa sorguyu yap
+        if (window.linkedPersonIds && window.linkedPersonIds.length > 0) {
+            const chunks = [];
             
-            snap.forEach(d => {
-                const s = d.data();
-                // Yetki kontrolü
-                if (s.client?.id && window.linkedPersonIds.includes(s.client.id)) {
+            // Firestore 'in' sorgusu en fazla 10 eleman kabul ettiği için diziyi 10'arlı parçalara bölüyoruz
+            for (let i = 0; i < window.linkedPersonIds.length; i += 10) {
+                const chunk = window.linkedPersonIds.slice(i, i + 10);
+                // Sadece bu müşterilere ait davaları sunucudan/önbellekten istiyoruz
+                const q = query(collection(db, 'suits'), where('client.id', 'in', chunk));
+                // runGetDocs kullanarak cache avantajından faydalanıyoruz
+                chunks.push(runGetDocs(q));
+            }
+            
+            // Tüm parçaları paralel çalıştır
+            const snapshots = await Promise.all(chunks);
+            
+            snapshots.forEach(snap => {
+                snap.forEach(d => {
+                    const s = d.data();
                     idx++;
                     suitRows.push({ 
                         id: d.id, 
@@ -2085,37 +2123,42 @@ window.fetchAndDisplaySuits = async function() {
                         suitStatus: s.suitDetails?.suitStatus || 'Devam Ediyor',
                         ...s.suitDetails, 
                         
-                        // 🔥 DÜZELTME BURADA: Filtreleme için client objesini ekledik
                         client: s.client, 
-                        
                         clientName: s.client?.name, 
                         subjectAssetTitle: s.subjectAsset?.title, 
                         subjectAssetType: s.subjectAsset?.type, 
                         subjectAssetNumber: s.subjectAsset?.number 
                     });
-                }
+                });
             });
+        }
 
-            // Global State'e Kaydet
-            window.davaPaginationData.allDataUnfiltered = suitRows;
-            window.suitsData = suitRows; 
+        // Global State'e Kaydet
+        window.davaPaginationData.allDataUnfiltered = suitRows;
+        window.suitsData = suitRows; 
 
-            // Filtre ve Render Tetikle
-            if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
-                window.applyMasterFilter();
-            } else {
-                window.davaPaginationData.allData = suitRows;
+        // Filtre ve Render Tetikle
+        if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
+            window.applyMasterFilter();
+        } else {
+            window.davaPaginationData.allData = suitRows;
+            if (!window.davaPaginationData.pagination && window.Pagination) {
                  window.davaPaginationData.pagination = new window.Pagination({
                     itemsPerPage: 10,
                     containerId: 'davaPagination',
                     onPageChange: (page, perPage) => window.renderDavaTable(suitRows.slice((page-1)*perPage, page*perPage), (page-1)*perPage)
                 });
-                window.davaPaginationData.pagination.update(suitRows.length);
-                window.renderDavaTable(suitRows.slice(0,10));
             }
+            if(window.davaPaginationData.pagination) window.davaPaginationData.pagination.update(suitRows.length);
+            window.renderDavaTable(suitRows.slice(0,10));
+        }
 
-        } catch(e) { console.error(e); }
-    };
+    } catch(e) { 
+        console.error("Dava verileri çekilirken hata:", e); 
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>';
+    }
+};
+
 
 // === İTİRAZ TABLOSU RENDER (GÜNCELLENMİŞ) ===
 window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
@@ -2186,173 +2229,244 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
 // --- 5. İTİRAZ MODÜLÜ (FİLTRE SORUNU KESİN ÇÖZÜM) ---
 
-    window.fetchAndDisplayObjections = async function() {
-        const tbody = document.getElementById('dava-itiraz-tbody');
-        if(!tbody) return;
-        
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
-        
-        const REQUEST_RESULT_STATUS = {
-            '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
-            '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
-            '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
-            '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
-        };
+window.fetchAndDisplayObjections = async function() {
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if(!tbody) return;
 
-        try {
-            const PARENT_TYPES = ['7', '19', '20', 7, 19, 20];
-            const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
-            const snap = await getDocs(q);
-            
-            const relevantTasks = [];
-            const clientSet = new Set(window.linkedPersonIds || []);
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
 
-            // 1. Taskleri Tara ve Yetki Kontrolü Yap
-            for (const docSnap of snap.docs) {
-                const t = docSnap.data();
-                const statusRaw = (t.status || '').trim();
-                if (statusRaw.includes('kapatıldı') || statusRaw === 'cancelled') continue; 
-                
-                // Yukarıdaki yeni checkTaskClientRelation fonksiyonu burada çalışacak
-                if (await window.checkTaskClientRelation(t, clientSet)) {
-                    relevantTasks.push({id: docSnap.id, ...t});
-                }
+    const REQUEST_RESULT_STATUS = {
+        '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
+        '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
+        '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
+        '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
+    };
+
+    try {
+        const PARENT_TYPES = ['7', '19', '20', 7, 19, 20];
+        const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
+        
+        // runGetDocs kullanarak veriyi önbellekten (cache) veya sunucudan tek seferde alıyoruz
+        const snap = await runGetDocs(q);
+
+        const rawTasks = [];
+        snap.forEach(docSnap => {
+            const t = docSnap.data();
+            const statusRaw = (t.status || '').trim();
+            // Kapanmış veya iptal edilmiş görevleri en baştan ele
+            if (!statusRaw.includes('kapatıldı') && statusRaw !== 'cancelled') {
+                rawTasks.push({ id: docSnap.id, ...t });
             }
-                
-            const rows = [];
-            
-            for (const task of relevantTasks) {
-                // IP Kaydı (Marka Bilgisi)
-                let rec = {};
-                if (task.relatedIpRecordId) {
-                    try {
-                        const recSnap = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
-                        if (recSnap.exists()) rec = recSnap.data();
-                    } catch (e) { }
-                }
-                
-                // İşlem Geçmişi (Transaction)
-                let allTx = [];
-                if (task.relatedIpRecordId) {
-                    try {
-                        const txQ = query(collection(db, 'ipRecords', task.relatedIpRecordId, 'transactions'));
-                        const txSnap = await getDocs(txQ);
-                        allTx = txSnap.docs.map(d=>({id:d.id, ...d.data()}));
-                    } catch (e) { }
-                }
-                
-                // Parent Transaction Eşleştirme
-                let parentTx = null;
-                if (task.triggeringTransactionId) {
-                    parentTx = allTx.find(x => x.id === task.triggeringTransactionId);
-                }
-                if (!parentTx) {
-                    parentTx = allTx.filter(x => String(x.type) === String(task.taskType))
-                                    .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
-                }
+        });
 
-                // Transaction Yoksa Sanal Oluştur
-                if (!parentTx) {
-                    parentTx = {
-                        id: 'virtual-tx-' + task.id,
-                        type: task.taskType,
-                        timestamp: task.createdAt || task.startDate || new Date(),
-                        requestResult: null,
-                        documents: [],
-                        isVirtual: true
-                    };
-                }
-                
-                // Statü Rengi
-                let computedStatus = 'Karar Bekleniyor';
-                let badgeColor = 'secondary'; 
-                const rr = parentTx.requestResult;
-                const statusRaw = (task.status || '').trim();
+        const clientSet = new Set(window.linkedPersonIds || []);
 
-                if (rr && REQUEST_RESULT_STATUS[String(rr)]) {
-                    computedStatus = REQUEST_RESULT_STATUS[String(rr)];
-                    if (computedStatus.includes('Ret')) badgeColor = 'danger';
-                    else if (computedStatus.includes('Kabul')) badgeColor = 'success';
-                    else badgeColor = 'info';
-                } else if (statusRaw.includes('awaiting') || statusRaw.includes('Bekliyor')) {
-                    computedStatus = 'Onay Bekliyor';
-                    badgeColor = 'warning';
-                }
-                
-                const children = parentTx.isVirtual ? [] : allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
-                const typeMeta = window.transactionTypesMap.get(String(task.taskType));
-                
-                const docs = [];
-                if(parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
-                if(task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
-                
-                // [KRİTİK BÖLÜM: SAHİPLİK BELİRLEME]
-                // Filtreleme fonksiyonunun çalışması için 'applicants' dizisi dolu olmalı.
-                let filterApplicants = [];
-                
-                if (task._relatedClientIds && task._relatedClientIds.length > 0) {
-                    // checkTaskClientRelation fonksiyonunun bulduğu ID'leri kullan
-                    filterApplicants = task._relatedClientIds.map(id => ({ id: id, name: 'Müvekkil' }));
-                } else if (task.clientId) {
-                    filterApplicants = [{ id: task.clientId, name: 'Müvekkil' }];
-                } else {
-                    // Fallback olarak IP kaydının sahibini kullan
-                    filterApplicants = rec.applicants || [];
-                }
+        // -------------------------------------------------------------------------
+        // 1. ADIM: N+1 SORGUSUNU ÖNLEMEK İÇİN EKSİK MARKALARI TOPLUCA (PARALEL) ÇEK
+        // -------------------------------------------------------------------------
+        const neededIpIds = [...new Set(rawTasks.map(t => t.relatedIpRecordId).filter(Boolean))];
+        const ipDataMap = new Map();
+        const missingIpIds = [];
 
-                rows.push({ 
-                    isParent: true, 
-                    id: task.id, 
-                    recordId: task.relatedIpRecordId, 
-                    hasChildren: children.length > 0, 
-                    
-                    // Menşe filtresine takılmaması için varsayılan değer
-                    origin: rec.origin || 'TÜRKPATENT', 
-                    
-                    brandImageUrl: rec.brandImageUrl, 
-                    title: rec.title || rec.brandText || 'İsimsiz Marka', 
-                    transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi', 
-                    applicationNumber: rec.applicationNumber || '-', 
-                    applicantName: rec.applicants?.[0]?.name || '-', // Görünen isim (Rakip Marka Sahibi)
-                    
-                    // [İŞTE BU SATIR EKSİKTİ]
-                    applicants: filterApplicants, 
+        // Önce bellekte (Portföy sekmesinde yüklenenler arasında) var mı diye bak (Hız Kazandırır)
+        neededIpIds.forEach(id => {
+            const local = (window.allPortfolioData || []).find(p => p.id === id);
+            if (local) {
+                ipDataMap.set(id, local);
+            } else {
+                missingIpIds.push(id);
+            }
+        });
 
-                    bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
-                    bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
-                    epatsDate: window.formatDateTR(parentTx.timestamp), 
-                    statusText: computedStatus, 
-                    statusBadge: badgeColor,      
-                    allParentDocs: docs, 
-                    childrenData: children 
+        // Bellekte olmayanları 10'arlı gruplar halinde "aynı anda" (Promise.all) çek
+        if (missingIpIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < missingIpIds.length; i += 10) {
+                chunks.push(missingIpIds.slice(i, i + 10));
+            }
+
+            await Promise.all(chunks.map(async chunk => {
+                const ipQ = query(collection(db, 'ipRecords'), where('__name__', 'in', chunk));
+                const ipSnap = await runGetDocs(ipQ);
+                ipSnap.forEach(d => ipDataMap.set(d.id, d.data()));
+            }));
+        }
+
+        // -------------------------------------------------------------------------
+        // 2. ADIM: YETKİ KONTROLÜ (Veritabanına gitmeden bellekteki verilerle)
+        // -------------------------------------------------------------------------
+        const relevantTasks = [];
+        for (const task of rawTasks) {
+            let isMatch = false;
+            if (!task._relatedClientIds) task._relatedClientIds = [];
+
+            // Doğrudan görev üzerindeki ID'leri kontrol et
+            if (task.clientId && clientSet.has(task.clientId)) {
+                if (!task._relatedClientIds.includes(task.clientId)) task._relatedClientIds.push(task.clientId);
+                isMatch = true;
+            }
+            if (task.taskOwner && typeof task.taskOwner === 'string' && clientSet.has(task.taskOwner)) {
+                if (!task._relatedClientIds.includes(task.taskOwner)) task._relatedClientIds.push(task.taskOwner);
+                isMatch = true;
+            }
+            if (Array.isArray(task.taskOwner)) {
+                task.taskOwner.forEach(id => {
+                    if (clientSet.has(id)) {
+                        if (!task._relatedClientIds.includes(id)) task._relatedClientIds.push(id);
+                        isMatch = true;
+                    }
                 });
             }
 
-            window.davaItirazPaginationData.allDataUnfiltered = rows;
-            
-            if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-itiraz-list') {
-                window.applyMasterFilter();
-            } else {
-                window.davaItirazPaginationData.allData = rows;
-                if (!window.davaItirazPaginationData.pagination && window.Pagination) {
-                     window.davaItirazPaginationData.pagination = new window.Pagination({
-                        itemsPerPage: 10,
-                        containerId: 'davaItirazPagination',
-                        onPageChange: (page, perPage) => {
-                            const slice = window.davaItirazPaginationData.allData.slice((page-1)*perPage, page*perPage);
-                            window.renderDavaItirazTable(slice, (page-1)*perPage);
-                        }
-                     });
-                }
-                if(window.davaItirazPaginationData.pagination) window.davaItirazPaginationData.pagination.update(rows.length);
-                window.renderDavaItirazTable(rows.slice(0,10));
+            const opponentId = task.opponent?.id || task.details?.opponent?.id;
+            if (opponentId && clientSet.has(opponentId)) {
+                if (!task._relatedClientIds.includes(opponentId)) task._relatedClientIds.push(opponentId);
+                isMatch = true;
             }
 
-        } catch(e) {
-            console.error("Objection Error", e);
-            tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
+            // İlgili Marka/Patent kaydının sahiplerini kontrol et
+            if (task.relatedIpRecordId) {
+                const rec = ipDataMap.get(task.relatedIpRecordId);
+                if (rec && rec.applicants && Array.isArray(rec.applicants)) {
+                    rec.applicants.forEach(app => {
+                        if (app.id && clientSet.has(app.id)) {
+                            if (!task._relatedClientIds.includes(app.id)) task._relatedClientIds.push(app.id);
+                            isMatch = true;
+                        }
+                    });
+                }
+            }
+
+            if (isMatch) {
+                relevantTasks.push(task);
+            }
         }
-    };
+
+        // -------------------------------------------------------------------------
+        // 3. ADIM: ALT İŞLEMLERİ (TRANSACTIONS) PARALEL ÇEK
+        // -------------------------------------------------------------------------
+        const txMap = new Map();
+        const relevantIpIds = [...new Set(relevantTasks.map(t => t.relatedIpRecordId).filter(Boolean))];
+
+        // Döngü içinde beklemek (await) yerine tüm istekleri aynı anda (Promise.all) yolluyoruz
+        await Promise.all(relevantIpIds.map(async id => {
+            try {
+                const txQ = query(collection(db, 'ipRecords', id, 'transactions'));
+                const txSnap = await runGetDocs(txQ);
+                txMap.set(id, txSnap.docs.map(d => ({id: d.id, ...d.data()})));
+            } catch(e) { }
+        }));
+
+        // -------------------------------------------------------------------------
+        // 4. ADIM: EKRANA YAZDIRILACAK VERİYİ HAZIRLA (Tamamen Senkron & Hızlı)
+        // -------------------------------------------------------------------------
+        const rows = [];
+        for (const task of relevantTasks) {
+            let rec = ipDataMap.get(task.relatedIpRecordId) || {};
+            let allTx = txMap.get(task.relatedIpRecordId) || [];
+
+            // Parent Transaction Eşleştirme
+            let parentTx = null;
+            if (task.triggeringTransactionId) {
+                parentTx = allTx.find(x => x.id === task.triggeringTransactionId);
+            }
+            if (!parentTx) {
+                parentTx = allTx.filter(x => String(x.type) === String(task.taskType))
+                                .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
+            }
+
+            // Transaction Yoksa Sanal Oluştur
+            if (!parentTx) {
+                parentTx = {
+                    id: 'virtual-tx-' + task.id,
+                    type: task.taskType,
+                    timestamp: task.createdAt || task.startDate || new Date(),
+                    requestResult: null,
+                    documents: [],
+                    isVirtual: true
+                };
+            }
+
+            // Statü Rengi
+            let computedStatus = 'Karar Bekleniyor';
+            let badgeColor = 'secondary';
+            const rr = parentTx.requestResult;
+            const statusRaw = (task.status || '').trim();
+
+            if (rr && REQUEST_RESULT_STATUS[String(rr)]) {
+                computedStatus = REQUEST_RESULT_STATUS[String(rr)];
+                if (computedStatus.includes('Ret')) badgeColor = 'danger';
+                else if (computedStatus.includes('Kabul')) badgeColor = 'success';
+                else badgeColor = 'info';
+            } else if (statusRaw.includes('awaiting') || statusRaw.includes('Bekliyor')) {
+                computedStatus = 'Onay Bekliyor';
+                badgeColor = 'warning';
+            }
+
+            const children = parentTx.isVirtual ? [] : allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
+            const typeMeta = window.transactionTypesMap.get(String(task.taskType));
+
+            const docs = [];
+            if(parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
+            if(task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
+
+            // Sahiplik Belirleme
+            let filterApplicants = [];
+            if (task._relatedClientIds && task._relatedClientIds.length > 0) {
+                filterApplicants = task._relatedClientIds.map(id => ({ id: id, name: 'Müvekkil' }));
+            } else if (task.clientId) {
+                filterApplicants = [{ id: task.clientId, name: 'Müvekkil' }];
+            } else {
+                filterApplicants = rec.applicants || [];
+            }
+
+            rows.push({
+                isParent: true,
+                id: task.id,
+                recordId: task.relatedIpRecordId,
+                hasChildren: children.length > 0,
+                origin: rec.origin || 'TÜRKPATENT',
+                brandImageUrl: rec.brandImageUrl,
+                title: rec.title || rec.brandText || 'İsimsiz Marka',
+                transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi',
+                applicationNumber: rec.applicationNumber || '-',
+                applicantName: rec.applicants?.[0]?.name || '-', 
+                applicants: filterApplicants,
+                bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate),
+                bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
+                epatsDate: window.formatDateTR(parentTx.timestamp),
+                statusText: computedStatus,
+                statusBadge: badgeColor,
+                allParentDocs: docs,
+                childrenData: children
+            });
+        }
+
+        window.davaItirazPaginationData.allDataUnfiltered = rows;
+
+        if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-itiraz-list') {
+            window.applyMasterFilter();
+        } else {
+            window.davaItirazPaginationData.allData = rows;
+            if (!window.davaItirazPaginationData.pagination && window.Pagination) {
+                 window.davaItirazPaginationData.pagination = new window.Pagination({
+                    itemsPerPage: 10,
+                    containerId: 'davaItirazPagination',
+                    onPageChange: (page, perPage) => {
+                        const slice = window.davaItirazPaginationData.allData.slice((page-1)*perPage, page*perPage);
+                        window.renderDavaItirazTable(slice, (page-1)*perPage);
+                    }
+                 });
+            }
+            if(window.davaItirazPaginationData.pagination) window.davaItirazPaginationData.pagination.update(rows.length);
+            window.renderDavaItirazTable(rows.slice(0,10));
+        }
+
+    } catch(e) {
+        console.error("Objection Error", e);
+        tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">İtirazlar yüklenirken hata oluştu.</td></tr>';
+    }
+};
 
     // --- PDF & LOAD TRANSACTIONS ---
     window.fetchPdfsForTransactions = async function(transactionIds) {
@@ -3768,35 +3882,48 @@ window.generatePDF = async function(data, headers, filename) {
 
     // 3. Müşteri Değiştirme Mantığı
     window.switchClient = function(clientId, fromModal = false) {
-        window.selectedClientId = clientId;
-        sessionStorage.setItem('selectedClientSession', clientId);
-        
-        // UI Güncelle
-        let nameText = 'Tüm Müşteriler';
-        if (clientId !== 'ALL') {
-            const client = window.linkedClientsMap.find(c => c.id === clientId);
-            if (client) nameText = client.name;
+        // 1. İşlem başlar başlamaz yükleme ekranını göster
+        if (window.SimpleLoadingController) {
+            window.SimpleLoadingController.show('Müvekkil Verileri Yükleniyor', 'Portföy ve analizler hazırlanıyor...');
         }
-        $('#currentClientName').text(nameText);
-        
+
         if (fromModal) {
             $('#clientSelectionModal').modal('hide');
         }
 
-        // --- VERİLERİ FİLTRELE VE YENİLE ---
-        console.log("Müşteri değiştirildi:", clientId);
-        
-        // Tüm modüllerin filtre fonksiyonlarını tetikle
-        window.applyMasterFilter(); // Portföy
-        window.applyTaskFilter();   // İşlerim
-        window.applyInvoiceFilter(); // Faturalar
-        
-        // 🔥 Dashboard Sayaçlarını Yeniden Hesapla
-        window.updateDashboardCounts();
+        // 2. setTimeout: Tarayıcıya animasyonu ekrana çizmesi için 50 milisaniye nefes aldırıyoruz!
+        // Bu olmazsa JS doğrudan filtrelemeye girer ve loading animasyonu ekrana gelemeden sayfa donar.
+        setTimeout(() => {
+            window.selectedClientId = clientId;
+            sessionStorage.setItem('selectedClientSession', clientId);
+            
+            // UI Güncelle
+            let nameText = 'Tüm Müşteriler';
+            if (clientId !== 'ALL') {
+                const client = window.linkedClientsMap.find(c => c.id === clientId);
+                if (client) nameText = client.name;
+            }
+            $('#currentClientName').text(nameText);
 
-        if ($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
-             window.applyMasterFilter(); 
-        }
+            // --- VERİLERİ FİLTRELE VE YENİLE ---
+            console.log("Müşteri değiştirildi:", clientId);
+            
+            window.applyMasterFilter(); // Portföy
+            window.applyTaskFilter();   // İşlerim
+            window.applyInvoiceFilter(); // Faturalar
+            
+            // 🔥 Dashboard Sayaçlarını Yeniden Hesapla
+            window.updateDashboardCounts();
+
+            if ($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
+                 window.applyMasterFilter(); 
+            }
+
+            // 3. İşlem bitince yükleme ekranını kapat
+            if (window.SimpleLoadingController) {
+                window.SimpleLoadingController.hide();
+            }
+        }, 50); // 50ms bekleme
     };
 
 // === RAPORLAR MODÜLÜ (TAM VE NİHAİ VERSİYON) ===
