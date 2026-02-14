@@ -1,7 +1,7 @@
 // public/js/indexing/triggered-tasks.js
 
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, functions } from '../../firebase-config.js';
-import { showNotification,TASK_STATUS_MAP } from '../../utils.js';
+import { showNotification,TASK_STATUS_MAP, formatToTRDate } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { doc, getDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -345,9 +345,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const row = document.createElement('tr');
                 const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
                 
-                // Tarih formatlama
-                const opDate = task.operationalDueObj ? task.operationalDueObj.toLocaleDateString('tr-TR') : '-';
-                const offDate = task.officialDueObj ? task.officialDueObj.toLocaleDateString('tr-TR') : '-';
+                // Tarih formatlama (Merkezi utils fonksiyonu ile)
+                const opDate = formatToTRDate(task.operationalDueObj);
+                const offDate = formatToTRDate(task.officialDueObj);
+
+                // ISO değerleri DeadlineHighlighter (renklendirme) için gereklidir, bu yüzden bunları koruyoruz
                 const opISO = task.operationalDueObj ? task.operationalDueObj.toISOString().slice(0,10) : '';
                 const offISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
 
