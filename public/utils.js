@@ -108,16 +108,24 @@ export function generateUUID() {
     });
 }
 
-// Görev durumları (task-management.html ve task-update.html'de kullanılır)
 export const TASK_STATUSES = [
-    { value: 'open', text: 'Açık' },
-    { value: 'in-progress', text: 'Devam Ediyor' },
-    { value: 'completed', text: 'Tamamlandı' },
-    { value: 'pending', text: 'Beklemede' },
-    { value: 'cancelled', text: 'İptal Edildi' },
-    { value: 'on-hold', text: 'Askıda' },
-    { value: 'awaiting_client_approval', text: 'Müvekkil Onayı Bekliyor' } // Yeni durum eklendi
+    { value: 'open', text: 'Açık', color: 'primary' },
+    { value: 'in-progress', text: 'Devam Ediyor', color: 'info' },
+    { value: 'completed', text: 'Tamamlandı', color: 'success' },
+    { value: 'pending', text: 'Beklemede', color: 'warning' },
+    { value: 'cancelled', text: 'İptal Edildi', color: 'danger' },
+    { value: 'archived', text: 'Arşivlendi', color: 'secondary' },
+    { value: 'awaiting-approval', text: 'Onay Bekliyor', color: 'secondary' },
+    { value: 'awaiting_client_approval', text: 'Müvekkil Onayı Bekliyor', color: 'warning' },
+    { value: 'client_approval_opened', text: 'Müvekkil Onayı - Açıldı', color: 'info' },
+    { value: 'client_approval_closed', text: 'Müvekkil Onayı - Kapatıldı', color: 'success' },
+    { value: 'client_no_response_closed', text: 'Müvekkil Cevaplamadı - Kapatıldı', color: 'dark' }
 ];
+
+// Statü objesini döndüren yardımcı fonksiyon
+export const getTaskStatusInfo = (status) => {
+    return TASK_STATUSES.find(s => s.value === status) || { text: status || 'Belirsiz', color: 'secondary' };
+};
 
 // IP Kayıt durumları (data-entry.html'de kullanılır)
 export const STATUSES = {
