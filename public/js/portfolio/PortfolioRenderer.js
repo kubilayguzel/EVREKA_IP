@@ -214,13 +214,12 @@ export class PortfolioRenderer {
             tr.style.backgroundColor = '#f8f9fa'; // Alt işlemler için belirgin açık gri
         }
 
-        // 🔥 GÜNCELLEME 3: PDF İkon ve Renklerini CSS Çakışmalarına Karşı Garantileme
         const docsHtml = (row.documents || []).map(doc => {
             let iconClass = 'fa-file-pdf'; 
             let iconColor = '#dc3545'; // Standart Kırmızı
             
-            // Veri tiplerine göre görsel ayrım
-            if (doc.type === 'opposition_epats_petition') {
+            // 🔥 Güncellenen "type" alanına göre ikonlar
+            if (doc.type === 'epats_document') {
                 iconClass = 'fa-file-invoice';
                 iconColor = '#0d6efd'; // ePATS için Mavi
             } else if (doc.type === 'official_document') {
@@ -231,7 +230,6 @@ export class PortfolioRenderer {
                 iconColor = '#fd7e14'; // İtiraz Dilekçesi için Turuncu
             }
 
-            // Rengi doğrudan ikonun içine (style="color: ... !important") yazarak CSS'i eziyoruz.
             return `
                 <a href="${doc.fileUrl}" target="_blank" class="pdf-link" title="${doc.fileName}" style="text-decoration: none; margin-right: 8px;">
                     <i class="fas ${iconClass}" style="color: ${iconColor} !important; font-size: 1.3em; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></i>
