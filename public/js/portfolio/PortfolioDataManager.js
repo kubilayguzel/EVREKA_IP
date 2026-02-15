@@ -215,19 +215,15 @@ export class PortfolioDataManager {
     }
 
     // --- OBJECTIONS (HIZLANDIRILMIŞ & OPTİMİZE EDİLMİŞ) ---
-    async loadObjectionRows() {
+async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
 
+        // 🔥 YENİ MANTIK: Sadece Ana (Parent) İşlemleri arıyoruz. (Performans için süper hızlı)
         const PARENT_TYPES = ['7', '19', '20'];
 
         try {
-            // HIZLI SORGULAMA: collectionGroup
-            // Tüm veritabanındaki "transactions" koleksiyonlarını tek seferde tarar.
-            const q = query(
-                collectionGroup(db, 'transactions'), 
-                where('type', 'in', PARENT_TYPES)
-            );
-            
+            // 1. Tüm veritabanında sadece Ana İtirazları bul
+            const q = query(collectionGroup(db, 'transactions'), where('type', 'in', PARENT_TYPES));
             const snapshot = await getDocs(q);
             
             if (snapshot.empty) {
@@ -235,54 +231,60 @@ export class PortfolioDataManager {
                 return [];
             }
 
-            const allTransactions = [];
-            
+            const parents = [];
+            const recordIds = new Set(); // Hangi portföy kayıtlarında itiraz var?
+
             snapshot.forEach(docSnap => {
                 const data = docSnap.data();
-                // Subcollection olduğu için parent'ın parent'ı ana kayıttır (ipRecord)
                 const parentRecordId = docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : null;
-                
                 if (parentRecordId) {
-                    allTransactions.push({
-                        ...data,
-                        id: docSnap.id,
-                        recordId: parentRecordId 
-                    });
+                    parents.push({ ...data, id: docSnap.id, recordId: parentRecordId });
+                    recordIds.add(parentRecordId);
                 }
             });
 
-            // Sadece parent işlemleri al
-            const parents = allTransactions.filter(t => t.transactionHierarchy === 'parent' || !t.parentId);
             const childrenMap = {};
-            
-            // Varsa alt işlemleri eşleştir
-            allTransactions.forEach(t => {
-                if (t.parentId && t.transactionHierarchy === 'child') {
-                    if (!childrenMap[t.parentId]) childrenMap[t.parentId] = [];
-                    childrenMap[t.parentId].push(t);
-                }
+
+            // 2. SADECE İtiraz bulunan kayıtların altındaki işlemleri getir (Nokta Atışı)
+            const subcollectionPromises = Array.from(recordIds).map(async (recId) => {
+                const txRef = collection(db, `ipRecords/${recId}/transactions`);
+                const txSnap = await getDocs(txRef);
+                
+                txSnap.forEach(tDoc => {
+                    const tData = tDoc.data();
+                    // Sadece çocuk işlemleri (Child) haritaya ekle
+                    if (tData.parentId && tData.transactionHierarchy === 'child') {
+                        if (!childrenMap[tData.parentId]) childrenMap[tData.parentId] = [];
+                        childrenMap[tData.parentId].push({ ...tData, id: tDoc.id, recordId: recId });
+                    }
+                });
             });
+
+            // Tüm çocukları paralel (aynı anda) çekerek süreyi kısalt
+            await Promise.all(subcollectionPromises);
 
             const localRows = [];
 
+            // 3. Parent ve Child'ları birleştir
             for (const parent of parents) {
-                // Ana kaydı hafızadan bul
                 const record = this.allRecords.find(r => r.id === parent.recordId);
                 if (!record) continue;
 
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
 
-                // Satır verisini oluştur (HIZLI VERSİYON)
                 const parentRow = await this._createObjectionRowDataFast(record, parent, typeInfo, true, children.length > 0);
-                localRows.push(parentRow);
+                parentRow.children = []; 
 
+                // Çocukları tarihe göre sırala ve içine ekle
                 children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
                     const childRow = await this._createObjectionRowDataFast(record, child, childTypeInfo, false, false, parent.id);
-                    localRows.push(childRow);
+                    parentRow.children.push(childRow); 
                 }
+                
+                localRows.push(parentRow);
             }
 
             this.objectionRows = localRows;
@@ -295,40 +297,45 @@ export class PortfolioDataManager {
     }
 
     async _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
-        const docs = (tx.documents || []).map(d => ({
-            fileName: d.name || 'Belge',
-            fileUrl: d.url || d.downloadURL || d.path,
-            type: d.type
-        }));
+        const isOwnRecord = record.recordOwnerType !== 'third_party';
+        const docs = [];
         
-        if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
-        if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
-        if (tx.oppositionEpatsPetitionFileUrl) docs.push({ fileName: 'Karşı ePATS Dilekçesi', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
+        // 🔥 KURAL: Eğer dosya bizim (self) ise ve İşlem Tipi 20 (Yayına İtiraz) ise
+        if (isOwnRecord && String(tx.type) === '20') {
+            // SADECE ePATS belgesini göster
+            if (tx.oppositionEpatsPetitionFileUrl) {
+                docs.push({ fileName: 'ePATS İtiraz Evrakı', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
+            }
+        } 
+        // DİĞER DURUMLAR: Normal işleyiş
+        else {
+            if (Array.isArray(tx.documents)) {
+                tx.documents.forEach(d => {
+                    docs.push({ fileName: d.name || 'Belge', fileUrl: d.url || d.downloadURL || d.path, type: d.type || 'standard' });
+                });
+            }
+            if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
+            if (tx.oppositionEpatsPetitionFileUrl) docs.push({ fileName: 'ePATS İtiraz Evrakı', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
+            if (!isParent && tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
+        }
        
-        // 🔥 YENİ: Karşı Taraf (Opponent / taskOwner) Çözümleme Mantığı
+        // Karşı Taraf Çözümleme Mantığı
         let opponentText = '-';
-        if (tx.oppositionOwner) {
-            opponentText = tx.oppositionOwner;
-        } else if (tx.objectionOwners && tx.objectionOwners.length > 0) {
-            opponentText = tx.objectionOwners.map(o => o.name).join(', ');
-        } else if (tx.taskOwner) {
-            // TaskOwner bir dizi ise (ID veya Obje barındırabilir)
+        if (tx.oppositionOwner) opponentText = tx.oppositionOwner;
+        else if (tx.objectionOwners && tx.objectionOwners.length > 0) opponentText = tx.objectionOwners.map(o => o.name).join(', ');
+        else if (tx.taskOwner) {
             if (Array.isArray(tx.taskOwner) && tx.taskOwner.length > 0) {
                 opponentText = tx.taskOwner.map(owner => {
                     if (typeof owner === 'object' && owner.name) return owner.name;
-                    const ownerId = typeof owner === 'object' ? owner.id : String(owner);
-                    const person = this.personsMap.get(ownerId); // ID'den anında ismi bul (O(1) Hızında)
-                    return person ? person.name : ownerId;
+                    const person = this.personsMap.get(typeof owner === 'object' ? owner.id : String(owner));
+                    return person ? person.name : (typeof owner === 'object' ? owner.id : String(owner));
                 }).filter(Boolean).join(', ');
-            } 
-            // Tekil string ID ise
-            else if (typeof tx.taskOwner === 'string') {
+            } else if (typeof tx.taskOwner === 'string') {
                 const person = this.personsMap.get(tx.taskOwner);
                 opponentText = person ? person.name : tx.taskOwner;
             }
         } 
         
-        // Eğer hiçbirinde yoksa, task details.relatedParty'de var mı diye bak (Yedek)
         if (opponentText === '-' && tx.details && tx.details.relatedParty && tx.details.relatedParty.name) {
             opponentText = tx.details.relatedParty.name;
         }
@@ -339,11 +346,12 @@ export class PortfolioDataManager {
             parentId: parentId,
             isChild: !isParent,
             hasChildren: hasChildren,
+            isOwnRecord: isOwnRecord, 
             title: record.title || record.brandText || '',
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
             applicantName: record.formattedApplicantName || '-',
-            opponent: opponentText || '-', // 🔥 BULUNAN İSİM BURAYA YAZILIYOR
+            opponent: opponentText || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
             epatsDate: this._fmtDate(tx.epatsDocument?.documentDate),
@@ -588,10 +596,13 @@ export class PortfolioDataManager {
             });
         }
         return sourceData.filter(item => {
+            // 1. GENEL ARAMA KUTUSU KONTROLÜ
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();
+                
                 if (typeFilter === 'objections') {
-                    return (
+                    // Önce Ana İşlemde (Parent) ara
+                    const matchParent = (
                         (item.transactionTypeName && item.transactionTypeName.toLowerCase().includes(s)) ||
                         (item.title && item.title.toLowerCase().includes(s)) ||
                         (item.opponent && item.opponent.toLowerCase().includes(s)) ||
@@ -600,21 +611,39 @@ export class PortfolioDataManager {
                         (item.applicationNumber && item.applicationNumber.toString().includes(s)) ||
                         (item.statusText && item.statusText.toLowerCase().includes(s))
                     );
+                    
+                    // Sonra içine gömdüğümüz Alt İşlemlerde (Child) ara
+                    let matchChild = false;
+                    if (item.children && item.children.length > 0) {
+                        matchChild = item.children.some(c => 
+                            (c.transactionTypeName && c.transactionTypeName.toLowerCase().includes(s)) ||
+                            (c.statusText && c.statusText.toLowerCase().includes(s)) ||
+                            (c.opponent && c.opponent.toLowerCase().includes(s))
+                        );
+                    }
+                    
+                    // Eğer ne anada ne de çocukta kelime yoksa, bu satırı direkt ele!
+                    if (!matchParent && !matchChild) return false;
+                    
                 } else {
                     const searchStr = Object.values(item).join(' ').toLowerCase();
                     if (!searchStr.includes(s)) return false;
                 }
             }
+            
+            // 2. SÜTUN (KOLON) FİLTRELERİ KONTROLÜ
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
                 let filterVal = val.toLowerCase();
                 let itemVal = String(item[key] || '').toLowerCase();
+                
                 if (key === 'formattedApplicationDate' && val.includes('-')) {
                     const parts = val.split('-'); 
                     if (parts.length === 3) filterVal = `${parts[2]}.${parts[1]}.${parts[0]}`;
                 }
                 if (!itemVal.includes(filterVal)) return false;
             }
+            
             return true;
         });
     }
