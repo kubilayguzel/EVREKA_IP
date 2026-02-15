@@ -56,16 +56,22 @@ export class TaskUpdateUIManager {
     }
 
     renderDocuments(docs) {
+        // 1. Diziyi ikiye ayır: EPATS olanlar ve Diğerleri
+        const epatsDoc = docs.find(d => d.type === 'epats_document');
+        const standardDocs = docs.filter(d => d.type !== 'epats_document');
+
+        // 2. Normal belgeleri aşağıdaki genel listeye bas
         const container = this.elements.filesContainer;
-        if (!docs || docs.length === 0) {
+        if (!standardDocs || standardDocs.length === 0) {
             container.innerHTML = '<p class="text-center text-muted p-3">Belge yok.</p>';
-            return;
+        } else {
+            container.innerHTML = standardDocs.map(d => this._createFileItemHtml(d, false)).join('');
         }
 
-        container.innerHTML = docs.map(d => this._createFileItemHtml(d, false)).join('');
+        // 3. EPATS belgesini yukarıdaki Resmi Kurum Evrakı alanına bas
+        this.renderEpatsDocument(epatsDoc || null);
     }
 
-    // --- YENİLENEN EPATS RENDER (Diğer dosyalarla aynı görsel) ---
     renderEpatsDocument(doc) {
         const container = this.elements.epatsContainer;
         const noInput = document.getElementById('turkpatentEvrakNo');
@@ -74,12 +80,24 @@ export class TaskUpdateUIManager {
         // Form alanlarını doldur
         if (doc) {
             // Eğer doc içinde kayıtlı veri varsa onu kullan, yoksa inputtakini koru
-            if(doc.turkpatentEvrakNo) noInput.value = doc.turkpatentEvrakNo;
-            if(doc.documentDate) dateInput.value = this.formatDateForInput(doc.documentDate);
+            if (doc.turkpatentEvrakNo) noInput.value = doc.turkpatentEvrakNo;
+            
+            if (doc.documentDate) {
+                const formattedDate = this.formatDateForInput(doc.documentDate);
+                dateInput.value = formattedDate;
+                
+                // 🔥 ÇÖZÜM: Date Picker (Flatpickr) Görselini Güncelleme
+                if (dateInput._flatpickr) {
+                    dateInput._flatpickr.setDate(formattedDate, true);
+                }
+            }
         } else {
             // Belge yoksa inputları temizle
-            noInput.value = '';
-            dateInput.value = '';
+            if (noInput) noInput.value = '';
+            if (dateInput) {
+                dateInput.value = '';
+                if (dateInput._flatpickr) dateInput._flatpickr.clear();
+            }
             container.innerHTML = '';
             return;
         }
