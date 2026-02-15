@@ -745,7 +745,7 @@ export class TaskSubmitHandler {
                 type: selectedTaskType.id,
                 description: 'Dava Açıldı',
                 transactionHierarchy: 'parent',
-                triggeringTaskId: String(taskId),
+                taskId: String(taskId), // 🔥 SADECE taskId
                 createdAt: Timestamp.now(),
                 creationDate: new Date().toISOString()
             };
@@ -789,10 +789,10 @@ export class TaskSubmitHandler {
             type: taskType.id,
             description: `${taskType.name} işlemi.`,
             transactionHierarchy: hierarchy,
-            triggeringTaskId: String(taskId),
+            taskId: String(taskId), // 🔥 SADECE taskId
             createdAt: Timestamp.now(), 
             timestamp: new Date().toISOString(),
-            documents: formattedDocs, // --- [GÜNCELLEME: Dokümanlar eklendi] ---
+            documents: formattedDocs, 
             ...extraData
         };
 
