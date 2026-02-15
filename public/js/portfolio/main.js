@@ -52,14 +52,20 @@ class PortfolioController {
         }
 
         try {
-            // Verilerin yüklenmesini BEKLE
+            // İtirazlar tabı açıksa, Firestore sorgusunu ŞİMDİDEN başlat (paralel prefetch)
+            let objectionPrefetch = null;
+            if (this.state.activeTab === 'objections') {
+                objectionPrefetch = this.dataManager.prefetchObjectionData();
+            }
+
+            // Ana verileri yükle
             await this.dataManager.loadInitialData();
 
             // Ek verileri yükle
             if (this.state.activeTab === 'litigation') {
                 await this.dataManager.loadLitigationData();
             } else if (this.state.activeTab === 'objections') {
-                await this.dataManager.loadObjectionRows();
+                await this.dataManager.buildObjectionRows(objectionPrefetch);
             }
 
             // DÜZELTME BURADA: Pagination'ı render'dan ÖNCE kurmalıyız
