@@ -756,9 +756,18 @@ class PortfolioController {
             const globalIndex = ((this.state.currentPage - 1) * this.ITEMS_PER_PAGE) + index + 1;
 
             if (this.state.activeTab === 'objections') {
-                const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
-                if (item.isChild) tr.style.display = 'none';
+                // Önce Parent'ı ekle
+                const tr = this.renderer.renderObjectionRow(item, item.children && item.children.length > 0, false);
                 frag.appendChild(tr);
+
+                // Sonra altına gizli (display:none) şekilde çocuklarını (Child) ekle
+                if (item.children && item.children.length > 0) {
+                    item.children.forEach(childItem => {
+                        const childTr = this.renderer.renderObjectionRow(childItem, false, true);
+                        childTr.style.display = 'none'; // Akordeon kapalı başlar
+                        frag.appendChild(childTr);
+                    });
+                }
 
             } else if (this.state.activeTab === 'litigation') {
                 if (this.renderer.renderLitigationRow) {
@@ -1148,7 +1157,7 @@ class PortfolioController {
         }
     }
 
-    
+
     /**
      * Excel'e Aktar (Seçili veya Tümü)
      */
