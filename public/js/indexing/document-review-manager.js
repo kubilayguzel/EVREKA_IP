@@ -1025,7 +1025,7 @@ updateChildTransactionOptions() {
                 if (taskResult.success) {
                     createdTaskId = taskResult.id;
                     const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
-                    await updateDoc(txRef, { triggeringTaskId: createdTaskId });
+                    await updateDoc(txRef, { taskId: String(createdTaskId) }); // 🔥 SADECE taskId
                 }
             }
 
@@ -1038,7 +1038,7 @@ updateChildTransactionOptions() {
                     type: childTypeObj.taskTriggered,
                     description: `${triggeredTypeName} (Otomatik)`,
                     transactionHierarchy: targetHierarchy,
-                    triggeringTaskId: String(createdTaskId),
+                    taskId: String(createdTaskId), // 🔥 SADECE taskId
                     timestamp: new Date().toISOString()
                 };
 
