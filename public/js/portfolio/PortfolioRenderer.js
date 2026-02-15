@@ -217,13 +217,13 @@ export class PortfolioRenderer {
 
         tr.innerHTML = `
             <td class="toggle-cell text-center">${caret}</td>
-            <td ${indentation} title="${row.transactionTypeName} - ${row.title}">
-                ${isChild ? '↳ ' : ''} <strong>${row.transactionTypeName}</strong>
-                <div class="small text-muted">${row.title}</div>
+            <td ${indentation} title="${row.title || ''}" style="max-width: 250px; white-space: normal; word-wrap: break-word; overflow-wrap: break-word;">
+                ${isChild ? '↳ ' : ''} <strong>${row.title || '-'}</strong>
             </td>
+            <td title="${row.transactionTypeName || ''}" style="white-space: normal;">${row.transactionTypeName || '-'}</td>
             <td title="${row.applicationNumber}">${row.applicationNumber || '-'}</td>
-            <td title="${row.applicantName}">${row.applicantName || '-'}</td>
-            <td title="${row.opponent}">${row.opponent || '-'}</td>
+            <td title="${row.applicantName}" style="max-width: 200px; white-space: normal; word-wrap: break-word;">${row.applicantName || '-'}</td>
+            <td title="${row.opponent}" style="max-width: 200px; white-space: normal; word-wrap: break-word;">${row.opponent || '-'}</td>
             <td>${row.bulletinDate || '-'}</td>
             <td>${row.bulletinNo || '-'}</td>
             <td>${row.epatsDate || '-'}</td>
