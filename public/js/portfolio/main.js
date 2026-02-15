@@ -230,9 +230,12 @@ class PortfolioController {
             });
         }
 
-        // --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
+// --- 1. ANA SEKME (TAB) DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                // 🔥 YENİ: Eğer sekme verisi zaten yükleniyorsa çift tıklamayı engelle
+                if (this.isTabLoading) return;
+
                 // Sınıf temizliği
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
 
@@ -255,8 +258,10 @@ class PortfolioController {
                     }
                 }
 
-                // 🔥 YENİ EKLENEN KISIM: Sekme değiştiğinde verileri zorla yükle
+                // 🔥 YENİ KİLİT SİSTEMİ: Veriler çekilene kadar animasyonu aç ve çizimi kilitle
+                this.isTabLoading = true;
                 this.renderer.showLoading(true);
+
                 try {
                     if (this.state.activeTab === 'litigation' && this.dataManager.litigationRows.length === 0) {
                         await this.dataManager.loadLitigationData();
@@ -265,6 +270,9 @@ class PortfolioController {
                     }
                 } catch (err) {
                     console.error("Sekme verisi yüklenemedi:", err);
+                } finally {
+                    // İşlem (veya bekleme) bittiğinde kilidi mutlaka kaldır
+                    this.isTabLoading = false;
                 }
 
                 // Sıfırlama
@@ -281,6 +289,8 @@ class PortfolioController {
                 this.renderer.renderHeaders(columns, this.state.columnFilters);
 
                 this.renderer.clearTable();
+                
+                // Kilit kalktığı için artık güvenle verileri ekrana çizebiliriz
                 this.render();
             });
         });
@@ -716,6 +726,10 @@ class PortfolioController {
  * Tabloyu ekrana çizer
  */
     async render() {
+        // 🔥 YENİ EKLENDİ: Başka bir sekmenin verisi arka planda yükleniyorsa 
+        // erken çizim yapmayı durdur. Bu sayede loading animasyonu asla erken kapanmaz 
+        // ve "Kayıt bulunamadı" uyarısı sahte yere gözükmez.
+        if (this.isTabLoading) return;
         this.renderer.showLoading(true);
         this.renderer.clearTable();
 
@@ -952,194 +966,6 @@ class PortfolioController {
         }
     }
 
-    /**
-     * Excel'e Aktar (Seçili veya Tümü)
-     */
-    async exportToExcel(type) {
-        // 1. Veriyi Hazırla (Mevcut filtre, sıralama ve alt sekme durumuna göre)
-        let allFilteredData = this.dataManager.filterRecords(
-            this.state.activeTab, 
-            this.state.searchQuery, 
-            this.state.columnFilters,
-            this.state.subTab
-        );
-        allFilteredData = this.dataManager.sortRecords(allFilteredData, this.state.sort.column, this.state.sort.direction);
-
-        let dataToExport = [];
-
-        if (type === 'selected') {
-            const selectedIds = this.state.selectedRecords;
-            if (!selectedIds || selectedIds.size === 0) {
-                // Eğer notification fonksiyonunuz yoksa alert kullanabilirsiniz
-                if(typeof showNotification === 'function') showNotification('Lütfen en az bir kayıt seçiniz.', 'warning');
-                else alert('Lütfen en az bir kayıt seçiniz.');
-                return;
-            }
-            
-            // DÜZELTME: ID Karşılaştırmasında String dönüşümü (Checkbox sorunu çözümü)
-            dataToExport = allFilteredData.filter(item => selectedIds.has(String(item.id)));
-        } else {
-            // Tüm filtrelenmiş listeyi al
-            dataToExport = [...allFilteredData];
-        }
-
-        if (dataToExport.length === 0) {
-            if(typeof showNotification === 'function') showNotification('Aktarılacak veri bulunamadı.', 'warning');
-            else alert('Aktarılacak veri bulunamadı.');
-            return;
-        }
-
-        this.renderer.showLoading(true);
-
-        try {
-            // 2. Kütüphaneleri Dinamik Yükle
-            const loadScript = (src) => {
-                return new Promise((resolve, reject) => {
-                    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            };
-
-            if (!window.ExcelJS) await loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js');
-            if (!window.saveAs) await loadScript('https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js');
-
-            // 3. Veriyi Hiyerarşik Sıraya Sok (Export için)
-            const sortedData = [];
-            const processedIds = new Set(); // Çift eklemeyi önlemek için
-
-            dataToExport.forEach(parent => {
-                if (!processedIds.has(String(parent.id))) {
-                    sortedData.push(parent);
-                    processedIds.add(String(parent.id));
-
-                    // Eğer bu bir parent kayıt ise, çocuklarını bul ve hemen altına ekle
-                    if ((parent.origin === 'WIPO' || parent.origin === 'ARIPO') && parent.transactionHierarchy === 'parent') {
-                        const irNo = parent.wipoIR || parent.aripoIR;
-                        if (irNo) {
-                            // Ekranda filtreli olsa bile child kayıtlarını veritabanından/cache'ten çek
-                            const children = this.dataManager.getWipoChildren(irNo);
-                            
-                            children.forEach(child => {
-                                // Eğer çocuk daha önce eklenmediyse ekle
-                                if (!processedIds.has(String(child.id))) {
-                                    sortedData.push(child);
-                                    processedIds.add(String(child.id));
-                                }
-                            });
-                        }
-                    }
-                }
-            });
-
-            // 4. Workbook ve Worksheet Oluştur
-            const workbook = new window.ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Portföy Listesi');
-
-            // Sütunlar
-            worksheet.columns = [
-                { header: 'Görsel', key: 'logo', width: 12 },
-                { header: 'Marka/Konu Adı', key: 'title', width: 40 },
-                { header: 'Başvuru Sahibi', key: 'applicant', width: 35 },
-                { header: 'Başvuru No', key: 'appNo', width: 20 },
-                { header: 'Tescil No', key: 'regNo', width: 20 },
-                { header: 'Ülke', key: 'countryName', width: 20 },
-                { header: 'Sınıflar', key: 'classes', width: 15 },
-                { header: 'Durum', key: 'status', width: 20 },
-                { header: 'Başvuru Tarihi', key: 'appDate', width: 15 },
-                { header: 'Tescil Tarihi', key: 'regDate', width: 15 }
-            ];
-
-            // Başlık Stili
-            const headerRow = worksheet.getRow(1);
-            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3C72' } };
-            headerRow.height = 30;
-            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-
-            // 5. Satırları İşle
-            for (let i = 0; i < sortedData.length; i++) {
-                const record = sortedData[i];
-
-                // Veri Formatlama
-                let applicantStr = '';
-                if (record.applicants && Array.isArray(record.applicants)) {
-                    applicantStr = record.applicants.map(a => a.name).join(', ');
-                } else if (record.applicantName) {
-                    applicantStr = record.applicantName;
-                }
-
-                const countryNameStr = this.dataManager.getCountryName(record.country);
-
-                const row = worksheet.addRow({
-                    title: record.title || '',
-                    applicant: applicantStr,
-                    appNo: record.applicationNumber || '',
-                    regNo: record.registrationNumber || '',
-                    countryName: countryNameStr,
-                    classes: Array.isArray(record.niceClasses) ? record.niceClasses.join(', ') : (record.niceClasses || ''),
-                    status: record.statusText || record.status || '',
-                    appDate: record.applicationDate ? new Date(record.applicationDate).toLocaleDateString('tr-TR') : '',
-                    regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
-                });
-
-                // Hiyerarşi Görselleştirmesi
-                if (record.transactionHierarchy === 'child') {
-                    row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
-                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
-                } else {
-                    row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
-                    row.font = { bold: true };
-                }
-
-                // Hücre Hizalamaları
-                ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
-                   if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
-                });
-                row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-
-                // Resim Ekleme
-                if (record.brandImageUrl) {
-                    try {
-                        const response = await fetch(record.brandImageUrl);
-                        if (response.ok) {
-                            const buffer = await response.arrayBuffer();
-                            let ext = 'png';
-                            if (record.brandImageUrl.toLowerCase().includes('.jpg') || record.brandImageUrl.toLowerCase().includes('.jpeg')) ext = 'jpeg';
-
-                            const imageId = workbook.addImage({ buffer: buffer, extension: ext });
-                            worksheet.addImage(imageId, {
-                                tl: { col: 0, row: i + 1 },
-                                br: { col: 1, row: i + 2 },
-                                editAs: 'oneCell'
-                            });
-                            row.height = 50; 
-                        } else { row.height = 30; }
-                    } catch (err) { row.height = 30; }
-                } else { row.height = 30; }
-            }
-
-            // İndirme İşlemi
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            
-            const dateStr = new Date().toISOString().slice(0,10);
-            const fileName = type === 'selected' ? `Secili_Portfoy_${dateStr}.xlsx` : `Tum_Portfoy_${dateStr}.xlsx`;
-            
-            window.saveAs(blob, fileName);
-            
-        } catch (error) {
-            console.error('Excel hatası:', error);
-            if(typeof showNotification === 'function') showNotification('Excel oluşturulurken bir hata oluştu.', 'error');
-            else alert('Hata oluştu.');
-        } finally {
-            this.renderer.showLoading(false);
-        }
-    }
-
     highlightUpdatedRow(id) {
         const row = document.querySelector(`tr[data-id="${id}"]`);
         
@@ -1245,19 +1071,33 @@ class PortfolioController {
             const workbook = new window.ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Portföy Listesi');
 
-            // Sütunlar
-            worksheet.columns = [
-                { header: 'Görsel', key: 'logo', width: 12 },
-                { header: 'Marka/Konu Adı', key: 'title', width: 40 },
-                { header: 'Başvuru Sahibi', key: 'applicant', width: 35 },
-                { header: 'Başvuru No', key: 'appNo', width: 20 },
-                { header: 'Tescil No', key: 'regNo', width: 20 },
-                { header: 'Ülke', key: 'countryName', width: 20 },
-                { header: 'Sınıflar', key: 'classes', width: 15 },
-                { header: 'Durum', key: 'status', width: 20 },
-                { header: 'Başvuru Tarihi', key: 'appDate', width: 15 },
-                { header: 'Tescil Tarihi', key: 'regDate', width: 15 }
-            ];
+            // --- 🔥 YENİ: SEKME (TAB) BAZLI DİNAMİK SÜTUN AYARLARI ---
+            if (this.state.activeTab === 'objections') {
+                worksheet.columns = [
+                    { header: 'Marka/Konu Adı', key: 'title', width: 35 },
+                    { header: 'İşlem Tipi', key: 'transactionType', width: 25 }, // İstediğiniz sütun eklendi
+                    { header: 'Başvuru No', key: 'appNo', width: 20 },
+                    { header: 'Başvuru Sahibi', key: 'applicant', width: 30 },
+                    { header: 'Karşı Taraf', key: 'opponent', width: 30 },
+                    { header: 'Bülten No', key: 'bulletinNo', width: 15 },
+                    { header: 'Bülten Tarihi', key: 'bulletinDate', width: 15 },
+                    { header: 'İşlem Tarihi', key: 'epatsDate', width: 15 },
+                    { header: 'Durum', key: 'status', width: 25 }
+                ];
+            } else {
+                worksheet.columns = [
+                    { header: 'Görsel', key: 'logo', width: 12 },
+                    { header: 'Marka/Konu Adı', key: 'title', width: 40 },
+                    { header: 'Başvuru Sahibi', key: 'applicant', width: 35 },
+                    { header: 'Başvuru No', key: 'appNo', width: 20 },
+                    { header: 'Tescil No', key: 'regNo', width: 20 },
+                    { header: 'Ülke', key: 'countryName', width: 20 },
+                    { header: 'Sınıflar', key: 'classes', width: 15 },
+                    { header: 'Durum', key: 'status', width: 20 },
+                    { header: 'Başvuru Tarihi', key: 'appDate', width: 15 },
+                    { header: 'Tescil Tarihi', key: 'regDate', width: 15 }
+                ];
+            }
 
             // Başlık Stili
             const headerRow = worksheet.getRow(1);
@@ -1270,64 +1110,96 @@ class PortfolioController {
             for (let i = 0; i < sortedData.length; i++) {
                 const record = sortedData[i];
 
-                // Veri Formatlama
-                let applicantStr = '';
-                if (record.applicants && Array.isArray(record.applicants)) {
-                    applicantStr = record.applicants.map(a => a.name).join(', ');
-                } else if (record.applicantName) {
-                    applicantStr = record.applicantName;
-                }
+                if (this.state.activeTab === 'objections') {
+                    // 🔥 İTİRAZLAR SEKME EXPORTU MANTIĞI
+                    const row = worksheet.addRow({
+                        title: record.title || '',
+                        transactionType: record.transactionTypeName || '-',
+                        appNo: record.applicationNumber || '-',
+                        applicant: record.applicantName || '-',
+                        opponent: record.opponent || '-',
+                        bulletinNo: record.bulletinNo || '-',
+                        bulletinDate: record.bulletinDate || '-',
+                        epatsDate: record.epatsDate || '-',
+                        status: record.statusText || '-'
+                    });
 
-                const countryNameStr = this.dataManager.getCountryName(record.country);
+                    // Hiyerarşi (Alt İşlemler) için Girinti
+                    if (record.isChild) {
+                        row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
+                        row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
+                    } else {
+                        row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
+                        row.font = { bold: true };
+                    }
 
-                const row = worksheet.addRow({
-                    title: record.title || '',
-                    applicant: applicantStr,
-                    appNo: record.applicationNumber || '',
-                    regNo: record.registrationNumber || '',
-                    countryName: countryNameStr,
-                    classes: Array.isArray(record.niceClasses) ? record.niceClasses.join(', ') : (record.niceClasses || ''),
-                    status: record.statusText || record.status || '',
-                    appDate: record.applicationDate ? new Date(record.applicationDate).toLocaleDateString('tr-TR') : '',
-                    regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
-                });
+                    // Hücre Hizalamaları
+                    ['transactionType', 'appNo', 'bulletinNo', 'bulletinDate', 'epatsDate', 'status'].forEach(key => {
+                        row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
+                    });
+                    row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                    row.getCell('opponent').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                    row.height = 30;
 
-                // Hiyerarşi Görselleştirmesi
-                if (record.transactionHierarchy === 'child') {
-                    row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
-                    row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
                 } else {
-                    row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
-                    row.font = { bold: true };
+                    // 🟢 STANDART MARKA/PORTFÖY EXPORTU (Mevcut Kodunuz)
+                    let applicantStr = '';
+                    if (record.applicants && Array.isArray(record.applicants)) {
+                        applicantStr = record.applicants.map(a => a.name).join(', ');
+                    } else if (record.applicantName) {
+                        applicantStr = record.applicantName;
+                    }
+
+                    const countryNameStr = this.dataManager.getCountryName(record.country);
+
+                    const row = worksheet.addRow({
+                        title: record.title || '',
+                        applicant: applicantStr,
+                        appNo: record.applicationNumber || '',
+                        regNo: record.registrationNumber || '',
+                        countryName: countryNameStr,
+                        classes: Array.isArray(record.niceClasses) ? record.niceClasses.join(', ') : (record.niceClasses || ''),
+                        status: record.statusText || record.status || '',
+                        appDate: record.applicationDate ? new Date(record.applicationDate).toLocaleDateString('tr-TR') : '',
+                        regDate: record.registrationDate ? new Date(record.registrationDate).toLocaleDateString('tr-TR') : ''
+                    });
+
+                    // Hiyerarşi Görselleştirmesi
+                    if (record.transactionHierarchy === 'child') {
+                        row.getCell('title').alignment = { indent: 2, vertical: 'middle' };
+                        row.getCell('title').font = { italic: true, color: { argb: 'FF555555' } };
+                    } else {
+                        row.getCell('title').alignment = { indent: 0, vertical: 'middle', wrapText: true };
+                        row.font = { bold: true };
+                    }
+
+                    // Hücre Hizalamaları
+                    ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
+                       if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
+                    });
+                    row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+                    // Resim Ekleme
+                    if (record.brandImageUrl) {
+                        try {
+                            const response = await fetch(record.brandImageUrl);
+                            if (response.ok) {
+                                const buffer = await response.arrayBuffer();
+                                let ext = 'png';
+                                if (record.brandImageUrl.toLowerCase().includes('.jpg') || record.brandImageUrl.toLowerCase().includes('.jpeg')) ext = 'jpeg';
+
+                                const imageId = workbook.addImage({ buffer: buffer, extension: ext });
+                                worksheet.addImage(imageId, {
+                                    tl: { col: 0, row: i + 1 },
+                                    br: { col: 1, row: i + 2 },
+                                    editAs: 'oneCell'
+                                });
+                                row.height = 50; 
+                            } else { row.height = 30; }
+                        } catch (err) { row.height = 30; }
+                    } else { row.height = 30; }
                 }
-
-                // Hücre Hizalamaları
-                ['logo', 'appNo', 'regNo', 'countryName', 'status', 'appDate', 'regDate'].forEach(key => {
-                   if(key !== 'logo') row.getCell(key).alignment = { vertical: 'middle', horizontal: 'center' };
-                });
-                row.getCell('applicant').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-
-                // Resim Ekleme
-                if (record.brandImageUrl) {
-                    try {
-                        const response = await fetch(record.brandImageUrl);
-                        if (response.ok) {
-                            const buffer = await response.arrayBuffer();
-                            let ext = 'png';
-                            if (record.brandImageUrl.toLowerCase().includes('.jpg') || record.brandImageUrl.toLowerCase().includes('.jpeg')) ext = 'jpeg';
-
-                            const imageId = workbook.addImage({ buffer: buffer, extension: ext });
-                            worksheet.addImage(imageId, {
-                                tl: { col: 0, row: i + 1 },
-                                br: { col: 1, row: i + 2 },
-                                editAs: 'oneCell'
-                            });
-                            row.height = 50; 
-                        } else { row.height = 30; }
-                    } catch (err) { row.height = 30; }
-                } else { row.height = 30; }
             }
-
             // İndirme İşlemi
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
