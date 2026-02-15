@@ -112,31 +112,30 @@ export class TaskUpdateDataManager {
         return await updateDoc(txRef, data);
     }
 
-    // 👇 GÜNCELLEME 2: EKSİK OLAN METOT EKLENDİ 👇
     async findTransactionIdByTaskId(recordId, taskId) {
         console.log(`🔎 [DataManager] Transaction Aranıyor... Record: ${recordId}, Task: ${taskId}`);
 
         try {
-            // 1. ipRecords Koleksiyonunda Ara
-            const q = query(
+            // 1. SADECE YENİ MANTIK: ipRecords koleksiyonunda doğrudan 'taskId' ile ara
+            let q = query(
                 collection(db, 'ipRecords', recordId, 'transactions'),
-                where('triggeringTaskId', '==', String(taskId))
+                where('taskId', '==', String(taskId))
             );
-            
-            const snapshot = await getDocs(q);
+            let snapshot = await getDocs(q);
+
             if (!snapshot.empty) {
                 const foundId = snapshot.docs[0].id;
                 console.log(`   ✅ [DataManager] BULUNDU! Transaction ID: ${foundId}`);
                 return foundId;
             }
             
-            // 2. Bulunamazsa suits (Dava) Koleksiyonunda Ara
-            console.log(`   ⚠️ [DataManager] ipRecords içinde bulunamadı, 'suits'e bakılıyor...`);
-            const qSuit = query(
+            // 2. BULUNAMAZSA: 'suits' (Dava) koleksiyonuna bak
+            console.log(`   ⚠️ ipRecords içinde bulunamadı, 'suits'e bakılıyor...`);
+            let qSuit = query(
                 collection(db, 'suits', recordId, 'transactions'),
-                where('triggeringTaskId', '==', String(taskId))
+                where('taskId', '==', String(taskId))
             );
-            const snapshotSuit = await getDocs(qSuit);
+            let snapshotSuit = await getDocs(qSuit);
 
             if (!snapshotSuit.empty) {
                 const foundId = snapshotSuit.docs[0].id;
