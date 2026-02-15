@@ -404,7 +404,7 @@ async mapBulletinToPortfolio(bulletinData, transactionId, bulletinDate = null) {
           designation: 'Yayına İtiraz',
           description: 'Yayına İtiraz',
           transactionHierarchy: 'parent',
-          triggeringTaskId: String(transactionId),
+          taskId: String(transactionId), // 🔥 SADECE taskId
           ...(oppositionOwner ? { oppositionOwner } : {}),
           timestamp: new Date().toISOString(),
           userId:  u?.uid   || 'anonymous',
