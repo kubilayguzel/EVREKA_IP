@@ -205,11 +205,39 @@ export class PortfolioRenderer {
         tr.className = isChild ? 'group-row child-row' : (hasChildren ? 'group-header' : '');
         if (isChild) tr.setAttribute('aria-hidden', 'true');
         
-        const docsHtml = (row.documents || []).map(doc => `
-            <a href="${doc.fileUrl}" target="_blank" class="pdf-link ${doc.type === 'epats_document' ? 'text-info' : 'text-danger'}" title="${doc.fileName}">
-                <i class="fas ${doc.type === 'epats_document' ? 'fa-file-invoice' : 'fa-file-pdf'}"></i>
-            </a>
-        `).join('');
+        // 🔥 GÜNCELLEME: Kendi portföyümüze gelen bir itirazsa arkaplanı belirgin kırmızımsı yap
+        if (!isChild && row.isOwnRecord) {
+            // Bootstrap'in kendi tehlike (kırmızı) taban rengini kullanıyoruz ki kesin çalışsın:
+            tr.classList.add('table-danger'); 
+            // Veya CSS ile ezilmemesi için: tr.style.setProperty('background-color', '#ffebee', 'important');
+        } else if (isChild) {
+            tr.style.backgroundColor = '#f8f9fa'; // Alt işlemler için belirgin açık gri
+        }
+
+        // 🔥 GÜNCELLEME 3: PDF İkon ve Renklerini CSS Çakışmalarına Karşı Garantileme
+        const docsHtml = (row.documents || []).map(doc => {
+            let iconClass = 'fa-file-pdf'; 
+            let iconColor = '#dc3545'; // Standart Kırmızı
+            
+            // Veri tiplerine göre görsel ayrım
+            if (doc.type === 'opposition_epats_petition') {
+                iconClass = 'fa-file-invoice';
+                iconColor = '#0d6efd'; // ePATS için Mavi
+            } else if (doc.type === 'official_document') {
+                iconClass = 'fa-file-signature';
+                iconColor = '#198754'; // Resmi Yazı için Yeşil
+            } else if (doc.type === 'opposition_petition') {
+                iconClass = 'fa-file-contract';
+                iconColor = '#fd7e14'; // İtiraz Dilekçesi için Turuncu
+            }
+
+            // Rengi doğrudan ikonun içine (style="color: ... !important") yazarak CSS'i eziyoruz.
+            return `
+                <a href="${doc.fileUrl}" target="_blank" class="pdf-link" title="${doc.fileName}" style="text-decoration: none; margin-right: 8px;">
+                    <i class="fas ${iconClass}" style="color: ${iconColor} !important; font-size: 1.3em; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></i>
+                </a>
+            `;
+        }).join('');
 
         const caret = hasChildren ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
         const indentation = isChild ? 'style="padding-left: 30px; border-left: 3px solid #f39c12;"' : '';
