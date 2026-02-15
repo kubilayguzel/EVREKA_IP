@@ -834,29 +834,48 @@ export class BulkIndexingModule {
             }
 
             // ==========================================
-            // 2. YENİ KISIM: HİYERARŞİ TESPİTİ
+            // 2. YENİ KISIM: HİYERARŞİ TESPİTİ VE İTİRAZ İŞ KURALI
             // ==========================================
             let finalParentId = null;
             const isChild = !!childTypeId;
 
-            // Eğer Alt İşlem oluşturuluyorsa ve "YENİ YARAT" (CREATE_NEW) seçildiyse:
-            if (isChild && existingParentId === "CREATE_NEW") {
-                const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(parentTypeId));
+            // 🔥 MÜKEMMEL DOMAIN KURALI: Eğer Başvuru (2 veya 6) işleminin altına İtiraz Bildirimi (27) eklenmeye çalışılıyorsa:
+            if (isChild && String(childTypeId) === '27' && (String(parentTypeId) === '2' || String(parentTypeId) === '6')) {
+                showNotification('İtiraz işlemi için "Yayına İtiraz" kök işlemi otomatik oluşturuluyor...', 'info');
+                
+                // Araya girecek 20 numaralı Parent'ı (Yayına İtiraz) oluştur
+                const parent20Obj = this.allTransactionTypes.find(t => String(t.id) === '20');
                 const newParentData = {
-                    type: parentTypeId,
+                    type: '20',
                     transactionHierarchy: 'parent',
-                    description: parentTypeObj ? (parentTypeObj.alias || parentTypeObj.name) : 'Ana İşlem',
+                    description: parent20Obj ? (parent20Obj.alias || parent20Obj.name) : 'Yayına İtiraz (Otomatik)',
                     timestamp: new Date().toISOString(),
                     userId: this.currentUser.uid,
                     userEmail: this.currentUser.email
                 };
+                
                 const pResult = await ipRecordsService.addTransactionToRecord(this.selectedRecordManual.id, newParentData);
                 if (pResult.success) finalParentId = pResult.id;
-            } else if (isChild && existingParentId) {
-                // Mevcut seçili parent ID'sini kullan
-                finalParentId = existingParentId;
+            } 
+            // NORMAL AKIŞ (Eğer yukarıdaki özel kurala takılmadıysa)
+            else {
+                if (isChild && existingParentId === "CREATE_NEW") {
+                    const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(parentTypeId));
+                    const newParentData = {
+                        type: parentTypeId,
+                        transactionHierarchy: 'parent',
+                        description: parentTypeObj ? (parentTypeObj.alias || parentTypeObj.name) : 'Ana İşlem',
+                        timestamp: new Date().toISOString(),
+                        userId: this.currentUser.uid,
+                        userEmail: this.currentUser.email
+                    };
+                    const pResult = await ipRecordsService.addTransactionToRecord(this.selectedRecordManual.id, newParentData);
+                    if (pResult.success) finalParentId = pResult.id;
+                } else if (isChild && existingParentId) {
+                    finalParentId = existingParentId;
+                }
             }
-
+            
             // ==========================================
             // 3. BİREBİR AYNI KALAN KISIM: PAYLOAD YAPISI
             // ==========================================
