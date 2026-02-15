@@ -263,10 +263,14 @@ export const authService = {
     }
 };
 
-// --- IP Records Service ---
 export const ipRecordsService = {
     async createRecord(recordData) {
         try {
+            // 🔥 YENİ GÜVENLİK AĞI: Veritabanına gitmeden önce applicantIds dizisini otomatik oluştur
+            if (recordData.applicants && Array.isArray(recordData.applicants)) {
+                recordData.applicantIds = recordData.applicants.map(app => app.id).filter(Boolean);
+            }
+
             // 1. applicationNumber varsa duplikasyon kontrolü yap
             if (recordData.applicationNumber && recordData.applicationNumber.trim()) {
                 const applicationNumber = recordData.applicationNumber.trim();
@@ -369,6 +373,11 @@ export const ipRecordsService = {
     async addRecord(record) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
+            // 🔥 YENİ: applicantIds güvenliği
+            if (record.applicants && Array.isArray(record.applicants)) {
+                record.applicantIds = record.applicants.map(app => app.id).filter(Boolean);
+            }
+            
             const docRef = await addDoc(collection(db, 'ipRecords'), { ...record, createdAt: new Date().toISOString() });
             return { success: true, id: docRef.id };
         } catch (error) {
