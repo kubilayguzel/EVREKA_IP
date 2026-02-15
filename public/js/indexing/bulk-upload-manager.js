@@ -17,7 +17,9 @@ import {
     query, 
     where, 
     orderBy, 
-    onSnapshot 
+    onSnapshot,
+    getDocs,
+    limit
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { 
@@ -46,6 +48,7 @@ export class BulkIndexingModule {
         this.allTransactionTypes = [];
         this.uploadedFilesMap = new Map(); 
         this.selectedRecordManual = null;
+        this.currentRecordTransactions = []; // Seçili markanın işlem geçmişini tutacak
 
         // Manuel aramada async sonuçların birbiriyle yarışmasını engellemek için
         this._manualSearchSeq = 0;
@@ -83,41 +86,46 @@ export class BulkIndexingModule {
 }
 
     async loadAllData() {
-    try {
-        console.log('⏳ Portföy ve işlem tipleri yükleniyor...');
-        
-        // Matcher'ın tüm kayıtları tarayabilmesi için 'getAllRecords' kullanımı daha güvenlidir
-        const [recordsResult, transactionTypesResult] = await Promise.all([
-        ipRecordsService.getAllRecords({ source: 'server' }),
-        transactionTypeService.getTransactionTypes()
-        ]);
+        try {
+            console.log('⏳ Portföy ve işlem tipleri yükleniyor...');
+            
+            const [recordsResult, transactionTypesResult] = await Promise.all([
+                ipRecordsService.getRecords(), 
+                transactionTypeService.getTransactionTypes()
+            ]);
 
-        // Portföy Kayıtlarını Yükle
-        if (recordsResult && recordsResult.success) {
-            this.allRecords = recordsResult.data || [];
-            console.log(`📊 ${this.allRecords.length} adet portföy kaydı eşleşme için hazır.`);
-        } else {
-            this.allRecords = [];
-            console.warn('⚠️ Portföy kayıtları yüklenemedi, eşleşme yapılamayacak.');
+            let recordsArray = [];
+            if (recordsResult) {
+                if (Array.isArray(recordsResult.data)) {
+                    recordsArray = recordsResult.data;
+                } else if (Array.isArray(recordsResult.items)) {
+                    recordsArray = recordsResult.items;
+                } else if (Array.isArray(recordsResult)) {
+                    recordsArray = recordsResult;
+                }
+            }
+
+            this.allRecords = recordsArray;
+            this._isDataLoaded = true; // 🔥 YENİ: Veri çekme işleminin bittiğini işaretle
+
+            if (this.allRecords.length > 0) {
+                console.log(`📊 ${this.allRecords.length} adet portföy kaydı eşleşme için hazır.`);
+            } else {
+                // 🔥 DÜZELTME: Uyarı mesajı kaldırıldı. Sadece konsola bilgi geçiyoruz.
+                console.info('ℹ️ Portföy şu an boş. Aramalar doğrudan bülten üzerinden yapılacak.');
+            }
+
+            if (transactionTypesResult && transactionTypesResult.success) {
+                this.allTransactionTypes = transactionTypesResult.data || [];
+            }
+
+        } catch (error) {
+            console.error('loadAllData hatası:', error);
+            showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
+            this._isDataLoaded = true; // Hata olsa bile kilidi aç
+            throw error; 
         }
-
-        // İşlem Tiplerini Yükle
-        if (transactionTypesResult && transactionTypesResult.success) {
-            this.allTransactionTypes = transactionTypesResult.data || [];
-        }
-
-        // Eğer veriler boş geldiyse kullanıcıyı bilgilendir
-        if (this.allRecords.length === 0) {
-            showNotification('Sistemde eşleştirilecek portföy kaydı bulunamadı.', 'warning');
-        }
-
-    } catch (error) {
-        console.error('loadAllData hatası:', error);
-        showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
-        // Hatayı yukarı (init'e) fırlatıyoruz ki işlem akışı durması gerektiğini bilsin
-        throw error; 
     }
-}
 
     setupEventListeners() {
         this.setupBulkUploadListeners();
@@ -129,11 +137,30 @@ export class BulkIndexingModule {
             saveManualTransactionBtn.addEventListener('click', () => this.handleManualTransactionSubmit());
         }
         
+        // 🔥 1. Ana İşlem (Parent) değiştiğinde Alt İşlemleri (Child) getir ve butonu kontrol et
         const manualTransactionType = document.getElementById('specificManualTransactionType');
         if (manualTransactionType) {
-            manualTransactionType.addEventListener('change', () => this.checkFormCompleteness());
+            manualTransactionType.addEventListener('change', () => {
+                this.updateManualChildOptions();
+                this.checkFormCompleteness();
+            });
         }
-                   
+
+        // 🔥 2. Alt İşlem (Child) değiştiğinde bağlanabilecek mevcut Ana İşlemleri (Parent) getir
+        const manualChildType = document.getElementById('manualChildTransactionType');
+        if (manualChildType) {
+            manualChildType.addEventListener('change', () => {
+                this.updateManualParentOptions();
+                this.checkFormCompleteness();
+            });
+        }
+
+        // 🔥 3. Mevcut Parent seçici değiştiğinde Kaydet butonunun durumunu (canSubmit) kontrol et
+        const manualParentSelect = document.getElementById('manualExistingParentSelect');
+        if (manualParentSelect) {
+            manualParentSelect.addEventListener('change', () => this.checkFormCompleteness());
+        }
+                 
         this.setupManualTransactionListeners();
         this.setupCommonFormListeners();
     }
@@ -276,91 +303,118 @@ export class BulkIndexingModule {
         }
     }
 
-    async searchRecords(query, tabContext) {
+    async searchRecords(queryText, tabContext) {
         const containerId = 'searchResultsContainerManual';
         const container = document.getElementById(containerId);
-
         if (!container) return;
 
-        const rawQuery = (query || '').trim();
-        
-        // Arama kutusu boşsa gizle
-        if (rawQuery.length < 1) {
+        const rawQuery = (queryText || '').trim();
+        if (rawQuery.length < 3) {
             container.style.display = 'none';
             return;
         }
 
-        // Veri Kontrolü: Sayfa yeni açıldıysa ve veriler (allRecords) henüz gelmediyse uyar
-        if (!this.allRecords || this.allRecords.length === 0) {
-            container.innerHTML = '<div style="padding:10px; color:#e67e22; font-size:0.9em;"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor, lütfen bekleyin...</div>';
+        // Sadece yükleme işlemi henüz bitmediyse beklet, bittiyse (portföy sıfır olsa bile) devam et.
+        if (this._isDataLoaded !== true) {
+            container.innerHTML = '<div style="padding:10px; color:#e67e22;"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>';
             container.style.display = 'block';
             return;
         }
 
         const seq = ++this._manualSearchSeq;
         const lowerQuery = rawQuery.toLowerCase();
+        const upperQuery = rawQuery.toUpperCase();
 
-        // 1. İSTEMCİ TARAFLI FİLTRELEME (Anlık Hız)
-        let filtered = this.allRecords.filter(r => {
+        // 1. Portföy Araması (allRecords içinden)
+        let filteredPortfolio = this.allRecords.filter(r => {
             const title = (r.title || r.markName || '').toLowerCase();
             const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
             return title.includes(lowerQuery) || appNo.includes(lowerQuery);
-        });
+        }).map(r => ({ ...r, _isPortfolio: true }));
 
-        // Yarış koşulu (Race Condition) önlemi
-        if (seq !== this._manualSearchSeq) return;
+        // 2. Bülten Araması (trademarkBulletinRecords koleksiyonundan - Doğru alanlarla)
+        let filteredBulletins = [];
+        try {
+            const bulletinsRef = collection(firebaseServices.db, 'trademarkBulletinRecords');
+
+            // TaskDataManager.js'deki orijinal arama mantığının aynısı
+            const bQueries = [
+                query(bulletinsRef, where('markName', '>=', lowerQuery), where('markName', '<=', lowerQuery + '\uf8ff'), limit(15)),
+                query(bulletinsRef, where('markName', '>=', upperQuery), where('markName', '<=', upperQuery + '\uf8ff'), limit(15)),
+                query(bulletinsRef, where('applicationNo', '>=', lowerQuery), where('applicationNo', '<=', lowerQuery + '\uf8ff'), limit(15)),
+                query(bulletinsRef, where('applicationNo', '>=', upperQuery), where('applicationNo', '<=', upperQuery + '\uf8ff'), limit(15))
+            ];
+
+            const bSnapshots = await Promise.all(bQueries.map(q => getDocs(q)));
+            
+            bSnapshots.forEach(snap => {
+                snap.forEach(d => {
+                    const data = d.data();
+                    
+                    // Tekilleştirme: Bu başvuru numarası zaten portföy sonuçlarında (filteredPortfolio) var mı?
+                    const safeAppNo = String(data.applicationNo || data.applicationNumber || '').replace(/[\s\/]/g, '');
+                    const alreadyInPortfolio = filteredPortfolio.some(p => {
+                        const pNo = String(p.applicationNumber || p.applicationNo || '').replace(/[\s\/]/g, '');
+                        return pNo === safeAppNo;
+                    });
+
+                    // Çifte Kayıt Kontrolü: 4 farklı sorgudan aynı bülten kaydı iki kez gelebilir
+                    const alreadyInBulletins = filteredBulletins.some(b => b.id === d.id);
+
+                    if (!alreadyInPortfolio && !alreadyInBulletins) {
+                        filteredBulletins.push({ id: d.id, ...data, _isBulletin: true });
+                    }
+                });
+            });
+        } catch (err) {
+            console.warn("Bülten araması hatası:", err);
+        }
+
+        if (seq !== this._manualSearchSeq) return; // Yarış koşulu önlemi
+
+        const finalResults = [...filteredPortfolio.slice(0, 15), ...filteredBulletins];
 
         container.innerHTML = '';
         container.style.display = 'block';
         
-        if (filtered.length === 0) {
+        if (finalResults.length === 0) {
             container.innerHTML = '<div style="padding:10px; color:#666;">Kayıt bulunamadı.</div>';
             return;
         }
 
-        // 2. LİSTELEME (Görsel En Başta)
-        // Performans için ilk 30 kaydı gösteriyoruz
-        filtered.slice(0, 30).forEach(record => {
+        finalResults.forEach(record => {
             const item = document.createElement('div');
             item.className = "search-result-item";
-            // Flexbox ile düzen: [Görsel] [Metin Bilgileri]
-            item.style.cssText = `
-                display: flex; 
-                align-items: center; 
-                padding: 8px 12px; 
-                border-bottom: 1px solid #eee; 
-                cursor: pointer; 
-                transition: background 0.1s;
-            `;
-            
-            // Hover efekti
+            item.style.cssText = `display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s;`;
             item.onmouseenter = () => item.style.backgroundColor = '#f0f7ff';
             item.onmouseleave = () => item.style.backgroundColor = 'white';
 
-            // Verileri Hazırla
-            const title = record.title || record.markName || '(İsimsiz)';
-            const appNo = record.applicationNumber || record.applicationNo || record.wipoIR || record.aripoIR || '-';
+            // Verileri yakalamak için güvenli property fallback'leri
+            const title = record.markName || record.title || record.brandName || '(İsimsiz)';
+            const appNo = record.applicationNo || record.applicationNumber || record.wipoIR || record.aripoIR || '-';
             
-            // İçerik HTML'i (Resim placeholder ile başlar)
+            const badge = record._isBulletin 
+                ? '<span class="badge badge-warning mr-2" style="font-size: 0.7em;">BÜLTEN</span>' 
+                : '<span class="badge badge-primary mr-2" style="font-size: 0.7em;">PORTFÖY</span>';
+
             item.innerHTML = `
                 <div class="result-img-wrapper" style="width: 45px; height: 45px; margin-right: 12px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px;">
-                    <i class="fas fa-image text-muted" style="font-size: 1.2em;"></i>
+                    <i class="fas fa-image text-muted"></i>
                 </div>
                 <div style="flex-grow: 1; min-width: 0;">
-                    <div style="font-weight: 600; color: #1e3c72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this._highlightText(title, rawQuery)}</div>
+                    <div style="font-weight: 600; color: #1e3c72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${badge}${this._highlightText(title, rawQuery)}
+                    </div>
                     <div style="font-size: 0.85em; color: #666;">${this._highlightText(appNo, rawQuery)}</div>
                 </div>
             `;
 
-            // Tıklama Olayı
             item.addEventListener('click', () => {
                 this.selectRecord(record);
                 container.style.display = 'none';
             });
 
-            // Resmi Asenkron Yükle (Listeyi kilitlememek için)
             this._loadResultImage(record, item.querySelector('.result-img-wrapper'));
-
             container.appendChild(item);
         });
     }
@@ -397,6 +451,11 @@ export class BulkIndexingModule {
         this.renderSelectedRecordCardManual(record);
 
         this.populateManualTransactionTypeSelect();
+        // Markanın mevcut işlem geçmişini (Parent tespiti için) sunucudan çek
+        this.currentRecordTransactions = [];
+        ipRecordsService.getRecordTransactions(record.id).then(res => {
+            if(res.success) this.currentRecordTransactions = res.data || [];
+        });
         this.checkFormCompleteness();
     }
 
@@ -517,6 +576,92 @@ export class BulkIndexingModule {
         });
     }
 
+    updateManualChildOptions() {
+        const parentTypeSelect = document.getElementById('specificManualTransactionType');
+        const childTypeSelect = document.getElementById('manualChildTransactionType');
+        const parentContainer = document.getElementById('manualParentSelectContainer');
+
+        if (!parentTypeSelect || !childTypeSelect) return;
+
+        // Reset
+        childTypeSelect.innerHTML = '<option value="">-- Sadece Ana İşlem Oluştur --</option>';
+        childTypeSelect.disabled = true;
+        if(parentContainer) parentContainer.style.display = 'none';
+
+        const selectedParentTypeId = parentTypeSelect.value;
+        if (!selectedParentTypeId) return;
+
+        const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(selectedParentTypeId));
+        if (!parentTypeObj || !parentTypeObj.indexFile) return; // Alt işlemi yoksa çık
+
+        // Alt işlemleri filtrele
+        const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile.map(String) : [];
+        const allowedChildTypes = this.allTransactionTypes
+            .filter(t => allowedChildIds.includes(String(t.id)))
+            .sort((a, b) => (a.order || 999) - (b.order || 999));
+
+        if (allowedChildTypes.length > 0) {
+            allowedChildTypes.forEach(type => {
+                const opt = document.createElement('option');
+                opt.value = type.id;
+                opt.textContent = type.alias || type.name;
+                childTypeSelect.appendChild(opt);
+            });
+            childTypeSelect.disabled = false;
+        }
+    }
+
+    updateManualParentOptions() {
+        const parentTypeSelect = document.getElementById('specificManualTransactionType');
+        const childTypeSelect = document.getElementById('manualChildTransactionType');
+        const parentContainer = document.getElementById('manualParentSelectContainer');
+        const parentSelect = document.getElementById('manualExistingParentSelect');
+
+        if (!parentContainer || !parentSelect) return;
+
+        const childTypeId = childTypeSelect.value;
+        const parentTypeId = parentTypeSelect.value;
+
+        // Eğer alt işlem seçilmediyse parent sorusunu gizle
+        if (!childTypeId) {
+            parentContainer.style.display = 'none';
+            parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçin --</option>';
+            return;
+        }
+
+        // Alt işlem seçildi, kutuyu göster
+        parentContainer.style.display = 'block';
+        parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçin --</option>';
+
+        // Markanın geçmişinde, seçilen Parent Tipi ile eşleşen 'parent' hiyerarşili kayıtları bul
+        const existingParents = this.currentRecordTransactions.filter(t => 
+            String(t.type) === String(parentTypeId) && 
+            (t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
+        );
+
+        if (existingParents.length === 0) {
+            // Hiç yoksa kullanıcıyı bilgilendirip sanal oluşturma opsiyonu verelim
+            const opt = document.createElement('option');
+            opt.value = "CREATE_NEW";
+            opt.textContent = "⚠️ Mevcut İşlem Yok - Önce Yeni Ana İşlem Yaratıp Bağla";
+            parentSelect.appendChild(opt);
+            parentSelect.value = "CREATE_NEW";
+        } else {
+            // Varsa listele (En yeniden en eskiye)
+            existingParents.sort((a,b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                const dateStr = t.timestamp ? new Date(t.timestamp).toLocaleDateString('tr-TR') : 'Tarihsiz';
+                opt.textContent = `${t.description || 'İşlem'} (${dateStr})`;
+                parentSelect.appendChild(opt);
+            });
+            // Sadece 1 tane varsa kullanıcıyı yormamak için otomatik seç
+            if (existingParents.length === 1) {
+                parentSelect.value = existingParents[0].id;
+            }
+        }
+    }
+
     handleFileChange(event, tabKey) {
         const fileInput = event.target;
         const files = Array.from(fileInput.files);
@@ -568,16 +713,21 @@ export class BulkIndexingModule {
     }
 
     checkFormCompleteness() {
-        // Sadece Manuel Tabı için kontrol
         if (this.activeTab === 'manual-indexing-pane') {
-            const typeSelected = document.getElementById('specificManualTransactionType')?.value;
-            // Kayıt seçili mi ve işlem türü seçili mi?
-            const canSubmit = this.selectedRecordManual !== null && typeSelected && typeSelected !== "";
+            const parentType = document.getElementById('specificManualTransactionType')?.value;
+            const childType = document.getElementById('manualChildTransactionType')?.value;
+            const existingParent = document.getElementById('manualExistingParentSelect')?.value;
+
+            let canSubmit = this.selectedRecordManual !== null && parentType && parentType !== "";
+
+            // Eğer alt işlem seçildiyse, bağlanacak parent da seçilmiş olmak ZORUNDA
+            if (childType && !existingParent) {
+                canSubmit = false;
+            }
             
             const saveManualBtn = document.getElementById('saveManualTransactionBtn');
             if (saveManualBtn) {
                 saveManualBtn.disabled = !canSubmit;
-                // Butonun opaklığını da ayarla
                 saveManualBtn.style.opacity = canSubmit ? '1' : '0.6';
             }
         }
@@ -585,11 +735,13 @@ export class BulkIndexingModule {
 
     // --- MANUEL İŞLEM KAYDETME (GÜNCELLENEN METOD) ---
     async handleManualTransactionSubmit() {
-        const transactionTypeId = document.getElementById('specificManualTransactionType')?.value;
+        const parentTypeId = document.getElementById('specificManualTransactionType')?.value;
+        const childTypeId = document.getElementById('manualChildTransactionType')?.value;
+        const existingParentId = document.getElementById('manualExistingParentSelect')?.value;
         const deliveryDateStr = document.getElementById('manualTransactionDeliveryDate')?.value;
         const notes = document.getElementById('manualTransactionNotes')?.value;
         
-        if (!this.selectedRecordManual || !transactionTypeId) {
+        if (!this.selectedRecordManual || !parentTypeId) {
             showNotification('Lütfen işlem türü ve kayıt seçiniz.', 'warning');
             return;
         }
@@ -599,7 +751,63 @@ export class BulkIndexingModule {
         showNotification('Dosyalar yükleniyor ve işlem kaydediliyor...', 'info');
 
         try {
-            // 1. Dosyaları Firebase Storage'a Yükle
+
+// ==========================================
+            // 🔥 EĞER BÜLTEN SEÇİLDİYSE ÖNCE KAYIT OLUŞTUR (DOĞRU ALAN ADLARIYLA)
+            // ==========================================
+            if (this.selectedRecordManual._isBulletin) {
+                showNotification('Bülten kaydı 3. Taraf olarak portföye ekleniyor...', 'info');
+                
+                const newRecordData = {
+                    title: this.selectedRecordManual.markName || this.selectedRecordManual.title || 'İsimsiz Marka',
+                    applicationNumber: this.selectedRecordManual.applicationNo || this.selectedRecordManual.applicationNumber || '',
+                    niceClasses: this.selectedRecordManual.classes || this.selectedRecordManual.niceClasses || [],
+                    recordOwnerType: 'third_party',
+                    origin: 'TÜRKPATENT',
+                    status: 'published',
+                    bulletinNo: this.selectedRecordManual.bulletinNo || '',
+                    applicationDate: this.selectedRecordManual.applicationDate || '',
+                    brandImageUrl: this.selectedRecordManual.imagePath || this.selectedRecordManual.imageUrl || null,
+                    createdAt: new Date().toISOString()
+                };
+                
+                // Bülten sahibi (Applicant) alanını yakala
+                const ownerName = this.selectedRecordManual.applicantName || this.selectedRecordManual.owner || this.selectedRecordManual.applicant;
+                if (ownerName) {
+                    newRecordData.applicants = [{
+                        name: ownerName,
+                        id: 'temp_' + Date.now()
+                    }];
+                }
+
+                // 1. ipRecords tablosuna yeni belgeyi kaydet
+                const newRecordRef = doc(collection(firebaseServices.db, 'ipRecords'));
+                await setDoc(newRecordRef, newRecordData);
+                const newRecordId = newRecordRef.id;
+
+                // 2. "Marka Başvurusu" (ID: 6) kök işlemini (Transaction) otomatik bağla
+                const rootTxData = {
+                    type: "2", // Sisteminizdeki Marka Başvurusu ID'si
+                    transactionHierarchy: 'parent',
+                    description: 'Başvuru',
+                    date: this.selectedRecordManual.applicationDate || new Date().toISOString(),
+                    timestamp: new Date().toISOString(),
+                    userId: this.currentUser.uid,
+                    userName: this.currentUser.displayName || this.currentUser.email || 'Kullanıcı',
+                    userEmail: this.currentUser.email
+                };
+                await ipRecordsService.addTransactionToRecord(newRecordId, rootTxData);
+
+                // 3. Referansı Güncelle (Artık sıradan bir Portföy kaydı oldu)
+                this.selectedRecordManual.id = newRecordId;
+                this.selectedRecordManual._isBulletin = false; 
+                
+                // Aramada bir daha bülten olarak çıkmasın diye belleğe ekle
+                this.allRecords.push({ id: newRecordId, ...newRecordData });
+            }
+            // ==========================================
+            // 1. BİREBİR AYNI KALAN KISIM: PDF YÜKLEME
+            // ==========================================
             const filesToUpload = this.uploadedFilesMap.get('manual-indexing-pane') || [];
             const uploadedDocuments = [];
 
@@ -611,44 +819,72 @@ export class BulkIndexingModule {
                     const storagePath = `pdfs/${this.currentUser.uid}/${uniqueFileName}`;
                     const storageRef = ref(firebaseServices.storage, storagePath);
                     
-                    // Upload
                     const uploadTask = await uploadBytesResumable(storageRef, file);
                     const downloadURL = await getDownloadURL(uploadTask.ref);
 
-                    // Documents Array Yapısı
                     uploadedDocuments.push({
                         id: generateUUID(),
                         name: file.name,
                         type: file.type || 'application/pdf',
                         downloadURL: downloadURL,
                         uploadedAt: new Date().toISOString(),
-                        documentDesignation: fileItem.documentDesignation || 'Resmi Yazı' // Varsayılan designation
+                        documentDesignation: fileItem.documentDesignation || 'Resmi Yazı'
                     });
                 }
             }
 
-            // 2. Transaction Objesini Hazırla
+            // ==========================================
+            // 2. YENİ KISIM: HİYERARŞİ TESPİTİ
+            // ==========================================
+            let finalParentId = null;
+            const isChild = !!childTypeId;
+
+            // Eğer Alt İşlem oluşturuluyorsa ve "YENİ YARAT" (CREATE_NEW) seçildiyse:
+            if (isChild && existingParentId === "CREATE_NEW") {
+                const parentTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(parentTypeId));
+                const newParentData = {
+                    type: parentTypeId,
+                    transactionHierarchy: 'parent',
+                    description: parentTypeObj ? (parentTypeObj.alias || parentTypeObj.name) : 'Ana İşlem',
+                    timestamp: new Date().toISOString(),
+                    userId: this.currentUser.uid,
+                    userEmail: this.currentUser.email
+                };
+                const pResult = await ipRecordsService.addTransactionToRecord(this.selectedRecordManual.id, newParentData);
+                if (pResult.success) finalParentId = pResult.id;
+            } else if (isChild && existingParentId) {
+                // Mevcut seçili parent ID'sini kullan
+                finalParentId = existingParentId;
+            }
+
+            // ==========================================
+            // 3. BİREBİR AYNI KALAN KISIM: PAYLOAD YAPISI
+            // ==========================================
+            const targetTypeId = isChild ? childTypeId : parentTypeId;
+            const typeObj = this.allTransactionTypes.find(t => String(t.id) === String(targetTypeId));
+
             const transactionData = {
-                type: transactionTypeId,
-                transactionHierarchy: 'parent',
+                type: targetTypeId,
+                transactionHierarchy: isChild ? 'child' : 'parent', // Sadece burası dinamik oldu
                 deliveryDate: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : null,
-                
-                // Description ve Notes alanları
-                description: notes || '', 
+                description: typeObj ? (typeObj.alias || typeObj.name) : (notes || ''),
                 notes: notes || '',
-                
                 timestamp: new Date().toISOString(),
                 
-                // Documents Alanı (Array)
+                // ORİJİNAL BELGE EKLEME MANTIĞI KORUNDU
                 documents: uploadedDocuments,
                 
-                // Kullanıcı Meta Verisi
                 userId: this.currentUser.uid,
                 userName: this.currentUser.displayName || this.currentUser.email || 'Kullanıcı',
                 userEmail: this.currentUser.email
             };
 
-            // 3. Veritabanına Ekle
+            // Eğer child ise ParentID'yi pakete dahil et
+            if (isChild && finalParentId) {
+                transactionData.parentId = finalParentId;
+            }
+
+            // 4. Veritabanına Ekle
             const result = await ipRecordsService.addTransactionToRecord(
                 this.selectedRecordManual.id, 
                 transactionData
@@ -658,8 +894,15 @@ export class BulkIndexingModule {
             
             showNotification('İşlem başarıyla kaydedildi!', 'success');
             
-            // 4. Formu Temizle
+            // 5. Formu Temizle ve Kapat
             this.resetForm();
+            if (document.getElementById('manualParentSelectContainer')) {
+                document.getElementById('manualParentSelectContainer').style.display = 'none';
+            }
+            if (document.getElementById('manualChildTransactionType')) {
+                document.getElementById('manualChildTransactionType').disabled = true;
+                document.getElementById('manualChildTransactionType').innerHTML = '<option value="">-- Sadece Ana İşlem Oluştur --</option>';
+            }
 
         } catch (error) {
             console.error('Manuel işlem hatası:', error);
@@ -667,7 +910,7 @@ export class BulkIndexingModule {
         } finally {
             if(submitBtn) {
                 submitBtn.disabled = false;
-                this.checkFormCompleteness(); // Buton durumunu güncelle
+                this.checkFormCompleteness();
             }
         }
     }
