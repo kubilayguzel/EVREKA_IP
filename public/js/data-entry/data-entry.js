@@ -488,7 +488,15 @@ class DataEntryModule {
             })).sort((a, b) => a.classNo - b.classNo);
             
             // niceClasses listesini güncelle (örn: ["1", "5", "35"])
+
             recordData.niceClasses = Object.keys(tempMap).sort((a, b) => Number(a) - Number(b));
+        }
+
+        // 🔥 YENİ: Başvuru sahiplerinin (applicants) ID'lerini düz bir diziye çevir (Silme/Ekleme burada otomatik algılanır)
+        if (recordData.applicants && Array.isArray(recordData.applicants)) {
+            recordData.applicantIds = recordData.applicants.map(app => app.id).filter(Boolean);
+        } else {
+            recordData.applicantIds = [];
         }
 
         // 2. Validasyon
@@ -796,6 +804,7 @@ class DataEntryModule {
                 brandImageUrl: parentData.brandImageUrl || null,
                 
                 applicants: parentData.applicants,
+                applicantIds: parentData.applicantIds || [], // 🔥 YENİ: Alt kayıtlara da senkronize et
                 goodsAndServicesByClass: parentData.goodsAndServicesByClass,
                 
                 updatedAt: new Date().toISOString()
