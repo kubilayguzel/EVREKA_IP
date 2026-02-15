@@ -69,49 +69,50 @@ class TaskUpdateController {
 
     // public/js/task-update/main.js içindeki metodun güncel hali
 
-async extractEpatsInfoFromFile(file) {
-    try {
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument(arrayBuffer);
-        const pdf = await loadingTask.promise;
+    async extractEpatsInfoFromFile(file) {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+            const pdf = await loadingTask.promise;
 
-        let fullText = '';
-        const maxPages = Math.min(pdf.numPages, 2);
-        for (let i = 1; i <= maxPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            const strings = content.items.map(item => item.str);
-            fullText += strings.join(' ') + '\n';
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 2);
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                const strings = content.items.map(item => item.str);
+                fullText += strings.join(' ') + '\n';
+            }
+
+            // PDF'teki gereksiz alt satırları ve boşlukları tek bir boşluğa indirgiyoruz
+            const normalizedText = fullText.replace(/\s+/g, ' '); 
+
+            // 1. Evrak No Yakalayıcı (Araya giren virgül, tırnak vb. karakterleri tolere eder)
+            let evrakNo = null;
+            const evrakNoRegex = /(?<!İtirazın\s)Evrak\s+(?:No|Numarası)[\s:.\-,"']*([a-zA-Z0-9\-]+)/i;
+            const evrakNoMatch = normalizedText.match(evrakNoRegex);
+            
+            if (evrakNoMatch) {
+                // Eğer numaranın sonunda fazladan tire kalmışsa temizle (Örn: 2026GE-12345- -> 2026GE-12345)
+                evrakNo = evrakNoMatch[1].trim().replace(/-$/, '');
+            }
+
+            // 2. Evrak Tarihi Yakalayıcı (Araya giren virgül ve tırnak işaretlerini artık atlayacak)
+            let documentDate = null;
+            const dateRegex = /(?:Tarih|Evrak\s+Tarihi)[\s:.\-,"']*(\d{1,2}[./]\d{1,2}[./]\d{4})/i;
+            const dateMatch = normalizedText.match(dateRegex);
+            
+            if (dateMatch) {
+                documentDate = this.parseDate(dateMatch[1]);
+            }
+
+            return { evrakNo, documentDate };
+
+        } catch (e) {
+            console.error("PDF okuma hatası:", e);
+            return null;
         }
-
-        // --- GÜNCELLENMİŞ REGEX MANTIĞI ---
-        
-        // 1. Evrak No: Önünde "İtirazın" kelimesi olmayan "Evrak Numarası" veya "Evrak No"yu bulur.
-        // Bu sayede "Karşı Görüş Sunulan İtirazın Evrak Numarası" alanını atlar.
-        let evrakNo = null;
-        const evrakNoRegex = /(?<!İtirazın\s)Evrak\s+(?:No|Numarası)\s*["\s,:]+([\w-]+)/i;
-        const evrakNoMatch = fullText.match(evrakNoRegex);
-        
-        if (evrakNoMatch) {
-            evrakNo = evrakNoMatch[1].trim();
-        }
-
-        // 2. Evrak Tarihi: "Evrak Tarihi" veya "Tarih" etiketinden sonraki tarihi yakalar.
-        let documentDate = null;
-        const dateRegex = /(?:Evrak\s+)?Tarih(?:i)?\s*["\s,:]+(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i;
-        const dateMatch = fullText.match(dateRegex);
-        
-        if (dateMatch) {
-            documentDate = this.parseDate(dateMatch[1]);
-        }
-
-        return { evrakNo, documentDate };
-
-    } catch (e) {
-        console.error("PDF okuma hatası:", e);
-        return null;
     }
-}
 
     // Yardımcı: DD.MM.YYYY formatını YYYY-MM-DD (HTML input formatı) yapar
     parseDate(dateStr) {
@@ -414,14 +415,31 @@ async extractEpatsInfoFromFile(file) {
 
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
             showNotification('PDF taranıyor, evrak bilgileri okunuyor...', 'info');
+            
             this.extractEpatsInfoFromFile(file).then(info => {
                 if (info) {
                     const noInput = document.getElementById('turkpatentEvrakNo');
                     const dateInput = document.getElementById('epatsDocumentDate');
+
                     let msg = [];
-                    if (info.evrakNo && noInput && !noInput.value) { noInput.value = info.evrakNo; msg.push('Evrak No'); }
-                    if (info.documentDate && dateInput && !dateInput.value) { dateInput.value = info.documentDate; msg.push('Tarih'); }
-                    if (msg.length > 0) showNotification(`✅ PDF'ten otomatik dolduruldu: ${msg.join(', ')}`, 'success');
+                    if (info.evrakNo && noInput && !noInput.value) {
+                        noInput.value = info.evrakNo;
+                        msg.push('Evrak No');
+                    }
+                    if (info.documentDate && dateInput && !dateInput.value) {
+                        dateInput.value = info.documentDate;
+                        
+                        // 🔥 ÇÖZÜM: Date Picker (Flatpickr) Görselini Güncelleme
+                        if (dateInput._flatpickr) {
+                            dateInput._flatpickr.setDate(info.documentDate, true);
+                        }
+                        
+                        msg.push('Tarih');
+                    }
+
+                    if (msg.length > 0) {
+                        showNotification(`✅ PDF'ten otomatik dolduruldu: ${msg.join(', ')}`, 'success');
+                    }
                 }
             });
         }
