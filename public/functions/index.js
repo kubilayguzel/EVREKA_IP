@@ -908,7 +908,7 @@ export const createObjectionTask = onCall(
             designation: 'Yayına İtiraz',
             description: 'Yayına İtiraz',
             transactionHierarchy: 'parent',
-            // ❌ triggeringTaskId YOK - Manuel oluşturulan iş
+            taskId: String(taskId),
             ...(oppositionOwnerName ? { oppositionOwner: oppositionOwnerName } : {}),
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             userId: 'cloud_function',
@@ -6991,7 +6991,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 description: "Yenileme işlemi.", // (string) - Sabit metin
                 timestamp: nowISO,             // (string) - ISO format
                 transactionHierarchy: "parent",// (string)
-                triggeringTaskId: nextId,      // (string)
+                taskId: String(nextId),      // (string)
                 type: "22",                    // (string)
                 userEmail: assignedTo_email,   // (string)
                 userId: assignedTo_uid,        // (string)
@@ -7667,7 +7667,7 @@ export const onTaskDeleteCleanup = onDocumentDeleted(
 
         // A) SİLİNEN TASK TARAFINDAN OLUŞTURULAN TRANSACTION'I BUL
         const transactionSnapshot = await transactionsRef
-            .where('triggeringTaskId', '==', taskId)
+            .where('taskId', '==', taskId) // 🔥 SADECE taskId
             .get();
 
         if (!transactionSnapshot.empty) {
@@ -7763,7 +7763,7 @@ export const cleanupTransactionOnClientRejection = onDocumentUpdated(
         try {
             if (after.relatedIpRecordId) {
                 const transactionsRef = adminDb.collection('ipRecords').doc(after.relatedIpRecordId).collection('transactions');
-                const transactionSnapshot = await transactionsRef.where('triggeringTaskId', '==', taskId).get();
+                const transactionSnapshot = await transactionsRef.where('taskId', '==', taskId).get();
 
                 if (!transactionSnapshot.empty) {
                     const deletedTransactionIds = [];
