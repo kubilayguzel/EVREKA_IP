@@ -297,29 +297,34 @@ async loadObjectionRows() {
     }
 
     async _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
-        const isOwnRecord = record.recordOwnerType !== 'third_party';
-        const docs = [];
+        let docs = [];
         
-        // 🔥 KURAL: Eğer dosya bizim (self) ise ve İşlem Tipi 20 (Yayına İtiraz) ise
-        if (isOwnRecord && String(tx.type) === '20') {
-            // SADECE ePATS belgesini göster
-            if (tx.oppositionEpatsPetitionFileUrl) {
-                docs.push({ fileName: 'ePATS İtiraz Evrakı', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
-            }
-        } 
-        // DİĞER DURUMLAR: Normal işleyiş
-        else {
-            if (Array.isArray(tx.documents)) {
-                tx.documents.forEach(d => {
-                    docs.push({ fileName: d.name || 'Belge', fileUrl: d.url || d.downloadURL || d.path, type: d.type || 'standard' });
-                });
-            }
-            if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
-            if (tx.oppositionEpatsPetitionFileUrl) docs.push({ fileName: 'ePATS İtiraz Evrakı', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
-            if (!isParent && tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
+        // 1. TEK GERÇEKLİK KAYNAĞI: documents dizisi
+        if (Array.isArray(tx.documents)) {
+            docs = tx.documents.map(d => ({
+                fileName: d.name || 'Belge',
+                fileUrl: d.url || d.downloadURL || d.path,
+                type: d.type || 'standard'
+            }));
         }
+
+        // ESKİ (LEGACY) KAYITLARA DESTEK: Eğer documents dizisinde yoklarsa eski alanlardan kurtar
+        if (tx.relatedPdfUrl && !docs.some(d => d.type === 'official_document')) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
+        if (tx.oppositionEpatsPetitionFileUrl && !docs.some(d => d.type === 'epats_document')) docs.push({ fileName: 'ePATS İtiraz Evrakı', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'epats_document' });
+        if (!isParent && tx.oppositionPetitionFileUrl && !docs.some(d => d.type === 'opposition_petition')) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
-        // Karşı Taraf Çözümleme Mantığı
+        const isOwnRecord = record.recordOwnerType !== 'third_party';
+
+        // 🔥 KURALLAR: Hangi dosya nerede gösterilecek?
+        if (isOwnRecord && String(tx.type) === '20') {
+            // Kural: Kendi markamız ve işlem Tipi 20 ise SADECE ePATS
+            docs = docs.filter(d => d.type === 'epats_document');
+        } else if (isParent) {
+            // Kural: Ana işlemlerde (Parent) normal itiraz dilekçesini kalabalık yapmasın diye gizle
+            docs = docs.filter(d => d.type !== 'opposition_petition');
+        }
+
+        // Karşı Taraf Çözümleme
         let opponentText = '-';
         if (tx.oppositionOwner) opponentText = tx.oppositionOwner;
         else if (tx.objectionOwners && tx.objectionOwners.length > 0) opponentText = tx.objectionOwners.map(o => o.name).join(', ');
@@ -336,7 +341,7 @@ async loadObjectionRows() {
             }
         } 
         
-        if (opponentText === '-' && tx.details && tx.details.relatedParty && tx.details.relatedParty.name) {
+        if (opponentText === '-' && tx.details?.relatedParty?.name) {
             opponentText = tx.details.relatedParty.name;
         }
 
@@ -354,7 +359,7 @@ async loadObjectionRows() {
             opponent: opponentText || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
-            epatsDate: this._fmtDate(tx.epatsDocument?.documentDate),
+            epatsDate: this._fmtDate(docs.find(d => d.type === 'epats_document')?.documentDate || tx.epatsDocument?.documentDate),
             statusText: this._formatObjectionStatus(tx.requestResult),
             timestamp: tx.timestamp,
             documents: docs
