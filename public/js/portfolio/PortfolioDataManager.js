@@ -294,8 +294,6 @@ export class PortfolioDataManager {
         }
     }
 
-    // Task belgesi çekmeyen HIZLI fonksiyon
-    // Eski versiyondaki _fetchTaskDocuments kaldırıldı.
     async _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
         const docs = (tx.documents || []).map(d => ({
             fileName: d.name || 'Belge',
@@ -307,6 +305,34 @@ export class PortfolioDataManager {
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
         if (tx.oppositionEpatsPetitionFileUrl) docs.push({ fileName: 'Karşı ePATS Dilekçesi', fileUrl: tx.oppositionEpatsPetitionFileUrl, type: 'opposition_epats_petition' });
        
+        // 🔥 YENİ: Karşı Taraf (Opponent / taskOwner) Çözümleme Mantığı
+        let opponentText = '-';
+        if (tx.oppositionOwner) {
+            opponentText = tx.oppositionOwner;
+        } else if (tx.objectionOwners && tx.objectionOwners.length > 0) {
+            opponentText = tx.objectionOwners.map(o => o.name).join(', ');
+        } else if (tx.taskOwner) {
+            // TaskOwner bir dizi ise (ID veya Obje barındırabilir)
+            if (Array.isArray(tx.taskOwner) && tx.taskOwner.length > 0) {
+                opponentText = tx.taskOwner.map(owner => {
+                    if (typeof owner === 'object' && owner.name) return owner.name;
+                    const ownerId = typeof owner === 'object' ? owner.id : String(owner);
+                    const person = this.personsMap.get(ownerId); // ID'den anında ismi bul (O(1) Hızında)
+                    return person ? person.name : ownerId;
+                }).filter(Boolean).join(', ');
+            } 
+            // Tekil string ID ise
+            else if (typeof tx.taskOwner === 'string') {
+                const person = this.personsMap.get(tx.taskOwner);
+                opponentText = person ? person.name : tx.taskOwner;
+            }
+        } 
+        
+        // Eğer hiçbirinde yoksa, task details.relatedParty'de var mı diye bak (Yedek)
+        if (opponentText === '-' && tx.details && tx.details.relatedParty && tx.details.relatedParty.name) {
+            opponentText = tx.details.relatedParty.name;
+        }
+
         return {
             id: tx.id,
             recordId: record.id,
@@ -317,7 +343,7 @@ export class PortfolioDataManager {
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
             applicantName: record.formattedApplicantName || '-',
-            opponent: tx.oppositionOwner || (tx.objectionOwners || []).map(o=>o.name).join(', ') || '-',
+            opponent: opponentText || '-', // 🔥 BULUNAN İSİM BURAYA YAZILIYOR
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
             epatsDate: this._fmtDate(tx.epatsDocument?.documentDate),
