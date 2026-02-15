@@ -279,10 +279,25 @@
                                 <h3 class="section-title">İşlem Detayları</h3>
                                 <div class="form-grid">
                                     <div class="form-group">
-                                        <label class="form-label">İşlem Türü <span class="text-danger">*</span></label>
+                                        <label class="form-label">İşlem Türü (Ana İşlem) <span class="text-danger">*</span></label>
                                         <select id="specificManualTransactionType" class="form-select"></select>
                                     </div>
                                     <div class="form-group">
+                                        <label class="form-label">Alt İşlem Türü (Opsiyonel)</label>
+                                        <select id="manualChildTransactionType" class="form-select" disabled>
+                                            <option value="">-- Sadece Ana İşlem Oluştur --</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="form-group" id="manualParentSelectContainer" style="display: none; grid-column: span 2;">
+                                        <label class="form-label">Bağlanacak Ana İşlem (Parent) <span class="text-danger">*</span></label>
+                                        <select id="manualExistingParentSelect" class="form-select">
+                                            <option value="">-- Ana İşlem Seçin --</option>
+                                        </select>
+                                        <small class="text-muted"><i class="fas fa-info-circle mr-1"></i>Alt işlemi bağlamak için mevcut bir ana işlem seçmelisiniz.</small>
+                                    </div>
+
+                                    <div class="form-group" style="grid-column: span 2;">
                                         <label class="form-label">Tebliğ Tarihi</label>
                                         <input type="date" id="manualTransactionDeliveryDate" class="form-input">
                                     </div>
