@@ -214,80 +214,85 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- OBJECTIONS (HIZLANDIRILMIŞ & OPTİMİZE EDİLMİŞ) ---
-async loadObjectionRows() {
-        if (this.objectionRows.length > 0) return this.objectionRows;
-
-        // 🔥 YENİ MANTIK: Sadece Ana (Parent) İşlemleri arıyoruz. (Performans için süper hızlı)
+        // --- OBJECTIONS: PREFETCH (Firestore sorgularını paralel başlatır) ---
+    prefetchObjectionData() {
         const PARENT_TYPES = ['7', '19', '20'];
+        const parentQuery = query(collectionGroup(db, 'transactions'), where('type', 'in', PARENT_TYPES));
+        const childQuery = query(collectionGroup(db, 'transactions'), where('transactionHierarchy', '==', 'child'));
+        
+        // İki sorguyu paralel başlat, Promise'leri döndür (await YOK, hemen başlar)
+        return {
+            parentPromise: getDocs(parentQuery),
+            childPromise: getDocs(childQuery)
+        };
+    }
+
+    // --- OBJECTIONS: BUILD (Prefetch sonuçlarını kullanarak satırları oluşturur) ---
+    async buildObjectionRows(prefetch = null) {
+        if (this.objectionRows.length > 0) return this.objectionRows;
+        console.time('⏱️ buildObjectionRows');
 
         try {
-            // 1. Tüm veritabanında sadece Ana İtirazları bul
-            const q = query(collectionGroup(db, 'transactions'), where('type', 'in', PARENT_TYPES));
-            const snapshot = await getDocs(q);
-            
-            if (snapshot.empty) {
+            if (!prefetch) {
+                prefetch = this.prefetchObjectionData();
+            }
+
+            const [parentSnapshot, childSnapshot] = await Promise.all([
+                prefetch.parentPromise,
+                prefetch.childPromise
+            ]);
+
+            if (parentSnapshot.empty) {
                 this.objectionRows = [];
                 return [];
             }
 
             const parents = [];
-            const recordIds = new Set(); // Hangi portföy kayıtlarında itiraz var?
+            const parentIds = new Set();
 
-            snapshot.forEach(docSnap => {
+            parentSnapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 const parentRecordId = docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : null;
                 if (parentRecordId) {
                     parents.push({ ...data, id: docSnap.id, recordId: parentRecordId });
-                    recordIds.add(parentRecordId);
+                    parentIds.add(docSnap.id);
                 }
             });
 
             const childrenMap = {};
-
-            // 2. SADECE İtiraz bulunan kayıtların altındaki işlemleri getir (Nokta Atışı)
-            const subcollectionPromises = Array.from(recordIds).map(async (recId) => {
-                const txRef = collection(db, `ipRecords/${recId}/transactions`);
-                const txSnap = await getDocs(txRef);
-                
-                txSnap.forEach(tDoc => {
-                    const tData = tDoc.data();
-                    // Sadece çocuk işlemleri (Child) haritaya ekle
-                    if (tData.parentId && tData.transactionHierarchy === 'child') {
-                        if (!childrenMap[tData.parentId]) childrenMap[tData.parentId] = [];
-                        childrenMap[tData.parentId].push({ ...tData, id: tDoc.id, recordId: recId });
-                    }
-                });
+            childSnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data.parentId && parentIds.has(data.parentId)) {
+                    const childRecordId = docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : null;
+                    if (!childrenMap[data.parentId]) childrenMap[data.parentId] = [];
+                    childrenMap[data.parentId].push({ ...data, id: docSnap.id, recordId: childRecordId });
+                }
             });
 
-            // Tüm çocukları paralel (aynı anda) çekerek süreyi kısalt
-            await Promise.all(subcollectionPromises);
-
+            const recordsMap = new Map(this.allRecords.map(r => [r.id, r]));
             const localRows = [];
 
-            // 3. Parent ve Child'ları birleştir
             for (const parent of parents) {
-                const record = this.allRecords.find(r => r.id === parent.recordId);
+                const record = recordsMap.get(parent.recordId);
                 if (!record) continue;
 
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
 
-                const parentRow = await this._createObjectionRowDataFast(record, parent, typeInfo, true, children.length > 0);
-                parentRow.children = []; 
+                const parentRow = this._createObjectionRowDataFast(record, parent, typeInfo, true, children.length > 0);
+                parentRow.children = [];
 
-                // Çocukları tarihe göre sırala ve içine ekle
-                children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
-                    const childRow = await this._createObjectionRowDataFast(record, child, childTypeInfo, false, false, parent.id);
-                    parentRow.children.push(childRow); 
+                    parentRow.children.push(this._createObjectionRowDataFast(record, child, childTypeInfo, false, false, parent.id));
                 }
-                
+                parentRow.children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
                 localRows.push(parentRow);
             }
 
             this.objectionRows = localRows;
+            console.timeEnd('⏱️ buildObjectionRows');
             return this.objectionRows;
 
         } catch (error) {
@@ -296,7 +301,12 @@ async loadObjectionRows() {
         }
     }
 
-    async _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
+    // Geriye uyumluluk (başka yerlerden çağrılıyorsa)
+    async loadObjectionRows() {
+        return this.buildObjectionRows();
+    }
+
+    _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
         let docs = [];
         
         // 1. TEK GERÇEKLİK KAYNAĞI: documents dizisi
