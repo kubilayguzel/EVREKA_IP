@@ -1212,6 +1212,36 @@ export const taskService = {
             return { success: false, error: error.message };
         }
     },
+    async getTasksByStatus(status, userId = null) {
+        try {
+            let q;
+            const tasksRef = collection(db, "tasks");
+            
+            if (userId) {
+                // 🔥 HATA DÜZELTİLDİ: where ve or filtreleri and() içine alındı
+                q = query(
+                    tasksRef, 
+                    and(
+                        where("status", "==", status),
+                        or(
+                            where("taskOwner", "array-contains", userId),
+                            where("assignedTo_uid", "==", userId)
+                        )
+                    ),
+                    orderBy("createdAt", "desc")
+                );
+            } else {
+                // Admin için tüm görevler (sadece tek filtre olduğu için and() gerekmez)
+                q = query(tasksRef, where("status", "==", status), orderBy("createdAt", "desc"));
+            }
+
+            const snapshot = await getDocs(q);
+            return { success: true, data: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+        } catch (error) {
+            console.error("Görev filtresi hatası:", error);
+            return { success: false, error: error.message };
+        }
+    },
     async updateTask(taskId, updates) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         const user = authService.getCurrentUser();
