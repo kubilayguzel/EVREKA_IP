@@ -11,7 +11,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 import { initializeFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue,
-collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager,onSnapshot, or }
+collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager,onSnapshot, or, and }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
@@ -1046,6 +1046,29 @@ export const personService = {
             
             await batch.commit();
             return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    async getPersonsByIds(personIds = []) {
+        if (!isFirebaseAvailable) return { success: true, data: [] };
+        try {
+            const ids = [...new Set((personIds || []).filter(Boolean).map(id => String(id)))];
+            if (ids.length === 0) return { success: true, data: [] };
+
+            const chunkSize = 10;
+            const chunks = [];
+            for (let i = 0; i < ids.length; i += chunkSize) {
+                chunks.push(ids.slice(i, i + chunkSize));
+            }
+
+            const results = await Promise.all(chunks.map(async (chunk) => {
+                const q = query(collection(db, 'persons'), where(documentId(), 'in', chunk));
+                const snap = await getDocs(q);
+                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            }));
+
+            return { success: true, data: results.flat() };
         } catch (error) {
             return { success: false, error: error.message };
         }
