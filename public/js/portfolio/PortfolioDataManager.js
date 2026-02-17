@@ -16,7 +16,7 @@ export class PortfolioDataManager {
         this.personsMap = new Map(); 
         this.statusMap = new Map();  
         
-        this.allCountries = [];
+        this.allCountries = [];  
         this.taskCache = new Map(); 
         this.wipoGroups = { parents: new Map(), children: new Map() };
 
