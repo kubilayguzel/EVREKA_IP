@@ -45,6 +45,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.statusDisplayMap = TASK_STATUS_MAP;
             // Tetiklenen görevler sayfasında sadece müvekkil onayı bekleyen işler görünecek.
             this.triggeredTaskStatuses = ['awaiting_client_approval'];
+            // Progressive yükleme için cache
+            this.ipRecordsCache = new Map();   // id -> ipRecord
+            this.personsCache = new Map();     // id -> person
+
         }
 
         init() {
@@ -74,7 +78,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     containerId: 'paginationContainer',
                     itemsPerPage: 10,
                     itemsPerPageOptions: [10, 25, 50, 100],
-                    onPageChange: () => this.renderTable()
+                    onPageChange: async () => {
+                    this.renderTable();
+                    await this.enrichVisiblePage();   // yeni fonksiyon
+                    }
                 });
             }
         }
@@ -84,60 +91,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (loader) loader.style.display = 'block';
 
             try {
-                let isSuper = false;
+                // 1) yetki
                 const token = await this.currentUser.getIdTokenResult();
-                isSuper = !!(token.claims && token.claims.superAdmin);
+                const isSuper = !!(token.claims && token.claims.superAdmin);
 
                 const targetStatus = 'awaiting_client_approval';
-                
-                // 1. Görevleri ve İşlem Tiplerini Çek
+
+                // 2) Tasks + işlem tipleri (paralel)
                 const [tasksResult, transTypesResult] = await Promise.all([
-                    taskService.getTasksByStatus(targetStatus, isSuper ? null : this.currentUser.uid),
-                    transactionTypeService.getTransactionTypes()
+                taskService.getTasksByStatus(targetStatus, isSuper ? null : this.currentUser.uid),
+                transactionTypeService.getTransactionTypes()
                 ]);
 
                 this.allTasks = tasksResult.success ? tasksResult.data : [];
                 this.allTransactionTypes = transTypesResult.success ? transTypesResult.data : [];
 
-                if (this.allTasks.length === 0) {
-                    this.processData();
-                    return;
-                }
+                // 3) İlk çizim: ipRecords/persons BEKLEMEDEN tabloyu bas
+                //    (placeholders gözükecek, sonra zenginleşecek)
+                this.allIpRecords = [];
+                this.allPersons = [];
+                this.ipRecordsMap = new Map();
+                this.personsMap = new Map();
 
-                // 2. Sadece lazım olan ID'leri topla
-                const relatedIpIds = [...new Set(this.allTasks.map(t => t.relatedIpRecordId).filter(Boolean))];
-                const personIds = new Set();
-                this.allTasks.forEach(t => {
-                    if (Array.isArray(t.taskOwner)) t.taskOwner.forEach(id => personIds.add(String(id)));
-                });
+                this.processData(); // tabloyu hemen çiz (veriler eksikse "Yükleniyor..." vs görünebilir)
 
-                // 3. Markaları PARALEL çek
-                const ipRecordsRes = await ipRecordsService.getRecordsByIds(relatedIpIds);
-                this.allIpRecords = ipRecordsRes.success ? ipRecordsRes.data : [];
+                // 4) Loader'ı ilk ekran için kapat (asıl hız hissi burada)
+                if (loader) loader.style.display = 'none';
 
-                // 4. Marka sahiplerini de ID listesine ekle
-                this.allIpRecords.forEach(r => {
-                    if (Array.isArray(r.applicants)) {
-                        r.applicants.forEach(a => {
-                            const pId = (typeof a === 'string') ? a : (a.id || a.personId);
-                            if (pId) personIds.add(String(pId));
-                        });
-                    }
-                });
+                // Görev yoksa işimiz bitti
+                if (!this.allTasks.length) return;
 
-                // 5. SADECE ilgili kişileri çek (Hızın anahtarı burası!)
-                const personsResult = await personService.getPersonsByIds(Array.from(personIds));
-                this.allPersons = personsResult.success ? personsResult.data : [];
-                
-                this.buildMaps();
-                this.processData();
+                // 5) Arka planda: sadece görünen sayfayı zenginleştir
+                //    (UI'yı bloklamasın)
+                setTimeout(() => {
+                this.enrichVisiblePage().catch(console.error);
+                }, 0);
 
             } catch (error) {
                 console.error("Yükleme Hatası:", error);
             } finally {
+                // loader'ı yukarıda kapattık; burada tekrar kapatmak sorun değil
                 if (loader) loader.style.display = 'none';
             }
-        }
+            }
+
 
 		buildMaps() {
 			this.ipRecordsMap.clear();
@@ -146,6 +143,72 @@ document.addEventListener('DOMContentLoaded', async () => {
 				if (key) this.ipRecordsMap.set(key, r);
 			});
 		}
+
+        async enrichVisiblePage() {
+        // Filtrelenmiş veri yoksa çık
+        if (!this.filteredData || this.filteredData.length === 0) return;
+
+        // O an görünen sayfanın görevlerini al
+        let currentData = this.filteredData;
+        if (this.pagination) {
+            currentData = this.pagination.getCurrentPageData(this.filteredData);
+        }
+
+        // 1) Görünen görevlerden ipRecord id’leri topla (cache’te olmayanlar)
+        const ipIdsToFetch = [];
+        for (const t of currentData) {
+            const id = t?.relatedIpRecordId ? String(t.relatedIpRecordId).trim() : null;
+            if (id && !this.ipRecordsCache.has(id)) ipIdsToFetch.push(id);
+        }
+
+        // ipRecords çek
+        if (ipIdsToFetch.length) {
+            const ipRes = await ipRecordsService.getRecordsByIds(ipIdsToFetch);
+            const records = ipRes.success ? ipRes.data : [];
+            records.forEach(r => {
+            const key = r?.id ? String(r.id).trim() : null;
+            if (key) this.ipRecordsCache.set(key, r);
+            });
+        }
+
+        // 2) Görünen görevlerden + ipRecord applicant’larından person id’leri topla (cache’te olmayanlar)
+        const personIds = new Set();
+
+        for (const t of currentData) {
+            if (Array.isArray(t.taskOwner)) {
+            t.taskOwner.forEach(id => personIds.add(String(id)));
+            }
+            const rid = t?.relatedIpRecordId ? String(t.relatedIpRecordId).trim() : null;
+            const ip = rid ? this.ipRecordsCache.get(rid) : null;
+            if (ip && Array.isArray(ip.applicants)) {
+            ip.applicants.forEach(a => {
+                const pId = (typeof a === 'string') ? a : (a.id || a.personId);
+                if (pId) personIds.add(String(pId));
+            });
+            }
+        }
+
+        const toFetchPersons = Array.from(personIds).filter(id => !this.personsCache.has(String(id)));
+        if (toFetchPersons.length) {
+            const pRes = await personService.getPersonsByIds(toFetchPersons);
+            const persons = pRes.success ? pRes.data : [];
+            persons.forEach(p => {
+            const key = p?.id ? String(p.id) : null;
+            if (key) this.personsCache.set(key, p);
+            });
+        }
+
+        // 3) Cache’ten allIpRecords/allPersons’ı güncelle ve tabloyu aynı filtreyle tekrar bas
+        this.allIpRecords = Array.from(this.ipRecordsCache.values());
+        this.allPersons = Array.from(this.personsCache.values());
+        this.buildMaps();
+
+        // Mevcut arama/filtreyi koruyarak yeniden işle
+        const query = document.getElementById('searchInput')?.value || '';
+        this.processData();
+        // processData handleSearch çağırdığı için tablo yenilenir; kullanıcı aynı sayfadaysa pagination zaten korur
+        }
+
 
     processData() {
         // 1. ADIM: Hızlı erişim için Yardımcı Map'leri (Sözlükleri) oluşturun
