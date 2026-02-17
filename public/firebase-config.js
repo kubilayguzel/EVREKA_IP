@@ -10,13 +10,9 @@ import {
     updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-import { 
-    initializeFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, 
-    query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, 
-    serverTimestamp, Timestamp, FieldValue, collectionGroup, limit, 
-    getDocsFromCache, getDocsFromServer, persistentLocalCache, 
-    persistentMultipleTabManager, onSnapshot, or, and // <-- 'and' buraya eklendi
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { initializeFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue,
+collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager,onSnapshot, or }
+from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
@@ -478,26 +474,88 @@ export const ipRecordsService = {
     return await this.getRecords({ limitCount, source: 'server' });
     },
 
+    // ✅ İhtiyaç duyulan ipRecord'ları ID listesi ile getir (İşlerim/MyTasks için ideal)
+    // Firestore 'in' sorgusu 10 ID ile sınırlı olduğu için chunk'lar halinde çalışır.
     async getRecordsByIds(recordIds = [], opts = {}) {
         if (!isFirebaseAvailable) return { success: true, data: [] };
+        const { source = 'cache-first' } = opts;
         try {
             const ids = [...new Set((recordIds || []).filter(Boolean).map(id => String(id)))];
             if (ids.length === 0) return { success: true, data: [] };
 
+            const out = [];
+            const seen = new Set();
             const chunkSize = 10;
-            const chunks = [];
+
             for (let i = 0; i < ids.length; i += chunkSize) {
-                chunks.push(ids.slice(i, i + chunkSize));
+                const chunk = ids.slice(i, i + chunkSize);
+                const q = query(
+                    collection(db, 'ipRecords'),
+                    where(documentId(), 'in', chunk)
+                );
+
+                let cacheSnap = null;
+                if (source !== 'server') {
+                    cacheSnap = await getDocsFromCache(q).catch(() => null);
+                }
+
+                const cacheDocs = cacheSnap ? cacheSnap.docs : [];
+                const cacheMap = new Map(cacheDocs.map(d => [d.id, d]));
+
+                // cache-only modunda cache döndür, yoksa boş
+                if (source === 'cache-only') {
+                    for (const d of cacheDocs) {
+                        if (seen.has(d.id)) continue;
+                        seen.add(d.id);
+                        out.push({ id: d.id, ...d.data() });
+                    }
+                    continue;
+                }
+
+                // cache-first ise: cache'te eksik kalan ID'ler için server'a git
+                // cache'te doc var ama kritik alanlar eksikse "stale" kabul edip server'dan tazele
+                const isStaleIpRecord = (docSnap) => {
+                    const data = docSnap?.data?.() || {};
+
+                    // Başvuru numarası iki farklı isimle gelebiliyor olabilir
+                    const hasApplicationNo =
+                        !!String(data.applicationNumber || data.applicationNo || '').trim();
+
+                    // "sahip" alanı sizde çoğunlukla applicants üzerinden okunuyor
+                    // Alan tamamen yoksa stale sayıyoruz (boş array olabilir ama field'in hiç olmaması problem)
+                    const hasApplicantsField = Object.prototype.hasOwnProperty.call(data, 'applicants');
+
+                    return !hasApplicationNo || !hasApplicantsField;
+                };
+
+                const missingIds = chunk.filter(id => {
+                    const snap = cacheMap.get(id);
+                    if (!snap) return true;             // cache'te yok
+                    if (isStaleIpRecord(snap)) return true; // cache'te var ama eksik/eskimiş
+                    return false;
+                });
+
+
+                let serverDocs = [];
+                if (source === 'server' || missingIds.length > 0 || !cacheSnap || cacheSnap.empty) {
+                    // Not: Server'dan chunk bazlı sorgu
+                    const qServer = query(
+                        collection(db, 'ipRecords'),
+                        where(documentId(), 'in', chunk)
+                    );
+                    const serverSnap = await getDocsFromServer(qServer).catch(() => getDocs(qServer));
+                    serverDocs = serverSnap.docs;
+                }
+
+                // Merge (server cache'i de tazeler)
+                for (const d of [...cacheDocs, ...serverDocs]) {
+                    if (seen.has(d.id)) continue;
+                    seen.add(d.id);
+                    out.push({ id: d.id, ...d.data() });
+                }
             }
 
-            // 🔥 PARALEL ÇALIŞTIRMA: 15 sorguyu aynı anda atıyoruz
-            const results = await Promise.all(chunks.map(async (chunk) => {
-                const q = query(collection(db, 'ipRecords'), where(documentId(), 'in', chunk));
-                const snap = await getDocs(q);
-                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            }));
-
-            return { success: true, data: results.flat() };
+            return { success: true, data: out };
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -991,30 +1049,7 @@ export const personService = {
         } catch (error) {
             return { success: false, error: error.message };
         }
-    },
-    async getPersonsByIds(personIds = []) {
-        if (!isFirebaseAvailable) return { success: true, data: [] };
-        try {
-            const ids = [...new Set((personIds || []).filter(Boolean).map(id => String(id)))];
-            if (ids.length === 0) return { success: true, data: [] };
-
-            const chunkSize = 10;
-            const chunks = [];
-            for (let i = 0; i < ids.length; i += chunkSize) {
-                chunks.push(ids.slice(i, i + chunkSize));
-            }
-
-            const results = await Promise.all(chunks.map(async (chunk) => {
-                const q = query(collection(db, 'persons'), where(documentId(), 'in', chunk));
-                const snap = await getDocs(q);
-                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            }));
-
-            return { success: true, data: results.flat() };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    },
+    }
 };
 // --- YENİ EKLENDİ: Monitoring Service ---
 export const monitoringService = {
@@ -1174,36 +1209,6 @@ export const taskService = {
             return { success: true, data };
         } catch (error) {
             console.error("Kullanıcı görevleri çekilemedi:", error);
-            return { success: false, error: error.message };
-        }
-    },
-    async getTasksByStatus(status, userId = null) {
-        try {
-            let q;
-            const tasksRef = collection(db, "tasks");
-            
-            if (userId) {
-                // 🔥 HATA DÜZELTİLDİ: where ve or filtreleri and() içine alındı
-                q = query(
-                    tasksRef, 
-                    and(
-                        where("status", "==", status),
-                        or(
-                            where("taskOwner", "array-contains", userId),
-                            where("assignedTo_uid", "==", userId)
-                        )
-                    ),
-                    orderBy("createdAt", "desc")
-                );
-            } else {
-                // Admin için tüm görevler (sadece tek filtre olduğu için and() gerekmez)
-                q = query(tasksRef, where("status", "==", status), orderBy("createdAt", "desc"));
-            }
-
-            const snapshot = await getDocs(q);
-            return { success: true, data: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
-        } catch (error) {
-            console.error("Görev filtresi hatası:", error);
             return { success: false, error: error.message };
         }
     },
