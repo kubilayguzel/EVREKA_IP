@@ -125,14 +125,28 @@ class PortfolioController {
                 }
             }, 800);
 
-            // 🔥 YENİ: Başka sekmeden (data-entry) gelen canlı güncellemeleri dinle ve satırı yeşile boya
-            window.addEventListener('storage', (e) => {
+            // 🔥 YENİ: Başka sekmeden (data-entry) gelen canlı güncellemeleri dinle ve tabloyu yenile
+            window.addEventListener('storage', async (e) => {
                 if (e.key === 'crossTabUpdatedRecordId' && e.newValue) {
                     this.state.updatedRecordId = e.newValue;
-                    // Firebase zaten tabloyu anında güncelledi, biz sadece rengini yakıyoruz
+                    
+                    // 1. Önbelleği temizle ve aktif sekmenin verisini yeniden yükle
+                    this.dataManager.clearCache();
+                    if (this.state.activeTab === 'litigation') {
+                        await this.dataManager.loadLitigationData();
+                    } else if (this.state.activeTab === 'objections') {
+                        await this.dataManager.loadObjectionRows();
+                    }
+                    // Not: 'trademark' ana sekmesi startListening (realtime) ile zaten otomatik güncelleniyor.
+
+                    // 2. Tabloyu yeniden çiz (böylece değişen isimler/tarihler veya eklenen itirazlar anında görünür)
+                    this.render();
+
+                    // 3. İlgili satırı bul ve yeşile boya
                     setTimeout(() => {
                         this.highlightUpdatedRow(e.newValue, false);
                     }, 500); 
+                    
                     localStorage.removeItem('crossTabUpdatedRecordId');
                 }
             });
@@ -724,7 +738,17 @@ class PortfolioController {
             this.renderer.showLoading(true);
             await this.dataManager.deleteRecord(id);
             showNotification('Kayıt silindi.', 'success');
-            await this.dataManager.loadRecords();
+            
+            // 🔥 YENİ: Önbelleği temizle ve aktif sekmeye göre güncel veriyi çek
+            this.dataManager.clearCache();
+            if (this.state.activeTab === 'litigation') {
+                await this.dataManager.loadLitigationData();
+            } else if (this.state.activeTab === 'objections') {
+                await this.dataManager.loadObjectionRows();
+            } else {
+                await this.dataManager.loadRecords();
+            }
+            
             this.render();
         } catch (e) { showNotification('Silme hatası: ' + e.message, 'error'); }
         finally { this.renderer.showLoading(false); }
