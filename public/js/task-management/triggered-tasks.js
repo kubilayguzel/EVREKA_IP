@@ -307,6 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.pagination.update(this.filteredData.length);
             }
             this.renderTable();
+            this.enrichVisiblePage();
         }
 
         handleSort(key) {
@@ -318,6 +319,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             this.sortData();
             this.renderTable();
+            this.enrichVisiblePage();
         }
 
 
