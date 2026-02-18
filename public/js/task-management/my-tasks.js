@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                         
                         // Veriler geldi, tabloyu güncel halleriyle (Marka isimleriyle) tekrar çiz
-                        this.renderTasks();
+                        this.processData(true);
                     }
                 } catch (e) {
                     console.error("Görünen sayfa zenginleştirme hatası:", e);
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        processData() {
+        processData(preservePage = false) {
             const safeDate = (val) => {
                 if (!val) return null;
                 try {
@@ -250,8 +250,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            const currentQuery = document.getElementById('taskSearchInput')?.value || '';
-            this.handleSearch(currentQuery);
+            const currentQuery = document.getElementById('taskSearchInput')?.value || document.getElementById('searchInput')?.value || '';
+            // ESKİ: this.handleSearch(currentQuery, preservePage); // (Zaten eklemişsiniz gibi duruyor, emin olun)
+            this.handleSearch(currentQuery, preservePage);
         }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
@@ -264,7 +265,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             this.sortData();
             this.renderTasks();
-            this.enrichVisiblePage();
         }
 
         sortData() {
@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // my-tasks.js içindeki handleSearch metodunu bununla değiştirin:
 
-        handleSearch(query) {
+        handleSearch(query, preservePage = false) {
             const statusFilter = document.getElementById('statusFilter').value;
             const lowerQuery = (query || '').toLowerCase();
 
@@ -358,12 +358,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.sortData();
 
             if (this.pagination) {
-                this.pagination.reset();
+                // ESKİ: this.pagination.reset();
+                if (!preservePage) { // YENİ
+                    this.pagination.reset();
+                }
                 this.pagination.update(this.filteredData.length);
             }
 
             this.renderTasks();
-            this.enrichVisiblePage();
+            // this.enrichVisiblePage(); <-- BUNU SİLİN (Sonsuz döngü önlemi)
         }
 
         attachCheckboxListeners() {
