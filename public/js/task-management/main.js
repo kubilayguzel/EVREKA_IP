@@ -84,6 +84,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     window.location.href = 'index.html';
                 }
             });
+
+            // YENİ SEKMELERDE YAPILAN DÜZENLEMELERİ (TASK UPDATE) CANLI YAKALA
+            window.addEventListener('storage', async (e) => {
+                if (e.key === 'crossTabUpdatedTaskId' && e.newValue) {
+                    console.log('🔄 Görev başka bir sekmede güncellendi, İş Yönetimi listesi yenileniyor...');
+                    await this.loadAllData();
+                    localStorage.removeItem('crossTabUpdatedTaskId');
+                }
+            });
         }
 
         initializePagination() {
@@ -95,8 +104,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 containerId: 'paginationContainer',
                 itemsPerPage: 10,
                 itemsPerPageOptions: [10, 25, 50, 100],
-                onPageChange: () => {
+                onPageChange: async () => {
                     this.renderTable();
+                    await this.enrichVisiblePage(); // YENİ EKLENDİ: Sayfa değişince veriyi çek
                 }
             });
         }
@@ -111,43 +121,47 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             try {
-                // SADECE Gerekli Verileri Çekiyoruz (Ağır IP ve Accrual listelerini kaldırdık)
-                const [tasksResult, personsResult, usersResult, transactionTypesResult] = await Promise.all([
-                    taskService.getAllTasks(),
-                    personService.getPersons(),
-                    taskService.getAllUsers(),
-                    transactionTypeService.getTransactionTypes()
-                ]);
-
+                // 1. Görevleri her zaman taze çek
+                const tasksResult = await taskService.getAllTasks();
                 this.allTasks = tasksResult.success ? tasksResult.data : [];
-                this.allPersons = personsResult.success ? personsResult.data : [];
-                this.allUsers = usersResult.success ? usersResult.data : [];
-                this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-                // Haritaları Oluştur
+                // 2. Sabit sözlükleri sadece BOŞSA çek (Önbellek mantığı, tekrar tekrar çekmez)
+                const fetchPromises = [];
+                if (this.allPersons.length === 0) fetchPromises.push(personService.getPersons());
+                if (this.allUsers.length === 0) fetchPromises.push(taskService.getAllUsers());
+                if (this.allTransactionTypes.length === 0) fetchPromises.push(transactionTypeService.getTransactionTypes());
+
+                const results = await Promise.all(fetchPromises);
+                
+                // Sonuçları ata (Eğer yeni çekildiyse)
+                let resIndex = 0;
+                if (this.allPersons.length === 0) this.allPersons = results[resIndex++]?.success ? results[resIndex-1].data : [];
+                if (this.allUsers.length === 0) this.allUsers = results[resIndex++]?.success ? results[resIndex-1].data : [];
+                if (this.allTransactionTypes.length === 0) this.allTransactionTypes = results[resIndex++]?.success ? results[resIndex-1].data : [];
+
                 this.buildMaps();
-
-                // Formları Başlat
                 this.initForms();
 
-                // Tabloyu hemen göster (IP verileri "Yükleniyor..." olarak görünecek)
+                // 3. Tabloyu anında "Yükleniyor..." durumlarıyla çiz
                 this.processData();
                 if (this.pagination) {
                     this.pagination.update(this.filteredData.length);
                 }
                 this.renderTable();
 
-                // ARKA PLAN: IP Kayıtlarını Parça Parça Getir (UI donmadan)
-                this.fetchRelatedIpRecordsInChunks();
+                if (loader) loader.hide();
+                const oldLoader = document.getElementById('loadingIndicator');
+                if(oldLoader) oldLoader.style.display = 'none';
+
+                // 4. Arka planda: Sadece o an sayfada GÖRÜNEN markaların detayını çek
+                setTimeout(() => {
+                    this.enrichVisiblePage().catch(console.error);
+                }, 0);
 
             } catch (error) {
                 console.error(error);
                 if (loader) loader.hide(); 
                 showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
-            } finally {
-                if (loader) loader.hide();
-                const oldLoader = document.getElementById('loadingIndicator');
-                if(oldLoader) oldLoader.style.display = 'none';
             }
         }
 
@@ -166,56 +180,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // --- YENİ: Akıllı IP Çekme Fonksiyonu ---
-        async fetchRelatedIpRecordsInChunks() {
-            // 1. İşlerde geçen benzersiz IP ID'lerini topla
-            const uniqueIpIds = new Set();
-            this.allTasks.forEach(t => {
-                if (t.relatedIpRecordId) uniqueIpIds.add(t.relatedIpRecordId);
-            });
+        // --- YENİ: Akıllı IP Çekme Fonksiyonu (Lazy Load) ---
+        async enrichVisiblePage() {
+            if (!this.filteredData || this.filteredData.length === 0) return;
 
-            const idsToFetch = Array.from(uniqueIpIds);
-            if (idsToFetch.length === 0) return;
-
-            // 2. ID'leri 30'arlı gruplara böl (Firestore limiti)
-            const chunkSize = 30;
-            const chunks = [];
-            for (let i = 0; i < idsToFetch.length; i += chunkSize) {
-                chunks.push(idsToFetch.slice(i, i + chunkSize));
+            // Sadece o anki sayfadaki görevleri al
+            let currentData = this.filteredData;
+            if (this.pagination) {
+                currentData = this.pagination.getCurrentPageData(this.filteredData);
             }
 
-            const fetchChunk = async (chunk) => {
+            const ipIdsToFetch = [];
+            for (const t of currentData) {
+                const id = t?.relatedIpRecordId ? String(t.relatedIpRecordId).trim() : null;
+                // Eğer bu markayı daha önce çekmediysek listeye ekle
+                if (id && !this.ipRecordsMap.has(id)) {
+                    ipIdsToFetch.push(id);
+                }
+            }
+
+            const uniqueIds = [...new Set(ipIdsToFetch)];
+
+            // Çekilecek eksik veri varsa Firestore'a git
+            if (uniqueIds.length > 0) {
                 try {
-                    const q = query(collection(db, 'ipRecords'), where(documentId(), 'in', chunk));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(doc => {
-                        this.ipRecordsMap.set(doc.id, { id: doc.id, ...doc.data() });
-                    });
+                    const ipRes = await ipRecordsService.getRecordsByIds(uniqueIds);
+                    if (ipRes.success) {
+                        ipRes.data.forEach(r => {
+                            const key = r?.id ? String(r.id).trim() : null;
+                            if (key) this.ipRecordsMap.set(key, r);
+                        });
+                        
+                        // Marka isimleri geldi, tabloyu güncel halleriyle yeniden çiz
+                        this.processData(); 
+                    }
                 } catch (e) {
-                    console.warn("IP chunk fetch hatası:", e);
+                    console.error("Görünen sayfa zenginleştirme hatası:", e);
                 }
-            };
-
-            // İlk 2 grubu hemen çekip tabloyu güncelle
-            const initialChunks = chunks.slice(0, 2);
-            const remainingChunks = chunks.slice(2);
-
-            await Promise.all(initialChunks.map(chunk => fetchChunk(chunk)));
-            
-            // UI Güncelle
-            this.processData();
-            this.renderTable();
-
-            // Kalanları 5'li paraleller halinde çek
-            if (remainingChunks.length > 0) {
-                const parallelLimit = 5;
-                for (let i = 0; i < remainingChunks.length; i += parallelLimit) {
-                    const batch = remainingChunks.slice(i, i + parallelLimit);
-                    await Promise.all(batch.map(chunk => fetchChunk(chunk)));
-                }
-                // Son güncelleme
-                this.processData();
-                this.renderTable();
             }
         }
 
@@ -354,6 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             this.renderTable();
+            this.enrichVisiblePage();
         }
 
         // --- SIRALAMA (SORTING) ---
@@ -367,6 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             this.sortData();
             this.renderTable();
+            this.enrichVisiblePage();
         }
 
         sortData() {
@@ -582,7 +585,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
-                searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+                searchInput.addEventListener('input', (e) => {
+                    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+                    this.searchTimeout = setTimeout(() => {
+                        this.handleSearch(e.target.value);
+                    }, 300);
+                });
             }
 
             const statusFilter = document.getElementById('statusFilter');
