@@ -211,6 +211,14 @@ export class PortfolioDataManager {
         return this.wipoGroups.children.get(irNo) || [];
     }
 
+    // --- CACHE (ÖNBELLEK) YÖNETİMİ ---
+    clearCache() {
+        // Değişiklik yapıldığında hafızayı sıfırlar ki bir sonraki sekme geçişinde veritabanından güncel veriyi çeksin.
+        this.objectionRows = [];
+        this.litigationRows = [];
+        console.log("🧹 Önbellek temizlendi, veriler yeniden çekilecek.");
+    }
+
     // --- LITIGATION ---
     async loadLitigationData() {
         try {
