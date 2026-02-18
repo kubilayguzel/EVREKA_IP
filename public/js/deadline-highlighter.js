@@ -76,6 +76,27 @@
     return Math.round((b - a) / msPerDay);
   }
 
+  // --- YENİ: Satırın statüsünü kontrol et (Biten/Kapanan işleri boyamamak için) ---
+  function isTaskFinished(row) {
+    // İşlerin durumunu gösteren badge'leri arıyoruz (status-badge sınıfı)
+    const statusBadge = row.querySelector('.status-badge');
+    if (!statusBadge) return false; 
+
+    const className = statusBadge.className.toLowerCase();
+
+    // Sadece belirlediğimiz 4 kapalı statüden biriyse TRUE (bitti) döndür
+    if (
+        className.includes('status-completed') ||                  // Tamamlandı
+        className.includes('status-cancelled') ||                  // İptal Edildi
+        className.includes('status-client_approval_closed') ||     // Müvekkil Onayı - Kapatıldı
+        className.includes('status-client_no_response_closed')     // Müvekkil Cevaplamadı - Kapatıldı
+    ) {
+      return true;
+    }
+    
+    return false;
+  }
+
   function throttle(fn, wait) {
     let last = 0, timer = null;
     return function(...args) {
@@ -219,10 +240,15 @@
     const today = getToday();
 
     rows.forEach(row => {
+      clearRowClasses(row); // Her zaman önce eski boyaları temizle
+
+      // YENİ: Eğer iş "Tamamlandı" veya "İptal" ise tarihi hiç kontrol etme, atla!
+      if (isTaskFinished(row)) return; 
+
       const fieldNames = dateFields.map(f => f.name || '');
       const dates = dateFields.map(f => getDateFromField(row, f));
       const selected = chooseDate(dates, row, strategy, fieldNames);
-      clearRowClasses(row);
+      
       if (!selected) return;
 
       const diff = dayDiff(today, selected);
