@@ -205,12 +205,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Mevcut arama/filtreyi koruyarak yeniden işle
         const query = document.getElementById('searchInput')?.value || '';
-        this.processData();
+        this.processData(true);
         // processData handleSearch çağırdığı için tablo yenilenir; kullanıcı aynı sayfadaysa pagination zaten korur
         }
 
 
-    processData() {
+    processData(preservePage = false) {
         // 1. ADIM: Hızlı erişim için Yardımcı Map'leri (Sözlükleri) oluşturun
         // Bu sayede .find() kullanmak yerine doğrudan "nokta atışı" veri çekeceğiz.
         const transTypeMap = new Map();
@@ -287,11 +287,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
         });
 
-        this.handleSearch(document.getElementById('searchInput')?.value || '');
-    }
+            const currentQuery = document.getElementById('taskSearchInput')?.value || document.getElementById('searchInput')?.value || '';
+            // ESKİ: this.handleSearch(currentQuery, preservePage);
+            this.handleSearch(currentQuery, preservePage); // YENİ
+        }
 
         // --- ARAMA ve SIRALAMA (Standart) ---
-        handleSearch(query) {
+        handleSearch(query, preservePage = false) {
             const statusFilter = document.getElementById('statusFilter').value;
             const lowerQuery = query ? query.toLowerCase() : '';
 
@@ -302,12 +304,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             this.sortData();
+            
             if (this.pagination) {
-                this.pagination.reset();
+                // ESKİ: this.pagination.reset();
+                if (!preservePage) { // YENİ
+                    this.pagination.reset();
+                }
                 this.pagination.update(this.filteredData.length);
             }
             this.renderTable();
-            this.enrichVisiblePage();
+            // this.enrichVisiblePage(); <-- BUNU SİLİN
         }
 
         handleSort(key) {
@@ -319,7 +325,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             this.sortData();
             this.renderTable();
-            this.enrichVisiblePage();
         }
 
 
