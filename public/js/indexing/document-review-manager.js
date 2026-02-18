@@ -52,20 +52,40 @@ export class DocumentReviewManager {
     }
 
     toYMD(raw) {
-    if (!raw) return '';
-    let d = raw;
+        if (!raw) return '';
+        let d = raw;
 
-    if (d && typeof d.toDate === 'function') d = d.toDate();
-    else if (d && d.seconds) d = new Date(d.seconds * 1000);
+        // 1. EĞER VERİ METİN (STRING) İSE
+        if (typeof d === 'string') {
+            
+            // YENİ EKLENEN KISIM: ISO formatındaysa (Örn: "2026-02-18T11:05:05.000Z")
+            // 'T' harfinden böl ve sadece ilk kısmı (tarihi) al
+            if (d.includes('T')) {
+                d = d.split('T')[0]; // "2026-02-18" elde edilir
+            }
+            
+            // Zaten veritabanında YYYY-MM-DD formatındaysa doğrudan döndür
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+            
+            // Eğer DD.MM.YYYY veya DD/MM/YYYY formatındaysa parçala ve YYYY-MM-DD'ye çevir
+            const parts = d.split(/[\.\/]/);
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+        }
 
-    if (!(d instanceof Date)) d = new Date(d);
-    if (isNaN(d.getTime())) return '';
+        // 2. EĞER VERİ FIRESTORE TIMESTAMP VEYA DATE NESNESİ İSE
+        if (d && typeof d.toDate === 'function') d = d.toDate();
+        else if (d && d.seconds) d = new Date(d.seconds * 1000);
 
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-}
+        if (!(d instanceof Date)) d = new Date(d);
+        if (isNaN(d.getTime())) return '';
+
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
 
     async init() {
         // [KRİTİK DÜZELTME] 1. Her açılışta URL parametrelerini taze olarak al
@@ -382,18 +402,20 @@ async loadData() {
             });
         } 
 
-        // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur (format hatasını çözer)
+        // 1) Tebliğ tarihi alanını yyyy-MM-dd formatında doldur
         const dateInput = document.getElementById('detectedDate');
         if (dateInput) {
-            const ymd =
-                this.prefillDeliveryDate ||
-                this.toYMD(this.pdfData?.belgeTarihi) ||
-                this.toYMD(this.pdfData?.uploadedAt);
+            // Sadece URL'den gelen zorunlu tarih veya veritabanındaki tebligTarihi alınır
+            const ymd = this.prefillDeliveryDate || this.toYMD(this.pdfData?.tebligTarihi);
 
             if (ymd) {
                 dateInput.value = ymd;
                 // Datepicker görselini güncelle:
                 if (dateInput._flatpickr) dateInput._flatpickr.setDate(ymd, true);
+            } else {
+                // Herhangi bir tebliğ tarihi yoksa kutuyu kesinlikle boş bırak (kullanıcı elle girsin)
+                dateInput.value = '';
+                if (dateInput._flatpickr) dateInput._flatpickr.clear();
             }
         }
 
@@ -531,8 +553,6 @@ async loadData() {
             }
 
             // --- TARİH ÇÖZÜMLEME YARDIMCISI ---
-            // Veritabanında tarih 'timestamp', 'creationDate' veya 'createdAt' olarak kayıtlı olabilir.
-            // Ayrıca format String veya Firestore Timestamp olabilir. Hepsini kapsıyoruz.
             const resolveDate = (item) => {
                 try {
                     if (item.timestamp) return new Date(item.timestamp);
@@ -557,12 +577,54 @@ async loadData() {
                     return timeB - timeA; // Yeniden eskiye sırala
                 });
 
-            parentTransactions.forEach(t => {
+            // Asenkron işlemler (Task ve Person çekme) yapacağımız için for...of kullanıyoruz
+            for (const t of parentTransactions) {
                 // Type ID kontrolü (String çevrimi yaparak güvenli eşleştirme)
                 const typeObj = this.allTransactionTypes.find(type => String(type.id) === String(t.type));
+                let label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'İşlem');
                 
-                const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'İşlem');
-                
+                // ==========================================================
+                // YENİ: İTİRAZ EDEN BİLGİSİNİ BULMA (Yayına İtiraz & İtirazın İncelenmesi)
+                // ==========================================================
+                const typeIdStr = String(t.type);
+                if (typeIdStr === '20' || typeIdStr === '19' || t.oppositionOwner) {
+                    let opponentName = null;
+
+                    // 1. Öncelik: Doğrudan İşlem üzerinde kayıtlı oppositionOwner var mı? (Self portföyler)
+                    if (t.oppositionOwner) {
+                        opponentName = t.oppositionOwner;
+                    } 
+                    // 2. Öncelik: taskId üzerinden Task'a ve oradan Person'a git (3. Taraf veya gelişmiş Self portföyler)
+                    else if (t.taskId || t.triggeringTaskId) {
+                        const targetTaskId = t.taskId || t.triggeringTaskId;
+                        try {
+                            const taskResult = await taskService.getTaskById(targetTaskId);
+                            if (taskResult.success && taskResult.data) {
+                                const taskOwner = taskResult.data.taskOwner;
+                                // Task owner genelde bir dizi (array) veya string olarak tutulur
+                                const ownerId = Array.isArray(taskOwner) ? taskOwner[0] : taskOwner;
+                                
+                                if (ownerId) {
+                                    // personID ile persons koleksiyonundan unvanı bul
+                                    const pDoc = await getDoc(doc(db, 'persons', ownerId));
+                                    if (pDoc.exists()) {
+                                        const pData = pDoc.data();
+                                        opponentName = pData.name || pData.companyName || null;
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            console.warn(`İtiraz eden bilgisi çekilemedi (Task ID: ${targetTaskId}):`, err);
+                        }
+                    }
+
+                    // Eğer itiraz edeni bulduysak, Option etiketine ekle
+                    if (opponentName) {
+                        label += ` [İtiraz Eden: ${opponentName}]`;
+                    }
+                }
+                // ==========================================================
+
                 // Tarihi formatla
                 const dateObj = resolveDate(t);
                 const dateStr = formatToTRDate(dateObj);
@@ -571,14 +633,16 @@ async loadData() {
                 opt.value = t.id;
                 opt.textContent = `${label} (${dateStr})`;
                 parentSelect.appendChild(opt);
-            });
+            }
             
         } catch (error) {
             console.error('Transaction yükleme hatası:', error);
             parentSelect.innerHTML = '<option value="">Hata: İşlemler yüklenemedi</option>';
         }
     }
-updateChildTransactionOptions() {
+
+
+    updateChildTransactionOptions() {
         const parentSelect = document.getElementById('parentTransactionSelect');
         const childSelect = document.getElementById('detectedType');
         const selectedParentTxId = parentSelect.value;
@@ -923,18 +987,34 @@ updateChildTransactionOptions() {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
             };
+            let skipFallback = false; // Adım 2'ye inmeyi engellemek için kalkan
 
-            // ADIM 1: Önce Matrix'e Bak (Varsa tetikle)
-            if (taskTriggerMatrix[parentTypeId] && taskTriggerMatrix[parentTypeId][recordType]) {
-                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeIdStr)) {
-                    shouldTriggerTask = true;
+            // ADIM 1: Matris Kontrolü
+            if (taskTriggerMatrix[parentTypeId]) {
+                // Bu ana işlemin özel olarak ilgilendiği TÜM alt işlemleri bul (Portföy ve 3. Taraf listelerini birleştir)
+                // Örn: 20 için -> ["50", "51", "52"] listesini oluşturur.
+                const allGovernedChildren = [
+                    ...(taskTriggerMatrix[parentTypeId]["Portföy"] || []),
+                    ...(taskTriggerMatrix[parentTypeId]["3. Taraf"] || [])
+                ];
+
+                // Eğer eklenen alt işlem, matrisin "özel ilgilendiği" işlemlerden biriyse (Örn: 50, 51 veya 52)
+                if (allGovernedChildren.includes(childTypeIdStr)) {
+                    // Bu işlem matrisin kurallarına tabidir, Adım 2'ye KESİNLİKLE İNMEMELİ!
+                    skipFallback = true; 
+
+                    // Matris bu dosya tipi için (Portföy/3. Taraf) onay veriyor mu?
+                    if (taskTriggerMatrix[parentTypeId][recordType] && taskTriggerMatrix[parentTypeId][recordType].includes(childTypeIdStr)) {
+                        shouldTriggerTask = true;
+                    } else {
+                        shouldTriggerTask = false; // Örn: 3. Taraf ve 50 numarası -> Reddedildi.
+                    }
                 }
             }
 
-            // ADIM 2: Eğer Matrix tetiklemediyse, Standart Tanıma Bak (Fallback)
-            // Bu sayede Parent=20 olsa bile, listede olmayan bir iş (Örn: 27) gelirse,
-            // kendi taskTriggered değeri (Örn: 38) devreye girer.
-            if (!shouldTriggerTask) {
+            // ADIM 2: Standart Tanıma Bak (Fallback)
+            // Eğer matris bu işlemle "özel olarak" ilgilenmiyorsa (skipFallback === false) o zaman JSON'daki değere bak
+            if (!shouldTriggerTask && !skipFallback) {
                 if (childTypeObj.taskTriggered) {
                     shouldTriggerTask = true;
                 }
