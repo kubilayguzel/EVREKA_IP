@@ -295,7 +295,8 @@ export class ETEBSManager {
             id: id,
             ...data,
             uploadedAt: this._toDate(data.uploadedAt),
-            belgeTarihi: this._toDate(data.belgeTarihi || data.uploadedAt)
+            belgeTarihi: this._toDate(data.belgeTarihi || data.uploadedAt),
+            tebligTarihi: this._toDate(data.tebligTarihi) // <--- BU SATIR EKLENDİ
         };
     }
 
@@ -457,9 +458,20 @@ export class ETEBSManager {
         } else if (action === 'index') {
             const q = doc.dosyaNo || doc.evrakNo || '';
             const recordId = doc.matchedRecordId || '';
-            const date = doc.belgeTarihi ? doc.belgeTarihi.toISOString().split('T')[0] : '';
             
-            window.location.href = `indexing-detail.html?pdfId=${encodeURIComponent(doc.id)}&q=${encodeURIComponent(q)}&recordId=${encodeURIComponent(recordId)}&deliveryDate=${encodeURIComponent(date)}`;
+            // KESİNLİKLE sadece tebligTarihi kullanılacak, belgeTarihi'ne bakılmayacak
+            const targetDate = doc.tebligTarihi;
+            let dateStr = '';
+            
+            if (targetDate) {
+                // Saat dilimi kaymasını önlemek için güvenli formatlama:
+                const yyyy = targetDate.getFullYear();
+                const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(targetDate.getDate()).padStart(2, '0');
+                dateStr = `${yyyy}-${mm}-${dd}`;
+            }
+            
+            window.location.href = `indexing-detail.html?pdfId=${encodeURIComponent(doc.id)}&q=${encodeURIComponent(q)}&recordId=${encodeURIComponent(recordId)}&deliveryDate=${encodeURIComponent(dateStr)}`;
         }
     }
 
