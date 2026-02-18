@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                         
                         // Marka isimleri geldi, tabloyu güncel halleriyle yeniden çiz
-                        this.processData(); 
+                        this.processData(true);
                     }
                 } catch (e) {
                     console.error("Görünen sayfa zenginleştirme hatası:", e);
@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.taskDetailManager = new TaskDetailManager('modalBody');
         }
 
-        processData() {
+        processData(preservePage = false) {
             // Helper fonksiyon (Date parsing)
             const parseDate = (d) => {
                 if (!d) return null;
@@ -301,11 +301,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            this.handleSearch();
+            const currentQuery = document.getElementById('searchInput')?.value || '';
+            this.handleSearch(currentQuery, preservePage); // YENİ
         }
 
         // --- ARAMA ve FİLTRELEME ---
-        handleSearch(query) {
+        handleSearch(query, preservePage = false) {
             // 1. Arama Metnini Al
             const searchInput = document.getElementById('searchInput');
             const searchValue = (query !== undefined ? query : (searchInput?.value || '')).toLowerCase();
@@ -350,12 +351,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.sortData();
 
             if (this.pagination) {
-                this.pagination.reset();
+                // ESKİ: this.pagination.reset();
+                if (!preservePage) { // YENİ: Sadece sayfa korunmayacaksa başa dön
+                    this.pagination.reset();
+                }
                 this.pagination.update(this.filteredData.length);
             }
             
             this.renderTable();
-            this.enrichVisiblePage();
         }
 
         // --- SIRALAMA (SORTING) ---
@@ -369,7 +372,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             this.sortData();
             this.renderTable();
-            this.enrichVisiblePage();
         }
 
         sortData() {
