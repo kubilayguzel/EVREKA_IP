@@ -68,6 +68,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     window.location.href = 'index.html';
                 }
             });
+            // YENİ SEKMELERDE YAPILAN DÜZENLEMELERİ CANLI YAKALA
+            window.addEventListener('storage', async (e) => {
+                if (e.key === 'crossTabUpdatedTaskId' && e.newValue) {
+                    await this.loadAllData();
+                    localStorage.removeItem('crossTabUpdatedTaskId');
+                }
+            });
         }
 
         initializePagination() {
@@ -79,84 +86,66 @@ document.addEventListener('DOMContentLoaded', async () => {
                 containerId: 'paginationControls',
                 itemsPerPage: 10,
                 itemsPerPageOptions: [10, 25, 50, 100],
-                onPageChange: () => {
+                onPageChange: async () => {
                     this.renderTasks();
+                    await this.enrichVisiblePage(); // YENİ: Sayfa değişince o sayfanın verilerini çek
                 }
             });
         }
 
         async loadAllData() {
-            // 1. Gelişmiş Loading Animasyonunu Başlat
             if (window.SimpleLoadingController) {
                 window.SimpleLoadingController.show({
                     text: 'İşleriniz Hazırlanıyor',
                     subtext: 'Verileriniz optimize ediliyor, lütfen bekleyiniz...'
                 });
             }
-
-            // Eski loader'ı gizle (varsa)
             const loader = document.getElementById('loadingIndicator');
             if(loader) loader.style.display = 'none';
 
             try {
-                // İlk adım: Sadece kullanıcıya ait görevleri çekerek kapsamı belirleyelim
+                // 1. Sadece görevleri çek
                 const tasksResult = await taskService.getTasksForUser(this.currentUser.uid);
+                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => t.status !== 'awaiting_client_approval') : [];
+
+                // 2. Sabit sözlükleri (Kişiler, Tipler, Kullanıcılar) çek (Eğer zaten çekilmediyse)
+                // DİKKAT: Tahakkukları ve IP kayıtlarını buradan sildik!
+                const fetchPromises = [];
+                if (this.allPersons.length === 0) fetchPromises.push(personService.getPersons());
+                if (this.allTransactionTypes.length === 0) fetchPromises.push(transactionTypeService.getTransactionTypes());
+                if (this.allUsers.length === 0) fetchPromises.push(taskService.getAllUsers());
+
+                const results = await Promise.all(fetchPromises);
                 
-                // "Müvekkil Onayı Bekliyor" hariç görevleri filtrele
-                this.allTasks = tasksResult.success ? tasksResult.data.filter(t => 
-                    t.status !== 'awaiting_client_approval'
-                ) : [];
+                // Sonuçları dizilere ata (Eğer yeni çekildiyse)
+                if (this.allPersons.length === 0) this.allPersons = results[0]?.success ? results[0].data : [];
+                if (this.allTransactionTypes.length === 0) this.allTransactionTypes = results[1]?.success ? results[1].data : [];
+                if (this.allUsers.length === 0) this.allUsers = results[2]?.success ? results[2].data : [];
 
-                // 2. Performans Optimizasyonu: Sadece gerekli IP Kayıtlarını belirle
-                const relatedIds = [...new Set(
-                    this.allTasks
-                        .map(t => t.relatedIpRecordId)
-                        .filter(Boolean)
-                        .map(id => String(id).trim())
-                )];
-
-                // 3. Paralel Veri Çekme (Hız için)
-                // Not: accrualService.getAccruals() tüm koleksiyonu çektiği için en büyük darboğazdır.
-                // Gelecekte bu servise getAccrualsByTaskIds eklenerek daha da hızlandırılabilir.
-                const [ipRes, personsResult, accrualsResult, transactionTypesResult, usersResult] = await Promise.all([
-                    relatedIds.length ? ipRecordsService.getRecordsByIds(relatedIds, { source: 'cache-first' }) : Promise.resolve({success: true, data: []}),
-                    personService.getPersons(),
-                    accrualService.getAccruals(),
-                    transactionTypeService.getTransactionTypes(),
-                    taskService.getAllUsers()
-                ]);
-
-                // Verileri state'e işle
-                this.allIpRecords = ipRes.success ? ipRes.data : [];
-                this.buildMaps(); // Hızlı erişim için Map yapısını kur
-
-                this.allPersons = personsResult.success ? personsResult.data : [];
-                this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
-                this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
-                this.allUsers = usersResult.success ? usersResult.data : [];
-
+                this.buildMaps(); // allIpRecords şu an boş, map temizlenecek
+                
                 // Form yöneticilerini güncelle
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
-
                 if (this.completeTaskFormManager) {
                     this.completeTaskFormManager.allPersons = this.allPersons;
                     this.completeTaskFormManager.render();
                 }
 
-                // Verileri işleyerek tabloya hazırla
+                // 3. Tabloyu "Yükleniyor..." durumlarıyla anında çiz!
                 this.processData();
+
+                if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
+
+                // 4. Arka planda: Sadece görünen sayfanın marka detaylarını çek (UI kitlenmez)
+                setTimeout(() => {
+                    this.enrichVisiblePage().catch(console.error);
+                }, 0);
 
             } catch (error) {
                 console.error(error);
-                if (typeof showNotification === 'function') {
-                    showNotification('Veriler yüklenirken hata oluştu: ' + error.message, 'error');
-                }
-            } finally {
-                // 4. Loading Animasyonunu Kapat
-                if (window.SimpleLoadingController) {
-                    window.SimpleLoadingController.hide();
-                }
+                if (typeof showNotification === 'function') showNotification('Hata: ' + error.message, 'error');
+                if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
             }
         }
 
@@ -168,7 +157,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 			});
 		}
 
-        // public/js/task-management/my-tasks.js dosyasındaki processData metodu
+        async enrichVisiblePage() {
+            if (!this.filteredData || this.filteredData.length === 0) return;
+
+            // O an ekranda (sayfada) görünen görevleri al
+            let currentData = this.filteredData;
+            if (this.pagination) {
+                currentData = this.pagination.getCurrentPageData(this.filteredData);
+            }
+
+            // Görünen görevlerin IP ID'lerini topla (Eğer daha önce çekmediysek)
+            const ipIdsToFetch = [];
+            for (const t of currentData) {
+                const id = t?.relatedIpRecordId ? String(t.relatedIpRecordId).trim() : null;
+                if (id && !this.ipRecordsMap.has(id)) {
+                    ipIdsToFetch.push(id);
+                }
+            }
+
+            // Tekrarları temizle
+            const uniqueIds = [...new Set(ipIdsToFetch)];
+
+            // Eksik veri varsa Firestore'dan çek
+            if (uniqueIds.length > 0) {
+                try {
+                    const ipRes = await ipRecordsService.getRecordsByIds(uniqueIds);
+                    if (ipRes.success) {
+                        ipRes.data.forEach(r => {
+                            const key = r?.id ? String(r.id).trim() : null;
+                            if (key) this.ipRecordsMap.set(key, r);
+                        });
+                        
+                        // Veriler geldi, tabloyu güncel halleriyle (Marka isimleriyle) tekrar çiz
+                        this.renderTasks();
+                    }
+                } catch (e) {
+                    console.error("Görünen sayfa zenginleştirme hatası:", e);
+                }
+            }
+        }
 
         processData() {
             const safeDate = (val) => {
@@ -237,6 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             this.sortData();
             this.renderTasks();
+            this.enrichVisiblePage();
         }
 
         sortData() {
@@ -335,6 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             this.renderTasks();
+            this.enrichVisiblePage();
         }
 
         attachCheckboxListeners() {
@@ -617,7 +646,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        showTaskDetailModal(taskId) {
+        async showTaskDetailModal(taskId) { // <--- async eklendi
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task || !this.taskDetailManager) return;
 
@@ -628,16 +657,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             title.textContent = 'Yükleniyor...';
             this.taskDetailManager.showLoading();
 
-			const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-			const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-			const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
-            const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
-            const assignedUser = { email: task.assignedTo_email, displayName: task.assignedTo_email };
+            try {
+                // SADECE BU İŞE AİT TAHAKKUKLARI DİNAMİK OLARAK ÇEK
+                const { query, collection, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+                const qAccruals = query(collection(db, 'accruals'), where('taskId', '==', String(task.id)));
+                const accSnap = await getDocs(qAccruals);
+                const relatedAccruals = accSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            title.textContent = `İş Detayı (${task.id})`;
-            this.taskDetailManager.render(task, {
-                ipRecord, transactionType, assignedUser, accruals: relatedAccruals
-            });
+                const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
+                const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+                const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
+                const assignedUser = task.assignedTo_email ? { email: task.assignedTo_email, displayName: task.assignedTo_email } : null;
+
+                title.textContent = `İş Detayı (${task.id})`;
+                this.taskDetailManager.render(task, {
+                    ipRecord, transactionType, assignedUser, accruals: relatedAccruals
+                });
+            } catch (e) {
+                console.error("Detay yüklenemedi:", e);
+                this.taskDetailManager.showError('Hata oluştu.');
+            }
         }
 
         showCreateAccrualModal(taskId) {
