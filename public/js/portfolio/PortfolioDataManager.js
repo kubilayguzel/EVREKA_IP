@@ -1,8 +1,44 @@
 // public/js/portfolio/PortfolioDataManager.js
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
 // GÜNCEL IMPORT: collectionGroup, query, where EKLENDİ
-import { doc, getDoc, collection, getDocs, collectionGroup, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, collectionGroup, query, where,getDocFromCache } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES } from '../../utils.js';
+
+// --- YENİ: ULTRA HIZLI ÖNBELLEK MOTORU ---
+const EvrekaFastCache = {
+    _db: null,
+    async getDB() {
+        if (this._db) return this._db;
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open("EvrekaFastCache", 1);
+            req.onupgradeneeded = e => e.target.result.createObjectStore("cache");
+            req.onsuccess = e => { this._db = e.target.result; resolve(this._db); };
+            req.onerror = e => reject(e);
+        });
+    },
+    async get(key) {
+        try {
+            const db = await this.getDB();
+            return new Promise(resolve => {
+                const tx = db.transaction("cache", "readonly");
+                const req = tx.objectStore("cache").get(key);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch { return null; }
+    },
+    async set(key, value) {
+        try {
+            const db = await this.getDB();
+            return new Promise(resolve => {
+                const tx = db.transaction("cache", "readwrite");
+                tx.objectStore("cache").put(value, key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch { return false; }
+    }
+};
 
 export class PortfolioDataManager {
     constructor() {
@@ -23,6 +59,31 @@ export class PortfolioDataManager {
         // Durumları Haritala
         this._buildStatusMap();
         this.countriesMap = new Map();
+    }
+
+    // --- YENİ: Tarayıcıyı Dondurmayan Veri İşleme Motoru ---
+    async _processInChunks(array, processor, chunkSize = 500) {
+        const result = [];
+        for (let i = 0; i < array.length; i += chunkSize) {
+            const chunk = array.slice(i, i + chunkSize);
+            result.push(...chunk.map(processor));
+            // Ana iş parçacığına (UI) nefes aldır, donmayı engelle
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        return result;
+    }
+
+    // --- YENİ: Ortak Haritalama (Mapping) Fonksiyonu ---
+    async _mapRawToProcessed(rawData) {
+        return await this._processInChunks(rawData, record => ({
+            ...record,
+            applicationDateTs: this._parseDate(record.applicationDate),
+            formattedApplicantName: this._resolveApplicantName(record),
+            formattedApplicationDate: this._fmtDate(record.applicationDate),
+            formattedNiceClasses: this._formatNiceClasses(record),
+            statusText: this._resolveStatusText(record),
+            formattedCountryName: this.getCountryName(record.country)
+        }), 500);
     }
 
     async loadInitialData({ deferPersons = true } = {}) {
@@ -61,40 +122,54 @@ export class PortfolioDataManager {
     }
 
     async loadPersons() {
+        // YENİ: Önce anında FastCache'den çek (0.05 Saniye)
+        const cached = await EvrekaFastCache.get('persons');
+        if (cached) {
+            this.personsMap.clear();
+            cached.forEach(p => { if(p.id) this.personsMap.set(p.id, p); });
+            
+            // Arka planda sessizce taze veriyi kontrol et (Sayfayı dondurmaz)
+            personService.getPersons().then(res => {
+                if(res.success) EvrekaFastCache.set('persons', res.data || []);
+            });
+            return;
+        }
+
+        // FastCache boşsa (ilk giriş), normal yükle ve kaydet
         const result = await personService.getPersons();
         if (result.success) {
             const persons = result.data || [];
-            // Array'i Map'e çevir (HIZ OPTİMİZASYONU)
-            // Bu sayede 1000 kişiyi aramak için döngüye girmeyiz, direkt ID ile buluruz.
             this.personsMap.clear();
-            persons.forEach(p => {
-                if(p.id) this.personsMap.set(p.id, p);
-            });
+            persons.forEach(p => { if(p.id) this.personsMap.set(p.id, p); });
+            await EvrekaFastCache.set('persons', persons);
         }
     }
 
     async loadCountries() {
         try {
             const docRef = doc(db, 'common', 'countries');
-            const docSnap = await getDoc(docRef);
+            
+            // YENİ: Önce önbelleğe bak
+            let docSnap;
+            try {
+                docSnap = await getDocFromCache(docRef);
+            } catch(e) {
+                docSnap = await getDoc(docRef);
+            }
 
-            if (docSnap.exists()) {
-            this.allCountries = docSnap.data().list || [];
-
-            // ✅ O(1) lookup için Map oluştur
-            this.countriesMap = new Map(
-                this.allCountries.map(c => [c.code, c.name])
-            );
+            if (docSnap && docSnap.exists()) {
+                this.allCountries = docSnap.data().list || [];
+                this.countriesMap = new Map(this.allCountries.map(c => [c.code, c.name]));
             } else {
-            this.allCountries = [];
-            this.countriesMap = new Map();
+                this.allCountries = [];
+                this.countriesMap = new Map();
             }
         } catch (e) {
             console.error("Ülke listesi hatası:", e);
             this.allCountries = [];
             this.countriesMap = new Map();
         }
-        }
+    }
 
 
     // Durum listesini Map'e çevirir (HIZ OPTİMİZASYONU)
@@ -111,52 +186,90 @@ export class PortfolioDataManager {
     }
 
     async loadRecords({ type = null } = {}) {
-        const result = type
-            ? await ipRecordsService.getRecordsByType(type)   // ✅ sadece marka/patent/tasarım
-            : await ipRecordsService.getRecords();            // ✅ tümü (all tab)
+        const cacheKey = type ? `records_${type}` : 'records_all';
 
+        let cachedData = await EvrekaFastCache.get(cacheKey);
+
+        // 🔥 OTO-ONARIM: Eğer Firebase hatası yüzünden cache'de çok az kayıt (örn: 100'den az) kaldıysa, bu bozuktur. Çöpe at!
+        if (cachedData && cachedData.length < 100 && type === 'trademark') {
+            cachedData = null; 
+            await EvrekaFastCache.set(cacheKey, null);
+        }
+
+        // Eğer sağlam bir cache varsa anında ekrana bas
+        if (cachedData && cachedData.length > 0) {
+            this.allRecords = cachedData;
+            this._buildWipoGroups();
+            return this.allRecords; 
+        }
+
+        // 🔥 GÜVENLİK: İlk yüklemede Firebase'in eksik local cache'ine düşmemek için { source: 'server' } zorluyoruz
+        const result = type 
+            ? await ipRecordsService.getRecordsByType(type, { source: 'server' }) 
+            : await ipRecordsService.getRecords({ source: 'server' });            
+        
         if (result.success) {
             const rawData = Array.isArray(result.data) ? result.data : [];
-
-            this.allRecords = rawData.map(record => ({
-            ...record,
-
-            // ✅ precompute: sıralamada tekrar parse etmeyelim
-            applicationDateTs: this._parseDate(record.applicationDate),
-
-            formattedApplicantName: this._resolveApplicantName(record),
-            formattedApplicationDate: this._fmtDate(record.applicationDate),
-            formattedNiceClasses: this._formatNiceClasses(record),
-            statusText: this._resolveStatusText(record),
-            formattedCountryName: this.getCountryName(record.country)
-            }));
-
+            this.allRecords = await this._mapRawToProcessed(rawData);
             this._buildWipoGroups();
+            await EvrekaFastCache.set(cacheKey, this.allRecords); // Gelecek sefer için kaydet
         }
         return this.allRecords;
-        }
+    }
 
 
-        startListening(onDataReceived, { type = null } = {}) {
-            const subscribeFn = type ? ipRecordsService.subscribeToRecordsByType : ipRecordsService.subscribeToRecords;
-            const args = type ? [type] : [];
+    startListening(onDataReceived, { type = null } = {}) {
+        const subscribeFn = type ? ipRecordsService.subscribeToRecordsByType : ipRecordsService.subscribeToRecords;
+        const cacheKey = type ? `records_${type}` : 'records_all';
+        const args = type ? [type] : [];
 
-            return subscribeFn(...args, (result) => {
-                if (result.success) {
-                this.allRecords = result.data.map(record => ({
-                    ...record,
-                    applicationDateTs: this._parseDate(record.applicationDate),
-                    formattedApplicantName: this._resolveApplicantName(record),
-                    formattedApplicationDate: this._fmtDate(record.applicationDate),
-                    formattedNiceClasses: this._formatNiceClasses(record),
-                    statusText: this._resolveStatusText(record),
-                    formattedCountryName: this.getCountryName(record.country)
-                }));
-                this._buildWipoGroups();
-                onDataReceived(this.allRecords);
+        let isFirstSnapshot = true; 
+
+        return subscribeFn(...args, async (result) => { 
+            if (result.success) {
+                const freshRecords = await this._mapRawToProcessed(result.data);
+                
+                // 🔥 KRİTİK GÜVENLİK AĞI: Firebase bazen "Partial Cache" hatası yapıp 6000 kayıt yerine 5-10 kayıt gönderir.
+                // Eğer elimizde zaten 100+ kayıt varsa ve Firebase bize aniden bunun yarısından azını gönderirse, YOK SAY!
+                if (this.allRecords.length > 100 && freshRecords.length < (this.allRecords.length * 0.5)) {
+                    console.warn("⚠️ Firebase eksik snapshot gönderdi (Partial Cache), bu güncelleme yoksayılıyor.");
+                    return;
                 }
-            });
+
+                if (isFirstSnapshot && this.allRecords.length > 0) {
+                    isFirstSnapshot = false;
+                    
+                    let hasChanges = freshRecords.length !== this.allRecords.length;
+                    
+                    if (!hasChanges) {
+                        for (let i = 0; i < freshRecords.length; i++) {
+                            if (freshRecords[i].updatedAt !== this.allRecords[i].updatedAt || 
+                                freshRecords[i].status !== this.allRecords[i].status) {
+                                hasChanges = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hasChanges) {
+                        this.allRecords = freshRecords;
+                        this._buildWipoGroups();
+                        onDataReceived(this.allRecords);
+                        EvrekaFastCache.set(cacheKey, freshRecords).catch(() => {});
+                    }
+                    return; 
+                }
+                
+                isFirstSnapshot = false;
+
+                this.allRecords = freshRecords;
+                this._buildWipoGroups();
+                EvrekaFastCache.set(cacheKey, this.allRecords).catch(() => {});
+                
+                onDataReceived(this.allRecords);
             }
+        });
+    }
 
     // OPTİMİZE EDİLDİ: Artık .find() yerine .get() kullanıyor
     _resolveApplicantName(record) {
@@ -213,9 +326,10 @@ export class PortfolioDataManager {
 
     // --- CACHE (ÖNBELLEK) YÖNETİMİ ---
     clearCache() {
-        // Değişiklik yapıldığında hafızayı sıfırlar ki bir sonraki sekme geçişinde veritabanından güncel veriyi çeksin.
         this.objectionRows = [];
         this.litigationRows = [];
+        // Yeni bir kayıt eklendiğinde İtirazlar önbelleğini de temizle ki tazesini çeksin
+        EvrekaFastCache.set('objectionRows', null); 
         console.log("🧹 Önbellek temizlendi, veriler yeniden çekilecek.");
     }
 
@@ -263,17 +377,18 @@ export class PortfolioDataManager {
     // --- OBJECTIONS: BUILD (Prefetch sonuçlarını kullanarak satırları oluşturur) ---
     async buildObjectionRows(prefetch = null) {
         if (this.objectionRows.length > 0) return this.objectionRows;
+
+        // YENİ: İtirazları da anında FastCache'den al
+        const cached = await EvrekaFastCache.get('objectionRows');
+        if (cached && cached.length > 0) {
+            this.objectionRows = cached;
+            return this.objectionRows;
+        }
+
         console.time('⏱️ buildObjectionRows');
-
         try {
-            if (!prefetch) {
-                prefetch = this.prefetchObjectionData();
-            }
-
-            const [parentSnapshot, childSnapshot] = await Promise.all([
-                prefetch.parentPromise,
-                prefetch.childPromise
-            ]);
+            if (!prefetch) prefetch = this.prefetchObjectionData();
+            const [parentSnapshot, childSnapshot] = await Promise.all([prefetch.parentPromise, prefetch.childPromise]);
 
             if (parentSnapshot.empty) {
                 this.objectionRows = [];
@@ -303,11 +418,10 @@ export class PortfolioDataManager {
             });
 
             const recordsMap = new Map(this.allRecords.map(r => [r.id, r]));
-            const localRows = [];
-
-            for (const parent of parents) {
-                const record = recordsMap.get(parent.recordId);
-                if (!record) continue;
+            
+            const localRows = await this._processInChunks(parents, (parent) => {
+                let record = recordsMap.get(parent.recordId);
+                if (!record) { record = { id: parent.recordId, isMissing: true }; }
 
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
@@ -321,10 +435,14 @@ export class PortfolioDataManager {
                 }
                 parentRow.children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-                localRows.push(parentRow);
-            }
+                return parentRow;
+            }, 100); 
 
-            this.objectionRows = localRows;
+            this.objectionRows = localRows.filter(Boolean);
+            
+            // YENİ: Hesaplanan İtirazları Kaydet
+            await EvrekaFastCache.set('objectionRows', this.objectionRows);
+            
             console.timeEnd('⏱️ buildObjectionRows');
             return this.objectionRows;
 
@@ -699,39 +817,37 @@ export class PortfolioDataManager {
     }
 
     sortRecords(data, column, direction) {
-    return [...data].sort((a, b) => {
-        // Ülke kolonunda kod yerine ad ile sırala
-        let valA = column === 'country' ? (a.formattedCountryName || a[column]) : a[column];
-        let valB = column === 'country' ? (b.formattedCountryName || b[column]) : b[column];
-               
-        // Boş değerleri kontrol et
-        const isEmptyA = (valA === null || valA === undefined || valA === '');
-        const isEmptyB = (valB === null || valB === undefined || valB === '');
-        
-        if (isEmptyA && isEmptyB) return 0;
-        if (isEmptyA) return direction === 'asc' ? 1 : -1; // Boşlar sona
-        if (isEmptyB) return direction === 'asc' ? -1 : 1; // Boşlar sona
-        
-        // Tarih sütunları
-        if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
-        // applicationDate için precomputed alan kullan
-        if (column === 'applicationDate') {
-            const aTs = a.applicationDateTs || 0;
-            const bTs = b.applicationDateTs || 0;
-            return direction === 'asc' ? aTs - bTs : bTs - aTs;
-        }
+        // 🔥 YENİ: localeCompare yerine modern ve ultra hızlı sıralama motoru
+        const collator = new Intl.Collator('tr-TR', { sensitivity: 'base' });
 
-        valA = this._parseDate(valA);
-        valB = this._parseDate(valB);
-        return direction === 'asc' ? valA - valB : valB - valA;
-        }
-        
-        // String karşılaştırması (TÜRKÇE DESTEK)
-        const strA = String(valA);
-        const strB = String(valB);
-        const comparison = strA.localeCompare(strB, 'tr-TR', { sensitivity: 'base' });
-        
-        return direction === 'asc' ? comparison : -comparison;
-    });
-}
+        return [...data].sort((a, b) => {
+            let valA = column === 'country' ? (a.formattedCountryName || a[column]) : a[column];
+            let valB = column === 'country' ? (b.formattedCountryName || b[column]) : b[column];
+                   
+            const isEmptyA = (valA === null || valA === undefined || valA === '');
+            const isEmptyB = (valB === null || valB === undefined || valB === '');
+            
+            if (isEmptyA && isEmptyB) return 0;
+            if (isEmptyA) return direction === 'asc' ? 1 : -1;
+            if (isEmptyB) return direction === 'asc' ? -1 : 1;
+            
+            if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
+                if (column === 'applicationDate') {
+                    const aTs = a.applicationDateTs || 0;
+                    const bTs = b.applicationDateTs || 0;
+                    return direction === 'asc' ? aTs - bTs : bTs - aTs;
+                }
+                valA = this._parseDate(valA);
+                valB = this._parseDate(valB);
+                return direction === 'asc' ? valA - valB : valB - valA;
+            }
+            
+            // YENİ HIZLI KARŞILAŞTIRMA
+            const strA = String(valA);
+            const strB = String(valB);
+            const comparison = collator.compare(strA, strB);
+            
+            return direction === 'asc' ? comparison : -comparison;
+        });
+    }
 }
