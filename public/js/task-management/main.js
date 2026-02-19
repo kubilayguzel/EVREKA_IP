@@ -28,9 +28,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allAccruals = [];
 
             // --- PERFORMANS HARİTALARI (MAPS) ---
-            // Bu yapılar sayesinde binlerce kayıt arasında "find" yapmak yerine
-            // direkt ID ile ışık hızında veriyi çekeceğiz.
-            this.ipRecordsMap = new Map();
             this.usersMap = new Map();
             this.transactionTypesMap = new Map();
 
@@ -160,9 +157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         buildMaps() {
-            this.ipRecordsMap.clear();
-            // IP haritası başlangıçta boş, fetchRelatedIpRecordsInChunks ile dolacak.
-
+            // 🔥 ipRecordsMap.clear() satırı silindi çünkü artık Map kullanmıyoruz.
             this.usersMap.clear();
             this.allUsers.forEach(u => {
                 if(u.id) this.usersMap.set(u.id, u);
@@ -173,8 +168,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(t.id) this.transactionTypesMap.set(t.id, t);
             });
         }
-
-
 
         initForms() {
             // 1. Ek Tahakkuk Formu
@@ -198,68 +191,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         processData(preservePage = false) {
-            // Helper fonksiyon (Date parsing)
-            const parseDate = (d) => {
-                if (!d) return null;
-                if (d.toDate) return d.toDate(); // Firestore Timestamp
-                if (d.seconds) return new Date(d.seconds * 1000);
-                return new Date(d); 
+        const parseDate = (d) => {
+            if (!d) return null;
+            if (d.toDate) return d.toDate();
+            if (d.seconds) return new Date(d.seconds * 1000);
+            return new Date(d); 
+        };
+
+        this.processedData = this.allTasks.map(task => {
+            // 🔥 ARTIK VERİLERİ DOĞRUDAN TASK İÇİNDEKİ YENİ ALANLARDAN ALIYORUZ
+            const appNo = task.iprecordApplicationNo || "-";
+            const recordTitle = task.iprecordTitle || task.relatedIpRecordTitle || "-";
+            const applicantName = task.iprecordApplicantName || "-";
+
+            const transactionTypeObj = this.transactionTypesMap.get(task.taskType);
+            const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
+
+            const assignedUser = this.usersMap.get(task.assignedTo_uid);
+            const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
+
+            const operationalDueObj = parseDate(task.dueDate); 
+            const operationalDueDisplay = operationalDueObj ? operationalDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+            const officialDueObj = parseDate(task.officialDueDate); 
+            const officialDueDisplay = officialDueObj ? officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+
+            const statusText = this.statusDisplayMap[task.status] || task.status;
+            
+            // Arama metnine yeni alanları da ekliyoruz
+            const searchString = `${task.id} ${task.title || ''} ${appNo} ${recordTitle} ${applicantName} ${taskTypeDisplay} ${assignedToDisplay} ${statusText}`.toLowerCase();
+
+            return {
+                ...task,
+                appNo,
+                recordTitle,
+                applicantName,
+                taskTypeDisplay,
+                assignedToDisplay,
+                operationalDueDisplay,
+                officialDueDisplay,
+                operationalDueObj,
+                officialDueObj,
+                statusText,
+                searchString
             };
+        });
 
-            this.processedData = this.allTasks.map(task => {
-                // --- OPTİMİZE EDİLMİŞ VERİ ÇEKME ---
-                
-                // 1. İlişkili Kayıt (IP Record)
-                // Map üzerinden çekiyoruz. Veri henüz yüklenmediyse (undefined ise) ve ID varsa 'Yükleniyor...' gösteriyoruz.
-                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
-                
-                const relatedRecord = ipRecord 
-                    ? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title || 'Kayıt Bulunamadı') 
-                    : (task.relatedIpRecordId ? 'Yükleniyor...' : '—');
-
-                // 2. İşlem Tipi
-                const transactionTypeObj = this.transactionTypesMap.get(task.taskType);
-                const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
-
-                // 3. Atanan Kişi
-                const assignedUser = this.usersMap.get(task.assignedTo_uid);
-                const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
-
-                // Tarih İşlemleri
-                const operationalDueObj = parseDate(task.dueDate); 
-                const operationalDueISO = operationalDueObj ? operationalDueObj.toISOString().slice(0, 10) : ''; 
-                const operationalDueDisplay = operationalDueObj ? operationalDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
-
-                const officialDueObj = parseDate(task.officialDueDate); 
-                const officialDueISO = officialDueObj ? officialDueObj.toISOString().slice(0, 10) : '';
-                const officialDueDisplay = officialDueObj ? officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
-
-                // Arama Metni (Search String)
-                const statusText = this.statusDisplayMap[task.status] || task.status;
-                const searchString = `${task.id} ${task.title || ''} ${relatedRecord} ${taskTypeDisplay} ${assignedToDisplay} ${statusText} ${task.priority || ''}`.toLowerCase();
-
-                return {
-                    ...task,
-                    relatedRecord,
-                    taskTypeDisplay,
-                    assignedToDisplay,
-                    // Gösterim (Display) Alanları
-                    operationalDue: operationalDueISO,
-                    officialDue: officialDueISO,
-                    operationalDueDisplay,
-                    officialDueDisplay,
-                    // Sıralama (Sort) Alanları
-                    operationalDueObj,
-                    officialDueObj,
-                    statusText,
-                    // Arama Alanı
-                    searchString
-                };
-            });
-
-            const currentQuery = document.getElementById('searchInput')?.value || '';
-            this.handleSearch(currentQuery, preservePage); // YENİ
-        }
+        const currentQuery = document.getElementById('searchInput')?.value || '';
+        this.handleSearch(currentQuery, preservePage);
+    }
 
         // --- ARAMA ve FİLTRELEME ---
         handleSearch(query, preservePage = false) {
@@ -405,7 +384,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <tr>
                         <td><input type="checkbox" class="task-checkbox" value="${task.id}" ${this.selectedTaskIds.has(task.id) ? 'checked' : ''}></td>
                         <td>${task.id}</td>
-                        <td>${task.relatedRecord}</td>
+                        <td>
+                            <div class="font-weight-bold text-primary">${task.relatedRecord}</div>
+                            <div class="small text-dark">${task.recordTitle}</div>
+                            <div class="small text-muted" style="font-size: 0.8em;">${task.applicantName}</div>
+                        </td>
                         <td>${task.taskTypeDisplay}</td>
                         <td><span class="priority-badge ${priorityClass}">${safePriority}</span></td>
                         <td>${task.assignedToDisplay}</td>
