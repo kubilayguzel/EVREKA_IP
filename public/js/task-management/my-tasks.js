@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allTasks = [];
             this.allIpRecords = [];
 			// Hızlı join için Map (id -> ipRecord)
-			this.ipRecordsMap = new Map();
             this.allPersons = [];
             this.allUsers = []; // Kullanıcı listesi eklendi (Atamalar için)
             this.allAccruals = [];
@@ -142,72 +141,49 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
             }
         }
-
-		buildMaps() {
-			this.ipRecordsMap.clear();
-			(this.allIpRecords || []).forEach(r => {
-				const key = r?.id ? String(r.id).trim() : null;
-				if (key) this.ipRecordsMap.set(key, r);
-			});
-		}
+        buildMaps() {
+            this.ipRecordsMap.clear(); // Hata almamak için Map kalsa da içini doldurmaya gerek yok
+        }
 
         processData(preservePage = false) {
-            const safeDate = (val) => {
-                if (!val) return null;
-                try {
-                    if (typeof val.toDate === 'function') return val.toDate();
-                    if (val.seconds) return new Date(val.seconds * 1000);
-                    const d = new Date(val);
-                    return isNaN(d.getTime()) ? null : d;
-                } catch { return null; }
+        const safeDate = (val) => {
+            if (!val) return null;
+            try {
+                if (typeof val.toDate === 'function') return val.toDate();
+                if (val.seconds) return new Date(val.seconds * 1000);
+                return new Date(val);
+            } catch { return null; }
+        };
+
+        this.processedData = this.allTasks.map(task => {
+            // 🔥 YENİ ALANLAR
+            const appNo = task.iprecordApplicationNo || "-";
+            const recordTitleDisplay = task.iprecordTitle || task.relatedIpRecordTitle || "-";
+            const applicantName = task.iprecordApplicantName || "-";
+            
+            const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+            const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmiyor';
+            const statusText = this.statusDisplayMap[task.status] || task.status;
+
+            const searchString = `${task.id} ${task.title || ''} ${appNo} ${recordTitleDisplay} ${applicantName} ${taskTypeDisplay} ${statusText}`.toLowerCase();
+
+            return {
+                ...task,
+                appNo,
+                recordTitleDisplay,
+                applicantName,
+                taskTypeDisplay,
+                statusText,
+                searchString,
+                dueDateObj: safeDate(task.dueDate),
+                officialDueObj: safeDate(task.officialDueDate),
+                createdAtObj: safeDate(task.createdAt)
             };
+        });
 
-            this.processedData = this.allTasks.map(task => {
-                // [GÜNCELLEME BURADA] ID'leri String'e çevirerek karşılaştır
-                // Bu sayede "123" (string) ile 123 (number) gelirse de eşleşir.
-				const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-				const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-                
-				const relatedRecordDisplay = ipRecord
-					? (ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.title)
-					: (relatedId ? (task.relatedIpRecordTitle || 'Yükleniyor…') : '—');
-                
-                const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
-                const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmiyor';
-                
-                const statusText = this.statusDisplayMap[task.status] || task.status;
-
-                const searchString = `${task.id} ${task.title || ''} ${relatedRecordDisplay} ${taskTypeDisplay} ${statusText} ${task.priority}`.toLowerCase();
-
-                // Atama Tarihi Verisini Hazırla
-                let assignedDateObj = null;
-                let assignedAtText = '-';
-                if (Array.isArray(task.history)) {
-                    const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
-                    if (assignEntry?.timestamp) {
-                        assignedDateObj = safeDate(assignEntry.timestamp);
-                        if (assignedDateObj) assignedAtText = formatToTRDate(assignedDateObj);
-                    }
-                }
-
-                return {
-                    ...task,
-                    relatedRecordDisplay,
-                    taskTypeDisplay,
-                    statusText,
-                    searchString,
-                    dueDateObj: safeDate(task.dueDate),
-                    officialDueObj: safeDate(task.officialDueDate),
-                    createdAtObj: safeDate(task.createdAt),
-                    assignedDateObj: assignedDateObj,
-                    assignedAtText: assignedAtText
-                };
-            });
-
-            const currentQuery = document.getElementById('taskSearchInput')?.value || document.getElementById('searchInput')?.value || '';
-            // ESKİ: this.handleSearch(currentQuery, preservePage); // (Zaten eklemişsiniz gibi duruyor, emin olun)
-            this.handleSearch(currentQuery, preservePage);
-        }
+        const currentQuery = document.getElementById('taskSearchInput')?.value || '';
+        this.handleSearch(currentQuery, preservePage);
+    }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
         handleSort(key) {
@@ -559,7 +535,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 row.innerHTML = `
                     <td><input type="checkbox" class="task-checkbox" value="${task.id}" ${this.selectedTaskIds.has(task.id) ? 'checked' : ''}></td>
                     <td>${task.id}</td>
-                    <td>${task.relatedRecordDisplay}</td>
+                    <td>
+                        <div class="font-weight-bold text-primary">${task.relatedRecordDisplay}</div>
+                        <div class="small text-dark">${task.recordTitleDisplay}</div>
+                        <div class="small text-muted" style="font-size: 0.8em;">${task.applicantName}</div>
+                    </td>
                     <td>${task.taskTypeDisplay}</td>
                     <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
                     <td data-field="operationalDue" data-date="${dueDateISO}">
