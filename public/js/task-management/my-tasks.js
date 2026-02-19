@@ -142,7 +142,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         buildMaps() {
-            this.ipRecordsMap.clear(); // Hata almamak için Map kalsa da içini doldurmaya gerek yok
         }
 
         processData(preservePage = false) {
@@ -536,7 +535,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td><input type="checkbox" class="task-checkbox" value="${task.id}" ${this.selectedTaskIds.has(task.id) ? 'checked' : ''}></td>
                     <td>${task.id}</td>
                     <td>
-                        <div class="font-weight-bold text-primary">${task.relatedRecordDisplay}</div>
+                        <div class="font-weight-bold text-primary">${task.appNo}</div>
                         <div class="small text-dark">${task.recordTitleDisplay}</div>
                         <div class="small text-muted" style="font-size: 0.8em;">${task.applicantName}</div>
                     </td>
@@ -601,8 +600,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const accSnap = await getDocs(qAccruals);
                 const relatedAccruals = accSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-                const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
+                // 🔥 YENİ: Detay açıldığında anlık portföy çekimi
+                let ipRecord = null;
+                if (task.relatedIpRecordId) {
+                    try {
+                        const ipSnap = await getDoc(doc(db, 'ipRecords', String(task.relatedIpRecordId)));
+                        if (ipSnap.exists()) {
+                            ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                        } else {
+                            const suitSnap = await getDoc(doc(db, 'suits', String(task.relatedIpRecordId)));
+                            if (suitSnap.exists()) ipRecord = { id: suitSnap.id, ...suitSnap.data() };
+                        }
+                    } catch(e) { console.warn("Kayıt detayı çekilemedi:", e); }
+                }
                 const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
                 const assignedUser = task.assignedTo_email ? { email: task.assignedTo_email, displayName: task.assignedTo_email } : null;
 
