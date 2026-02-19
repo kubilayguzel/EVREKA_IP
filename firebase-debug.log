@@ -1,0 +1,122 @@
+[debug] [2026-02-19T14:44:47.116Z] ----------------------------------------------------------------------
+[debug] [2026-02-19T14:44:47.118Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Kubilay GÜZEL\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-02-19T14:44:47.118Z] CLI Version:   15.0.0
+[debug] [2026-02-19T14:44:47.118Z] Platform:      win32
+[debug] [2026-02-19T14:44:47.118Z] Node Version:  v24.12.0
+[debug] [2026-02-19T14:44:47.118Z] Time:          Thu Feb 19 2026 17:44:47 GMT+0300 (GMT+03:00)
+[debug] [2026-02-19T14:44:47.118Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-19T14:44:47.983Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-19T14:44:47.983Z] > authorizing via signed-in user (kubilayguzel@evrekagroup.com)
+[debug] [2026-02-19T14:44:47.983Z] [iam] checking project ipgate-31bd2 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-02-19T14:44:47.984Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:47.984Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:47.985Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ipgate-31bd2:testIamPermissions [none]
+[debug] [2026-02-19T14:44:47.985Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ipgate-31bd2:testIamPermissions x-goog-quota-user=projects/ipgate-31bd2
+[debug] [2026-02-19T14:44:47.985Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ipgate-31bd2:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-02-19T14:44:49.029Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ipgate-31bd2:testIamPermissions 200
+[debug] [2026-02-19T14:44:49.029Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ipgate-31bd2:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-02-19T14:44:49.029Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:49.029Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:49.029Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ipgate-31bd2 [none]
+[debug] [2026-02-19T14:44:49.560Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ipgate-31bd2 200
+[debug] [2026-02-19T14:44:49.560Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ipgate-31bd2 {"projectId":"ipgate-31bd2","projectNumber":"105921768418","displayName":"IPGATE- Prod","name":"projects/ipgate-31bd2","resources":{"hostingSite":"ipgate-31bd2"},"state":"ACTIVE","etag":"1_59e2c0f2-d0d3-47cc-bc9b-74d1d23cd2f4"}
+[info] 
+[info] === Deploying to 'ipgate-31bd2'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-02-19T14:44:49.566Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:49.566Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:49.566Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions [none]
+[debug] [2026-02-19T14:44:49.566Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-02-19T14:44:51.587Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions 200
+[debug] [2026-02-19T14:44:51.587Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions {"name":"projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[ipgate-31bd2]: beginning deploy... 
+[info] i  hosting[ipgate-31bd2]: found 106 files in public 
+[debug] [2026-02-19T14:44:51.638Z] [hosting] uploading with 200 concurrency
+[debug] [2026-02-19T14:44:51.717Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:51.717Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:51.718Z] [hosting] hash cache [cHVibGlj] stored for 106 files
+[debug] [2026-02-19T14:44:51.719Z] [hosting][hash queue][FINAL] {"max":55,"min":0,"avg":2.192410781578797,"active":0,"complete":106,"success":106,"errored":0,"retried":0,"total":106,"elapsed":76}
+[debug] [2026-02-19T14:44:51.719Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a:populateFiles [none]
+[debug] [2026-02-19T14:44:51.719Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a:populateFiles {"files":{"/utils.js":"104d7c96d6a4b5a89b89b0e321647ae0751d86d472633b4c11d46fdfabe73e38","/user-management.html":"bb5cf4c6925d75427ef1dbdad9704b8180116f6c545a4e5c332e949c091a1c39","/triggered-tasks.html":"4eccd0f30acbfa9efc915ac47c09639cb557065123c20703cb3bc2dc25df7e30","/trigger-index.html":"cfe8c477310a4278358f9844f8ef459a190ed44bda220a75f7dfc1a4181f4eca","/trademark-similarity-search.html":"f71337ac80af0d5051d3b02ab33359dec8d9fea7e8425506fae7a089d19150ec","/tp-icon.png":"f791ce50e3490d2306f743b3baa50264cc2212e8eaaadd34ab78c79a2ee76938","/tp-file-transfer.html":"464281917dd2fe7c0d6f59528d76d84f02b237a8e2cdd40165ad31b94cd9d00a","/task-update.html":"81d9c432d7a9d6d29178c77e2eb7a09c9cdf91f71eaba85e1cd6ff82d9f70ec5","/task-management.html":"c2c6659fc4b49e2091a13250c822fa0df26c159784dad83b93d2f93534041d5c","/suit-detail.html":"4d386c08101f02d358215fec08d2cbef7effe3857254333bf77f007bc9927cbd","/shared_layout_parts.html":"278f6742c99861a9a856f5d35aa40efc165022ac1fcb133823867df25790f822","/scheduled-tasks.html":"8f3dead0f3ed851cbdfd98d7dc640bef8ec5514baad6891767ecf5d77a74baee","/reminders.html":"95837ac376984e0d37b148e56a86a422fd8cbde61b32a25f9ed985d75b5b19f1","/privacy-policy2.html":"c4eda62ea8b5d31b84dc6049408fab199e8217415a98257fc2001126b306321f","/privacy-policy.html":"baaff39827d6c0aa1929441a5392c1d29e7e84662d80366905071d619dbee293","/portfolio.html":"c78550437a45ab269e7487e664080134aaf65997ad86f3d8ce992e4905b9e5fe","/portfolio-detail.html":"90c06df802e1ededc9d0e3a2abd9e8b44df00dd7ae4b2384b4b18f30d901c9af","/persons.html":"c4c139d086eda19e2764798e23b814033eab3ac75c52e0e6285b5ff284479bcd","/notifications.html":"ac4299f49c0aeb9f47f5a43b9cb817ccdf10e78890e46ea85aff155e917abe57","/my-tasks.html":"4e78709227df4d762cfe9cb0147d8d448830abcb2f5c183dbe30aff6c112ea2b","/monitoring-trademarks.html":"02454e530b8aa22ca5738e85e263af6051e9a070c8c98aaf8e2a0da442f142b1","/logo.png":"f0f9f0be13ded13de414458e866b519de11621bdd9a3084a6ba3f25f69bb6c94","/indexing-detail.html":"d110c3d73165abe6d9b79d72a95055279f2b89d4a8b8d577ea19e71a2fe6b9b5","/index.html":"69d75f5cf61eacb0ca8f5f0f6eace4ed203feb6043ba8effade3b09b3f6689f5","/firebase-config.js":"53df8dffc0de08e4ababe02fa5bfd6d3eedd34144600f74d9ab23a964e2e7e9b","/favicon.ico":"bcac679aa88d6796a3885781dd51e132f7ea1864b405a3c96c267966a3235e39","/excel-upload.html":"045023d04b2b312af7f17eeeb7bfda380953654de503e723866f3f5566f22d3a","/evreka-logo.png":"c82196a30d8dc53d76fbad93459baac9033a1dbd4e7d99a420b99d949a1161c4","/eklenti-kurulum.html":"6f727a98c87b6885e3788b52e2ef0939bc9ee95d1a0c352580ff080fa631e73b","/data-entry.html":"245fec42442cf0b19fb1a4392704d4dc4d0ac4a544be7bdbfaccdb6e51c1a57c","/dashboard.html":"d621665b41007f1d53cfb53c2b8e767ae227bd9c43946c50573f4160f681a39f","/create-task.html":"9acbbda9fec01acf864bc3bc9663da355299b5f1dc6351eeb08087fb70b5873e","/client-portal.html":"e1871f7d30cbfccc42aa0405e099f3b909d88952a5a9eecde1c25ea83b1bfab9","/client-pending.html":"13c44d05f5e4a270355def03eace6abfe35739fa7a7a412670062c6a94769bf1","/bulletin-upload.html":"c1faeabcd6de902b6d25a908f7cc64a11d96ed4f8a5b2cda0f21bde61dbf76b3","/bulletin-search.html":"6d7cda0f22d75e0cbd0b0003813b2f129bd9cbe860259ec026bc5b3c07d0a98f","/bulk-indexing-page.html":"5185c056e7473f77495918bce1f4ed8131b5484c5a494677e462b3219c7f3d5b","/accruals.html":"12644cc9e1c26ce2cf5802f92727702dfac33bd4e6d50598d75b25fd8d964aec","/js/turkpatent-mapper.js":"17572d788ad6cabdec951ede255121de2ac673752d98c69aad8ac055f60646bc","/js/trademark-similarity-search.js":"1ced7980bcd3871f2ae3be142acb8706d9c5b29bd6958b967495b3f310b0e2ec","/js/tp-file-transfer.js":"d85d7298deb00b963e2cb2eea6afe286494faaf8201e5a2691a4c769bbd49cb0","/js/table-manager.js":"1956bd8eabd9c8031804b2a3d42349cc497c3060436e83057b95075f53e57d20","/js/simple-loading.js":"07eeb9277980616226879ee177778a1296b9f3a9bd1bb498ce41031f06dda375","/js/pagination.js":"66c3488e3c44ff99b9eb5e88977eeedece31b51db3c0e35f41684e88bf016164","/js/nice-classification.js":"962deddfffdb80c4b1db33917d7d9b7e21b7d1693c69a34441c2c5d958f79979","/js/layout-loader.js":"f8b238ef74f3b1c7b05b3eb6f92484ac85d823fad155f12306f21e188eb77a8d","/js/etebs-module.js":"853463a5946c7923dcf15b233139379c1a0a0398c04b59941c2aa19a1dc6514e","/js/deadline-highlighter.js":"03f447ff2ccb747e1a064e777ae62504adbdcfa989df0a448d8bf0d56f136562","/js/date-pickers.js":"96acce5880fcb416e43122a2daa83176f34539389dd485e35cc1703f0964c83e","/js/create-portfolio-by-opposition.js":"ddd85cfc125cc9e6ea620a5b5d72a14acbf9ae4d660e9cad72bd9a525d3ae71c","/js/bulletin-upload.js":"6fffd583828efe2b63be395659216e91292e75d2f85546ed91edf9da5ab7d1d8","/js/bulletin-search.js":"e468f7293f239bbdfb6771d2470e08979f2abb5411d2d4f43847cb4f468ce29b","/js/trademark-similarity/visual-match.js":"51527de5b9354a44ef0916a076149e3ea5c206e8d9db2741e81f29f3b7b62cab","/js/trademark-similarity/scorer.js":"e94430abb1fd1f0cdb2907e7a2d51efd65cc3a01d570941f4bf931c81e6a83ee","/js/trademark-similarity/run-search.js":"79958ffa32d19a18bc30944c70aa197fb1d484db3f02e114354cc1a11ee873bc","/js/trademark-similarity/preprocess.js":"41c2d80c84d7bfc07c6caf7f1ff8d36a2afec61cad9d4ad048aa1328163dd04f","/js/trademark-similarity/phonetic.js":"dadd09d845c6422668792fefecacf84187cad4d31de52e019900e515e16b2af1","/js/trademark-similarity/filters.js":"f936c1f32206a9785a961bd7f05ae266b168db63b113f857562f0db3ab063f8e","/js/task-update/TaskUpdateUIManager.js":"c0465b7c9a287a0d3a58d71559209023fb05c91605657161b410b8aa76544d6b","/js/task-update/TaskUpdateDataManager.js":"5e59d36c20b5cae96d07ec465aa72601f31f0d9d893330245e81a7bb02460002","/js/task-update/main.js":"19d15fbadf065cb095eb7e6c740556d9e53db82afcc67f754795bbf084bbf482","/js/task-management/triggered-tasks.js":"7b10b4e02cf22014a4a732fa43841becbacac22e9fb914693db100f47317e905","/js/portfolio/TransactionHelper.js":"485f24bab262bc687c4a1c633fae0d1417aee8f134676812b3ecfa88a505d4de","/js/portfolio/PortfolioRenderer.js":"dca109cff65df69f8057f99b122f52790fa0f817c535d9929b35a8c7cd77133a","/js/portfolio/PortfolioDetailManager.js":"f3c2a89b65299157513ae7cb39740307a4867ccb20833408028cdf6830c9239f","/js/portfolio/PortfolioDataManager.js":"aad8d94943d8ce756f44696c4ce4c3de17577a172269b3526d9c00adba132cb7","/js/portfolio/main.js":"ce461dfd1ebc745258ce0d0d8873fe5e41afd182911df6b9fc07639c07a2188c","/js/persons/PersonUIManager.js":"1e7723896aeb516b6543d09f8a2cded64e154b5dcc9062782c5d2612bdcfa6a8","/js/persons/PersonDataManager.js":"3400098c3cfbafb6d237bc583161dec76e6aae9a7bdf9f7b6af9b836915566f7","/js/indexing/record-matcher.js":"dde1613710a5d4dca3488c162e2adf264926ec3a1cb7a24eae3b4cec5c07fa68","/js/indexing/portfolio-update-manager.js":"be7b5ae780ebf3c5ab10db05344078dce119e124c42902bb4d3bfa0c6c71af06","/js/indexing/filename-parser.js":"5c8c4ab8dfd5915fb65fac6d192a5b85ec40c3671bee616ff35a4774b5477d3a","/js/indexing/epats-ui-manager.js":"4f0832ffaa33cdd9d7a1350e66d4900056772b4c72a3e9a3800f2c870d2391b9","/js/indexing/document-review-manager.js":"18db15901bfde8c2fcc1881867019436636e67dccbcb2a22ca811fc105e45d2a","/js/indexing/bulk-upload-manager.js":"ffbcb783cc2cfb2e2fc528d20c4f4ca7d05202e70580693f93ae1d0e24b16ae1","/js/data-entry/strategies.js":"fcf90c050a1520d10e5f0581bcb4a48356de91dfa222941f6da3845caa040146","/js/data-entry/form-templates.js":"18be1c4de74134ef9339b7906680ff9a6a7278bda63c59848ddd91e6898c9f84","/js/data-entry/data-entry.js":"2a20059f6fde2ad4b04a743d6b5a0dc5121719a911a38caabe2bdf582cbfdee6","/js/create-task/TaskValidator.js":"0580ae46895be79e0f7cc9285e8668dac57c820bd6d7371eaed96d2ee2e78fe9","/js/create-task/TaskUIManager.js":"805843e1fcb3dfc2b98e5ae2ac16cc20fb66dac5205664870d90ca60ad56f260","/js/create-task/TaskSubmitHandler.js":"fca68f8b3100bd4cd7f1bed28a71eb54502ec081251c99370f6795e83b462ec6","/js/create-task/TaskDataManager.js":"eecb736bdf20cf66e86737ffaba4fb9685dd4504a0b4d76e2de0fa9d1082cb78","/js/create-task/TaskConstants.js":"63dbbdc47891b641392064ac1bf16664787ee2cda6b782d3dcd5c11387e93fc2","/js/create-task/main.js":"49141c541a9e5263d1a9328fb5d56ff1a34b8f347f6369ca380d296c06ef4aac","/js/components/TaskDetailManager.js":"e0eb56d9a49e3a87711c3500ffada292e51ec0b1a7bbb671c1ce196a8bbe6256","/js/components/PersonModalManager.js":"c18fa1650d3ab163dcab80ff036285e9abbc186889244e015a2a5ae17defbd1b","/js/components/AccrualFormManager.js":"99569e42294141eae3ea0750e32e0252080bf9888cdba8ab8da4665e9bf61676","/js/accrual-management/main.js":"9d2eba569c2b989a54621b4b81ae22324e81bb60c60a3c276ae91d6636c1a651","/js/accrual-management/AccrualUIManager.js":"bcaabfca5b420a553d2d85edfaea60e65f0105fe267b46ca1ff032b44fe51b56","/js/accrual-management/AccrualDataManager.js":"b15c0e965b37d1efa4a0e29927a31328a3b62fa77c5848af87c1ce03ce570fcc","/functions/utils.js":"7607195d4b93ba60acffaa924e2687695ea7020eea64f5eb5785dc8210e55cca","/functions/package.json":"0fbcf16458217ab3f16d6565058a936acc194b5b8274e61163f3317281bd806e","/functions/package-lock.json":"68bd74f18d0fd5924fe6c4fa630482dcdb2135c2a6129ea47b39a081646a24e7","/functions/handleBatch.js":"0bac6f87ead7334d79d13bfe455f462d109173243dee929e34c2ff23a3cb7ac6","/functions/env.json":"36037b71a009ad2b3c5ab99e11510c49c5180cdd2f8676f58759d72819c3c250","/css/trademark-search.css":"e48b834e47689bd26f45c6f8e05814512d76bcc1a3a1d4808df993e7b34706a4","/css/task-update.css":"38784db100413750eb279465723371286aa42ccb345d0cb60b9fb3862dcdea6b","/css/task-management.css":"49529401a1105916a15e172a0b2b1c6a3f98b86c1eecf4b885ae892d164489fa","/css/simple-loading.css":"522cee0b97f1d79a54378170cc34921018fa0d5098d113892c13b5ea4f8f4dc3","/css/shared-styles.css":"5a0bde710880540191a3f4e913a114a12915ff34eab26d81f4f57f16fc0e11aa","/css/persons.css":"087ddf0c6fdd07968e385b1ade85621d76e634e597e2939a93e5de315b5430a8","/css/deadline-highlighter.css":"ce70d494285bf1bb452a428ce878b3b30698652ea0abc134c245db83e6a7b0e2","/css/data-entry.css":"190c5da0998f4a0883b080333bcd04af8e52ee194f81609e44c1b89bf9fce247","/js/task-management/my-tasks.js":"54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da","/js/task-management/main.js":"b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb","/functions/index.js":"acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d"}}
+[debug] [2026-02-19T14:44:52.605Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a:populateFiles 200
+[debug] [2026-02-19T14:44:52.606Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a:populateFiles {"uploadRequiredHashes":["acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d","54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da","b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb"],"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files"}
+[debug] [2026-02-19T14:44:52.606Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.606Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.607Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.607Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.607Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.607Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:52.607Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d [none]
+[debug] [2026-02-19T14:44:52.607Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d [stream]
+[debug] [2026-02-19T14:44:52.610Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da [none]
+[debug] [2026-02-19T14:44:52.610Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da [stream]
+[debug] [2026-02-19T14:44:52.614Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb [none]
+[debug] [2026-02-19T14:44:52.614Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb [stream]
+[debug] [2026-02-19T14:44:52.617Z] [hosting][populate queue][FINAL] {"max":890,"min":890,"avg":890,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":900}
+[debug] [2026-02-19T14:44:52.617Z] [hosting] uploads queued: 3
+[debug] [2026-02-19T14:44:53.732Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d 200
+[debug] [2026-02-19T14:44:53.732Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/acdd111e2fd8eb049b5857d0d933b3f665a43a58de55b2880d0258e4f053886d [stream]
+[debug] [2026-02-19T14:44:53.736Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb 200
+[debug] [2026-02-19T14:44:53.736Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/b7846b681660415a253890b4a3d53e6b704c3d09e09480405a76fc51da777dbb [stream]
+[debug] [2026-02-19T14:44:53.754Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da 200
+[debug] [2026-02-19T14:44:53.754Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/ipgate-31bd2/versions/c314a4513890116a/files/54435055bdfe1c4a199b5b4bc9c7f9fcb1825422f4db3f6679d10daba25fb6da [stream]
+[debug] [2026-02-19T14:44:53.755Z] [hosting][upload queue][FINAL] {"max":1147,"min":1127,"avg":1134.3333333333333,"active":0,"complete":3,"success":3,"errored":0,"retried":0,"total":3,"elapsed":1148}
+[info] +  hosting[ipgate-31bd2]: file upload complete 
+[debug] [2026-02-19T14:44:53.758Z] [hosting] deploy completed after 2163ms
+[debug] [2026-02-19T14:44:53.758Z] [
+  {
+    "config": {
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "cleanUrls": false,
+      "trailingSlash": false,
+      "rewrites": [
+        {
+          "source": "/tp-sorgu",
+          "destination": "/tp-sorgu.html"
+        },
+        {
+          "source": "/tp-sorgu.html",
+          "destination": "/tp-sorgu.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(html|js|css)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        }
+      ],
+      "site": "ipgate-31bd2"
+    },
+    "version": "projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a"
+  }
+]
+[info] i  hosting[ipgate-31bd2]: finalizing version... 
+[debug] [2026-02-19T14:44:53.763Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:53.763Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:53.764Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions/c314a4513890116a updateMask=status%2Cconfig
+[debug] [2026-02-19T14:44:53.764Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions/c314a4513890116a {"status":"FINALIZED","config":{"rewrites":[{"glob":"/tp-sorgu","path":"/tp-sorgu.html"},{"glob":"/tp-sorgu.html","path":"/tp-sorgu.html"},{"glob":"**","path":"/index.html"}],"headers":[{"glob":"**/*.@(html|js|css)","headers":{"Cache-Control":"no-cache, no-store, must-revalidate"}}],"cleanUrls":false,"trailingSlashBehavior":"REMOVE"}}
+[debug] [2026-02-19T14:44:55.188Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions/c314a4513890116a 200
+[debug] [2026-02-19T14:44:55.188Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/versions/c314a4513890116a {"name":"projects/105921768418/sites/ipgate-31bd2/versions/c314a4513890116a","status":"FINALIZED","config":{"headers":[{"headers":{"Cache-Control":"no-cache, no-store, must-revalidate"},"glob":"**/*.@(html|js|css)"}],"rewrites":[{"glob":"/tp-sorgu","path":"/tp-sorgu.html"},{"glob":"/tp-sorgu.html","path":"/tp-sorgu.html"},{"glob":"**","path":"/index.html"}],"trailingSlashBehavior":"REMOVE"},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-02-19T14:44:50.113303Z","createUser":{"email":"kubilayguzel@evrekagroup.com"},"finalizeTime":"2026-02-19T14:44:54.780491Z","finalizeUser":{"email":"kubilayguzel@evrekagroup.com"}}
+[debug] [2026-02-19T14:44:55.188Z] [hosting] finalized version for ipgate-31bd2:[object Object]
+[info] +  hosting[ipgate-31bd2]: version finalized 
+[info] i  hosting[ipgate-31bd2]: releasing new version... 
+[debug] [2026-02-19T14:44:55.189Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:55.189Z] Checked if tokens are valid: true, expires at: 1771515270601
+[debug] [2026-02-19T14:44:55.189Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/channels/live/releases versionName=projects%2F105921768418%2Fsites%2Fipgate-31bd2%2Fversions%2Fc314a4513890116a
+[debug] [2026-02-19T14:44:55.189Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/ipgate-31bd2/channels/live/releases {}
