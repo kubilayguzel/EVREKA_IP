@@ -151,49 +151,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 			});
 		}
 
-        // 🔥 YENİ: Arama filtrelerinin kusursuz çalışması için TÜM görevlerin dosya numaralarını tek seferde çeken motor
-    async enrichAllTasks() {
-        if (!this.allTasks || this.allTasks.length === 0) return;
-        if (this._isEnriching) return; // Çift tetiklenmeyi önleyen kilit
-
-        const missingIpIds = new Set();
-
-        // 1. Sözlükte (Map) olmayan eksik ID'leri bul
-        this.allTasks.forEach(task => {
-            const recId = task.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : null;
-            if (recId && !this.ipRecordsMap.has(recId)) {
-                missingIpIds.add(recId);
-            }
-        });
-
-        // Tüm görevler zaten yüklüyse işlemi durdur
-        if (missingIpIds.size === 0) return;
-
-        this._isEnriching = true; // Kilidi kapat
-
-        try {
-            const { ipRecordsService } = await import('../../firebase-config.js');
-            // Eksik tüm ID'leri tek seferde topluca çek
-            const res = await ipRecordsService.getRecordsByIds(Array.from(missingIpIds));
-            
-            if (res.success) {
-                // 🔥 ASIL DÜZELTME BURADA: Gelen verileri tablonun okuduğu MAP'e (Sözlüğe) yaz!
-                res.data.forEach(r => {
-                    if (r && r.id) {
-                        this.ipRecordsMap.set(String(r.id).trim(), r);
-                    }
-                });
-
-                // Veriler Map'e doldu! Sayfayı başa atmadan (sessizce) tabloyu yenile ve filtreleri aktif et
-                this.processData(true); 
-            }
-        } catch (error) {
-            console.error('Tüm görevleri zenginleştirme hatası:', error);
-        } finally {
-            this._isEnriching = false; // Kilidi aç
-        }
-    }
-
         processData(preservePage = false) {
             const safeDate = (val) => {
                 if (!val) return null;
@@ -250,7 +207,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const currentQuery = document.getElementById('taskSearchInput')?.value || document.getElementById('searchInput')?.value || '';
             // ESKİ: this.handleSearch(currentQuery, preservePage); // (Zaten eklemişsiniz gibi duruyor, emin olun)
             this.handleSearch(currentQuery, preservePage);
-            setTimeout(() => { this.enrichAllTasks(); }, 0);
         }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
