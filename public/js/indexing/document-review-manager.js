@@ -1068,6 +1068,20 @@ async loadData() {
                     }
                 }
 
+                // 🔥 YENİ: Denormalize alanların hesaplanması
+                let ipAppNo = this.matchedRecord.applicationNumber || this.matchedRecord.applicationNo || "-";
+                let ipTitle = this.matchedRecord.title || this.matchedRecord.markName || "-";
+                let ipAppName = this.matchedRecord.resolvedNames || "-";
+                
+                // resolvedNames boşsa (veya tire ise) fallback olarak standart yerlere bak:
+                if (ipAppName === "-") {
+                    if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
+                        ipAppName = this.matchedRecord.applicants[0].name || "-";
+                    } else if (this.matchedRecord.client && this.matchedRecord.client.name) {
+                        ipAppName = this.matchedRecord.client.name;
+                    }
+                }
+
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
@@ -1075,6 +1089,12 @@ async loadData() {
                     relatedRecordId: this.matchedRecord.id,
                     relatedIpRecordId: this.matchedRecord.id,
                     relatedIpRecordTitle: this.matchedRecord.title,
+                    
+                    // 🔥 YENİ: Denormalize Alanların Task'a Eklenmesi
+                    iprecordApplicationNo: ipAppNo,
+                    iprecordTitle: ipTitle,
+                    iprecordApplicantName: ipAppName,
+
                     transactionId: childTransactionId, 
                     triggeringTransactionType: childTypeId,
                     deliveryDate: deliveryDateStr,
