@@ -374,24 +374,32 @@ export class PortfolioDataManager {
         };
     }
 
-    // --- OBJECTIONS: BUILD (Prefetch sonuçlarını kullanarak satırları oluşturur) ---
-    async buildObjectionRows(prefetch = null) {
-        if (this.objectionRows.length > 0) return this.objectionRows;
+    // --- OBJECTIONS: BUILD ---
+    async buildObjectionRows(prefetch = null, forceRefresh = false) {
+        // Eğer zorunlu yenileme istenmişse mevcut RAM önbelleğini sıfırla
+        if (forceRefresh) {
+            this.objectionRows = [];
+        } else {
+            // RAM'de varsa direkt dön
+            if (this.objectionRows.length > 0) return this.objectionRows;
 
-        // YENİ: İtirazları da anında FastCache'den al
-        const cached = await EvrekaFastCache.get('objectionRows');
-        if (cached && cached.length > 0) {
-            this.objectionRows = cached;
-            return this.objectionRows;
+            // IndexedDB Cache'den al (Sadece forceRefresh false ise)
+            const cached = await EvrekaFastCache.get('objectionRows');
+            if (cached && cached.length > 0) {
+                this.objectionRows = cached;
+                return this.objectionRows;
+            }
         }
 
-        console.time('⏱️ buildObjectionRows');
+        console.time('⏱️ buildObjectionRows (Firebase)');
         try {
             if (!prefetch) prefetch = this.prefetchObjectionData();
             const [parentSnapshot, childSnapshot] = await Promise.all([prefetch.parentPromise, prefetch.childPromise]);
 
             if (parentSnapshot.empty) {
                 this.objectionRows = [];
+                // Eğer forceRefresh ile çağrıldıysa ve veri yoksa cache'i de sıfırla
+                await EvrekaFastCache.set('objectionRows', []);
                 return [];
             }
 
@@ -440,10 +448,10 @@ export class PortfolioDataManager {
 
             this.objectionRows = localRows.filter(Boolean);
             
-            // YENİ: Hesaplanan İtirazları Kaydet
+            // YENİ: Hesaplanan güncel İtirazları Cache'e yaz
             await EvrekaFastCache.set('objectionRows', this.objectionRows);
             
-            console.timeEnd('⏱️ buildObjectionRows');
+            console.timeEnd('⏱️ buildObjectionRows (Firebase)');
             return this.objectionRows;
 
         } catch (error) {
@@ -452,9 +460,9 @@ export class PortfolioDataManager {
         }
     }
 
-    // Geriye uyumluluk (başka yerlerden çağrılıyorsa)
-    async loadObjectionRows() {
-        return this.buildObjectionRows();
+    // Geriye uyumluluk için loadObjectionRows'u da forceRefresh destekleyecek şekilde güncelliyoruz
+    async loadObjectionRows(forceRefresh = false) {
+        return this.buildObjectionRows(null, forceRefresh);
     }
 
     _createObjectionRowDataFast(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
