@@ -492,18 +492,53 @@ export class AccrualFormManager {
         };
     }
     
-    showEpatsDoc(doc) {
+    showEpatsDoc(docOrTask) {
         const p = this.prefix;
         const container = document.getElementById(`${p}EpatsDocumentContainer`);
-        document.getElementById(`${p}EpatsDocName`).textContent = 'Belge Adı';
-        document.getElementById(`${p}EpatsDocLink`).href = '#';
+        if (!container) return;
 
-        if (!doc || (!doc.url && !doc.downloadURL)) {
-            container.style.display = 'none';
+        const nameEl = document.getElementById(`${p}EpatsDocName`);
+        const linkEl = document.getElementById(`${p}EpatsDocLink`);
+
+        let finalDoc = null;
+
+        // 1. Gelen veri doğrudan bir evrak objesi mi? (Yeni veya eski format)
+        if (docOrTask && (docOrTask.url || docOrTask.downloadURL || docOrTask.fileUrl)) {
+            finalDoc = docOrTask;
+        } 
+        // 2. Gelen veri komple bir TASK (İş) objesi mi? (Eğer Component'e tüm iş atılırsa diye güvenlik ağı)
+        else if (docOrTask) {
+            // YENİ FORMAT: details.documents dizisi içinde ara
+            if (docOrTask.details && Array.isArray(docOrTask.details.documents)) {
+                finalDoc = docOrTask.details.documents.find(d => d.type === 'epats_document');
+            }
+            if (!finalDoc && Array.isArray(docOrTask.documents)) {
+                finalDoc = docOrTask.documents.find(d => d.type === 'epats_document');
+            }
+            // ESKİ FORMAT: details.epatsDocument objesi
+            if (!finalDoc && docOrTask.details && docOrTask.details.epatsDocument) {
+                finalDoc = docOrTask.details.epatsDocument;
+            }
+            if (!finalDoc && docOrTask.epatsDocument) {
+                finalDoc = docOrTask.epatsDocument;
+            }
+        }
+
+        // 3. Hiçbir şey bulunamadıysa KESİN OLARAK GİZLE
+        if (!finalDoc || (!finalDoc.url && !finalDoc.downloadURL && !finalDoc.fileUrl)) {
+            container.style.setProperty('display', 'none', 'important');
+            if (nameEl) nameEl.textContent = 'Belge Adı';
+            if (linkEl) linkEl.href = '#';
             return;
         }
-        document.getElementById(`${p}EpatsDocName`).textContent = doc.name || 'EPATS Belgesi';
-        document.getElementById(`${p}EpatsDocLink`).href = doc.url || doc.downloadURL;
-        container.style.display = 'flex';
+
+        // 4. Belge bulundu! URL ve İsimleri bağla ve ZORLA GÖSTER (!important)
+        const fileUrl = finalDoc.url || finalDoc.downloadURL || finalDoc.fileUrl;
+        
+        if (nameEl) nameEl.textContent = finalDoc.name || finalDoc.fileName || 'EPATS Belgesi';
+        if (linkEl) linkEl.href = fileUrl;
+        
+        // Bootstrap veya başka bir CSS sınıfının bunu ezmesini engelliyoruz
+        container.style.setProperty('display', 'flex', 'important');
     }
 }
