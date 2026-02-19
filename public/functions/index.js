@@ -716,11 +716,24 @@ export const createObjectionTask = onCall(
       let clientId = monitoredData.clientId || null;
       let clientEmail = null;
 
+      // 🔥 YENİ: Denormalize alanlar için değişkenler
+      let ipAppNo = "-";
+      let ipTitle = monitoredData.title || "-";
+      let ipAppName = "-";
+
       if (relatedIpRecordId) {
         const ipDoc = await adminDb.collection('ipRecords').doc(relatedIpRecordId).get();
         if (ipDoc.exists) {
           const ipData = ipDoc.data();
           clientId = clientId || ipData.clientId || (ipData.applicants?.[0]?.id);
+          
+          ipAppNo = ipData.applicationNumber || ipData.applicationNo || "-";
+          ipTitle = ipData.title || ipData.markName || ipTitle;
+          if (Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
+             ipAppName = ipData.applicants[0].name || "-";
+          } else if (ipData.client && ipData.client.name) {
+             ipAppName = ipData.client.name;
+          }
         }
       }
 
@@ -810,6 +823,9 @@ export const createObjectionTask = onCall(
 
         title: taskTitle,
         description: taskDescription,
+        iprecordApplicationNo: ipAppNo,
+        iprecordTitle: ipTitle,
+        iprecordApplicantName: ipAppName,
 
         details: {
           objectionTarget: hitMarkName,
@@ -2664,6 +2680,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 mail_notification_id: notificationRef.id, 
                 relatedIpRecordId: recordId || null,
                 relatedIpRecordTitle: enrichedData.markName || "-",
+                iprecordApplicationNo: ipRecordData?.applicationNumber || ipRecordData?.applicationNo || "-",
+                iprecordTitle: enrichedData.markName || "-",
+                iprecordApplicantName: enrichedData.applicantNames || "-",
                 assignedTo_uid: assignedUid,
                 assignedTo_email: assignedEmail,
                 priority: "high",
@@ -6953,11 +6972,17 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
       const description = `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`;
 
       // --- YENİ EKLENEN KISIM: Task Owner Belirleme ---
-      // IP kaydındaki applicant (başvuru sahibi) bilgisini alıp taskOwner dizisine çeviriyoruz
       const taskOwners = (Array.isArray(ipRecord.applicants) ? ipRecord.applicants : [])
-          .map(a => String(a.id || a.personId)) // ID'leri al
-          .filter(Boolean); // Boş olanları temizle
-      // -----------------------------------------------
+          .map(a => String(a.id || a.personId))
+          .filter(Boolean);
+          
+      // 🔥 YENİ: Denormalize için Applicant Name Bulma
+      let appName = "-";
+      if (Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+          appName = ipRecord.applicants[0].name || "-";
+      } else if (ipRecord.client && ipRecord.client.name) {
+          appName = ipRecord.client.name;
+      }
 
       const data = {
         title,
@@ -6965,8 +6990,10 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
         taskType: taskTypeId,
         relatedIpRecordId: ipRecordId,
         relatedIpRecordTitle: ipRecord.title,
-        
-        taskOwner: taskOwners, // <--- BURAYA EKLENDİ (Veritabanına kaydedilecek)
+        iprecordApplicationNo: ipRecord.applicationNumber || ipRecord.applicationNo || ipRecord.appNo || "-",
+        iprecordTitle: ipRecord.title || ipRecord.markName || "-",
+        iprecordApplicantName: appName,        
+        taskOwner: taskOwners,
         
         status: 'awaiting_client_approval',
         priority: 'medium',
@@ -7519,6 +7546,9 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
           relatedTaskId: taskId,
           relatedIpRecordId: after.relatedIpRecordId || null,
           relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
+          iprecordApplicationNo: after.iprecordApplicationNo || "-",
+          iprecordTitle: after.iprecordTitle || after.relatedIpRecordTitle || after.title || "-",
+          iprecordApplicantName: after.iprecordApplicantName || "-",
           createdAt: now,
           updatedAt: now,
           createdBy: { uid: creatorUid, email: creatorEmail },
@@ -8289,5 +8319,86 @@ export const writeSearchResultsWorker = onMessagePublished(
         logger.error("❌ Yazma Worker Hatası:", error);
         throw error; 
     }
+  }
+);
+
+// =========================================================
+// YENİ: PORTFÖY DEĞİŞTİĞİNDE GÖREVLERİ (TASKS) SENKRONİZE ET
+// =========================================================
+export const syncTaskIpRecordDataOnUpdate = onDocumentUpdated(
+  {
+    document: "ipRecords/{recordId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
+    const before = change.before.data();
+    const after = change.after.data();
+    const recordId = event.params.recordId;
+
+    // 1. Veri Okuma Yardımcıları (Migration Script ile Birebir Aynı)
+    const getAppNo = (d) => d.applicationNumber || d.applicationNo || d.appNo || d.caseNo || "-";
+    const getTitle = (d) => d.title || d.markName || d.brandText || "-";
+    const getAppName = (d) => {
+        if (Array.isArray(d.applicants) && d.applicants.length > 0) {
+            return d.applicants[0].name || "-";
+        }
+        if (d.client && d.client.name) return d.client.name;
+        if (Array.isArray(d.holders) && d.holders.length > 0) {
+            return d.holders[0].name || d.holders[0].holderName || d.holders[0] || "-";
+        }
+        if (d.holder || d.applicantName) return d.holder || d.applicantName;
+        return "-";
+    };
+
+    // 2. Önceki ve Sonraki Durumları Al
+    const beforeAppNo = getAppNo(before);
+    const afterAppNo = getAppNo(after);
+    
+    const beforeTitle = getTitle(before);
+    const afterTitle = getTitle(after);
+    
+    const beforeAppName = getAppName(before);
+    const afterAppName = getAppName(after);
+
+    // 3. Gerçekten kritik bir değişiklik var mı kontrol et
+    if (beforeAppNo === afterAppNo && beforeTitle === afterTitle && beforeAppName === afterAppName) {
+        return null; // Değişiklik yoksa boşuna işlem yapma
+    }
+
+    console.log(`🔄 IP Record güncellendi (${recordId}). Bağlı görevler senkronize ediliyor...`);
+
+    try {
+        // 4. Bu IP Record'a bağlı tüm görevleri bul
+        const tasksSnap = await adminDb.collection("tasks").where("relatedIpRecordId", "==", recordId).get();
+        
+        if (tasksSnap.empty) {
+            return null;
+        }
+
+        // 5. Görevleri toplu (batch) güncelle
+        const batch = adminDb.batch();
+        let count = 0;
+
+        tasksSnap.forEach((doc) => {
+            batch.update(doc.ref, {
+                iprecordApplicationNo: afterAppNo,
+                iprecordTitle: afterTitle,
+                iprecordApplicantName: afterAppName,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            count++;
+        });
+
+        await batch.commit();
+        console.log(`✅ ${count} adet görevin denormalize alanları başarıyla güncellendi.`);
+
+    } catch (error) {
+        console.error("❌ Görev senkronizasyon hatası:", error);
+    }
+
+    return null;
   }
 );
