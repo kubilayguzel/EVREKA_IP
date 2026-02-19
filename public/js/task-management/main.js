@@ -225,6 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 appNo,
                 recordTitle,
                 applicantName,
+                relatedRecord: appNo,
                 taskTypeDisplay,
                 assignedToDisplay,
                 operationalDueDisplay,
@@ -631,7 +632,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 modalTitle.textContent = `İş Detayı (${task.id})`;
 
-                const ipRecord = this.ipRecordsMap.get(task.relatedIpRecordId);
+                // 🔥 YENİ: Detay açıldığında sadece bu işin portföyünü anlık çek (Hızlı ve maliyetsiz)
+                let ipRecord = null;
+                if (task.relatedIpRecordId) {
+                    try {
+                        const ipSnap = await getDoc(doc(db, 'ipRecords', String(task.relatedIpRecordId)));
+                        if (ipSnap.exists()) {
+                            ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                        } else {
+                            // Eğer Dava kartı ise
+                            const suitSnap = await getDoc(doc(db, 'suits', String(task.relatedIpRecordId)));
+                            if (suitSnap.exists()) ipRecord = { id: suitSnap.id, ...suitSnap.data() };
+                        }
+                    } catch(e) { console.warn("Kayıt detayı çekilemedi:", e); }
+                }
                 const transactionType = this.transactionTypesMap.get(task.taskType);
                 const assignedUser = this.usersMap.get(task.assignedTo_uid);
                 
