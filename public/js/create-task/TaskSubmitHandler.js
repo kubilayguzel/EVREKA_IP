@@ -59,6 +59,37 @@ export class TaskSubmitHandler {
                 }
             }
 
+            // 🔥 ADIM 3: Yeni eklenecek denormalize alanların hesaplanması (Bülten, Dava ve Yeni Başvuru uyumlu)
+            let ipAppNo = "-";
+            let ipTitle = "-";
+            let ipAppName = "-";
+
+            if (selectedIpRecord) {
+                // Başvuru Numarası Çözümleme
+                ipAppNo = selectedIpRecord.applicationNumber || selectedIpRecord.applicationNo || selectedIpRecord.appNo || selectedIpRecord.caseNo || "-";
+                
+                // Başlık/Marka Adı Çözümleme
+                ipTitle = selectedIpRecord.title || selectedIpRecord.markName || selectedIpRecord.brandText || "-";
+                
+                // Kişi (Müvekkil/Sahip) Çözümleme
+                if (Array.isArray(selectedIpRecord.applicants) && selectedIpRecord.applicants.length > 0) {
+                    ipAppName = selectedIpRecord.applicants[0].name || "-";
+                } else if (selectedIpRecord.client && selectedIpRecord.client.name) {
+                    ipAppName = selectedIpRecord.client.name;
+                } else if (Array.isArray(selectedIpRecord.holders) && selectedIpRecord.holders.length > 0) {
+                    ipAppName = selectedIpRecord.holders[0].name || selectedIpRecord.holders[0].holderName || selectedIpRecord.holders[0] || "-";
+                } else if (selectedIpRecord.holder || selectedIpRecord.applicantName) {
+                    ipAppName = selectedIpRecord.holder || selectedIpRecord.applicantName;
+                }
+            } else if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
+                // Yeni Marka Başvurusu durumu (İşlem anında ipRecord henüz oluşmadıysa UI'dan çekiyoruz)
+                ipTitle = document.getElementById('brandExampleText')?.value || taskTitle || "-";
+                if (selectedApplicants && selectedApplicants.length > 0) {
+                    ipAppName = selectedApplicants[0].name || "-";
+                }
+            }
+
+            // Temel Task Objesini Oluşturma
             let taskData = {
                 taskType: selectedTaskType.id,
                 title: taskTitle,
@@ -69,8 +100,15 @@ export class TaskSubmitHandler {
                 status: 'open',
                 relatedIpRecordId: selectedIpRecord ? selectedIpRecord.id : null,
                 relatedIpRecordTitle: selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : taskTitle,
+                
+                // 🔥 YENİ EKLENEN DENORMALIZE ALANLAR
+                iprecordApplicationNo: ipAppNo,
+                iprecordTitle: ipTitle,
+                iprecordApplicantName: ipAppName,
+                // =====================================
+
                 details: {},
-                documents: [], // Boş dizi olarak başlatıyoruz
+                documents: [], 
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now()
             };
@@ -436,6 +474,23 @@ export class TaskSubmitHandler {
 
                 transaction.set(counterRef, { count: newCount }, { merge: true });
 
+                // 🔥 ADIM 3: Tahakkuk alt görevi için de aynı alanları çıkarıyoruz
+                let accAppNo = "-";
+                let accTitle = taskTitle;
+                let accAppName = "-";
+
+                if (state.selectedIpRecord) {
+                    const sip = state.selectedIpRecord;
+                    accAppNo = sip.applicationNumber || sip.applicationNo || sip.appNo || sip.caseNo || "-";
+                    accTitle = sip.title || sip.markName || sip.brandText || taskTitle;
+                    
+                    if (Array.isArray(sip.applicants) && sip.applicants.length > 0) {
+                        accAppName = sip.applicants[0].name || "-";
+                    } else if (sip.client && sip.client.name) {
+                        accAppName = sip.client.name;
+                    }
+                }
+
                 const accrualTaskData = {
                     id: newCustomId, 
                     taskType: "53",
@@ -448,6 +503,12 @@ export class TaskSubmitHandler {
                     relatedTaskId: taskId, 
                     relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
                     relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
+                    
+                    // 🔥 YENİ EKLENEN ALANLAR
+                    iprecordApplicationNo: accAppNo,
+                    iprecordTitle: accTitle,
+                    iprecordApplicantName: accAppName,
+
                     details: {
                         source: 'automatic_accrual_assignment',
                         originalTaskType: taskType.alias || taskType.name
