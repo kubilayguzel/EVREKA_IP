@@ -146,6 +146,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const relatedRecordTitle = task.iprecordTitle || task.relatedIpRecordTitle || "-";
             const applicantName = task.iprecordApplicantName || "-";
 
+            const transactionTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
+            const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
+
             // Tarih ve Statü işlemleri (Aynen kalıyor ama Map kullanımı sayesinde buraya çok hızlı ulaşıyoruz)
             const parseDate = (d) => {
                 if (!d) return null;
