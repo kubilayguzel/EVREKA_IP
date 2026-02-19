@@ -26,9 +26,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allAccruals = [];
             this.allTransactionTypes = [];
 
-			// Hızlı join için Map (id -> ipRecord)
-			this.ipRecordsMap = new Map();
-
             // Tablo Yönetimi
             this.processedData = [];
             this.filteredData = [];
@@ -151,43 +148,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const relevantTasks = this.allTasks.filter(task => this.triggeredTaskStatuses.includes(task.status));
 
         this.processedData = relevantTasks.map(task => {
-            const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-            const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-            
-            // .find() yerine .get() kullanarak hızı O(n)'den O(1)'e düşürdük
-            const transactionTypeObj = transTypeMap.get(String(task.taskType));
-            
-            const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
-            const applicationNumber = ipRecord?.applicationNumber || ipRecord?.applicationNo || (relatedId ? 'Yükleniyor…' : '—');
-            const relatedRecordTitle = task.relatedIpRecordTitle || ipRecord?.title || '—';
-
-            // --- [BAŞLANGIÇ] SAHİP BİLGİSİ GÜNCELLEMESİ (OPTIMIZED) ---
-            let resolvedOwnerName = null;
-
-            // 1. ADIM: Task Owner Kontrolü (.find yerine Map.get)
-            if (Array.isArray(task.taskOwner) && task.taskOwner.length > 0) {
-                const ownerId = String(task.taskOwner[0]);
-                const person = personsMap.get(ownerId);
-                if (person) {
-                    resolvedOwnerName = person.name;
-                }
-            }
-
-            // 2. ADIM: Fallback - IP Record Applicants (.find yerine Map.get)
-            if (!resolvedOwnerName) {
-                if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
-                    resolvedOwnerName = ipRecord.applicants.map(a => {
-                        if (a.name) return a.name;
-                        
-                        const pId = String((typeof a === 'string') ? a : a.id);
-                        const p = personsMap.get(pId);
-                        return p ? p.name : '';
-                    }).filter(Boolean).join(', ');
-                }
-            }
-
-            const applicantName = resolvedOwnerName || 'N/A';
-            // --- [BİTİŞ] SAHİP BİLGİSİ GÜNCELLEMESİ ---
+            const applicationNumber = task.iprecordApplicationNo || "-";
+            const relatedRecordTitle = task.iprecordTitle || task.relatedIpRecordTitle || "-";
+            const applicantName = task.iprecordApplicantName || "-";
 
             // Tarih ve Statü işlemleri (Aynen kalıyor ama Map kullanımı sayesinde buraya çok hızlı ulaşıyoruz)
             const parseDate = (d) => {
