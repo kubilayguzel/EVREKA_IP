@@ -88,7 +88,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 itemsPerPageOptions: [10, 25, 50, 100],
                 onPageChange: async () => {
                     this.renderTasks();
-                    await this.enrichVisiblePage(); // YENİ: Sayfa değişince o sayfanın verilerini çek
                 }
             });
         }
@@ -137,11 +136,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (window.SimpleLoadingController) window.SimpleLoadingController.hide();
 
-                // 4. Arka planda: Sadece görünen sayfanın marka detaylarını çek (UI kitlenmez)
-                setTimeout(() => {
-                    this.enrichVisiblePage().catch(console.error);
-                }, 0);
-
             } catch (error) {
                 console.error(error);
                 if (typeof showNotification === 'function') showNotification('Hata: ' + error.message, 'error');
@@ -157,45 +151,48 @@ document.addEventListener('DOMContentLoaded', async () => {
 			});
 		}
 
-        async enrichVisiblePage() {
-            if (!this.filteredData || this.filteredData.length === 0) return;
+        // 🔥 YENİ: Arama filtrelerinin kusursuz çalışması için TÜM görevlerin dosya numaralarını tek seferde çeken motor
+    async enrichAllTasks() {
+        if (!this.allTasks || this.allTasks.length === 0) return;
+        if (this._isEnriching) return; // Çift tetiklenmeyi önleyen kilit
 
-            // O an ekranda (sayfada) görünen görevleri al
-            let currentData = this.filteredData;
-            if (this.pagination) {
-                currentData = this.pagination.getCurrentPageData(this.filteredData);
+        const missingIpIds = new Set();
+
+        // 1. Sözlükte (Map) olmayan eksik ID'leri bul
+        this.allTasks.forEach(task => {
+            const recId = task.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : null;
+            if (recId && !this.ipRecordsMap.has(recId)) {
+                missingIpIds.add(recId);
             }
+        });
 
-            // Görünen görevlerin IP ID'lerini topla (Eğer daha önce çekmediysek)
-            const ipIdsToFetch = [];
-            for (const t of currentData) {
-                const id = t?.relatedIpRecordId ? String(t.relatedIpRecordId).trim() : null;
-                if (id && !this.ipRecordsMap.has(id)) {
-                    ipIdsToFetch.push(id);
-                }
-            }
+        // Tüm görevler zaten yüklüyse işlemi durdur
+        if (missingIpIds.size === 0) return;
 
-            // Tekrarları temizle
-            const uniqueIds = [...new Set(ipIdsToFetch)];
+        this._isEnriching = true; // Kilidi kapat
 
-            // Eksik veri varsa Firestore'dan çek
-            if (uniqueIds.length > 0) {
-                try {
-                    const ipRes = await ipRecordsService.getRecordsByIds(uniqueIds);
-                    if (ipRes.success) {
-                        ipRes.data.forEach(r => {
-                            const key = r?.id ? String(r.id).trim() : null;
-                            if (key) this.ipRecordsMap.set(key, r);
-                        });
-                        
-                        // Veriler geldi, tabloyu güncel halleriyle (Marka isimleriyle) tekrar çiz
-                        this.processData(true);
+        try {
+            const { ipRecordsService } = await import('../../firebase-config.js');
+            // Eksik tüm ID'leri tek seferde topluca çek
+            const res = await ipRecordsService.getRecordsByIds(Array.from(missingIpIds));
+            
+            if (res.success) {
+                // 🔥 ASIL DÜZELTME BURADA: Gelen verileri tablonun okuduğu MAP'e (Sözlüğe) yaz!
+                res.data.forEach(r => {
+                    if (r && r.id) {
+                        this.ipRecordsMap.set(String(r.id).trim(), r);
                     }
-                } catch (e) {
-                    console.error("Görünen sayfa zenginleştirme hatası:", e);
-                }
+                });
+
+                // Veriler Map'e doldu! Sayfayı başa atmadan (sessizce) tabloyu yenile ve filtreleri aktif et
+                this.processData(true); 
             }
+        } catch (error) {
+            console.error('Tüm görevleri zenginleştirme hatası:', error);
+        } finally {
+            this._isEnriching = false; // Kilidi aç
         }
+    }
 
         processData(preservePage = false) {
             const safeDate = (val) => {
@@ -253,6 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const currentQuery = document.getElementById('taskSearchInput')?.value || document.getElementById('searchInput')?.value || '';
             // ESKİ: this.handleSearch(currentQuery, preservePage); // (Zaten eklemişsiniz gibi duruyor, emin olun)
             this.handleSearch(currentQuery, preservePage);
+            setTimeout(() => { this.enrichAllTasks(); }, 0);
         }
 
         // --- SIRALAMA (SORTING) FONKSİYONLARI ---
@@ -682,14 +680,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        showCreateAccrualModal(taskId) {
+        async showCreateAccrualModal(taskId) {
             this.currentTaskForAccrual = this.allTasks.find(t => t.id === taskId);
             if (!this.currentTaskForAccrual) return;
             this.accrualFormManager.reset();
-            let epatsDoc = null;
-            if (this.currentTaskForAccrual.details?.epatsDocument) {
-                epatsDoc = this.currentTaskForAccrual.details.epatsDocument;
+            
+            const getEpats = (t) => {
+                if (!t) return null;
+                if (t.details && Array.isArray(t.details.documents)) return t.details.documents.find(d => d.type === 'epats_document');
+                if (Array.isArray(t.documents)) return t.documents.find(d => d.type === 'epats_document');
+                return (t.details && t.details.epatsDocument) || t.epatsDocument || null;
+            };
+
+            let epatsDoc = getEpats(this.currentTaskForAccrual);
+            const parentId = this.currentTaskForAccrual.relatedTaskId || this.currentTaskForAccrual.associatedTaskId || this.currentTaskForAccrual.triggeringTaskId;
+            
+            if (!epatsDoc && parentId) {
+                let parent = this.allTasks.find(t => String(t.id) === String(parentId));
+                
+                // 🔥 ÇÖZÜM: Veritabanından Çek
+                if (!parent) {
+                    try {
+                        const parentSnap = await getDoc(doc(db, 'tasks', String(parentId)));
+                        if (parentSnap.exists()) parent = parentSnap.data();
+                    } catch (e) { console.warn('Parent fetch error:', e); }
+                }
+                epatsDoc = getEpats(parent);
             }
+            
             this.accrualFormManager.showEpatsDoc(epatsDoc);
             document.getElementById('createMyTaskAccrualModal').classList.add('show');
         }
@@ -782,9 +800,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-        // --- [GÜNCELLENDİ] Tahakkuk Tamamlama Mantığı ---
-        // Bu fonksiyonu async yaptık ki parent task veritabanından çekilebilsin
-        async openCompleteAccrualModal(taskId) {
+    async openCompleteAccrualModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
 
@@ -794,39 +810,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(this.completeTaskFormManager) {
                 this.completeTaskFormManager.reset();
                 
-                let epatsDoc = null;
+                const getEpats = (t) => {
+                    if (!t) return null;
+                    if (t.details && Array.isArray(t.details.documents)) return t.details.documents.find(d => d.type === 'epats_document');
+                    if (Array.isArray(t.documents)) return t.documents.find(d => d.type === 'epats_document');
+                    return (t.details && t.details.epatsDocument) || t.epatsDocument || null;
+                };
 
-                // 1. Önce kendi üzerindeki belgeye bak
-                if (task.details?.epatsDocument) {
-                    epatsDoc = task.details.epatsDocument;
-                } 
-                // 2. Yoksa ve bir üst işe bağlıysa (Parent Task)
-                else if (task.relatedTaskId) {
-                    // A) Önce eldeki listede ara
-                    let parent = this.allTasks.find(t => t.id === task.relatedTaskId);
+                let epatsDoc = getEpats(task);
+                const parentId = task.relatedTaskId || task.associatedTaskId || task.triggeringTaskId;
+
+                if (!epatsDoc && parentId) {
+                    let parent = this.allTasks.find(t => String(t.id) === String(parentId));
                     
-                    // B) Listede yoksa (başkasına atanmış olabilir), veritabanından tekil olarak çek
+                    // 🔥 ÇÖZÜM: Veritabanından Çek
                     if (!parent) {
                         try {
-                            const parentRef = doc(db, 'tasks', String(task.relatedTaskId));
-                            const parentSnap = await getDoc(parentRef);
+                            const parentSnap = await getDoc(doc(db, 'tasks', String(parentId)));
                             if (parentSnap.exists()) {
                                 parent = parentSnap.data();
                             }
-                        } catch (e) {
-                            console.warn('Parent task fetch error:', e);
-                        }
+                        } catch (e) { console.warn('Parent task fetch error:', e); }
                     }
-                    
-                    // Parent bulunduysa belgesini al
-                    if (parent?.details?.epatsDocument) {
-                        epatsDoc = parent.details.epatsDocument;
-                    }
+                    epatsDoc = getEpats(parent);
                 }
                 
-                // Form yöneticisine belgeyi gönder
                 this.completeTaskFormManager.showEpatsDoc(epatsDoc);
-                // ✅ targetAccrualId varsa hedef tahakkuku çekip forma bas
+                
                 const targetAccrualId = task.details?.targetAccrualId;
                 if (targetAccrualId) {
                     try {
@@ -839,7 +849,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         console.warn('Target accrual fetch error:', e);
                     }
                 }
-
             }
 
             const modal = document.getElementById('completeAccrualTaskModal');
