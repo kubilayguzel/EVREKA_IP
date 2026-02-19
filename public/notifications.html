@@ -1146,7 +1146,6 @@ async function getApplicantName(notification) {
   }
 }
 
-// notifications.html dosyanızdaki mevcut renderCurrentPage fonksiyonunu bununla değiştirin:
 async function renderCurrentPage() {
   if (!pagination) return;
 
@@ -1164,7 +1163,50 @@ async function renderCurrentPage() {
     return;
   }
 
-  // Tüm satırları paralel olarak işle
+  // 🔥 YENİ EKLENEN KOD: Ekranda görünen 20 kaydın tüm ihtiyaçlarını (Marka, Kişi, Dosya) TEK SEFERDE çekip önbelleğe (dbCache) atıyoruz.
+  const ipRecordIds = new Set();
+  const personIds = new Set();
+  const taskIds = new Set();
+  const pdfIds = new Set();
+
+  for (const notif of slice) {
+      if (notif.ipRecordId) ipRecordIds.add(notif.ipRecordId);
+      if (notif.relatedIpRecordId) ipRecordIds.add(notif.relatedIpRecordId);
+      if (notif.clientId) personIds.add(notif.clientId);
+      if (typeof notif.taskOwner === 'string') personIds.add(notif.taskOwner);
+      if (Array.isArray(notif.taskOwner) && typeof notif.taskOwner[0] === 'string') personIds.add(notif.taskOwner[0]);
+      if (notif.dependentTaskId) taskIds.add(notif.dependentTaskId);
+      if (notif.associatedTaskId) taskIds.add(notif.associatedTaskId);
+      if (notif.sourceDocumentId) pdfIds.add(notif.sourceDocumentId);
+  }
+
+  // 10'arlı gruplar halinde Firestore "in" sorgusu atma fonksiyonu
+  async function prefetchChunks(collectionName, idsSet) {
+      const ids = Array.from(idsSet).filter(id => id && !dbCache.has(`${collectionName}/${id}`));
+      if (ids.length === 0) return;
+      
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
+
+      await Promise.all(chunks.map(async (chunk) => {
+          try {
+              const q = query(collection(db, collectionName), where(documentId(), "in", chunk));
+              const snap = await getDocs(q);
+              snap.forEach(doc => { dbCache.set(`${collectionName}/${doc.id}`, doc.data()); });
+          } catch (e) { console.warn(`Prefetch hatası (${collectionName}):`, e); }
+      }));
+  }
+
+  // Arka planda tüm verileri paralel (aynı anda) çek
+  await Promise.all([
+      prefetchChunks("ipRecords", ipRecordIds),
+      prefetchChunks("persons", personIds),
+      prefetchChunks("tasks", taskIds),
+      prefetchChunks("unindexed_pdfs", pdfIds)
+  ]);
+  // 🔥 YENİ EKLENEN KODUN SONU
+
+  // Tüm satırları paralel olarak işle (Aşağıdaki kısımlar sizin kodunuzla tamamen AYNIDIR)
   const rows = await Promise.all(slice.map(async (notification) => {
     const tr = document.createElement('tr');
 
