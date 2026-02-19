@@ -509,7 +509,7 @@ async function resolveType(notification) {
 
     if (notification.sourceDocumentId) {
       try {
-        // 🔥 OPTİMİZASYON: Cache kullanıldı
+        // 🔥 AĞA ÇIKMAK YERİNE CACHE
         const docData = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
         if (docData && docData.associatedTransactionId && docData.ipRecordId) {
           const transactionDoc = await getDoc(doc(db, "ipRecords", docData.ipRecordId, "transactions", docData.associatedTransactionId));
@@ -517,55 +517,39 @@ async function resolveType(notification) {
             if (transactionDoc.data().type) return String(transactionDoc.data().type);
           }
         }
-      } catch (error) { console.warn('Transaction type query error:', error); }
+      } catch (error) { }
     }
 
     let ipRecordId = await resolveIpRecordId(notification);
     if (ipRecordId) {
       try {
-        // 🔥 OPTİMİZASYON: Cache kullanıldı
+        // Zaten Cache kullanıyor
         const ipData = await getDocFromDb("ipRecords", ipRecordId);
         if (ipData && ipData.mainProcessType) return String(ipData.mainProcessType);
-      } catch (error) { console.warn('IP record type query error:', error); }
+      } catch (error) { }
     }
 
     return '-';
-  } catch (error) {
-    console.error('resolveType error:', error);
-    return '-';
-  }
+  } catch (error) { return '-'; }
 }
 
 async function resolveDocumentInfo(notification) {
   try {
-    // Önce izleme raporunu kontrol et
     if (notification?.supplementaryAttachment) {
       const sa = notification.supplementaryAttachment;
-      return {
-        fileName: sa.fileName || "izleme_raporu.docx",
-        fileUrl: sa.url || sa.downloadURL || sa.fileUrl || null
-      };
+      return { fileName: sa.fileName || "izleme_raporu.docx", fileUrl: sa.url || sa.downloadURL || sa.fileUrl || null };
     }
 
     if (!notification?.sourceDocumentId) return { fileName:"-", fileUrl:null };
 
-    // 1) unindexed_pdfs'te dene
-    let d = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
-    if (d.exists()) {
-      const x = d.data() || {};
-      return { fileName: x.fileName || "-", fileUrl: x.fileUrl || null };
-    }
+    // 🔥 1) AĞA ÇIKMAK YERİNE CACHE'TEN DENE
+    let x = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+    if (x) return { fileName: x.fileName || "-", fileUrl: x.fileUrl || null };
 
-    // 2) indexed_documents'te dene ve eşleşen unindexed_pdfs'i bul
-    const idx = await getDoc(doc(db, "indexed_documents", notification.sourceDocumentId));
-    if (idx.exists()) {
-      const ix = idx.data() || {};
-      const q = await getDocs(query(
-        collection(db, "unindexed_pdfs"),
-        where("evrakNo", "==", ix.etebsEvrakNo || null),
-        where("userId", "==", ix.userId || null),
-        limit(1)
-      ));
+    // 🔥 2) indexed_documents İÇİN DE CACHE KULLAN
+    const ix = await getDocFromDb("indexed_documents", notification.sourceDocumentId);
+    if (ix) {
+      const q = await getDocs(query(collection(db, "unindexed_pdfs"), where("evrakNo", "==", ix.etebsEvrakNo || null), limit(1)));
       if (!q.empty) {
         const ux = q.docs[0].data() || {};
         return { fileName: ux.fileName || "-", fileUrl: ux.fileUrl || null };
@@ -573,132 +557,81 @@ async function resolveDocumentInfo(notification) {
     }
 
     return { fileName:"-", fileUrl:null };
-  } catch (e) {
-    console.warn('resolveDocumentInfo fallback error:', e);
-    return { fileName:"-", fileUrl:null };
-  }
+  } catch (e) { return { fileName:"-", fileUrl:null }; }
 }
 
-// ---------- Attachment helper (unified: task->EPATS + unindexed_pdfs + izleme raporları) ----------
 async function getAttachmentPreviews(notification) {
-  // Returns array of { fileName, fileUrl } items for UI display.
   const previews = [];
+  const safeName = (name, defaultName = "ek.pdf") => String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
 
-  const safeName = (name, defaultName = "ek.pdf") =>
-    String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
-
-  // A) Marka İzleme Raporu (generateSimilarityReport) - ÖNCELİKLİ KONTROL
-  // Backend'de supplementaryAttachment, files array ve attachmentUrl olarak 3 farklı yerde tutuluyor
+  // A) Marka İzleme Raporu
   if (notification?.supplementaryAttachment) {
     try {
       const sa = notification.supplementaryAttachment;
       const fileUrl = sa.url || sa.downloadURL || sa.fileUrl || null;
       const fileName = safeName(sa.fileName, "izleme_raporu.docx");
-      if (fileUrl) {
-        previews.push({ fileName, fileUrl });
-      }
-    } catch (e) {
-      console.warn("getAttachmentPreviews supplementaryAttachment error:", e);
-    }
+      if (fileUrl) previews.push({ fileName, fileUrl });
+    } catch (e) {}
   } else if (notification?.files && Array.isArray(notification.files) && notification.files.length > 0) {
-    // Fallback: files array'inden al (aynı izleme raporu burada da olabilir)
     try {
       notification.files.forEach(file => {
         const fileUrl = file.url || file.downloadUrl || file.downloadURL || file.fileUrl || null;
-        const fileName = safeName(file.fileName, "ek_dosya.pdf");
-        // Mükerrer kontrol
-        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-          previews.push({ fileName, fileUrl });
-        }
+        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) previews.push({ fileName: safeName(file.fileName, "ek_dosya.pdf"), fileUrl });
       });
-    } catch (e) {
-      console.warn("getAttachmentPreviews files array error:", e);
-    }
+    } catch (e) {}
   } else if (notification?.attachmentUrl) {
-    // Son fallback: attachmentUrl (dosya adı tahmin et)
     try {
       const fileUrl = notification.attachmentUrl;
-      // URL'den dosya adını çıkarmaya çalış
       const urlParts = fileUrl.split('/');
-      const lastPart = urlParts[urlParts.length - 1];
-      const fileName = safeName(
-        decodeURIComponent(lastPart.split('?')[0]), 
-        "izleme_raporu.docx"
-      );
-      if (!previews.some(p => p.fileUrl === fileUrl)) {
-        previews.push({ fileName, fileUrl });
-      }
-    } catch (e) {
-      console.warn("getAttachmentPreviews attachmentUrl error:", e);
-    }
+      const fileName = safeName(decodeURIComponent(urlParts[urlParts.length - 1].split('?')[0]), "izleme_raporu.docx");
+      if (!previews.some(p => p.fileUrl === fileUrl)) previews.push({ fileName, fileUrl });
+    } catch (e) {}
   }
 
-  // B) Task -> EPATS (createUniversalNotificationOnTaskCompleteV2)
+  // B) Task -> EPATS (🔥 AĞA ÇIKMAK YERİNE CACHE KULLANIYORUZ)
   if (notification?.associatedTaskId) {
     try {
-      const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
-      if (tSnap.exists()) {
-        const epats = (tSnap.data()?.details || {}).epatsDocument || null;
+      const tData = await getDocFromDb("tasks", notification.associatedTaskId);
+      if (tData) {
+        const epats = (tData.details || {}).epatsDocument || null;
         if (epats) {
           const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
-          const fileName = safeName(epats.name, "epats.pdf");
-          if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-            previews.push({ fileName, fileUrl: fileUrl || null });
-          }
+          if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) previews.push({ fileName: safeName(epats.name, "epats.pdf"), fileUrl });
         }
       }
-    } catch (e) {
-      console.warn("getAttachmentPreviews task EPATS error:", e);
-    }
+    } catch (e) {}
   }
 
-  // C) unindexed_pdfs (createMailNotificationOnDocumentStatusChangeV2)
+  // C) unindexed_pdfs (🔥 AĞA ÇIKMAK YERİNE CACHE KULLANIYORUZ)
   if (notification?.sourceDocumentId) {
     try {
-      const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
-      if (u.exists()) {
-        const d = u.data() || {};
-        const fileName = safeName(d.fileName, "document.pdf");
+      const d = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+      if (d) {
         const fileUrl  = d.fileUrl || d.downloadURL || null;
-        // avoid duplicates by url
-        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-          previews.push({ fileName, fileUrl });
-        }
+        if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) previews.push({ fileName: safeName(d.fileName, "document.pdf"), fileUrl });
       } else {
-        // Optional: indexed_documents -> find matching unindexed_pdfs by (evrakNo, userId)
         try {
-          const idx = await getDoc(doc(db, "indexed_documents", notification.sourceDocumentId));
-          if (idx.exists()) {
-            const ix = idx.data() || {};
-            const qy = query(
-              collection(db, "unindexed_pdfs"),
-              where("evrakNo", "==", ix.etebsEvrakNo || null),
-              where("userId", "==", ix.userId || null),
-              limit(1)
-            );
+          const ix = await getDocFromDb("indexed_documents", notification.sourceDocumentId);
+          if (ix) {
+            const qy = query(collection(db, "unindexed_pdfs"), where("evrakNo", "==", ix.etebsEvrakNo || null), where("userId", "==", ix.userId || null), limit(1));
+            // Indexli dökümanı bulmak için mecburen ağa çıkıyoruz (Çok nadir bir durum)
             const snap = await getDocs(qy);
             if (!snap.empty) {
               const ux = snap.docs[0].data() || {};
-              const fileName = safeName(ux.fileName, "document.pdf");
               const fileUrl  = ux.fileUrl || ux.downloadURL || null;
-              if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) {
-                previews.push({ fileName, fileUrl });
-              }
+              if (fileUrl && !previews.some(p => p.fileUrl === fileUrl)) previews.push({ fileName: safeName(ux.fileName, "document.pdf"), fileUrl });
             }
           }
-        } catch (e) {
-          console.warn("getAttachmentPreviews indexed fallback error:", e);
-        }
+        } catch (e) {}
       }
-    } catch (e) {
-      console.warn("getAttachmentPreviews unindexed_pdfs error:", e);
-    }
+    } catch (e) {}
   }
 
   return previews;
 }
-    // ---------- Modals ----------
-    function showMissingInfo(notification) {
+
+// ---------- Modals ----------
+  function showMissingInfo(notification) {
       const modal = document.getElementById("missing-info-modal");
       const list = document.getElementById("mi-missing-list");
       list.innerHTML = "";
