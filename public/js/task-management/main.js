@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td><input type="checkbox" class="task-checkbox" value="${task.id}" ${this.selectedTaskIds.has(task.id) ? 'checked' : ''}></td>
                         <td>${task.id}</td>
                         <td>
-                            <div class="font-weight-bold text-primary">${task.relatedRecord}</div>
+                            <div class="font-weight-bold text-primary">${task.appNo}</div>
                             <div class="small text-dark">${task.recordTitle}</div>
                             <div class="small text-muted" style="font-size: 0.8em;">${task.applicantName}</div>
                         </td>
@@ -1124,7 +1124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dataToExport.forEach(task => {
                     worksheet.addRow({
                         id: task.id,
-                        relatedRecord: task.relatedRecord,
+                        relatedRecord: task.appNo,
                         taskTypeDisplay: task.taskTypeDisplay,
                         title: task.title || '-',
                         priority: task.priority,
