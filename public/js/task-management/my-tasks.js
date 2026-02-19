@@ -171,6 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 appNo,
                 recordTitleDisplay,
                 applicantName,
+                relatedRecordDisplay: appNo,
                 taskTypeDisplay,
                 statusText,
                 searchString,
