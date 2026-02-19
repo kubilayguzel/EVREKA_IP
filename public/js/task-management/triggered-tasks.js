@@ -106,7 +106,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 //    (placeholders gözükecek, sonra zenginleşecek)
                 this.allIpRecords = [];
                 this.allPersons = [];
-                this.ipRecordsMap = new Map();
                 this.personsMap = new Map();
 
                 this.processData(); // tabloyu hemen çiz (veriler eksikse "Yükleniyor..." vs görünebilir)
@@ -127,11 +126,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 		buildMaps() {
-			this.ipRecordsMap.clear();
-			(this.allIpRecords || []).forEach(r => {
-				const key = r?.id ? String(r.id).trim() : null;
-				if (key) this.ipRecordsMap.set(key, r);
-			});
 		}
 
 
@@ -368,8 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- ENTEGRASYON NOKTALARI (Shared Components) ---
 
-        // 1. TaskDetailManager Kullanımı
-        showTaskDetail(taskId) {
+        async showTaskDetail(taskId) { // <-- async eklendi
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
 
@@ -379,16 +372,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             title.textContent = 'Yükleniyor...';
             this.taskDetailManager.showLoading();
 
-			// İlişkili verileri bul (ID normalize)
-			const relatedId = task?.relatedIpRecordId ? String(task.relatedIpRecordId).trim() : '';
-			const ipRecord = relatedId ? this.ipRecordsMap.get(relatedId) : null;
-			const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
+            // 🔥 YENİ: Anlık IP Record Çekimi
+            let ipRecord = null;
+            if (task.relatedIpRecordId) {
+                try {
+                    const ipSnap = await getDoc(doc(db, 'ipRecords', String(task.relatedIpRecordId)));
+                    if (ipSnap.exists()) {
+                        ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                    } else {
+                        const suitSnap = await getDoc(doc(db, 'suits', String(task.relatedIpRecordId)));
+                        if (suitSnap.exists()) ipRecord = { id: suitSnap.id, ...suitSnap.data() };
+                    }
+                } catch(e) { console.warn("Kayıt detayı çekilemedi:", e); }
+            }
+
+            const transactionType = this.allTransactionTypes.find(t => String(t.id) === String(task.taskType));
             const assignedUser = task.assignedTo_email ? { email: task.assignedTo_email } : null;
             const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
 
             title.textContent = `İş Detayı (${task.id})`;
             
-            // --- MANAGER RENDER ÇAĞRISI ---
             this.taskDetailManager.render(task, {
                 ipRecord, transactionType, assignedUser, accruals: relatedAccruals
             });
