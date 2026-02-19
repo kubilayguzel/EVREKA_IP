@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td data-field="operationalDue" data-date="${task.operationalDue}">${task.operationalDueDisplay}</td>
                         <td data-field="officialDue" data-date="${task.officialDue}">${task.officialDueDisplay}</td>
                         <td><span class="status-badge ${statusClass}">${task.statusText}</span></td>
-                        <td>${this.getActionButtonsHtml(task)}</td>
+                        <td class="text-center" style="overflow:visible;">${this.getActionButtonsHtml(task)}</td>
                     </tr>
                 `;
             });
@@ -404,6 +404,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.updateSortIcons();
             this.attachCheckboxListeners(); // YENİ: Checkbox dinleyicilerini bağla
+            if (window.$) $('.dropdown-toggle').dropdown();
 
             if (window.DeadlineHighlighter && typeof window.DeadlineHighlighter.refresh === 'function') {
                 setTimeout(() => window.DeadlineHighlighter.refresh('taskManagement'), 50);
@@ -462,28 +463,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             const safeStatus = (task.status || '').toString();
             const isCompleted = safeStatus === 'completed';
             const isAccrualTask = (String(task.taskType) === '53' || task.taskType === 'accrual_creation');
-
-            let html = `<div class="action-buttons-wrapper" style="display:flex; gap:5px;">`;
-            html += `<button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>`;
-
             const hideModificationButtons = isAccrualTask && isCompleted;
 
+            // 1. Her zaman görünen buton (Görüntüle)
+            let buttonsHtml = `<button class="btn btn-sm btn-light text-primary view-btn action-btn" data-id="${task.id}" title="Görüntüle"><i class="fas fa-eye" style="pointer-events: none;"></i></button>`;
+
+            // 2. Modifikasyon Butonları
             if (!hideModificationButtons) {
-                html += `
-                    <button class="action-btn edit-btn" data-id="${task.id}">Düzenle</button>
-                    <button class="action-btn delete-btn" data-id="${task.id}">Sil</button>
+                buttonsHtml += `
+                    <button class="btn btn-sm btn-light text-warning edit-btn action-btn" data-id="${task.id}" title="Düzenle"><i class="fas fa-edit" style="pointer-events: none;"></i></button>
+                    <button class="btn btn-sm btn-light text-danger delete-btn action-btn" data-id="${task.id}" title="Sil"><i class="fas fa-trash-alt" style="pointer-events: none;"></i></button>
                 `;
             }
 
+            // 3. Atama Butonu
             if (safeStatus !== 'cancelled' && !hideModificationButtons) {
-                html += `<button class="action-btn assign-btn" data-id="${task.id}">Ata</button>`;
+                buttonsHtml += `<button class="btn btn-sm btn-light text-info assign-btn action-btn" data-id="${task.id}" title="Başkasına Ata"><i class="fas fa-user-plus" style="pointer-events: none;"></i></button>`;
             }
 
+            // 4. Tahakkuk Butonu
             if (!isAccrualTask) {
-                html += `<button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk</button>`;
+                buttonsHtml += `<button class="btn btn-sm btn-light text-success add-accrual-btn action-btn" data-id="${task.id}" title="Ek Tahakkuk Ekle"><i class="fas fa-file-invoice-dollar" style="pointer-events: none;"></i></button>`;
             }
-            html += `</div>`;
-            return html;
+
+            // Dış Kaplama (Dropdown Wrapper)
+            return `
+            <div class="dropdown">
+                <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-ellipsis-v" style="pointer-events: none;"></i>
+                </button>
+                
+                <div class="dropdown-menu dropdown-menu-right shadow-sm border-0 p-2" style="min-width: auto;">
+                    <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
+                        ${buttonsHtml}
+                    </div>
+                </div>
+            </div>
+            `;
         }
 
         // --- EVENT LISTENERS ---
