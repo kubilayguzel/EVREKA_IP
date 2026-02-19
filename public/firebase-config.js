@@ -876,7 +876,16 @@ export const personService = {
         if (!isFirebaseAvailable) return { success: true, data: [] };
         try {
             const q = query(collection(db, 'persons'), orderBy('name', 'asc'));
-            const querySnapshot = await getDocs(q);
+            
+            // YENİ: Önce internete gitmeden Önbelleği (Cache) dene
+            let querySnapshot;
+            try {
+                querySnapshot = await getDocsFromCache(q);
+                if (querySnapshot.empty) querySnapshot = await getDocs(q);
+            } catch (e) {
+                querySnapshot = await getDocs(q);
+            }
+
             return { success: true, data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
         } catch (error) {
             return { success: false, error: error.message };
@@ -1360,7 +1369,16 @@ export const transactionTypeService = {
         if (!isFirebaseAvailable) return { success: true, data: [] };
         try {
             const q = query(this.collectionRef, orderBy('name', 'asc'));
-            const querySnapshot = await getDocs(q);
+            
+            // YENİ: Önce internete gitmeden Önbelleği (Cache) dene
+            let querySnapshot;
+            try {
+                querySnapshot = await getDocsFromCache(q);
+                if (querySnapshot.empty) querySnapshot = await getDocs(q);
+            } catch (e) {
+                querySnapshot = await getDocs(q);
+            }
+
             return { success: true, data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
         } catch (error) {
             console.error("İşlem tipleri yüklenirken hata:", error);
