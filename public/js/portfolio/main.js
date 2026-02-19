@@ -325,8 +325,23 @@ class PortfolioController {
                 try {
                     if (this.state.activeTab === 'litigation' && this.dataManager.litigationRows.length === 0) {
                         await this.dataManager.loadLitigationData();
-                    } else if (this.state.activeTab === 'objections' && this.dataManager.objectionRows.length === 0) {
-                        await this.dataManager.loadObjectionRows();
+                    } else if (this.state.activeTab === 'objections') {
+                        // 1. Önce Hızlı Yükleme (Cache veya RAM'den saniyesinde getir)
+                        if (this.dataManager.objectionRows.length === 0) {
+                            await this.dataManager.loadObjectionRows();
+                        }
+                        
+                        // 2. Sessiz Güncelleme (Stale-While-Revalidate Mantığı)
+                        // Arka planda Firebase'den güncel veriyi çek, gelince tabloyu hissettirmeden güncelle
+                        setTimeout(async () => {
+                            await this.dataManager.loadObjectionRows(true); // forceRefresh = true
+                            
+                            // Kullanıcı hala itirazlar sekmesindeyse tabloyu taze veriyle tekrar çiz
+                            if (this.state.activeTab === 'objections') {
+                                this.render();
+                                this.updateSelectAllCheckbox();
+                            }
+                        }, 500); 
                     }
                 } catch (err) {
                     console.error("Sekme verisi yüklenemedi:", err);
