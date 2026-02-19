@@ -530,6 +530,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const dueDateISO = task.dueDateObj ? task.dueDateObj.toISOString().slice(0,10) : '';
                 const officialDueISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
+                // 🔥 YENİ: Dropdown İşlem Menüsü
+                const actionMenuHtml = `
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light text-secondary rounded-circle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-ellipsis-v" style="pointer-events: none;"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu dropdown-menu-right shadow-sm border-0 p-2" style="min-width: auto;">
+                            <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
+                                <button class="btn btn-sm btn-light text-primary view-btn action-btn" data-id="${task.id}" data-action="view" title="Görüntüle">
+                                    <i class="fas fa-eye" style="pointer-events: none;"></i>
+                                </button>
+                                <button class="btn btn-sm btn-light text-warning edit-btn action-btn" data-id="${task.id}" data-action="edit" title="Düzenle">
+                                    <i class="fas fa-edit" style="pointer-events: none;"></i>
+                                </button>
+                                <button class="btn btn-sm btn-light text-info assign-btn action-btn" data-id="${task.id}" title="Başkasına Ata">
+                                    <i class="fas fa-user-plus" style="pointer-events: none;"></i>
+                                </button>
+                                <button class="btn btn-sm btn-light text-success add-accrual-btn action-btn" data-id="${task.id}" title="Ek Tahakkuk Ekle">
+                                    <i class="fas fa-file-invoice-dollar" style="pointer-events: none;"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -551,11 +576,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${formatToTRDate(task.createdAtObj)}</td>
                     <td>${task.assignedAtText}</td>
                     <td><span class="status-badge ${statusClass}">${task.statusText}</span></td>
-                    <td>
-                        <button class="action-btn view-btn" data-id="${task.id}" data-action="view"><i class="fas fa-eye"></i></button>
-                        <button class="action-btn edit-btn" data-id="${task.id}" data-action="edit"><i class="fas fa-edit"></i></button>
-                        <button class="action-btn assign-btn" data-id="${task.id}" title="Başkasına Ata"><i class="fas fa-user-plus"></i></button>
-                        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk</button>
+                    <td class="text-center" style="overflow:visible;">
+                        ${actionMenuHtml}
                     </td>
                 `;
                 tableBody.appendChild(row);
@@ -563,6 +585,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.updateSortIcons();
             this.attachCheckboxListeners(); // YENİ: Dinleyicileri ekle
+            if (window.$) $('.dropdown-toggle').dropdown();
 
             if (window.DeadlineHighlighter) {
                 setTimeout(() => window.DeadlineHighlighter.refresh('islerim'), 50);
