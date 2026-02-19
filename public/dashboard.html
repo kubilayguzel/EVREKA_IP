@@ -288,11 +288,50 @@
             renderApplicationTrendChart(records = []) {
                 const ctx = document.getElementById('trendChart').getContext('2d');
                 const monthlyData = {};
+                
                 records.forEach(record => {
-                    if (record.applicationDate) {
-                        const month = new Date(record.applicationDate).toISOString().slice(0, 7);
-                        if(!monthlyData[month]) monthlyData[month] = 0;
-                        monthlyData[month]++;
+                    let rawDate = record.applicationDate;
+                    
+                    // Veri boş veya tire ise direkt atla
+                    if (rawDate && rawDate !== '-' && rawDate !== '') {
+                        let dateObj = null;
+
+                        try {
+                            // 1. Firebase Timestamp Objeleriyse
+                            if (typeof rawDate.toDate === 'function') {
+                                dateObj = rawDate.toDate();
+                            } 
+                            // 2. Zaten Javascript Date objesiyse
+                            else if (rawDate instanceof Date) {
+                                dateObj = rawDate;
+                            } 
+                            // 3. Metin Formatındaysa
+                            else if (typeof rawDate === 'string') {
+                                if (rawDate.includes('.')) {
+                                    // Türkiye formatı: "25.10.2023" -> Yıl, Ay(0-11), Gün
+                                    const parts = rawDate.split('.');
+                                    if (parts.length === 3) {
+                                        dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+                                    }
+                                } else {
+                                    // Standart ISO veya İngilizce format
+                                    dateObj = new Date(rawDate);
+                                }
+                            } 
+                            // 4. Unix Timestamp (Sayı) ise
+                            else if (typeof rawDate === 'number') {
+                                dateObj = new Date(rawDate);
+                            }
+
+                            // Tarih başarıyla oluşturulduysa ve "Invalid Date" değilse işleme al
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                                const month = dateObj.toISOString().slice(0, 7); // YYYY-MM
+                                if(!monthlyData[month]) monthlyData[month] = 0;
+                                monthlyData[month]++;
+                            }
+                        } catch (e) {
+                            console.warn("Grafik için geçersiz tarih atlandı:", rawDate);
+                        }
                     }
                 });
 
@@ -315,6 +354,7 @@
                 });
             }
 
+
             processFinancialData(accruals = []) {
                 const today = new Date();
                 const eightWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 56);
@@ -329,33 +369,75 @@
                 const unpaidByClient = {};
 
                 accruals.forEach(accrual => {
-                    const serviceInvoicePartyName = accrual.serviceInvoiceParty?.name || 'Bilinmeyen Taraf';
-                    const totalAmount = accrual.totalAmount || 0;
+                    // Cari taraf ismini belirle (Service Invoice Party yoksa TP Invoice Party kullan)
+                    const clientName = accrual.serviceInvoiceParty?.name || accrual.tpInvoiceParty?.name || 'Bilinmeyen Taraf';
                     
-                    if (accrual.status === 'paid') {
-                        const paymentDate = accrual.paymentDate ? new Date(accrual.paymentDate) : new Date(accrual.updatedAt);
+                    let actualPaid = 0;
+                    let totalTarget = 0;
+                    let actualUnpaid = 0;
+
+                    // 1. HEDEF VE ÖDENEN TUTARLARI HESAPLA (AccrualDataManager Mantığı)
+                    if (accrual.isForeignTransaction || accrual.foreignStatus) {
+                        // A. Yurtdışı İşlemleri
+                        totalTarget = (accrual.officialFee?.amount || 0) + (accrual.serviceFee?.amount || 0);
+                        if (totalTarget === 0) totalTarget = accrual.totalAmount || 0; // Eski kayıtlar için destek
+                        
+                        actualPaid = (accrual.foreignPaidOfficialAmount || 0) + (accrual.foreignPaidServiceAmount || 0);
+                        
+                        // Eski verilerde manuel status paid yapılmış ama miktar girilmemişse:
+                        if (accrual.foreignStatus === 'paid' && actualPaid === 0) actualPaid = totalTarget;
+
+                    } else {
+                        // B. Yurtiçi İşlemleri
+                        const vatMultiplier = 1 + ((accrual.vatRate || 0) / 100);
+                        const offTarget = accrual.applyVatToOfficialFee ? (accrual.officialFee?.amount || 0) * vatMultiplier : (accrual.officialFee?.amount || 0);
+                        const srvTarget = (accrual.serviceFee?.amount || 0) * vatMultiplier;
+                        
+                        totalTarget = offTarget + srvTarget;
+                        if (totalTarget === 0) totalTarget = accrual.totalAmount || 0; // Eski kayıtlar için destek
+                        
+                        actualPaid = (accrual.paidOfficialAmount || 0) + (accrual.paidServiceAmount || 0);
+                        
+                        // Eski verilerde manuel status paid yapılmış ama miktar girilmemişse:
+                        if (accrual.status === 'paid' && actualPaid === 0) actualPaid = totalTarget;
+                    }
+
+                    // Kalan Borcu Hesapla
+                    actualUnpaid = Math.max(0, totalTarget - actualPaid);
+
+                    // 2. TAHSİLATLARI (GELİRLERİ) İŞLE
+                    if (actualPaid > 0) {
+                        // Ödeme tarihi varsa onu, yoksa güncellenme tarihini baz al
+                        const paymentDate = accrual.paymentDate || accrual.foreignPaymentDate 
+                            ? new Date(accrual.paymentDate || accrual.foreignPaymentDate) 
+                            : new Date(accrual.updatedAt || accrual.createdAt);
+
                         if (paymentDate >= eightWeeksAgo) {
-                            totalIncomeAmount += totalAmount;
+                            totalIncomeAmount += actualPaid;
                             const weekKey = this.getWeekNumber(paymentDate);
-                            weeklyIncome[weekKey] = (weeklyIncome[weekKey] || 0) + totalAmount;
-
-                            incomeByClient[serviceInvoicePartyName] = (incomeByClient[serviceInvoicePartyName] || 0) + totalAmount;
+                            weeklyIncome[weekKey] = (weeklyIncome[weekKey] || 0) + actualPaid;
+                            incomeByClient[clientName] = (incomeByClient[clientName] || 0) + actualPaid;
                         }
-                    } else if (accrual.status === 'unpaid') {
-                        const createdAt = new Date(accrual.createdAt);
-                        if (createdAt >= eightWeeksAgo) {
-                            totalUnpaidAmount += totalAmount;
-                            const weekKey = this.getWeekNumber(createdAt);
-                            weeklyUnpaid[weekKey] = (weeklyUnpaid[weekKey] || 0) + totalAmount;
+                    }
 
-                            unpaidByClient[serviceInvoicePartyName] = (unpaidByClient[serviceInvoicePartyName] || 0) + totalAmount;
+                    // 3. ÖDENMEYEN ALACAKLARI (BORÇLARI) İŞLE
+                    if (actualUnpaid > 0) {
+                        const createdAt = accrual.createdAt ? new Date(accrual.createdAt) : new Date();
+                        
+                        if (createdAt >= eightWeeksAgo) {
+                            totalUnpaidAmount += actualUnpaid;
+                            const weekKey = this.getWeekNumber(createdAt);
+                            weeklyUnpaid[weekKey] = (weeklyUnpaid[weekKey] || 0) + actualUnpaid;
+                            unpaidByClient[clientName] = (unpaidByClient[clientName] || 0) + actualUnpaid;
                         }
                     }
                 });
 
+                // Ekrana Yazdır
                 document.getElementById('totalIncome').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(totalIncomeAmount);
                 document.getElementById('totalUnpaid').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(totalUnpaidAmount);
 
+                // Grafikleri ve Listeleri Çiz
                 this.renderFinancialTrendCharts(weeklyIncome, weeklyUnpaid, eightWeeksAgo);
                 this.renderTopClients(incomeByClient, 'topIncomeClients');
                 this.renderTopClients(unpaidByClient, 'topUnpaidClients');
