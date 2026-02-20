@@ -865,13 +865,20 @@ export const createObjectionTask = onCall(
                   const personDoc = await adminDb.collection('persons').doc(clientId).get();
                   if (personDoc.exists) {
                     const personData = personDoc.data();
-                    taskData.details.relatedParty.name = personData.name || 'İzlenen Marka Sahibi';
+                    const realName = personData.name || personData.companyName || 'İzlenen Marka Sahibi';
+                    
+                    taskData.details.relatedParty.name = realName;
                     taskData.details.relatedParty.email = personData.email || null;
                     taskData.details.relatedParty.phone = personData.phone || null;
+                    
+                    // YENİ EKLENEN SATIR: Listelerde görünmesi için ana alanı güncelliyoruz
+                    taskData.iprecordApplicantName = realName; 
                   }
                 } catch (e) {
                   logger.warn('⚠️ İtiraz sahibi bilgisi details\'e eklenemedi:', e);
                   taskData.details.relatedParty.name = 'İzlenen Marka Sahibi';
+                  // YENİ EKLENEN SATIR (Hata durumu için fallback)
+                  taskData.iprecordApplicantName = 'İzlenen Marka Sahibi';
                 }
               }
 
