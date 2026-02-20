@@ -5163,11 +5163,21 @@ export const generateSimilarityReport = onCall(
               source: "bulletin_watch_system",
               assignedTo_uid: selcanUserId,
               assignedTo_email: selcanUserEmail,
+              
+              // 1. Mail gönderici fonksiyonun (Nodemailer) eki görebilmesi için:
+              taskAttachments: [{
+                name: reportFileName,
+                storagePath: storagePath,
+                url: downloadURL
+              }],
+              
+              // 2. Arayüzde (UI) dosyanın indirilebilir görünmesi için (signedUrl hatası düzeltildi):
               files: [{ 
                 fileName: reportFileName, 
                 storagePath: storagePath, 
-                url: signedUrl 
+                url: downloadURL 
               }],
+              
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
