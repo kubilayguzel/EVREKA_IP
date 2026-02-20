@@ -4773,7 +4773,12 @@ export const performTrademarkSimilaritySearch = onCall(
 
       await Promise.all(promises);
       
-      logger.info(`✅ ${promises.length} adet Worker tetiklendi.`);
+      // YENİ: Başarıyla oluşturulan gerçek worker sayısını Firestore'da güncelle
+      await adminDb.collection('searchProgress').doc(currentJobId).update({
+          totalChunks: promises.length
+      });
+      
+      logger.info(`✅ ${promises.length} adet Worker tetiklendi ve Firestore güncellendi.`);
 
       return { 
           success: true, 
