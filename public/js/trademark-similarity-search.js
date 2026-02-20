@@ -1194,6 +1194,7 @@ const performSearch = async () => {
     const monitoredMarksPayload = filteredMonitoringTrademarks.map(tm => ({
         id: tm.id,
         markName: (tm.title || tm.markName || '').trim() || 'BELİRSİZ_MARKA',
+        searchMarkName: tm.searchMarkName || '', // <--- EKSİK OLAN VE EKLENEN SATIR
         brandTextSearch: tm.brandTextSearch || [], 
         niceClassSearch: tm.niceClassSearch || [],
         goodsAndServicesByClass: tm.goodsAndServicesByClass || []
