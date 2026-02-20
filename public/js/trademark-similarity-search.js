@@ -1469,38 +1469,65 @@ const buildReportData = async (results) => {
     const reportData = [];
     
     for (const r of results) {
-        const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+        const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId) || {};
         let ipData = null;
         let bulletinDateValue = "-";
 
-        // 1. İlişkili IP Kaydını Çek
-        if (monitoredTm?.ipRecordId || monitoredTm?.sourceRecordId) {
+        // 1. İlişkili IP Kaydını Çek (ÖNCELİK: applicationNumber üzerinden arama)
+        const appNoToSearch = monitoredTm.applicationNumber || monitoredTm.applicationNo;
+        if (appNoToSearch) {
+            try {
+                const ipQuery = query(collection(db, 'ipRecords'), where('applicationNumber', '==', appNoToSearch), limit(1));
+                const ipSnap = await getDocs(ipQuery);
+                if (!ipSnap.empty) {
+                    ipData = ipSnap.docs[0].data();
+                }
+            } catch (e) { console.error("IP Record fetch by appNo error:", e); }
+        }
+        
+        // Eğer applicationNumber ile bulunamadıysa ID ile dene (Yedek)
+        if (!ipData && (monitoredTm.ipRecordId || monitoredTm.sourceRecordId)) {
             try {
                 const targetId = monitoredTm.ipRecordId || monitoredTm.sourceRecordId;
                 const ipDoc = await getDoc(doc(db, 'ipRecords', targetId));
                 if (ipDoc.exists()) ipData = ipDoc.data();
-            } catch (e) { console.error("IP Record fetch error:", e); }
+            } catch (e) { console.error("IP Record fetch by ID error:", e); }
         }
 
-        // 2. Bülten Tarihini Çek
-        if (r.bulletinId) {
+        // 1.5. Bültendeki Markanın (Hit) Tam Bilgisini Çek (Sahip bilgisi için)
+        // Arama indeksi (NDJSON) içinde sahip bilgisi olmadığı için asıl tablodan çekiyoruz.
+        let hitHolders = r.holders || [];
+        if (!hitHolders || hitHolders.length === 0) {
             try {
-                const bulletinDoc = await getDoc(doc(db, 'trademarkBulletins', r.bulletinId));
-                if (bulletinDoc.exists()) {
-                    const bulletinData = bulletinDoc.data();
-                    bulletinDateValue = bulletinData.bulletinDate || r.bulletinDate || r.applicationDate || "-";
-                } else {
-                    bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+                const hitDocId = r.objectID || r.id; 
+                if (hitDocId) {
+                    const hitDoc = await getDoc(doc(db, 'trademarkBulletinRecords', hitDocId));
+                    if (hitDoc.exists()) {
+                        hitHolders = hitDoc.data().holders || [];
+                    }
+                } else if (r.applicationNo) {
+                    const hitQuery = query(collection(db, 'trademarkBulletinRecords'), where('applicationNo', '==', r.applicationNo), limit(1));
+                    const hitSnap = await getDocs(hitQuery);
+                    if (!hitSnap.empty) {
+                        hitHolders = hitSnap.docs[0].data().holders || [];
+                    }
                 }
-            } catch (e) { 
-                console.error("Bulletin fetch error:", e);
-                bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+            } catch (e) { console.error("Hit record fetch error:", e); }
+        }
+
+        // 2. Bülten Tarihini Çek (ID'den '484_12012026' okuma)
+        if (r.bulletinId) {
+            const parts = String(r.bulletinId).split('_');
+            if (parts.length > 1 && parts[1].length >= 8) {
+                bulletinDateValue = parts[1].replace(/(\d{2})(\d{2})(\d{4})/, '$1.$2.$3');
+            } else {
+                bulletinDateValue = r.bulletinDate || "-";
             }
         } else {
-            bulletinDateValue = r.bulletinDate || r.applicationDate || "-";
+            bulletinDateValue = r.bulletinDate || "-";
         }
 
-        // 3. Sahip Bilgisini Çözümle (Rapor içeriği için isimleri birleştirir)
+        // 3. İzlenen Marka Sahip Bilgisini Çözümle
         let ownerNameStr = "-";
         if (ipData?.applicants && Array.isArray(ipData.applicants) && ipData.applicants.length > 0) {
             const ownerNames = [];
@@ -1519,22 +1546,19 @@ const buildReportData = async (results) => {
             ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
         } else {
             ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
-            // DÜZELTME 1: İzlenen marka kaydındaki manuel "ownerName" bilgisini yedek olarak çek
             if (ownerNameStr === "-") {
                 ownerNameStr = monitoredTm?.ownerName || "-";
             }
         }
 
-        // [KRİTİK GÜNCELLEME] 
         const ownerInfo = _getOwnerKey(ipData, monitoredTm, allPersons);
         const monitoredClientId = ownerInfo.id;
 
-        // 4. Diğer Bilgiler (GÜNCELLENMİŞ KISIM)
+        // 4. Diğer Bilgiler ve Tarih Parse İşlemi
         const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
         const monitoredImg = monitoredTm?.image || monitoredTm?.brandImageUrl || ipData?.brandImageUrl || monitoredTm?.imagePath || null;
         const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
         
-        // DÜZELTME 2: Başvuru tarihi (Application Date) için güvenli Parse işlemi
         let monitoredAppDate = "-";
         const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
         if (rawDate) {
@@ -1553,6 +1577,14 @@ const buildReportData = async (results) => {
             monitoredClasses = ipData.goodsAndServicesByClass.map(g => g.classNo);
         } else {
             monitoredClasses = _uniqNice(monitoredTm);
+        }
+
+        // Bültendeki Marka (Hit) Sahip Bilgisini Metne Çevir
+        let hitOwnerStr = "-";
+        if (Array.isArray(hitHolders) && hitHolders.length > 0) {
+            hitOwnerStr = hitHolders.map(h => h.name || h.holderName || h.id || h).filter(Boolean).join(', ');
+        } else if (typeof hitHolders === 'string' && hitHolders.trim() !== '') {
+            hitOwnerStr = hitHolders;
         }
 
         reportData.push({
@@ -1575,9 +1607,8 @@ const buildReportData = async (results) => {
                 applicationDate: r.applicationDate || "-",
                 bulletinDate: bulletinDateValue,
                 similarity: r.similarityScore,
-                holders: r.holders || [],
-                // DÜZELTME 3: Karşı tarafın Sahip bilgisi string de olsa array de olsa hatasız çevrilir
-                ownerName: Array.isArray(r.holders) ? r.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (r.holders || "-"),
+                holders: hitHolders,
+                ownerName: hitOwnerStr || "-",
                 bs: r.bs || null,
                 note: r.note || null
             }
@@ -1586,7 +1617,7 @@ const buildReportData = async (results) => {
     
     return reportData;
 };
-
+    
 const createObjectionTasks = async (results, bulletinNo, ownerId = null) => {
     let createdTaskCount = 0;
     const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
