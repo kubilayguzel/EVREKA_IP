@@ -6989,12 +6989,29 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
           .map(a => String(a.id || a.personId))
           .filter(Boolean);
           
-      // 🔥 YENİ: Denormalize için Applicant Name Bulma
+      // 🔥 YENİ: Denormalize için Applicant Name Bulma (Veritabanından asıl adı çekerek)
       let appName = "-";
-      if (Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
-          appName = ipRecord.applicants[0].name || "-";
-      } else if (ipRecord.client && ipRecord.client.name) {
-          appName = ipRecord.client.name;
+      
+      if (taskOwners.length > 0) {
+          try {
+              // İlk sahibin ID'sini kullanarak persons koleksiyonundan asıl adı çekiyoruz
+              const personDoc = await adminDb.collection('persons').doc(taskOwners[0]).get();
+              if (personDoc.exists) {
+                  const pData = personDoc.data();
+                  appName = pData.name || pData.companyName || "-";
+              }
+          } catch (e) {
+              logger.warn('⚠️ Yenileme işi için kişi adı çekilemedi:', e);
+          }
+      }
+      
+      // Eğer DB'den bulunamazsa eski mantıkla yedek (fallback) kontrol
+      if (appName === "-") {
+          if (Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+              appName = ipRecord.applicants[0].name || "-";
+          } else if (ipRecord.client && ipRecord.client.name) {
+              appName = ipRecord.client.name;
+          }
       }
 
       const data = {
