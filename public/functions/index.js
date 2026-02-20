@@ -709,7 +709,8 @@ export const createObjectionTask = onCall(
       if (!monitoredDoc.exists) throw new HttpsError('not-found', 'İzlenen marka bulunamadı: ' + monitoredMarkId);
 
       const monitoredData = monitoredDoc.data();
-      const relatedIpRecordId = monitoredData.ipRecordId || monitoredData.sourceRecordId || null;
+      // YENİ: relatedRecordId alanı da kontrol ediliyor
+      const relatedIpRecordId = monitoredData.ipRecordId || monitoredData.sourceRecordId || monitoredData.relatedRecordId || null;
       if (!relatedIpRecordId) throw new HttpsError('not-found', 'İzlenen marka için ilişkili IP kaydı bulunamadı.');
 
       // 2) Client bilgisi
