@@ -1519,26 +1519,30 @@ const buildReportData = async (results) => {
             ownerNameStr = ownerNames.length > 0 ? ownerNames.join(", ") : "-";
         } else {
             ownerNameStr = _pickOwners(ipData, monitoredTm, allPersons) || "-";
+            // DÜZELTME 1: İzlenen marka kaydındaki manuel "ownerName" bilgisini yedek olarak çek
+            if (ownerNameStr === "-") {
+                ownerNameStr = monitoredTm?.ownerName || "-";
+            }
         }
 
         // [KRİTİK GÜNCELLEME] 
-        // Backend'in ihtiyacı olan gerçek clientId (UUID) bilgisini 
-        // projenin standart fonksiyonu üzerinden güvenli bir şekilde alıyoruz.
         const ownerInfo = _getOwnerKey(ipData, monitoredTm, allPersons);
-        const monitoredClientId = ownerInfo.id; // UUID burada yer alır
+        const monitoredClientId = ownerInfo.id;
 
         // 4. Diğer Bilgiler (GÜNCELLENMİŞ KISIM)
         const monitoredName = ipData?.title || ipData?.brandText || monitoredTm?.title || monitoredTm?.markName || "Marka Adı Yok";
         const monitoredImg = monitoredTm?.image || monitoredTm?.brandImageUrl || ipData?.brandImageUrl || monitoredTm?.imagePath || null;
         const monitoredAppNo = ipData?.applicationNumber || ipData?.applicationNo || monitoredTm?.applicationNumber || "-";
         
+        // DÜZELTME 2: Başvuru tarihi (Application Date) için güvenli Parse işlemi
         let monitoredAppDate = "-";
         const rawDate = ipData?.applicationDate || monitoredTm?.applicationDate;
         if (rawDate) {
-            if (typeof rawDate === 'string') {
-                monitoredAppDate = rawDate.split('-').reverse().join('.');
-            } else {
-                monitoredAppDate = _pickAppDate(ipData, monitoredTm);
+            try {
+                const d = (typeof rawDate === 'object' && typeof rawDate.toDate === 'function') ? rawDate.toDate() : new Date(rawDate);
+                monitoredAppDate = isNaN(d.getTime()) ? (typeof rawDate === 'string' ? rawDate : "-") : d.toLocaleDateString('tr-TR');
+            } catch {
+                monitoredAppDate = typeof rawDate === 'string' ? rawDate : "-";
             }
         }
 
@@ -1551,12 +1555,9 @@ const buildReportData = async (results) => {
             monitoredClasses = _uniqNice(monitoredTm);
         }
 
-        // Log ekleyerek tarayıcı konsolundan doğruluğunu kontrol edebilirsiniz
-        console.log(`✅ [FRONTEND] Raporlanıyor: ${monitoredName}, ClientId: ${monitoredClientId}`);
-
         reportData.push({
             monitoredMark: {
-                clientId: monitoredClientId, // Artık null gelmeyecektir
+                clientId: monitoredClientId,
                 name: monitoredName,
                 markName: monitoredName,
                 imagePath: monitoredImg,
@@ -1575,7 +1576,8 @@ const buildReportData = async (results) => {
                 bulletinDate: bulletinDateValue,
                 similarity: r.similarityScore,
                 holders: r.holders || [],
-                ownerName: r.holders?.[0]?.name || "-",
+                // DÜZELTME 3: Karşı tarafın Sahip bilgisi string de olsa array de olsa hatasız çevrilir
+                ownerName: Array.isArray(r.holders) ? r.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (r.holders || "-"),
                 bs: r.bs || null,
                 note: r.note || null
             }
