@@ -5297,23 +5297,35 @@ async function createComparisonPage(group) {
     EXPERT_BORDER: "1E40AF"     // Uzman Görüşü Kenarlık
   };
 
-  // ============ İTİRAZ SON TARİHİ HESAPLA ============
+// ============ İTİRAZ SON TARİHİ HESAPLA ============
   let objectionDeadline = "-";
   try {
     const bulletinDateStr = similarMark.bulletinDate || similarMark.applicationDate;
     if (bulletinDateStr) {
-      let bulletinDate;
+      let bulletinDate = null;
       const parts = bulletinDateStr.split(/[./-]/);
-      if(parts.length === 3) {
-          // DD.MM.YYYY parse mantığı
-          bulletinDate = parts[2].length === 4 
-            ? new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
-            : new Date(bulletinDateStr);
+      if (parts.length === 3) {
+          // YYYY-MM-DD veya DD.MM.YYYY tespiti (Zaman dilimi kaymasını önler)
+          if (parts[0].length === 4) {
+             bulletinDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          } else {
+             bulletinDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+          }
+      } else {
+          bulletinDate = new Date(bulletinDateStr);
       }
+      
       if (bulletinDate && !isNaN(bulletinDate.getTime())) {
-        const rawDue = addMonthsToDate(bulletinDate, 2);
-        const adjustedDue = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
-        objectionDeadline = `${String(adjustedDue.getDate()).padStart(2, '0')}.${String(adjustedDue.getMonth() + 1).padStart(2, '0')}.${adjustedDue.getFullYear()}`;
+        let targetDate = new Date(bulletinDate);
+        targetDate.setMonth(targetDate.getMonth() + 2); // Tam 2 ay ekle
+        
+        let iter = 0;
+        // Tatil veya haftasonuna denk gelirse bir sonraki iş gününe at (Maksimum 30 gün ileri sarabilir)
+        while ((isWeekend(targetDate) || isHoliday(targetDate, TURKEY_HOLIDAYS)) && iter < 30) {
+            targetDate.setDate(targetDate.getDate() + 1);
+            iter++;
+        }
+        objectionDeadline = `${String(targetDate.getDate()).padStart(2, '0')}.${String(targetDate.getMonth() + 1).padStart(2, '0')}.${targetDate.getFullYear()}`;
       }
     }
   } catch (e) { console.error("Deadline error:", e); }
