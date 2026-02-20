@@ -26,7 +26,10 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
     }
 
     const jobId = data.jobId;
-    console.log('✅ Job başlatıldı:', jobId);
+    // YENİ: Backend'den dönen gerçek worker sayısını al (Gelmezse varsayılan 10)
+    const EXPECTED_WORKER_COUNT = data.workerCount || 10; 
+    
+    console.log(`✅ Job başlatıldı: ${jobId} (Beklenen Worker: ${EXPECTED_WORKER_COUNT})`);
 
     // 2. Takip Etme Mantığı
     return new Promise((resolve, reject) => {
@@ -42,7 +45,6 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
       };
       
       let workersState = {}; 
-      const WORKER_COUNT = 10; // Sabit worker sayısı
       let isJobFinished = false;
 
       let unsubscribeMain = null;
@@ -73,8 +75,8 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
 
           const workerKeys = Object.keys(workersState);
           
-          // 1. Tüm workerlar raporda görünüyor mu?
-          if (workerKeys.length < WORKER_COUNT) return;
+          // 1. Tüm workerlar raporda görünüyor mu? (DİNAMİK SAYI KULLANILIYOR)
+          if (workerKeys.length < EXPECTED_WORKER_COUNT) return;
 
           // 2. Hepsi "completed" durumunda mı?
           const allCompleted = workerKeys.every(key => workersState[key].status === 'completed');
@@ -171,7 +173,7 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onP
 
           // Ortalama İlerleme (0-100%)
           // Henüz başlamayan workerları da hesaba katmak için toplam beklenen worker sayısına bölüyoruz
-          const globalProgress = Math.floor(sumProgress / WORKER_COUNT);
+          const globalProgress = Math.floor(sumProgress / EXPECTED_WORKER_COUNT);
 
           if (onProgress) {
               onProgress({
