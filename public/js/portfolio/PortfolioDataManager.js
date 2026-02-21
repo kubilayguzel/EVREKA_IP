@@ -128,9 +128,13 @@ export class PortfolioDataManager {
             this.personsMap.clear();
             cached.forEach(p => { if(p.id) this.personsMap.set(p.id, p); });
             
-            // Arka planda sessizce taze veriyi kontrol et (Sayfayı dondurmaz)
+        // Arka planda sessizce taze veriyi kontrol et (Sayfayı dondurmaz)
             personService.getPersons().then(res => {
-                if(res.success) EvrekaFastCache.set('persons', res.data || []);
+                if(res.success) {
+                    EvrekaFastCache.set('persons', res.data || []);
+                    // YENİ: Arka planda gelen yeni müşterileri anında o anki hafızaya (RAM) dahil et
+                    res.data.forEach(p => { if(p.id) this.personsMap.set(p.id, p); });
+                }
             });
             return;
         }
