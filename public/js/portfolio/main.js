@@ -78,8 +78,8 @@ class PortfolioController {
         }
 
         try {
-            // Verilerin yüklenmesini BEKLE
-            await this.dataManager.loadInitialData({ deferPersons: true });
+            // Verilerin yüklenmesini BEKLE (Artık FastCache sayesinde anında iniyor)
+            await this.dataManager.loadInitialData({ deferPersons: false });
             await this.dataManager.loadRecords({ type: 'trademark' }); // ✅ sadece marka
 
             // Ek verileri yükle
