@@ -264,7 +264,11 @@ export const authService = {
 };
 
 export const ipRecordsService = {
+    _searchCache: null,
+    _searchCachePromise: null,
+
     async createRecord(recordData) {
+        this._searchCache = null;
         try {
             // 🔥 YENİ GÜVENLİK AĞI: Veritabanına gitmeden önce applicantIds dizisini otomatik oluştur
             if (recordData.applicants && Array.isArray(recordData.applicants)) {
@@ -763,63 +767,39 @@ export const ipRecordsService = {
     },
     async searchRecords(searchTerm) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
-        if (!searchTerm || searchTerm.trim().length < 3) return { success: true, data: [] };
+        
+        // Önbelleği erkenden doldurmak için gizli tetikleyici (preload)
+        if (searchTerm === 'preload') {
+            if (!this._searchCache && !this._searchCachePromise) {
+                this._searchCachePromise = this.getRecords({ source: 'cache-first' }).then(res => res.data || []);
+                this._searchCache = await this._searchCachePromise;
+            }
+            return { success: true, data: [] };
+        }
+
+        // Arama terimi en az 2 karakter olmalı
+        if (!searchTerm || searchTerm.trim().length < 2) return { success: true, data: [] };
 
         try {
             const termRaw = searchTerm.trim();
             const term = termRaw.toLowerCase();
-            
-            const exactFields = ['applicationNumber', 'applicationNo', 'wipoIR', 'aripoIR', 'dosyaNo', 'fileNo'];
-            
-            // 1. Önce tam eşleşme dene
-            for (const field of exactFields) {
-                try {
-                    const qExact = query(collection(db, 'ipRecords'), where(field, '==', termRaw), limit(5));
-                    const snapExact = await getDocs(qExact);
-                    if (!snapExact.empty) {
-                        return { success: true, data: snapExact.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
-                    }
-                } catch (e) {
-                    // Sessizce devam et
+            const cleanSearchNum = termRaw.replace(/\D/g, ''); 
+
+            // Create Task Mimarisi: Veriyi sadece 1 KERE çek, sonra hafızadan (RAM) kullan!
+            if (!this._searchCache) {
+                if (!this._searchCachePromise) {
+                    this._searchCachePromise = this.getRecords({ source: 'cache-first' }).then(res => res.data || []);
                 }
+                this._searchCache = await this._searchCachePromise;
             }
 
-            // 2. Tam eşleşme bulunamazsa, prefix (başlangıç) araması dene
-            for (const field of exactFields) {
-                try {
-                    const endStr = termRaw + '\uf8ff';
-                    const qPrefix = query(
-                        collection(db, 'ipRecords'), 
-                        where(field, '>=', termRaw), 
-                        where(field, '<=', endStr), 
-                        limit(10)
-                    );
-                    const snapPrefix = await getDocs(qPrefix);
-                    if (!snapPrefix.empty) {
-                        return { success: true, data: snapPrefix.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
-                    }
-                } catch (e) {
-                    // Index yoksa veya permission hatası olursa sessizce devam et
-                }
-            }
-
-            // SONRA: Eğer numara değilse, mevcut "fetch 500" mantığını 
-            // Cache'i zorlayarak (daha önce indiyse anında gelir) çalıştırın.
-            const q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
-            
-            // getDocsFromCache kullanımı hızı inanılmaz artırır
-            let snapshot;
-            try {
-                snapshot = await getDocsFromCache(q);
-                if (snapshot.empty) snapshot = await getDocs(q);
-            } catch (e) {
-                snapshot = await getDocs(q);
-            }
-            
+            const allRecords = this._searchCache || [];
             const results = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const title = (data.title || data.markName || '').toLowerCase();
+
+            // JS ile anında (0 milisaniye) filtreleme
+            for (const data of allRecords) {
+                let isMatch = false;
+                const title = String(data.title || data.markName || data.brandText || '').toLowerCase();
                 const nos = [
                     data.applicationNumber,
                     data.applicationNo,
@@ -827,16 +807,34 @@ export const ipRecordsService = {
                     data.aripoIR,
                     data.dosyaNo,
                     data.fileNo
-                ].filter(Boolean).map(v => String(v).toLowerCase());
+                ].filter(Boolean).map(v => String(v));
 
-                const noHit = nos.some(v => v.includes(term));
-
-                if (title.includes(term) || noHit) {
-                    results.push({ id: doc.id, ...data });
+                // A) Marka adı araması (Kelimenin neresinde olursa olsun bulur)
+                if (title.includes(term)) {
+                    isMatch = true;
+                } 
+                // B) Direkt numara araması
+                else if (nos.some(v => v.toLowerCase().includes(term))) {
+                    isMatch = true;
+                } 
+                // C) Akıllı Numara Kontrolü (Tire, slaş veya başa sıfır unutulsa bile bulur)
+                else if (cleanSearchNum && cleanSearchNum.length >= 4) {
+                    const noHit = nos.some(v => {
+                        const cleanRecordNum = v.replace(/\D/g, '').replace(/^0+/, '');
+                        return cleanRecordNum.includes(cleanSearchNum);
+                    });
+                    if (noHit) isMatch = true;
                 }
-            });
 
-            return { success: true, data: results.slice(0, 20) }; // Sadece ilk 20 sonucu dönmek yeterli
+                if (isMatch) {
+                    results.push(data);
+                    // Arayüz (UI) donmasın diye maksimum 30 sonuç yeterlidir
+                    if (results.length >= 30) break; 
+                }
+            }
+
+            return { success: true, data: results };
+
         } catch (error) {
             console.error("Kayıt arama hatası:", error);
             return { success: false, error: error.message };
