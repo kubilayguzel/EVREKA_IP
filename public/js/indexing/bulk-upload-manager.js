@@ -203,6 +203,16 @@ export class BulkIndexingModule {
         const clearSelectedBtn = document.getElementById('clearSelectedRecordManual');
         
         if (recordSearchInput) {
+            // YENİ: Arama kutusuna tıklandığında arka planda verileri indir (Sadece bir kez çalışır)
+            recordSearchInput.addEventListener('focus', () => {
+                if (!this._isDataLoaded && !this._isLoadingData) {
+                    this._isLoadingData = true;
+                    this.loadAllData().finally(() => {
+                        this._isLoadingData = false;
+                    });
+                }
+            }, { once: true });
+
             recordSearchInput.addEventListener(
                 'input',
                 debounce((e) => this.searchRecords(e.target.value, 'manual'), 100)
@@ -311,11 +321,20 @@ export class BulkIndexingModule {
             return;
         }
 
-        // Sadece yükleme işlemi henüz bitmediyse beklet, bittiyse (portföy sıfır olsa bile) devam et.
-        if (this._isDataLoaded !== true) {
-            container.innerHTML = '<div style="padding:10px; color:#e67e22;"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor...</div>';
+        // YENİ MANTIK: Eğer veriler henüz yüklenmediyse, burada zorla yükle.
+        if (!this._isDataLoaded) {
+            container.innerHTML = '<div style="padding:10px; color:#e67e22;"><i class="fas fa-spinner fa-spin"></i> Veriler hazırlanıyor... Lütfen bekleyin.</div>';
             container.style.display = 'block';
-            return;
+            
+            if (!this._isLoadingData) {
+                this._isLoadingData = true;
+                await this.loadAllData();
+                this._isLoadingData = false;
+            } else {
+                // Halihazırda yükleniyorsa biraz bekle ve tekrar dene
+                setTimeout(() => this.searchRecords(queryText, tabContext), 500);
+                return;
+            }
         }
 
         const seq = ++this._manualSearchSeq;
