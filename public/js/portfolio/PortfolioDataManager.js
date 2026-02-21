@@ -625,8 +625,11 @@ export class PortfolioDataManager {
     async toggleRecordsStatus(ids) {
         const records = ids.map(id => this.getRecordById(id)).filter(Boolean);
         if(!records.length) return;
-        const targetStatus = records[0].portfoyStatus === 'active' ? 'inactive' : 'active';
-        await Promise.all(records.map(r => ipRecordsService.updateRecord(r.id, { portfoyStatus: targetStatus })));
+        
+        // Toggle (aç/kapa) mantığını kaldırıp, sadece 'inactive' (pasif) yapıyoruz
+        await Promise.all(records.map(r => 
+            ipRecordsService.updateRecord(r.id, { portfoyStatus: 'inactive' })
+        ));
     }
 
     // --- EXPORT ---
