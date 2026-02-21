@@ -743,12 +743,17 @@ export class PortfolioDataManager {
         let sourceData = [];
 
         if (typeFilter === 'litigation') {
-            sourceData = this.litigationRows;
+            // Davalar sekmesinde pasifleri gizle
+            sourceData = this.litigationRows.filter(r => r.portfoyStatus !== 'inactive' && r.recordStatus !== 'pasif');
         } else if (typeFilter === 'objections') {
-            sourceData = this.objectionRows;
+            // İtirazlar sekmesinde pasifleri gizle
+            sourceData = this.objectionRows.filter(r => r.portfoyStatus !== 'inactive' && r.recordStatus !== 'pasif');
         } else {
             // ANA LİSTE FİLTRESİ
             sourceData = this.allRecords.filter(r => {
+                // 🔥 YENİ: Pasif olan kayıtları tamamen gizle
+                if (r.portfoyStatus === 'inactive' || r.recordStatus === 'pasif') return false;
+
                 // 1. Temel Kontroller (Child kayıtları ve 3. şahıs kayıtlarını gizle)
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
                 
