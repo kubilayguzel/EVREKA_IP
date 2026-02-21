@@ -564,20 +564,22 @@ class PortfolioController {
             });
         }
 
-        // --- 9. DURUM DEĞİŞTİR (AKTİF/PASİF) ---
+// --- 9. DURUM DEĞİŞTİR (AKTİF/PASİF) ---
         const toggleStatusBtn = document.getElementById('toggleRecordStatusBtn');
         if (toggleStatusBtn) {
             toggleStatusBtn.addEventListener('click', async () => {
                 if (this.state.selectedRecords.size === 0) return;
 
-                if (!confirm(`${this.state.selectedRecords.size} kaydın durumunu değiştirmek istiyor musunuz?`)) return;
+                // YENİ ONAY MESAJI
+                if (!confirm(`${this.state.selectedRecords.size} kaydı pasife almak istediğinize emin misiniz?`)) return;
 
                 try {
                     this.renderer.showLoading(true);
                     const ids = Array.from(this.state.selectedRecords);
                     await this.dataManager.toggleRecordsStatus(ids);
 
-                    showNotification('Kayıtların durumu güncellendi.', 'success');
+                    // YENİ BAŞARI MESAJI
+                    showNotification('Seçili kayıtlar pasife alındı.', 'success');
                     this.state.selectedRecords.clear();
                     const selectAll = document.getElementById('selectAllCheckbox');
                     if (selectAll) selectAll.checked = false;
@@ -650,8 +652,8 @@ class PortfolioController {
         const statusBtn = document.getElementById('toggleRecordStatusBtn');
         if (statusBtn) {
             statusBtn.disabled = !hasSelection;
-            // Opsiyonel: Buton metnini güncelle
-            statusBtn.textContent = hasSelection ? `Durum Değiştir (${count})` : 'Aktif/Pasif';
+            // YENİ BUTON İSMİ
+            statusBtn.textContent = hasSelection ? `Pasifle (${count})` : 'Pasifle';
         }
 
         // 2. İzlemeye Ekle Butonu (HTML ID: addToMonitoringBtn)
@@ -690,7 +692,8 @@ class PortfolioController {
         const monitorBtn = document.getElementById('addToMonitoringBtn');
         if (statusBtn) {
             statusBtn.disabled = count === 0;
-            statusBtn.textContent = count > 0 ? `Durum Değiştir (${count})` : 'Aktif/Pasif';
+            // YENİ BUTON İSMİ
+            statusBtn.textContent = count > 0 ? `Pasifle (${count})` : 'Pasifle';
         }
         if (monitorBtn) {
             monitorBtn.disabled = count === 0;
