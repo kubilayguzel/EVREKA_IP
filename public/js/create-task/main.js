@@ -38,7 +38,7 @@ class CreateTaskController {
         
     }
 
-    async init() {
+async init() {
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 this.state.currentUser = user;
@@ -48,6 +48,15 @@ class CreateTaskController {
                     Object.assign(this.state, initialData);
                     this.setupEventListeners();
                     this.setupIpRecordSearch();
+
+                    // --- YENİ EKLENEN KISIM: Yükleme Çatışmasını (Race Condition) Çözer ---
+                    // Eğer kullanıcı veriler inmeden hızlıca bir karta tıkladıysa, 
+                    // veriler indiği an o seçimi algılayıp Selectbox'ı otomatik doldurur.
+                    const mainSelect = document.getElementById('mainIpType');
+                    if (mainSelect && mainSelect.value) {
+                        mainSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
                 } catch (e) { console.error('Init hatası:', e); }
             } else { window.location.href = 'index.html'; }
         });
