@@ -1020,10 +1020,16 @@ async loadData() {
                 }
             }
 
-            // --- GÖREV OLUŞTURMA BLOĞU ---
-            if (shouldTriggerTask && childTypeObj.taskTriggered) {
+            // --- GÖREV OLUŞTURMA VE OTOMATİK İŞLEM BLOĞU (TEST LOGLARIYLA) ---
+            let finalTaskType = childTypeObj.taskTriggered;
+
+            // TEST LOGU 1: Girmeden önceki değerler
+            console.log("🛠️ TEST 1 - shouldTriggerTask:", shouldTriggerTask, " | finalTaskType (Başlangıç):", finalTaskType);
+
+            if (shouldTriggerTask && finalTaskType) {
+                console.log("🛠️ TEST 2 - Görev oluşturma bloğuna girildi.");
+
                 const deliveryDate = new Date(deliveryDateStr);
-                
                 let duePeriod = Number(childTypeObj.duePeriod || 0);
                 
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
@@ -1038,6 +1044,8 @@ async loadData() {
                 let relatedPartyData = null;
                 let taskOwner = []; 
 
+                console.log("🛠️ TEST 3 - RecordOwnerType:", this.matchedRecord.recordOwnerType);
+
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
                         taskOwner = this.matchedRecord.applicants
@@ -1049,9 +1057,12 @@ async loadData() {
                             relatedPartyData = { id: app.id || app.personId, name: app.name || 'İsimsiz' };
                         }
                     }
+                    console.log("🛠️ TEST 4 - Self dosya taskOwner belirlendi:", taskOwner);
                 } 
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
-                    const triggeringTaskId = parentTx?.triggeringTaskId;
+                    const triggeringTaskId = parentTx?.triggeringTaskId || parentTx?.taskId;
+                    console.log("🛠️ TEST 5 - 3. Taraf dosya, Tetikleyici ID:", triggeringTaskId);
+
                     if (triggeringTaskId) {
                         try {
                             const prevTaskResult = await taskService.getTaskById(triggeringTaskId);
@@ -1066,29 +1077,55 @@ async loadData() {
                             }
                         } catch (e) { console.warn('Parent task fetch error:', e); }
                     }
+
+                    if ((!taskOwner || taskOwner.length === 0) && this.matchedRecord.client) {
+                        console.log("🛠️ TEST 6 - 3. Taraf dosya, taskOwner boş, fallback devreye giriyor (Client).");
+                        const clientId = this.matchedRecord.client.id || this.matchedRecord.client.personId;
+                        if (clientId) {
+                            taskOwner = [String(clientId)];
+                            relatedPartyData = { id: clientId, name: this.matchedRecord.client.name || 'Müvekkil' };
+                        }
+                    }
+                    console.log("🛠️ TEST 7 - 3. Taraf dosya son taskOwner durumu:", taskOwner);
                 }
-                // 🔥 YENİ: Denormalize alanların hesaplanması
+
+                // --- KİŞİ BAZLI TOGGLE KONTROLÜ (ID 66) ---
+                console.log("🛠️ TEST 8 - Kişi sorgusuna başlanıyor. taskOwner:", taskOwner);
+                if (taskOwner && taskOwner.length > 0) {
+                    try {
+                        const personDoc = await getDoc(doc(db, 'persons', taskOwner[0]));
+                        if (personDoc.exists()) {
+                            const personData = personDoc.data();
+                            console.log("🛠️ TEST 9 - Kişi verisi çekildi. evaluationRequired:", personData.evaluationRequired, "needsEvaluation:", personData.needsEvaluation);
+                            
+                            if (personData.is_evaluation_required === true) {
+                                console.log("🔍 Müvekkil için Değerlendirme İşlemi (66) tetikleniyor.");
+                                finalTaskType = "66";
+                            }
+                        } else {
+                            console.log("⚠️ TEST 9 HATA - Kişi dokümanı Firestore'da bulunamadı. ID:", taskOwner[0]);
+                        }
+                    } catch (e) { console.warn("Kişi toggle ayarı okunamadı:", e); }
+                } else {
+                    console.log("⚠️ TEST 8 HATA - taskOwner dizisi boş veya tanımsız.");
+                }
+
+                console.log("🛠️ TEST 10 - Oluşturulacak son TaskType:", finalTaskType);
+
+                // Denormalize alanların hesaplanması (Müvekkil Kolonu Doğrulaması)
+                // ... (geri kalan kod aynen devam eder) ...
+
+                // Denormalize alanların hesaplanması (Müvekkil Kolonu Doğrulaması)
                 let ipAppNo = this.matchedRecord.applicationNumber || this.matchedRecord.applicationNo || "-";
                 let ipTitle = this.matchedRecord.title || this.matchedRecord.markName || "-";
-
-                // Müvekkil Kolonu Değer Tespiti (Düzeltilmiş Mantık)
                 let ipAppName = "-";
 
-                if (this.matchedRecord.recordOwnerType === 'third_party') {
-                    // 1. Üçüncü taraf ise öncelikle sistemdeki 'client' (müvekkil) bilgisini al
-                    if (this.matchedRecord.client && this.matchedRecord.client.name) {
-                        ipAppName = this.matchedRecord.client.name;
-                    } 
-                    // 2. Client alanı boşsa, iş akışından gelen isme bak
-                    else if (relatedPartyData && relatedPartyData.name) {
-                        ipAppName = relatedPartyData.name;
-                    }
+                if (this.matchedRecord.recordOwnerType === 'third_party' && relatedPartyData) {
+                    ipAppName = relatedPartyData.name;
                 } else {
-                    // 3. Kendi portföyümüz ise dosyanın asıl sahiplerini kullan
                     ipAppName = this.matchedRecord.resolvedNames || "-";
                 }
 
-                // Fallback: Hala bir isim bulunamadıysa standart yerlere bak
                 if (ipAppName === "-" || !ipAppName) {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
                         ipAppName = this.matchedRecord.applicants[0].name || "-";
@@ -1100,12 +1137,11 @@ async loadData() {
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
-                    taskType: childTypeObj.taskTriggered,
+                    taskType: finalTaskType, // <-- Artık Değerlendirme açıksa buraya '66' gelecek
                     relatedRecordId: this.matchedRecord.id,
                     relatedIpRecordId: this.matchedRecord.id,
                     relatedIpRecordTitle: this.matchedRecord.title,
                     
-                    // 🔥 YENİ: Denormalize Alanların Task'a Eklenmesi
                     iprecordApplicationNo: ipAppNo,
                     iprecordTitle: ipTitle,
                     iprecordApplicantName: ipAppName,
@@ -1125,7 +1161,7 @@ async loadData() {
                         uid: this.currentUser.uid,
                         email: this.currentUser.email
                     },
-                    taskOwner: taskOwner.length > 0 ? taskOwner : null,
+                    taskOwner: taskOwner.length > 0 ? taskOwner : null, // Boş değilse mailler tetiklenir
                     details: {
                         relatedParty: relatedPartyData 
                     },
@@ -1140,21 +1176,21 @@ async loadData() {
                 if (taskResult.success) {
                     createdTaskId = taskResult.id;
                     const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
-                    await updateDoc(txRef, { taskId: String(createdTaskId) }); // 🔥 SADECE taskId
+                    await updateDoc(txRef, { taskId: String(createdTaskId) });
                 }
-
             }
 
-            if (createdTaskId && childTypeObj.taskTriggered) {
-                const triggeredTypeObj = this.allTransactionTypes.find(t => t.id === childTypeObj.taskTriggered);
+            // Otomatik tetiklenen işlem kaydı
+            if (createdTaskId && finalTaskType) {
+                const triggeredTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(finalTaskType));
                 const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
                 const targetHierarchy = triggeredTypeObj?.hierarchy || 'child'; 
 
                 const triggeredTransactionData = {
-                    type: childTypeObj.taskTriggered,
+                    type: finalTaskType, // <-- 66 veya 19 (Doğru ID İşlenir)
                     description: `${triggeredTypeName} (Otomatik)`,
                     transactionHierarchy: targetHierarchy,
-                    taskId: String(createdTaskId), // 🔥 SADECE taskId
+                    taskId: String(createdTaskId),
                     timestamp: new Date().toISOString()
                 };
 
