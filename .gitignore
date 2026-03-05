@@ -1,1 +1,4 @@
 .firebase/hosting.cHVibGlj.cache
+/node_modules/.bin
+*.ts
+/node_modules
