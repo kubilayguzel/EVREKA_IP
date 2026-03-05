@@ -1035,7 +1035,7 @@ tr.selected-row:hover {
             const statusInfo = getStatusInTurkish(r.status);
             
             // --- NICE SINIFLARI ---
-            const niceClassesHtml = (() => {
+            const niceClassesData = (() => {
                 const classes = new Set();
                 if (r.goodsAndServicesByClass && Array.isArray(r.goodsAndServicesByClass)) {
                     r.goodsAndServicesByClass.forEach(classItem => {
@@ -1050,14 +1050,17 @@ tr.selected-row:hover {
                 }
 
                 if (classes.size > 0) {
-                    return Array.from(classes)
+                    const sortedClasses = Array.from(classes)
                         .map(cls => parseInt(cls))
                         .filter(cls => !isNaN(cls))
-                        .sort((a, b) => a - b)
-                        .map(cls => `<span class="nice-class-badge">${cls}</span>`)
-                        .join(' ');
+                        .sort((a, b) => a - b);
+                        
+                    return {
+                        html: sortedClasses.map(cls => `<span class="nice-class-badge">${cls}</span>`).join(' '),
+                        text: sortedClasses.join(', ') + ' Sınıfları' // Üzerine gelince görünecek metin
+                    };
                 }
-                return '-';
+                return { html: '-', text: '' };
             })();
 
             // --- TABLO SATIRINI OLUŞTUR ---
