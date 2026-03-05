@@ -16,10 +16,11 @@ export class RecordMatcher {
         const cleanSearch = this._normalize(searchNumber);
         
         for (const record of allRecords) {
-            // Kontrol edilecek olası alanlar
+            // 🔥 ÇÖZÜM: Otomatik PDF eşleştirmelerinde de Parent kayıtlarını bulabilmesi için eklendi
             const fieldsToCheck = [
                 record.applicationNumber,
                 record.applicationNo,
+                record.internationalRegNumber,
                 record.wipoIR,
                 record.aripoIR
             ];
