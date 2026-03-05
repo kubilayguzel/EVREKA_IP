@@ -1072,7 +1072,7 @@ tr.selected-row:hover {
                         <td><div class="owner-cell" title="${safeOwnerNames}">${ownerNames}</div></td>
                         <td>${r.applicationNumber || r.applicationNo || '-'}</td>
                         <td>${formatTurkishDate(r.applicationDate)}</td>
-                        <td>${niceClassesHtml}</td>
+                        <td title="${niceClassesData.text}">${niceClassesData.html}</td>
                         <td><span class="status-badge ${statusInfo.class}">${statusInfo.text}</span></td>
                     </tr>`;
         });
