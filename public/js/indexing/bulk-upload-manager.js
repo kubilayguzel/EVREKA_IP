@@ -344,7 +344,8 @@ export class BulkIndexingModule {
         // 1. Portföy Araması (allRecords içinden)
         let filteredPortfolio = this.allRecords.filter(r => {
             const title = (r.title || r.markName || '').toLowerCase();
-            const appNo = String(r.applicationNumber || r.applicationNo || r.wipoIR || r.aripoIR || '').toLowerCase();
+            // 🔥 ÇÖZÜM: internationalRegNumber alanı arama kriterlerine eklendi
+            const appNo = String(r.applicationNumber || r.applicationNo || r.internationalRegNumber || r.wipoIR || r.aripoIR || '').toLowerCase();
             return title.includes(lowerQuery) || appNo.includes(lowerQuery);
         }).map(r => ({ ...r, _isPortfolio: true }));
 
