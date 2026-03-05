@@ -974,61 +974,42 @@ async loadData() {
             }
 
             // 3. İş Tetikleme (Task) - [DÜZELTİLDİ: SIRALI KONTROL]
-            let createdTaskId = null;
             let shouldTriggerTask = false;
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             
-            // ID'lerin String olduğundan emin oluyoruz (Önemli!)
             const parentTypeId = String(parentTx.type); 
             const childTypeIdStr = String(childTypeId);
             
-            // Matrix sadece ÖZEL durumları tanımlar (Örn: 20 -> 50/51)
             const taskTriggerMatrix = {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
             };
-            let skipFallback = false; // Adım 2'ye inmeyi engellemek için kalkan
+            let skipFallback = false;
 
-            // ADIM 1: Matris Kontrolü
             if (taskTriggerMatrix[parentTypeId]) {
-                // Bu ana işlemin özel olarak ilgilendiği TÜM alt işlemleri bul (Portföy ve 3. Taraf listelerini birleştir)
-                // Örn: 20 için -> ["50", "51", "52"] listesini oluşturur.
                 const allGovernedChildren = [
                     ...(taskTriggerMatrix[parentTypeId]["Portföy"] || []),
                     ...(taskTriggerMatrix[parentTypeId]["3. Taraf"] || [])
                 ];
 
-                // Eğer eklenen alt işlem, matrisin "özel ilgilendiği" işlemlerden biriyse (Örn: 50, 51 veya 52)
                 if (allGovernedChildren.includes(childTypeIdStr)) {
-                    // Bu işlem matrisin kurallarına tabidir, Adım 2'ye KESİNLİKLE İNMEMELİ!
                     skipFallback = true; 
-
-                    // Matris bu dosya tipi için (Portföy/3. Taraf) onay veriyor mu?
                     if (taskTriggerMatrix[parentTypeId][recordType] && taskTriggerMatrix[parentTypeId][recordType].includes(childTypeIdStr)) {
                         shouldTriggerTask = true;
                     } else {
-                        shouldTriggerTask = false; // Örn: 3. Taraf ve 50 numarası -> Reddedildi.
+                        shouldTriggerTask = false;
                     }
                 }
             }
 
-            // ADIM 2: Standart Tanıma Bak (Fallback)
-            // Eğer matris bu işlemle "özel olarak" ilgilenmiyorsa (skipFallback === false) o zaman JSON'daki değere bak
             if (!shouldTriggerTask && !skipFallback) {
                 if (childTypeObj.taskTriggered) {
                     shouldTriggerTask = true;
                 }
             }
 
-            // --- GÖREV OLUŞTURMA VE OTOMATİK İŞLEM BLOĞU (TEST LOGLARIYLA) ---
-            let finalTaskType = childTypeObj.taskTriggered;
-
-            // TEST LOGU 1: Girmeden önceki değerler
-            console.log("🛠️ TEST 1 - shouldTriggerTask:", shouldTriggerTask, " | finalTaskType (Başlangıç):", finalTaskType);
-
-            if (shouldTriggerTask && finalTaskType) {
-                console.log("🛠️ TEST 2 - Görev oluşturma bloğuna girildi.");
-
+            // --- GÖREV VE OTOMATİK İŞLEM OLUŞTURMA BLOĞU (ÇOKLU GÖREV DESTEĞİ) ---
+            if (shouldTriggerTask) {
                 const deliveryDate = new Date(deliveryDateStr);
                 let duePeriod = Number(childTypeObj.duePeriod || 0);
                 
@@ -1044,8 +1025,6 @@ async loadData() {
                 let relatedPartyData = null;
                 let taskOwner = []; 
 
-                console.log("🛠️ TEST 3 - RecordOwnerType:", this.matchedRecord.recordOwnerType);
-
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
                         taskOwner = this.matchedRecord.applicants
@@ -1057,12 +1036,9 @@ async loadData() {
                             relatedPartyData = { id: app.id || app.personId, name: app.name || 'İsimsiz' };
                         }
                     }
-                    console.log("🛠️ TEST 4 - Self dosya taskOwner belirlendi:", taskOwner);
                 } 
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
                     const triggeringTaskId = parentTx?.triggeringTaskId || parentTx?.taskId;
-                    console.log("🛠️ TEST 5 - 3. Taraf dosya, Tetikleyici ID:", triggeringTaskId);
-
                     if (triggeringTaskId) {
                         try {
                             const prevTaskResult = await taskService.getTaskById(triggeringTaskId);
@@ -1079,125 +1055,155 @@ async loadData() {
                     }
 
                     if ((!taskOwner || taskOwner.length === 0) && this.matchedRecord.client) {
-                        console.log("🛠️ TEST 6 - 3. Taraf dosya, taskOwner boş, fallback devreye giriyor (Client).");
                         const clientId = this.matchedRecord.client.id || this.matchedRecord.client.personId;
                         if (clientId) {
                             taskOwner = [String(clientId)];
                             relatedPartyData = { id: clientId, name: this.matchedRecord.client.name || 'Müvekkil' };
                         }
                     }
-                    console.log("🛠️ TEST 7 - 3. Taraf dosya son taskOwner durumu:", taskOwner);
                 }
 
-                // --- KİŞİ BAZLI TOGGLE KONTROLÜ (ID 66) ---
-                console.log("🛠️ TEST 8 - Kişi sorgusuna başlanıyor. taskOwner:", taskOwner);
+                // 🔥 1. Tetiklenecek Görevleri Bir Dizide Topla
+                let tasksToCreate = [];
+                
+                // Normalde tetiklenmesi gereken standart işlemi (Örn: 19) ekle
+                if (childTypeObj.taskTriggered) {
+                    tasksToCreate.push(String(childTypeObj.taskTriggered));
+                }
+
+                // --- KİŞİ BAZLI TOGGLE KONTROLÜ (ID 66) VE MÜVEKKİL İSMİ TESPİTİ ---
+                let fetchedPersonName = null;
                 if (taskOwner && taskOwner.length > 0) {
                     try {
                         const personDoc = await getDoc(doc(db, 'persons', taskOwner[0]));
                         if (personDoc.exists()) {
                             const personData = personDoc.data();
-                            console.log("🛠️ TEST 9 - Kişi verisi çekildi. evaluationRequired:", personData.evaluationRequired, "needsEvaluation:", personData.needsEvaluation);
                             
+                            // Değerlendirme toggle'ı aktifse, listeye 66 nolu işi İLAVE ET
                             if (personData.is_evaluation_required === true) {
-                                console.log("🔍 Müvekkil için Değerlendirme İşlemi (66) tetikleniyor.");
-                                finalTaskType = "66";
+                                console.log("🔍 Müvekkil için Değerlendirme İşlemi (66) diziye eklendi.");
+                                if (!tasksToCreate.includes("66")) {
+                                    tasksToCreate.push("66");
+                                }
                             }
-                        } else {
-                            console.log("⚠️ TEST 9 HATA - Kişi dokümanı Firestore'da bulunamadı. ID:", taskOwner[0]);
+                            
+                            fetchedPersonName = personData.name || personData.companyName || null;
                         }
-                    } catch (e) { console.warn("Kişi toggle ayarı okunamadı:", e); }
-                } else {
-                    console.log("⚠️ TEST 8 HATA - taskOwner dizisi boş veya tanımsız.");
+                    } catch (e) { 
+                        console.warn("Kişi bilgisi okunamadı:", e); 
+                    }
                 }
 
-                console.log("🛠️ TEST 10 - Oluşturulacak son TaskType:", finalTaskType);
-
-                // Denormalize alanların hesaplanması (Müvekkil Kolonu Doğrulaması)
-                // ... (geri kalan kod aynen devam eder) ...
-
-                // Denormalize alanların hesaplanması (Müvekkil Kolonu Doğrulaması)
+                // Denormalize alanların hesaplanması (Rakip Adı Engellendi)
                 let ipAppNo = this.matchedRecord.applicationNumber || this.matchedRecord.applicationNo || "-";
                 let ipTitle = this.matchedRecord.title || this.matchedRecord.markName || "-";
                 let ipAppName = "-";
 
-                if (this.matchedRecord.recordOwnerType === 'third_party' && relatedPartyData) {
-                    ipAppName = relatedPartyData.name;
+                const isSelfPortfolio = (this.matchedRecord.recordOwnerType === 'self');
+
+                if (!isSelfPortfolio) {
+                    if (fetchedPersonName) {
+                        ipAppName = fetchedPersonName;
+                        if (relatedPartyData) relatedPartyData.name = fetchedPersonName;
+                    }
+                    else if (relatedPartyData && relatedPartyData.name) {
+                        ipAppName = relatedPartyData.name;
+                    } 
+                    else if (parentTx && parentTx.oppositionOwner) {
+                        ipAppName = parentTx.oppositionOwner;
+                    } 
+                    else if (this.matchedRecord.client && this.matchedRecord.client.name) {
+                        ipAppName = this.matchedRecord.client.name;
+                    } 
+                    else {
+                        ipAppName = "Müvekkil (Belirtilmemiş)";
+                    }
                 } else {
                     ipAppName = this.matchedRecord.resolvedNames || "-";
-                }
 
-                if (ipAppName === "-" || !ipAppName) {
-                    if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
-                        ipAppName = this.matchedRecord.applicants[0].name || "-";
-                    } else if (this.matchedRecord.client && this.matchedRecord.client.name) {
-                        ipAppName = this.matchedRecord.client.name;
+                    if (ipAppName === "-" || !ipAppName) {
+                        if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
+                            ipAppName = this.matchedRecord.applicants[0].name || "-";
+                        } else if (this.matchedRecord.client && this.matchedRecord.client.name) {
+                            ipAppName = this.matchedRecord.client.name;
+                        }
                     }
                 }
 
-                const taskData = {
-                    title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
-                    description: notes || `Otomatik oluşturulan görev.`,
-                    taskType: finalTaskType, // <-- Artık Değerlendirme açıksa buraya '66' gelecek
-                    relatedRecordId: this.matchedRecord.id,
-                    relatedIpRecordId: this.matchedRecord.id,
-                    relatedIpRecordTitle: this.matchedRecord.title,
+                // 🔥 2. Listedeki HER BİR Görev İçin Döngü Kur
+                for (const tType of tasksToCreate) {
                     
-                    iprecordApplicationNo: ipAppNo,
-                    iprecordTitle: ipTitle,
-                    iprecordApplicantName: ipAppName,
+                    let taskDesc = notes || `Otomatik oluşturulan görev.`;
+                    if (tType === "66") {
+                        taskDesc = "Müvekkil değerlendirme ayarı açık olduğu için ek olarak tetiklendi.";
+                    }
 
-                    transactionId: childTransactionId, 
-                    triggeringTransactionType: childTypeId,
-                    deliveryDate: deliveryDateStr,
-                    dueDate: Timestamp.fromDate(taskDueDate),
-                    officialDueDate: Timestamp.fromDate(officialDueDate),
-                    createdAt: Timestamp.now(),
-                    updatedAt: Timestamp.now(),
-                    status: 'awaiting_client_approval',
-                    priority: 'medium',
-                    assignedTo_uid: assignedUser.uid,
-                    assignedTo_email: assignedUser.email,
-                    createdBy: {
-                        uid: this.currentUser.uid,
-                        email: this.currentUser.email
-                    },
-                    taskOwner: taskOwner.length > 0 ? taskOwner : null, // Boş değilse mailler tetiklenir
-                    details: {
-                        relatedParty: relatedPartyData 
-                    },
-                    history: [{
-                        action: 'İndeksleme işlemi ile otomatik oluşturuldu.',
-                        timestamp: new Date().toISOString(),
-                        userEmail: this.currentUser.email
-                    }]
-                };
+                    const taskData = {
+                        title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
+                        description: taskDesc,
+                        taskType: tType, // <-- "19" ve "66" sırayla oluşturulacak
+                        relatedRecordId: this.matchedRecord.id,
+                        relatedIpRecordId: this.matchedRecord.id,
+                        relatedIpRecordTitle: this.matchedRecord.title,
+                        
+                        iprecordApplicationNo: ipAppNo,
+                        iprecordTitle: ipTitle,
+                        iprecordApplicantName: ipAppName,
 
-                const taskResult = await taskService.createTask(taskData);
-                if (taskResult.success) {
-                    createdTaskId = taskResult.id;
-                    const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
-                    await updateDoc(txRef, { taskId: String(createdTaskId) });
-                }
-            }
+                        transactionId: childTransactionId, 
+                        triggeringTransactionType: childTypeId,
+                        deliveryDate: deliveryDateStr,
+                        dueDate: Timestamp.fromDate(taskDueDate),
+                        officialDueDate: Timestamp.fromDate(officialDueDate),
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now(),
+                        status: 'awaiting_client_approval',
+                        priority: 'medium',
+                        assignedTo_uid: assignedUser.uid,
+                        assignedTo_email: assignedUser.email,
+                        createdBy: {
+                            uid: this.currentUser.uid,
+                            email: this.currentUser.email
+                        },
+                        taskOwner: taskOwner.length > 0 ? taskOwner : null,
+                        details: {
+                            relatedParty: relatedPartyData 
+                        },
+                        history: [{
+                            action: 'İndeksleme işlemi ile otomatik oluşturuldu.',
+                            timestamp: new Date().toISOString(),
+                            userEmail: this.currentUser.email
+                        }]
+                    };
 
-            // Otomatik tetiklenen işlem kaydı
-            if (createdTaskId && finalTaskType) {
-                const triggeredTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(finalTaskType));
-                const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
-                const targetHierarchy = triggeredTypeObj?.hierarchy || 'child'; 
+                    const taskResult = await taskService.createTask(taskData);
+                    
+                    if (taskResult.success) {
+                        const createdTaskId = taskResult.id;
+                        
+                        // Alt işlemi taskID ile güncelle
+                        const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
+                        await updateDoc(txRef, { taskId: String(createdTaskId) });
 
-                const triggeredTransactionData = {
-                    type: finalTaskType, // <-- 66 veya 19 (Doğru ID İşlenir)
-                    description: `${triggeredTypeName} (Otomatik)`,
-                    transactionHierarchy: targetHierarchy,
-                    taskId: String(createdTaskId),
-                    timestamp: new Date().toISOString()
-                };
+                        // Otomatik İşlem Kaydını Oluştur
+                        const triggeredTypeObj = this.allTransactionTypes.find(t => String(t.id) === String(tType));
+                        const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
+                        const targetHierarchy = triggeredTypeObj?.hierarchy || 'child'; 
 
-                if (targetHierarchy === 'child') {
-                    triggeredTransactionData.parentId = finalParentId;
-                }
-                await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
+                        const triggeredTransactionData = {
+                            type: tType,
+                            description: `${triggeredTypeName} (Otomatik)`,
+                            transactionHierarchy: targetHierarchy,
+                            taskId: String(createdTaskId),
+                            timestamp: new Date().toISOString()
+                        };
+
+                        if (targetHierarchy === 'child') {
+                            triggeredTransactionData.parentId = finalParentId;
+                        }
+                        await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
+                    }
+                } // Döngü sonu
             }
 
             // REQUEST RESULT GÜNCELLEME
@@ -1275,11 +1281,45 @@ async loadData() {
         }
     }
 
-    async handleManualSearch(query) {
+    async handleManualSearch(queryText) {
         const resultsContainer = document.getElementById('manualSearchResults');
-        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
-        const result = await ipRecordsService.searchRecords(query);
-        if (result.success) this.renderSearchResults(result.data);
+        if (!queryText || queryText.length < 3) { resultsContainer.style.display = 'none'; return; }
+        
+        // 1. Standart Arama (Servis üzerinden)
+        const result = await ipRecordsService.searchRecords(queryText);
+        let resultsData = result.success ? result.data : [];
+
+        // 🔥 WIPO PARENT EKSİKLİĞİNİ GİDEREN ÖZEL SORGUSU
+        // Standart servis araması WIPO numaralarını ('internationalRegNumber') atlayabiliyor.
+        const cleanQuery = queryText.trim();
+        if (cleanQuery.length >= 4) {
+            try {
+                const recordsRef = collection(db, 'ipRecords');
+                
+                // Paralel sorgular ile WIPO numaralarını Firestore'da direkt arıyoruz
+                const extraQueries = [
+                    getDocs(query(recordsRef, where('internationalRegNumber', '==', cleanQuery))),
+                    getDocs(query(recordsRef, where('wipoIR', '==', cleanQuery))),
+                    getDocs(query(recordsRef, where('aripoIR', '==', cleanQuery)))
+                ];
+
+                const snapshots = await Promise.all(extraQueries);
+                
+                snapshots.forEach(snap => {
+                    snap.forEach(docSnap => {
+                        const data = { id: docSnap.id, ...docSnap.data() };
+                        // Zaten listede yoksa EN BAŞA ekle ki ilk sırada 'ANA KAYIT' olarak görünsün
+                        if (!resultsData.some(r => r.id === data.id)) {
+                            resultsData.unshift(data);
+                        }
+                    });
+                });
+            } catch (err) {
+                console.warn("WIPO parent ek sorgu hatası:", err);
+            }
+        }
+
+        this.renderSearchResults(resultsData);
     }
 
     renderSearchResults(results) {
