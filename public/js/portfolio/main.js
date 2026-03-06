@@ -1281,7 +1281,7 @@ class PortfolioController {
                         // Array gelirse (sınıflar vb.) virgülle ayırarak string'e çevir
                         if (Array.isArray(val)) val = val.join(', ');
 
-                        // --- YENİ EKLENEN BÖLÜM: Yenileme Tarihini Formatla ---
+                        // --- BİR ÖNCEKİ ADIMDA EKLENEN YENİLEME TARİHİ FORMATI ---
                         if (col.key === 'renewalDate' && val) {
                             try {
                                 const d = new Date(val);
@@ -1291,6 +1291,17 @@ class PortfolioController {
                             } catch(e) {}
                         }
                         // -------------------------------------------------------
+
+                        // --- YENİ EKLENEN BÖLÜM: Ekranda Görünen Durumu (Badge Metnini) Excel'e Aktar ---
+                        if (col.key === 'statusText' || col.key === 'status') {
+                            if (this.renderer && typeof this.renderer.getStatusBadge === 'function') {
+                                // Ekrandaki durum balonu (badge) HTML'ini üretir
+                                const badgeHtml = this.renderer.getStatusBadge(record);
+                                // Regex ile HTML etiketlerini (<span class="..."> gibi) temizleyip sadece saf metni bırakır
+                                val = badgeHtml.replace(/<[^>]*>?/gm, '').trim();
+                            }
+                        }
+                        // --------------------------------------------------------------------------------
 
                         rowData[col.key] = (val === null || val === undefined || val === '') ? '-' : val;
                     }
