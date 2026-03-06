@@ -1241,6 +1241,19 @@ class PortfolioController {
                 }
             });
 
+            // --- YENİ EKLENEN BÖLÜM: Excel'e Yenileme Tarihi Kolonunu İlave Et ---
+            // Sadece Marka, Patent, Tasarım veya Tümü sekmelerinde göster (Dava ve İtirazlar hariç)
+            if (['trademark', 'patent', 'design', 'all'].includes(this.state.activeTab)) {
+                excelColumns.push({
+                    header: 'Yenileme Tarihi',
+                    key: 'renewalDate',
+                    width: 20
+                });
+            }
+            // ---------------------------------------------------------------------
+
+            worksheet.columns = excelColumns;
+
             worksheet.columns = excelColumns;
 
             // Başlık Stili
@@ -1267,6 +1280,17 @@ class PortfolioController {
                         
                         // Array gelirse (sınıflar vb.) virgülle ayırarak string'e çevir
                         if (Array.isArray(val)) val = val.join(', ');
+
+                        // --- YENİ EKLENEN BÖLÜM: Yenileme Tarihini Formatla ---
+                        if (col.key === 'renewalDate' && val) {
+                            try {
+                                const d = new Date(val);
+                                if (!isNaN(d.getTime())) {
+                                    val = d.toLocaleDateString('tr-TR'); // GG.AA.YYYY yapar
+                                }
+                            } catch(e) {}
+                        }
+                        // -------------------------------------------------------
 
                         rowData[col.key] = (val === null || val === undefined || val === '') ? '-' : val;
                     }
