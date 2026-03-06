@@ -2,3 +2,10 @@
 /node_modules/.bin
 *.ts
 /node_modules
+firestore_schema_and_sample.json
+.firebase/hosting.cHVibGlj.cache
+package-lock.json
+package.json
+serviceAccountKey.json
+trademark_bulletin_records_flat.csv
+package.json
