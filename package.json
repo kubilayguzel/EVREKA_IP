@@ -1,8 +1,28 @@
 {
   "dependencies": {
     "algoliasearch": "^5.34.0",
-    "firebase-admin": "^13.4.0",
+    "fast-csv": "^5.0.5",
+    "firebase-admin": "^13.6.1",
     "pdf-lib": "^1.17.1",
     "uuid": "^9.0.0"
-  }
+  },
+  "name": "evreka_ip",
+  "version": "1.0.0",
+  "description": "",
+  "main": "export.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kubilayguzel/EVREKA_IP.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kubilayguzel/EVREKA_IP/issues"
+  },
+  "homepage": "https://github.com/kubilayguzel/EVREKA_IP#readme"
 }
